@@ -1,0 +1,14 @@
+LICENSE
+Makefile.PL
+pgcluu
+pgcluu_collectd
+README
+resources
+doc/pgCluu.pod
+resources/bootstrap.min.css
+resources/bootstrap.min.js
+resources/font-awesome.min.css
+resources/fontawesome-webfont.ttf
+resources/jquery.min.js
+resources/pgcluu.css
+resources/pgcluu.js

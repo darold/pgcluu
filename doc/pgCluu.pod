@@ -1,0 +1,232 @@
+=head1 NAME
+
+pgCluu - PostgreSQL Cluster utilization
+
+=head1 DESCRIPTION
+
+pgCluu is a PostgreSQL performances monitoring and auditing tool.
+
+It is a Perl program used to perform a full audit of a PostgreSQL Cluster
+and System performances. It is divided in two parts:
+
+- A collector used to grab statistics on the PostgreSQL cluster using
+the psql command line utility and sar.
+
+- A pur Perl grapher that will generate all HTML and charts output without
+any requirements.
+
+If you don't want system utilization reports, you can disable it at command
+line. If you just want to graph a sar data file, it's also possible and finally,
+if you just want to generate report from the pgstats utility, that's possible.
+Note that pgcluu_collectd is mostly a Perl replacement of pgstats.
+
+=head1 SYNOPSIS
+
+PostgreSQL and System metrics collector.
+
+	pgcluu_collectd [options] output_dir
+
+Reports generator.
+
+	pgcluu [options] -o report_dir input_dir
+
+
+=head1 REQUIREMENT
+
+pgCluu comes with two Perl scripts. You need a modern Perl distribution, the
+psql PostgreSQL client and the sar command line utility (from sysstat).
+
+Charts are rendered using a Javascript library so you don't need anything else.
+Your browser will do all the work.
+
+=head1 INSTALLATION
+
+Download the tarball from Source Forge and unpack the archive:
+
+        tar xzf pgcluu-1.x.tar.gz
+        cd pgcluu-1.x/
+        perl Makefile.PL
+        make && sudo make install
+	cp -r resources /usr/local/share/pgcluu
+
+This will copy the Perl scripts pgcluu_collectd and pgcluu into the default
+/usr/local/bin directory and the man page to /usr/local/share/man/man1/pgcluu.1.
+Those are the default installation directories for 'site' install.
+
+If you want to install all under /usr location, use INSTALLDIRS='perl' as an
+argument of Makefile.PL. The script will be installed into /usr/bin/pgcluu
+and the manpage into /usr/share/man/man1/pgcluu.1.
+
+For example, to install everything just like Debian does, proceed as follows:
+
+        perl Makefile.PL INSTALLDIRS=vendor
+
+By default INSTALLDIRS is set to site.
+
+=head1 USAGE
+
+See next two chapters for a complete description of the command line options.
+For the impatients, here some simple commands that could be run as postgres
+user:
+
+        mkdir stat_db1/
+        pgclu_collectd -D -i 60 stat_db1/
+	[... wait some time and activity on you PostgreSQL Cluster ...]
+        pgclu_collectd -k
+	mkdir report_db1/
+	cp /usr/local/share/pgcluu/* report_db1/
+	pgcluu -o report_db1/ stat_db1/
+
+You should obtain something like example at http://pgcluu.darold.net/example/
+
+=head1 COLLECTING STATISTICS
+
+To generate reports about your PostgreSQL Cluster Utilization you must collect
+statistics before. pgcluu_collectd is here for that. It can be run in a daemom
+mode (option -D) or in interactive mode for debuging purpose. All you need is
+to provide a directory where data will be stored. Statistics will be pooled at
+a default interval of 60 secondes, using option -i you can customize it. See
+below for a complete list of command line options. 
+
+usage: pgusage_collector [options] output_dir
+
+	output_dir: directory where pgcluu_collectd will store statistics.
+
+options:
+
+  -d, --dbname=DATABASE    database name(s) to connect to. Default to current username.
+  -D, --daemonize          detach from console and enter in daemon mode.
+  -f, --pid-file=FILE      path to the pid file. Default: /tmp/pgcluu_collectd.pid.
+  -h, --host=HOSTNAME      database server host or socket directory
+  -i, --interval=NUM       time to wait between runs
+  -k, --kill		   stop current pgcluu_collectd running daemon.
+  -m, --metric=METRIC      set the metric or coma separated list of metrics to perform.
+  -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
+  -P, --psql=BIN           path to the psql command. Default: /usr/bin/psql.
+  -s, --sar=BIN            path to the sar sysstat command. Default: /usr/bin/sar.
+  -S, --disable-sar        disable collect of system statistics with sar.
+  -U, --dbuser=USERNAME    database user(s) to connect as. Default to current user.
+  --list-metric            list available metrics actions that can be performed.
+  --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
+			   database. Ex: -p 6432 -U postgres -h 192.168.1.100
+  --sar-file=FILE          path to sar output data file for sysstat stats
+                           Default to output_dir/sar_stats.dat.
+  --stat-type all|user     Set the type of stats tables to read. Default: user. Value
+			   can be 'all' or 'user' to look at pg_stat_(all|user) tables.
+  --pgversion X.Y          force the PostgreSQL version to the given value.
+  --pgservice NAME         The name of a service inside of the pg_service.conf file.
+  --help                   print usage
+
+For example, as postgres user:
+
+	mkdir stat_db1/
+	pgclu_collectd -D -i 60 stat_db1/
+
+then after some long time and activities on the database, stop the daemon:
+
+	pgclu_collectd -k
+
+The output directory should look likes:
+
+	stat_db1/
+	├── pg_class_size.csv
+	├── pg_database_size.csv
+	├── pg_stat_bgwriter.csv
+	├── pg_stat_connections.csv
+	├── pg_stat_database_conflicts.csv
+	├── pg_stat_database.csv
+	├── pg_statio_user_indexes.csv
+	├── pg_statio_user_sequences.csv
+	├── pg_statio_user_tables.csv
+	├── pg_stat_replication.csv
+	├── pg_stat_user_functions.csv
+	├── pg_stat_user_indexes.csv
+	├── pg_stat_user_tables.csv
+	├── pg_stat_xact_user_functions.csv
+	├── pg_stat_xact_user_tables.csv
+	├── pg_xlog_stat.csv
+	└── sar_stats.dat
+
+Then now you can proceed with pgcluu to generate reports.
+
+=head1 GENERATING REPORTS
+
+To generate a pgCluu report about a PostgreSQL Cluster you must, at least,
+have a directory that contains all data files generated by pgcluu_collectd
+or pgstats. In this directory, if you have a file named sar_stats.dat or
+sadc_stats.dat for binary sadc data file, it will be taken to build report
+about system utilisation. If you just want to make a report from a sar file
+use the -i or -I options.
+
+usage: ./pgcluu [options] [-i sar_file | -I sadc_file] [input_dir]
+
+	input_dir: directory where pgclu_collectd or pgstats and sar data
+		   files are stored.
+
+options:
+
+  -b, --begin  datetime    start date/time for the data to be parsed.
+  -d, --db-only dbname     Only report for the whole cluster and the given
+			   database name. You can use it multiple time.
+  -e, --end    datetime    end date/time for the data to be parsed.
+  -i, --sar-file=FILE      path to the sar text data file to read to generate
+			   system reports. Default to input_dir/sar_stats.dat.
+  -I, --sadc-file=FILE     sadc binary data file to read to generate system
+			   reports. Default to input_dir/sadc_stats.dat.
+  -o, --output=DIR         output directory
+  -p, --dev-only device    Only report I/O stats for a particular device
+			   You can use it multiple time.
+  -s, --sadf=BIN           path to the sadf sysstat command used to read the
+                           sadc binary data file. Default: /usr/bin/sadf.
+  -S, --disable-sar        disable collect of system statistics with sar.
+  -t, --all-table          report per table statistics, default is report
+                           for the whole database.
+  -T, --with-table table   Only report for the whole tables and the given
+			   table name. You can use it multiple time.
+
+  --help                   print usage
+
+Using the example above, you can generate all reports with the following command:
+
+	mkdir report_db1/
+	cp /usr/local/share/pgcluu/* report_db1/
+	pgcluu -o report_db1/ stat_db1/
+
+=head1 LICENSE
+
+Copyright (c) 2012-2013, Gilles Darold
+
+pgCluu is licenced under the PostgreSQL Licence a liberal Open Source license,
+similar to the BSD or MIT licenses. That mean that all parts of the program
+are open source and free of charge.
+
+	Permission to use, copy, modify, and distribute this software and its
+	documentation for any purpose, without fee, and without a written agreement
+	is hereby granted, provided that the above copyright notice and this
+	paragraph and the following two paragraphs appear in all copies.
+
+	IN NO EVENT SHALL Dalibo BE LIABLE TO ANY PARTY FOR DIRECT, INDIRECT,
+	SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST PROFITS,
+	ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN IF
+	Dalibo HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+	Gilles DArold SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT NOT
+	LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+	PARTICULAR PURPOSE. THE SOFTWARE PROVIDED HEREUNDER IS ON AN "AS IS" BASIS,
+	AND Gilles Darold HAS NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT,
+	UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+
+This is the case for both, pgcluu_collectd and the grapher pgcluu programs.
+
+=head1 AUTHORS
+
+pgCluu is an original development of Gilles Darold.
+
+Some parts of the collector are taken from pgstats a C program writen by
+Guillaume Lelarge and especially the SQL queries including the compatibility
+with all PostgreSQL versions. See https://github.com/gleu/pgstats
+
+Btw pgCluu grapher is compatible with files generated by pgstats, sar and
+sadc so you can use it independantly to graph those data. Some part of the
+sar output parser are taken from SysUsage. See http://sysusage.darold.net/
+

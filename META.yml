@@ -1,0 +1,28 @@
+---
+abstract: 'pgCluu - PostgreSQL performances auditing tool'
+author:
+  - 'Gilles Darold (gilles@darold.net)'
+build_requires:
+  ExtUtils::MakeMaker: 0
+configure_requires:
+  ExtUtils::MakeMaker: 0
+distribution_type: module
+dynamic_config: 0
+generated_by: 'ExtUtils::MakeMaker version 6.57_05'
+license: unknown
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: pgcluu
+no_index:
+  directory:
+    - t
+    - inc
+requires: {}
+resources:
+  homepage: http://pgcluu.darold.net/
+  repository:
+    git: git@github.com:darold/pgcluu.git
+    type: git
+    web: http://pgcluu.darold.net/
+version: 1.0

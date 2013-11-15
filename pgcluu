@@ -1,0 +1,2962 @@
+#!/usr/bin/env perl
+#------------------------------------------------------------------------------
+#
+# PgUsage - PostgreSQL monitoring tool with statistics collector and grapher
+#
+# This program is open source, licensed under the PostgreSQL license.
+# For license terms, see the LICENSE file.
+#
+# Author: Gilles Darold
+# Copyright: (C) 2012-2013 Gilles Darold - All rights reserved.
+#------------------------------------------------------------------------------
+use vars qw($VERSION $PROGRAM);
+
+use strict;
+use warnings;
+
+use IO::File;
+use Getopt::Long qw(:config bundling no_ignore_case_always);
+use Time::Local 'timegm_nocheck';
+use POSIX qw(locale_h sys_wait_h);
+setlocale(LC_ALL, 'C');
+
+$| = 1;
+
+$VERSION = '1.0';
+$PROGRAM = 'pgCluu';
+
+my $OUTPUT_DIR  = '';
+my $SADF_PROG   = '/usr/bin/sadf';
+my $DISABLE_SAR = 0;
+my $HTML        = '';
+my $SHOW_ALL_TB = 0;
+my $NO_TB_STAT  = 0;
+my @INCLUDE_DB  = ();
+my @INCLUDE_TB  = ();
+my @INCLUDE_DEV = ();
+my $IMG_FORMAT  = 'png';
+my $FH          = undef;
+my $FHCLUSTER   = undef;
+my %DBFH        = ();
+my %DEVFH       = ();
+my $IDX         = 1;
+my $HELP        = 0;
+my $DEBUG       = 0;
+my $BEGIN       = '';
+my $END         = '';
+my $NUMBER_CPU  = 0;
+my $SADC_INPUT_FILE    = '';
+my $SAR_INPUT_FILE     = '';
+my @DATABASE_LIST      = ();
+my @DEVICE_LIST        = ();
+my $FIST_DATABASE_LINK = '#';
+my %OVERALL_STATS      = ();
+
+my ($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
+
+# Statistics files to use with report
+my %DB_GRAPH_INFOS = (
+	'pg_stat_database.csv' => {
+		'1' => {
+			'name' =>  'database-backends',
+			'title' => 'Connections on %s database',
+			'description' => 'Number of clients connected to a database',
+			'ylabel' => 'Connections',
+			'legends' => ['backends'],
+		},
+		'2' => {
+			'name' =>  'database-read_write_query',
+			'title' => 'Affected tuples per operation on %s database',
+			'ylabel' => 'Tuples',
+			'description' => 'Affected rows on databases grouped by statement family',
+		},
+		'3' => {
+			'name' =>  'database-cache_ratio',
+			'title' => 'Cache hit/miss ratio on %s database',
+			'description' => 'Per database cache hit/miss ratio',
+			'ylabel' => 'Blocks per second',
+			'legends' => ['Cache hit','Cache miss','hit/miss ratio'],
+		},
+		'4' => {
+			'name' =>  'database-commits_rollbacks',
+			'title' => 'Commits/Rollbacks per second on %s database',
+			'description' => 'Number of commits / rollbacks per second and number of backends by database',
+			'ylabel' => 'Transaction/sec - Number of backend',
+			'legends' => ['commit','rollback','backends'],
+		},
+		'5' => {
+			'name' =>  'database-write_ratio',
+			'title' => 'Write ratio on %s database',
+			'description' => 'Write ratio on databases excluding templates and postgres',
+			'ylabel' => 'Write queries per second',
+			'legends' => ['Insert','Update','Delete'],
+		},
+		'6' => {
+			'name' =>  'database-read_ratio',
+			'title' => 'Read tuples on %s database',
+			'description' => 'Show entries returned from the index and live rows fetched from the table. The latter will be less if any dead or not-yet-committed rows are fetched using the index',
+			'ylabel' => 'Tuples per second',
+			'legends' => ['Returned','Fetched'],
+		},
+		'7' => {
+			'name' =>  'database-deadlocks',
+			'title' => 'Number of deadlocks on %s database',
+			'description' => 'Number of deadlocks detected in this database',
+			'ylabel' => 'Number of deadlocks',
+			'legends' => ['deadlocks'],
+		},
+		'8' => {
+			'name' =>  'database-canceled_queries',
+			'title' => 'Number of canceled queries on %s database',
+			'description' => 'Number of queries canceled due to conflicts with recovery in this database. [Conflicts occur only on standby servers]',
+			'ylabel' => 'Number of queries canceled',
+			'legends' => ['conflicts'],
+		},
+		'9' => {
+			'name' =>  'database-temporary_file',
+			'title' => 'Number of temporary file on %s database',
+			'description' => 'Number of temporary files created by queries per database.',
+			'ylabel' => 'Number of files',
+			'legends' => ['temporary files'],
+		},
+		'10' => {
+			'name' =>  'database-temporary_count',
+			'title' => 'Size of temporary data on %s database',
+			'description' => 'Amount of data written to temporary files created by queries per database.',
+			'ylabel' => 'Size per seconde',
+			'legends' => ['temporary data'],
+		},
+	},
+	'pg_stat_database_conflicts.csv' =>  {
+		'1' => {
+			'name' =>  'database-conflicts',
+			'title' => 'Conflicts per type on %s database',
+			'description' => 'Per database statistics about query cancels occurring due to conflicts with recovery on standby servers.',
+		},
+	},
+	'pg_database_size.csv' => {
+		'1' => {
+			'name' =>  'database-size',
+			'title' => 'Size of %s database',
+			'description' => 'Sizes of databases',
+			'ylabel' => 'Size',
+			'legends' => ['size'],
+			'active' => 1,
+		},
+	},
+	'pg_stat_bgwriter.csv' => {
+		'1' => {
+			'name' => 'database-checkpoints',
+			'title' => 'checkpoints stats',
+			'description' => 'Background writer statistics on checkpoints. "checkpoints_timed" is checkpoints issued because of checkpoint_timeout and "checkpoints_req" is checkpoint issued by request',
+			'ylabel' => 'Number of checkpoints',
+			'legends' => ['checkpoints requests'],
+		},
+		'2' => {
+			'name' =>  'database-bgwriter',
+			'title' => 'background writer clean stats',
+			'description' => 'Background writer cache cleaning statistics by checkpoints, lru and backends',
+			'ylabel' => 'Buffers per second',
+			'legends' => ['checkpoint buffers','clean buffers','backend buffers'],
+		},
+	},
+	'pg_stat_connections.csv' => {
+		'1' => {
+			'name' =>  'database-connections',
+			'title' => 'Connections by type on %s database',
+			'description' => 'Connections by type including idle ones',
+			'ylabel' => 'Number of connections',
+			'legends' => ['Active','Waiting','Waiting in xact'],
+		},
+	},
+	'pg_stat_user_functions.csv' => {
+		'1' => {
+			'name' =>  'database-functions_time',
+			'title' => 'Functions execution duration on database %s',
+			'description' => 'Statistics about executions time of functions. The track_functions parameter controls exactly which functions are tracked.',
+			'ylabel' => 'Duration',
+			'legends' => ['total time','self time'],
+		},
+		'2' => {
+			'name' =>  'database-functions_count',
+			'title' => 'Number of functions call on database %s',
+			'description' => 'Statistics about executions of functions. The track_functions parameter controls exactly which functions are tracked.',
+			'ylabel' => 'Number of calls',
+			'legends' => ['calls'],
+		},
+	},
+	'pg_stat_all_tables.csv' => {
+		'1' => {
+			'name' =>  'table-indexes',
+			'title' => 'Sequencial scan / Index scan',
+			'description' => 'Sequencial scan versus index scan per table',
+			'ylabel' => 'Number per second',
+			'legends' => ['sequencial scan','index scan'],
+		},
+		'2' => {
+			'name' =>  'table-vacuums-analyzes',
+			'title' => 'Analyze/vacuums and autoanalyze/autovacuum count',
+			'description' => 'Number of analyze, autoanalyze, vacuum and autovacuum count per table',
+			'ylabel' => 'Number per seconde',
+			'legends' => ['Analyze','Autoanalyze','Vacuum','Autovacuum'],
+		},
+	},
+	'pg_xlog_stat.csv' => {
+		'1' => {
+			'name' =>  'database-xlog_files',
+			'title' => 'WAL files',
+			'description' => 'Number of WAL file in the xlog directory',
+			'ylabel' => 'Number of files',
+			'legends' => ['xlog'],
+		},
+	},
+	'pg_stat_replication.csv' => {
+		'1' => {
+			'name' =>  'database-xlog',
+			'title' => 'Xlog written',
+			'description' => 'Number of Xlog data written per second',
+			'ylabel' => 'Size per second',
+			'legends' => ['written'],
+		},
+		'2' => {
+			'name' =>  'database-replication',
+			'title' => 'Replication lag on',
+			'description' => 'Lag of replication between the master and the slave in KiloBytes',
+			'ylabel' => 'Lag sizes',
+			'legends' => ['Sent','Write','Replay'],
+		},
+	},
+	'pgbouncer_stat.csv' => {
+		'1' => {
+			'name' =>  'pgbouncer-clients',
+			'title' => 'pgbouncer active/waiting clients',
+			'description' => 'Number of active/waiting clients in each pgbouncer pool',
+			'ylabel' => 'Number of clients',
+			'legends' => ['active','waiting'],
+		},
+		'2' => {
+			'name' =>  'pgbouncer-server',
+			'description' => 'Number of active/idle/used server connections in each pgbouncer pool',
+			'ylabel' => 'Number of connections',
+			'legends' => ['active','idle','used'],
+		},
+		'3' => {
+			'name' =>  'pgbouncer-maxwait',
+			'title' => 'pgbouncer clients wait time',
+			'description' => 'Maximum wait duration for client connections in pgbouncer pools',
+			'ylabel' => 'Duration',
+			'legends' => ['maxwait'],
+		},
+	},
+);
+
+my %SAR_GRAPH_INFOS = (
+	'1' => {
+		'name' =>  'system-cpu',
+		'title' => 'CPU %s utilisation',
+		'description' => 'Percentage of CPU utilization that occurred while executing at the system level (kernel), the user level (application) and the percentage of time that the CPU or CPUs were idle during which the system had an outstanding disk I/O request.',
+		'ylabel' => 'Percentage',
+		'legends' => ['Total','System','User','Iowait'],
+		'active' => 1,
+	},
+	'2' => {
+		'name' =>  'system-load',
+		'title' => 'System load',
+		'description' => 'System  load average for the last minute, the past 5 and 15 minutes. The load average is calculated as the average number of runnable or running tasks (R state), and the number of tasks in uninterruptible sleep (D state) over the specified interval.',
+		'ylabel' => 'Process load',
+		'legends' => ['ldavg-1','ldavg-5','ldavg-15'],
+	},
+	'3' => {
+		'name' =>  'system-process',
+		'title' => 'Number of process',
+		'description' => 'Number of tasks in the task list.',
+		'ylabel' => 'Number of process',
+		'legends' => ['plist-sz'],
+	},
+	'4' => {
+		'name' =>  'system-memory',
+		'title' => 'System memory usage',
+		'description' => 'Amount of memory used to cache data or as buffers by the kernel and free memory available in kilobytes.',
+		'ylabel' => 'Memory size',
+		'legends' => ['cached','buffers','memfree'],
+	},
+	'5' => {
+		'name' =>  'system-swap',
+		'title' => 'Swap In/Out (pages/seconds)',
+		'description' => 'Total number of swap pages the system brought in/out per second. The page size is usualy of 4096 bytes',
+		'ylabel' => 'Pages/second',
+		'legends' => ['pswpin/s','pswpout/s'],
+	},
+	'6' => {
+		'name' =>  'system-block',
+		'title' => 'Block In/Out (blocks/seconds)',
+		'description' => 'Total amount of data read/write from the devices in blocks per second. Blocks are equivalent to sectors and therefore have a size of 512 bytes',
+		'ylabel' => 'Block per second',
+		'legends' => ['bread/s','bwrtn/s'],
+	},
+	'7' => {
+		'name' =>  'system-device',
+		'title' => 'Data read/write on device %s',
+		'description' => 'Number of bytes read/write from/to the device.',
+		'ylabel' => 'Size Read/Written per second',
+		'legends' => ['Read','Write'],
+	},
+	'8' => {
+		'name' =>  'system-cpudevice',
+		'title' => 'CPU utilisation on device %s',
+		'description' => 'Percentage of CPU time during which I/O requests were issued to the device (bandwidth utilization for the device). Device saturation occurs when this value is close to 100%.',
+		'ylabel' => 'Percentage of CPU',
+		'legends' => ['cpu used'],
+	},
+	'9' => {
+		'name' =>  'system-srvtime',
+		'title' => 'Average service/wait time for I/O requests on device %s',
+		'description' => 'The average service time (in milliseconds) for I/O requests that were issued to the device.',
+		'ylabel' => 'Milliseconds',
+		'legends' => ['svctm','await'],
+	},
+);
+
+# Process command line options and look for an action keyword. There
+# are no mandatory options.
+GetOptions(
+	"b|begin=s"      => \$BEGIN,
+	"d|db-only=s"    => \@INCLUDE_DB,
+	"e|end=s"        => \$END,
+	"h|help!"        => \$HELP,
+	"i|sar-file=s"   => \$SAR_INPUT_FILE,
+	"I|sadc-file=s"  => \$SADC_INPUT_FILE,
+	"n|no-table!"    => \$NO_TB_STAT,
+	"o|output=s"     => \$OUTPUT_DIR,
+	"p|dev-only=s"   => \@INCLUDE_DEV,
+	"s|sadf=s"       => \$SADF_PROG,
+	"S|disable-sar!" => \$DISABLE_SAR,
+	"t|all-table!"   => \$SHOW_ALL_TB,
+	"T|with-table=s" => \@INCLUDE_TB,
+	"v|verbose!"     => \$DEBUG,
+) or die usage();
+&usage if ($HELP);
+
+my $INPUT_DIR   = $ARGV[0] || '';
+$INPUT_DIR =~ s/\/$//;
+$OUTPUT_DIR =~ s/\/$//;
+
+# Set default sysstat file to read (binary or text format)
+if (!$DISABLE_SAR) {
+	if (!$SADC_INPUT_FILE && !$SAR_INPUT_FILE) {
+		if (-f "$INPUT_DIR/sadc_stats.dat") {
+			$SADC_INPUT_FILE = "$INPUT_DIR/" . 'sadc_stats.dat';
+		} elsif (-f "$INPUT_DIR/sar_stats.dat") {
+			$SAR_INPUT_FILE = "$INPUT_DIR/" . 'sar_stats.dat';
+		}
+		if (!$SADC_INPUT_FILE && !$SAR_INPUT_FILE) {
+			print STDERR "ERROR: No sar data file found. Considere using -S or --disable-sar command line option or use -i / -I option to set the path to the data file.\n";
+			&usage();
+		}
+	}
+
+	# Verify that the sar data file exists.
+	if ($SADC_INPUT_FILE && !-f "$SADC_INPUT_FILE") {
+		print STDERR "ERROR: sar binary data file $SADC_INPUT_FILE can't be found.\n";
+		exit 1;
+	}
+	if ($SAR_INPUT_FILE && !-f "$SAR_INPUT_FILE") {
+		print STDERR "ERROR: sar text data file $SAR_INPUT_FILE can't be found.\n";
+		exit 1;
+	}
+}
+
+if (!$INPUT_DIR || !-d $INPUT_DIR) {
+	if (!$SAR_INPUT_FILE && !$SADC_INPUT_FILE) {
+		print STDERR "ERROR: you must specify a valid input directory: $INPUT_DIR.\n";
+		&usage();
+	}
+}
+$OUTPUT_DIR = '.' if (!$OUTPUT_DIR);
+
+# Check start/end date time
+if ($BEGIN) {
+	if ($BEGIN =~ /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/) {
+		$BEGIN = &timegm_nocheck($6, $5, $4, $3, $2 - 1, $1 - 1900) * 1000;
+		$o_day = $3;
+		$o_month = $2;
+		$o_year = $1;
+	} elsif ($BEGIN =~ /^(\d{4})-(\d{2})-(\d{2})$/) {
+		$BEGIN = &timegm_nocheck(0, 0, 0, $3, $2 - 1, $1 - 1900) * 1000;
+		$o_day = $3;
+		$o_month = $2;
+		$o_year = $1;
+	} else {
+		die "FATAL: bad format for begin datetime, shoud be yyyy-mm-dd hh:mm:ss\n";
+	}
+}
+if ($END) {
+	if ($END =~ /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/) {
+		$END = &timegm_nocheck($6, $5, $4, $3, $2 - 1, $1 - 1900) * 1000;
+	} elsif ($END =~ /^(\d{4})-(\d{2})-(\d{2})$/) {
+		$END = &timegm_nocheck(0, 0, 0, $3, $2 - 1, $1 - 1900) * 1000;
+	} else {
+		die "FATAL: bad format for ending datetime, shoud be yyyy-mm-dd hh:mm:ss\n";
+	}
+}
+
+if (!$DISABLE_SAR) {
+	# Extract the device list first
+	@DEVICE_LIST = &get_device_list();
+}
+
+# parse SQL stats files
+if (-d "$INPUT_DIR") {
+
+	# Get the list of databases from the statistics collected
+	@DATABASE_LIST = &get_database_list();
+
+	print "DEBUG: looking for CSV file into directory $INPUT_DIR/\n" if ($DEBUG);
+	opendir(IDIR, "$INPUT_DIR") || die "FATAL: can't opendir $INPUT_DIR: $!";
+	my @files = grep { !/^\./ && -f "$INPUT_DIR/$_" && /\.csv$/ } readdir(IDIR);
+	closedir(IDIR);
+	if ($#files < 0) {
+		die "FATAL: no csv file found in $INPUT_DIR";
+	}
+
+	foreach my $db (@DATABASE_LIST) {
+		# Open a filehandle for each database
+		$DBFH{$db} = new IO::File ">$OUTPUT_DIR/database-$db.html";
+		if (not defined $DBFH{$db}) {
+			die "FATAL: can't write to $OUTPUT_DIR/database-$db.html, $!\n";
+		}
+		$FIST_DATABASE_LINK = "database-$db.html" if ($FIST_DATABASE_LINK eq '#');
+		&html_header($DBFH{$db});
+		$DBFH{$db}->print("<ul id=\"slides\">\n");
+	}
+	# Open filehandle to cluster file
+	$FHCLUSTER = new IO::File ">$OUTPUT_DIR/cluster.html";
+	if (not defined $FHCLUSTER) {
+		die "FATAL: can't write to $OUTPUT_DIR/cluster.html, $!\n";
+	}
+	&html_header($FHCLUSTER);
+	print $FHCLUSTER "<ul id=\"slides\">\n";
+	foreach my $k (sort {$a cmp $b } keys %DB_GRAPH_INFOS) {
+		if (-e "$INPUT_DIR/$k" && !-z "$INPUT_DIR/$k") {
+			&compute_dbstat_graph($k, %{$DB_GRAPH_INFOS{$k}});
+		} elsif ($k =~ /_all_/) {
+			my $f = $k;
+			$f =~ s/_all_/_user_/;
+			if (-e "$INPUT_DIR/$f" && !-z "$INPUT_DIR/$f") {
+				&compute_dbstat_graph($f, %{$DB_GRAPH_INFOS{$k}});
+			}
+		}
+	}
+	# Terminate cluster statistics file
+	print $FHCLUSTER "</ul>\n";
+	&html_footer($FHCLUSTER);
+	$FHCLUSTER->close;
+	# Terminate all database statistic file
+	foreach my $db (@DATABASE_LIST) {
+		$DBFH{$db}->print("</ul>\n");
+		&html_footer($DBFH{$db});
+		$DBFH{$db}->close;
+	}
+
+} elsif (!$SAR_INPUT_FILE) {
+
+	print "FATAL: $INPUT_DIR is not a valid data directory\n";
+	exit 1;
+
+}
+
+# parse SAR stats file
+if (!$DISABLE_SAR) {
+
+	# Open filehandle
+	$FH = new IO::File ">$OUTPUT_DIR/system.html";
+	if (not defined $FH) {
+		die "FATAL: can't write to $OUTPUT_DIR/system.html, $!\n";
+	}
+	&html_header($FH);
+	print $FH "<ul id=\"slides\">\n";
+	for (my $i = 0; $i <= $#DEVICE_LIST; $i++) {
+		# Open a filehandle for each database
+		$DEVFH{$DEVICE_LIST[$i]} = new IO::File ">$OUTPUT_DIR/system-device$i.html";
+		if (not defined $DEVFH{$DEVICE_LIST[$i]}) {
+			die "FATAL: can't write to $OUTPUT_DIR/system-device$i.html, $!\n";
+		}
+		&html_header($DEVFH{$DEVICE_LIST[$i]});
+		$DEVFH{$DEVICE_LIST[$i]}->print("<ul id=\"slides\">\n");
+	}
+	if (-f "$SADC_INPUT_FILE") {
+		print "DEBUG: looking for sadc binary data file $SADC_INPUT_FILE\n" if ($DEBUG);
+		foreach my $id (sort keys %SAR_GRAPH_INFOS) {
+			&compute_sarstat_graph($SADC_INPUT_FILE, %{$SAR_GRAPH_INFOS{$id}});
+		}
+	} elsif (-f "$SAR_INPUT_FILE") {
+		print "DEBUG: looking for sar text data file $SADC_INPUT_FILE\n" if ($DEBUG);
+		foreach my $id (sort keys %SAR_GRAPH_INFOS) {
+			&compute_sarfile_graph($SAR_INPUT_FILE, %{$SAR_GRAPH_INFOS{$id}});
+		}
+	} else {
+		print "WARNING: No sar data file not found. Considere using -S or --disable-sar command line option if you don't have a sysstat data file.\n";
+	}
+	print $FH "</ul>\n";
+	&html_footer($FH);
+	$FH->close;
+	# Terminate all database statistic file
+	foreach my $dev (@DEVICE_LIST) {
+		$DEVFH{$dev}->print("</ul>\n");
+		&html_footer($DEVFH{$dev});
+		$DEVFH{$dev}->close;
+	}
+}
+
+if ($OUTPUT_DIR) {
+	&generate_html_index();
+}
+
+exit 0;
+
+#----------------------------------------------------------------------------------
+
+sub usage {
+    print qq{
+usage: $0 [options] [-i sar_file | -I sadc_file] [input_dir]
+
+	input_dir: directory where pgcluu_collectd or pgstats and sar data
+		   files are stored.
+
+options:
+  -b, --begin  datetime    start date/time for the data to be parsed.
+  -d, --db-only dbname     Only report for the whole cluster and the given
+			   database name. You can use it multiple time.
+  -e, --end    datetime    end date/time for the data to be parsed.
+  -i, --sar-file=FILE      path to the sar text data file to read to generate
+			   system reports. Default to input_dir/sar_stats.dat.
+  -I, --sadc-file=FILE     sadc binary data file to read to generate system
+			   reports. Default to input_dir/sadc_stats.dat.
+  -o, --output=DIR         output directory
+  -p, --dev-only device    Only report I/O stats for a particular device
+			   You can use it multiple time.
+  -s, --sadf=BIN           path to the sadf sysstat command used to read the
+                           sadc binary data file. Default: $SADF_PROG.
+  -S, --disable-sar        disable collect of system statistics with sar.
+  -t, --all-table          report per table statistics, default is report
+                           for the whole database.
+  -T, --with-table table   Only report for the whole tables and the given
+			   table name. You can use it multiple time.
+
+  --help                   print usage
+
+};
+    exit 0;
+}
+
+sub progress_bar
+{
+	my ( $got, $total, $width, $char ) = @_;
+	$width ||= 25; $char ||= '=';
+	my $num_width = length $total;
+	sprintf("[%-${width}s] Parsed %${num_width}s bytes of %s (%0.2f%%)\r",
+		$char x (($width-1)*$got/$total). '>',
+		$got, $total, 100*$got/+$total);
+}
+
+sub detect_interval
+{
+	my $file = shift;
+
+	my $dt = 0;
+	my $prev_val = 0;
+
+	if (!open(IN, "$file")) {
+		die "FATAL: can't read file $file: $!\n";
+	}
+	while (<IN>) {
+		my @data = split(/;/);
+		next if ($data[0] !~ /^\d+/);
+		$data[0] = &convert_time($data[0]);
+		if (!$dt && $prev_val) {
+			$dt = ($data[0] - $prev_val)/1000;
+			last if ($dt > 0);
+		}
+		$prev_val = $data[0];
+	}
+	close(IN);
+
+	if ( (length($dt) >= 2) && ($dt =~ /([123])$/) ) {
+		$dt -= $1;
+	}
+
+	return $dt;
+}
+
+sub get_data_id
+{
+	my ($str, %data_info) = @_;
+
+	foreach my $i (sort {$a <=> $b} keys %data_info) {
+		if ($data_info{$i}->{name} eq $str) {
+			return $i;
+		}
+	}
+	return -1;
+}
+
+sub get_database_list
+{
+	# Compute graphs of database size statistics
+	my @db_list = ();
+	my $file = "$INPUT_DIR/pg_database_size.csv";
+	if (!-e $file || -z $file) {
+		$file = "$INPUT_DIR/pg_stat_database.csv";
+	}
+	open(DBSIZEFILE, "$file") or die "FATAL: can't read $file\n";
+	while (<DBSIZEFILE>) {
+		my @data = split(/;/);
+		next if (!&normalyze_line(\@data));
+		# Get database name
+		push(@db_list, $data[2]) if (!grep(/^$data[2]$/, @db_list));
+	}
+	close(DBSIZEFILE);
+
+	return @db_list;
+}
+
+sub get_device_list
+{
+	my @dev_list = ();
+
+	if ($SADC_INPUT_FILE && -f "$SADC_INPUT_FILE") {
+
+		my $command = "$SADF_PROG -t -P ALL -D $SADC_INPUT_FILE -- -d -p";
+		print "DEBUG: looking for device list using command $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		while (my $l = <IN>) {
+			chomp($l);
+			# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
+			my @data = split(/;/, $l);
+			next if ($data[2] !~ /^\d+/);
+			next if (!&device_in_report($data[3]));
+			if (!grep(m#^$data[3]$#, @dev_list)) {
+				push(@dev_list, $data[3]);
+			} else {
+				last;
+			}
+		}
+		close(IN);
+
+	} elsif ($SAR_INPUT_FILE && -f "$SAR_INPUT_FILE") {
+
+		# Load data from file
+		if (!open(IN, "$SAR_INPUT_FILE")) {
+			die "FATAL: can't read input file $SAR_INPUT_FILE: $!\n";
+		}
+		my $type = '';
+		my @headers = ();
+		while (my $l = <IN>) {
+			chomp($l);
+			$l =~ s///;
+			# Skip kernel header part
+			next if ($l !~ /^\d+:\d+:\d+/);
+			if ($l =~ m#DEV\s+#) {
+				if ($#headers == -1) {
+					push(@headers, split(m#\s+#, $l));
+					next;
+				} else {
+					last;
+				}
+			}
+			# Empty line, maybe the end of a report
+			if (($l eq '') && ($#headers >= 0)) {
+				last;
+			}
+			# Get all values reported
+			if ($#headers >= 0) {
+				my @values = ();
+				push(@values, split(m#\s+#, $l));
+				last if ($#values != $#headers);
+				if (!grep(m#^$values[1]$#, @DEVICE_LIST)) {
+					push(@dev_list, $values[1]);
+				}
+			}
+		}
+		close(IN);
+
+	}
+
+	return @dev_list;
+}
+
+sub compute_dbstat_graph
+{
+	my ($file, %data_info) = @_;
+
+	print "DEBUG: reading statistics in file $INPUT_DIR/$file\n" if ($DEBUG);
+
+	# Detect interval from file
+	my $interval = &detect_interval("$INPUT_DIR/$file");
+
+	print "DEBUG: autodetected interval value $interval\n" if ($DEBUG);
+
+	# Load data from file
+	if (!open(IN, "$INPUT_DIR/$file")) {
+		die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	}
+
+	# Compute graphs of database statistics
+	if ($file =~ /pg_stat_database.csv/) {
+		my %database_stat = ();
+		my %all_database_stat = ();
+		my %start_vals = ();
+		my %total_count = ();
+		my $tmp_val = 0;
+		my $has_conflict = 0;
+		my $has_temp = 0;
+		my %total_qtype = ();
+		my %total_query_type = ();
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			# Gather select statement
+			push(@{$start_vals{$data[2]}}, @data) if ($#{$start_vals{$data[2]}} < 0);
+
+			(($data[8] - $start_vals{$data[2]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[2]}[8]);
+			$database_stat{$data[2]}{returned} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[0]}{returned} += $tmp_val;
+
+			(($data[9] - $start_vals{$data[2]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[2]}[9]);
+			$database_stat{$data[2]}{fetched} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[0]}{fetched} += $tmp_val;
+			$total_qtype{$data[2]} += $tmp_val;
+			$total_query_type{$data[2]}{'select'} += $tmp_val;
+			$OVERALL_STATS{'cluster'}{'read_tuples'} += $tmp_val;
+			$OVERALL_STATS{'database'}{$data[2]}{'read_tuples'} += $tmp_val;
+
+			# Gather insert statement
+			(($data[10] - $start_vals{$data[2]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[2]}[10]);
+			$database_stat{$data[2]}{insert} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[0]}{insert} += $tmp_val;
+			$total_qtype{$data[2]} += $tmp_val;
+			$total_query_type{$data[2]}{'insert'} += $tmp_val;
+
+			# Gather update statement
+			(($data[11] - $start_vals{$data[2]}[11]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[11] - $start_vals{$data[2]}[11]);
+			$database_stat{$data[2]}{update} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[0]}{update} += $tmp_val;
+			$total_qtype{$data[2]} += $tmp_val;
+			$total_query_type{$data[2]}{'update'} += $tmp_val;
+
+			# Gather delete statement
+			(($data[12] - $start_vals{$data[2]}[12]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[12] - $start_vals{$data[2]}[12]);
+			$database_stat{$data[2]}{delete} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[0]}{delete} += $tmp_val;
+			$total_qtype{$data[2]} += $tmp_val;
+			$total_query_type{$data[2]}{'delete'} += $tmp_val;
+
+			# Gather blks_read
+			my $tmp_read = '';
+			(($data[6] - $start_vals{$data[2]}[6]) < 0) ? $tmp_read = 0 : $tmp_read = ($data[6] - $start_vals{$data[2]}[6]);
+			$database_stat{$data[2]}{blks_read} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_read/$interval)) . '],';
+			$all_database_stat{$data[0]}{blks_read} += $tmp_read;
+			$OVERALL_STATS{'cluster'}{'blks_read'} += $tmp_read;
+			$OVERALL_STATS{'database'}{$data[2]}{'blks_read'} += $tmp_read;
+
+			# Gather blks_hit
+			my $tmp_hit = '';
+			(($data[7] - $start_vals{$data[2]}[7]) < 0) ? $tmp_hit = 0 : $tmp_hit = ($data[7] - $start_vals{$data[2]}[7]);
+			$database_stat{$data[2]}{blks_hit} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_hit/$interval)) . '],';
+			$all_database_stat{$data[0]}{blks_hit} += $tmp_hit;
+			$OVERALL_STATS{'cluster'}{'blks_hit'} += $tmp_hit;
+			$OVERALL_STATS{'database'}{$data[2]}{'blks_hit'} += $tmp_hit;
+
+			# Compute hit/miss ratio
+			if ( ($tmp_read > 0) || ($tmp_hit > 0) ) {
+				$database_stat{$data[2]}{ratio_hit_miss} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_hit*100)/($tmp_read + $tmp_hit)) . '],';
+			} else {
+				$database_stat{$data[2]}{ratio_hit_miss} .= '[' . $data[0] . ',0],';
+			}
+
+			# Gather number of running backend
+			$database_stat{$data[2]}{nbackend} .= '[' . $data[0] . ',' . ($data[3] || 0) . '],';
+			$all_database_stat{$data[0]}{nbackend} += $data[3];
+			$OVERALL_STATS{'cluster'}{'nbackend'} += $data[3];
+			$OVERALL_STATS{'database'}{$data[2]}{'nbackend'} += $data[3];
+
+			# Gather number of committed transaction
+			(($data[4] - $start_vals{$data[2]}[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals{$data[2]}[4]);
+			$database_stat{$data[2]}{xact_commit} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[0]}{xact_commit} += $tmp_val;
+
+			# Gather number of rollbacked transaction
+			(($data[5] - $start_vals{$data[2]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[2]}[5]);
+			$database_stat{$data[2]}{xact_rollback} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[0]}{xact_rollback} += $tmp_val;
+
+			# Gather number of canceled queries
+			if ($#data >= 13) {
+				(($data[13] - $start_vals{$data[2]}[13]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[13] - $start_vals{$data[2]}[13]);
+				$database_stat{$data[2]}{canceled_queries} .= '[' . $data[0] . ',' . $tmp_val . '],';
+				$all_database_stat{$data[0]}{canceled_queries} += $tmp_val;
+				$has_conflict = 1;
+			}
+
+			# Gather number of temporary data and deadlock
+			if ($#data > 15) {
+				(($data[15] - $start_vals{$data[2]}[15]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[15] - $start_vals{$data[2]}[15]);
+				$database_stat{$data[2]}{temp_files} .= '[' . $data[0] . ',' . $tmp_val . '],';
+				$all_database_stat{$data[0]}{temp_files} += $tmp_val;
+				$OVERALL_STATS{'cluster'}{'temp_files'} += $tmp_val;
+				$OVERALL_STATS{'database'}{$data[2]}{'temp_files'} += $tmp_val;
+
+				(($data[16] - $start_vals{$data[2]}[16]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[16] - $start_vals{$data[2]}[16]);
+				$database_stat{$data[2]}{temp_bytes} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+				$OVERALL_STATS{'cluster'}{'temp_bytes'} += $tmp_val;
+				$OVERALL_STATS{'database'}{$data[2]}{'temp_bytes'} += $tmp_val;
+
+				$all_database_stat{$data[0]}{temp_bytes} += $tmp_val;
+				(($data[17] - $start_vals{$data[2]}[17]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[17] - $start_vals{$data[2]}[17]);
+				$database_stat{$data[2]}{deadlocks} .= '[' . $data[0] . ',' . $tmp_val . '],';
+				$all_database_stat{$data[0]}{deadlocks} += $tmp_val;
+				$OVERALL_STATS{'cluster'}{'deadlocks'} += $tmp_val;
+				$OVERALL_STATS{'database'}{$data[2]}{'deadlocks'} += $tmp_val;
+				$has_temp = 1;
+			}
+
+
+			@{$start_vals{$data[2]}} = ();
+			push(@{$start_vals{$data[2]}}, @data);
+		}
+		$interval = 1 if (!$interval);
+
+		foreach my $time (sort {$a <=> $b} keys %all_database_stat) {
+			$database_stat{'all'}{insert} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{insert}/$interval)) . '],';
+			$database_stat{'all'}{returned} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{returned}/$interval)) . '],';
+			$database_stat{'all'}{fetched} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{fetched}/$interval)) . '],';
+			$database_stat{'all'}{update} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{update}/$interval)) . '],';
+			$database_stat{'all'}{delete} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{delete}/$interval)) . '],';
+			$total_qtype{'all'} +=  $all_database_stat{$time}{insert} + $all_database_stat{$time}{fetched} + $all_database_stat{$time}{update} + $all_database_stat{$time}{delete};
+			$all_database_stat{$time}{blks_read} ||= 0;
+			$all_database_stat{$time}{blks_hit} ||= 0;
+			$database_stat{'all'}{blks_read} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{blks_read}/$interval)) . '],';
+			$database_stat{'all'}{blks_hit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{blks_hit}/$interval)) . '],';
+			$total_query_type{'all'}{'insert'} += $all_database_stat{$time}{insert};
+			$total_query_type{'all'}{'delete'} += $all_database_stat{$time}{delete};
+			$total_query_type{'all'}{'update'} += $all_database_stat{$time}{update};
+			$total_query_type{'all'}{'select'} += $all_database_stat{$time}{fetched};
+
+			if (($all_database_stat{$time}{blks_read} + $all_database_stat{$time}{blks_hit}) > 0) {
+				$database_stat{'all'}{ratio_hit_miss} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{blks_hit}*100)/($all_database_stat{$time}{blks_read} + $all_database_stat{$time}{blks_hit})) . '],';
+			} else {
+				$database_stat{'all'}{ratio_hit_miss} .= '[' . $time . ',0],';
+			}
+			$database_stat{'all'}{nbackend} .= '[' . $time . ',' . $all_database_stat{$time}{nbackend} . '],';
+			$database_stat{'all'}{xact_commit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{xact_commit}/$interval)) . '],';
+			$database_stat{'all'}{xact_rollback} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{xact_rollback}/$interval)) . '],';
+			if ($has_conflict) {
+				$database_stat{'all'}{canceled_queries} .= '[' . $time . ',' . $all_database_stat{$time}{canceled_queries} . '],';
+			}
+			if ($has_temp) {
+				$database_stat{'all'}{deadlocks} .= '[' . $time . ',' . $all_database_stat{$time}{deadlocks} . '],';
+				$database_stat{'all'}{temp_files} .= '[' . $time . ',' . $all_database_stat{$time}{temp_files} . '],';
+				$database_stat{'all'}{temp_bytes} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{temp_bytes}/$interval)) . '],';
+			}
+		}
+		%all_database_stat = ();
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			foreach my $db (sort keys %database_stat) {
+				next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+
+				if ($data_info{$id}{name} eq 'database-write_ratio') {
+
+					$database_stat{$db}{insert} =~ s/,$//;
+					$database_stat{$db}{update} =~ s/,$//;
+					$database_stat{$db}{delete} =~ s/,$//;
+					if ($db ne 'all') {
+						$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-write_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{insert}, $database_stat{$db}{update}, $database_stat{$db}{delete}) );
+					} else {
+						print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-write_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{insert}, $database_stat{$db}{update}, $database_stat{$db}{delete});
+					}
+
+				} elsif ($data_info{$id}{name} eq 'database-read_ratio') {
+
+					$database_stat{$db}{returned} =~ s/,$//;
+					$database_stat{$db}{fetched} =~ s/,$//;
+					if ($db ne 'all') {
+						$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-read_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{returned}, $database_stat{$db}{fetched}) );
+					} else {
+						print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-read_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{returned}, $database_stat{$db}{fetched});
+					}
+
+				} elsif ($data_info{$id}{name} eq 'database-read_write_query') {
+
+					if ($total_qtype{$db}) {
+						my %data = ();
+						foreach my $t (keys %{$total_query_type{$db}}) {
+							$data{$t} = sprintf("%0.2f", $total_query_type{$db}{$t}*100/$total_qtype{$db});
+						}
+						if ($db ne 'all') {
+							$DBFH{$db}->print( &flotr2_piegraph($IDX++, 'database-read_write_query', \%{$data_info{$id}}, $db, %data) );
+						} else {
+							print $FHCLUSTER &flotr2_piegraph($IDX++, 'cluster-read_write_query', \%{$data_info{$id}}, $db, %data);
+						}
+					}
+
+				} elsif ($data_info{$id}{name} eq 'database-cache_ratio') {
+
+					$database_stat{$db}{blks_read} =~ s/,$//;
+					$database_stat{$db}{blks_hit} =~ s/,$//;
+					if ($db ne 'all') {
+						$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-cache_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{blks_hit}, $database_stat{$db}{blks_read}, $database_stat{$db}{ratio_hit_miss}) );
+					} else {
+						print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-cache_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{blks_hit}, $database_stat{$db}{blks_read}, $database_stat{$db}{ratio_hit_miss});
+					}
+					delete $database_stat{$db}{blks_hit};
+					delete $database_stat{$db}{blks_read};
+					delete $database_stat{$db}{ratio_hit_miss};
+
+				} elsif ($data_info{$id}{name} eq 'database-commits_rollbacks') {
+
+					$database_stat{$db}{xact_commit} =~ s/,$//;
+					$database_stat{$db}{xact_rollback} =~ s/,$//;
+					$database_stat{$db}{nbackend} =~ s/,$//;
+					if ($db ne 'all') {
+						$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-commits_rollbacks', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_commit}, $database_stat{$db}{xact_rollback}, $database_stat{$db}{nbackend}) );
+					} else {
+						print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-commits_rollbacks', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_commit}, $database_stat{$db}{xact_rollback}, $database_stat{$db}{nbackend});
+					}
+					delete $database_stat{$db}{xact_commit};
+					delete $database_stat{$db}{xact_rollback};
+				}
+			}
+		}
+		
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			my %data = ();
+			my %data2 = ();
+			my $found = 0;
+			foreach my $db (sort keys %database_stat) {
+				next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+
+				if ($data_info{$id}{name} eq 'database-backends') {
+
+					$database_stat{$db}{nbackend} =~ s/,$//;
+					$data{$db} = $database_stat{$db}{nbackend};
+					if ($db ne 'all') {
+						$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{nbackend}) );
+					}
+					delete $database_stat{$db}{nbackend};
+					$found++;
+
+				} elsif ($has_conflict && ($data_info{$id}{name} eq 'database-canceled_queries')) {
+
+					$database_stat{$db}{canceled_queries} =~ s/,$//;
+					$data{$db} = $database_stat{$db}{canceled_queries};
+					if ($db ne 'all') {
+						$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{canceled_queries}) );
+					}
+					delete $database_stat{$db}{canceled_queries};
+					$found++;
+
+				} elsif ($has_temp && ($data_info{$id}{name} eq 'database-deadlocks')) {
+
+					$database_stat{$db}{deadlocks} =~ s/,$//;
+					$data{$db} = $database_stat{$db}{deadlocks};
+					if ($db ne 'all') {
+						$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{deadlocks}) );
+					}
+					delete $database_stat{$db}{deadlocks};
+					$found++;
+
+				} elsif ($has_temp && ($data_info{$id}{name} eq 'database-temporary_file')) {
+
+					$database_stat{$db}{temp_files} =~ s/,$//;
+					$data{$db} = $database_stat{$db}{temp_files};
+					$database_stat{$db}{temp_bytes} =~ s/,$//;
+					$data2{$db} = $database_stat{$db}{temp_bytes};
+					if ($db ne 'all') {
+						$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{temp_files}) );
+						$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}.'_bytes', \%{$data_info{$id}}, $db, $database_stat{$db}{temp_bytes}) );
+					}
+					delete $database_stat{$db}{temp_files};
+					delete $database_stat{$db}{temp_bytes};
+					$found++;
+
+				}
+			}
+			if ($found) {
+				my $name = $data_info{$id}{name};
+				$name =~ s/^database/cluster/;
+				print $FHCLUSTER &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
+				if (scalar keys %data2 > 0) {
+					print $FHCLUSTER &flotr2_linegraph_hash($IDX++, $name.'_bytes', \%{$data_info{$id}}, 'all', %data2);
+				}
+			}
+		}
+	}
+
+	# Compute graphs of database conflict statistics
+	if ($file =~ /pg_stat_database_conflicts.csv/) {
+		my %database_stat = ();
+		my %all_database_stat = ();
+		my %start_vals = ();
+		my %total_count = ();
+		my $tmp_val = 0;
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			# Get database size statistics
+			push(@{$start_vals{$data[2]}}, @data) if ($#{$start_vals{$data[2]}} < 0);
+
+			(($data[3] - $start_vals{$data[2]}[3]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3] - $start_vals{$data[2]}[3]);
+			$all_database_stat{$data[2]}{tablespace} += $tmp_val;
+			$all_database_stat{'all'}{tablespace} += $tmp_val;
+
+			(($data[4] - $start_vals{$data[2]}[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals{$data[2]}[4]);
+			$all_database_stat{$data[2]}{lock} += $tmp_val;
+			$all_database_stat{'all'}{lock} += $tmp_val;
+
+			(($data[5] - $start_vals{$data[2]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[2]}[5]);
+			$all_database_stat{$data[2]}{snapshot} += $tmp_val;
+			$all_database_stat{'all'}{snapshot} += $tmp_val;
+
+			(($data[6] - $start_vals{$data[2]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[2]}[6]);
+			$all_database_stat{$data[2]}{bufferpin} += $tmp_val;
+			$all_database_stat{'all'}{bufferpin} += $tmp_val;
+
+			(($data[7] - $start_vals{$data[2]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[2]}[7]);
+			$all_database_stat{$data[2]}{deadlock} += $tmp_val;
+			$all_database_stat{'all'}{deadlock} += $tmp_val;
+
+                        @{$start_vals{$data[2]}} = ();
+                        push(@{$start_vals{$data[2]}}, @data);
+
+		}
+		my $id = &get_data_id('database-conflicts', %data_info);
+		foreach my $db (sort keys %all_database_stat) {
+			next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+			my $total = 0;
+			foreach my $k (sort keys %{$all_database_stat{$db}}) {
+				$total += $all_database_stat{$db}{$k};
+			}
+			$total ||= 1;
+			my %conflict_type = ();
+			if ($conflict_type{tablespace} || $conflict_type{lock} || $conflict_type{snapshot} || $conflict_type{bufferpin} || $conflict_type{deadlock}) {
+				$conflict_type{tablespace} = sprintf("%0.2f", ($all_database_stat{$db}{'tablespace'}*100)/$total);
+				$conflict_type{lock} = sprintf("%0.2f", ($all_database_stat{$db}{'lock'}*100)/$total);
+				$conflict_type{snapshot} = sprintf("%0.2f", ($all_database_stat{$db}{'snapshot'}*100)/$total);
+				$conflict_type{bufferpin} =  sprintf("%0.2f", ($all_database_stat{$db}{'bufferpin'}*100)/$total);
+				$conflict_type{deadlock} =  sprintf("%0.2f", ($all_database_stat{$db}{'deadlock'}*100)/$total);
+			}
+			if ($db ne 'all') {
+				$DBFH{$db}->print( &flotr2_piegraph($IDX++, 'database-conflicts', \%{$data_info{$id}}, $db, %conflict_type) );
+			} else {
+				print $FHCLUSTER &flotr2_piegraph($IDX++, 'cluster-conflicts', \%{$data_info{$id}}, $db, %conflict_type);
+			}
+		}
+	}
+
+	# Compute graphs of database size statistics
+	if ($file =~ /pg_database_size.csv/) {
+		my %database_stat = ();
+		my %all_database_stat = ();
+		my $total_val = 0;
+		my $old_time = 0;
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+			# Get database size statistics
+			$database_stat{$data[2]}{size} .= '[' . $data[0] . ',' . $data[3] . '],';
+			$all_database_stat{$data[0]} += $data[3];
+			$OVERALL_STATS{'database'}{$data[2]}{'size'} = $data[3];
+		}
+		foreach my $t (sort {$a <=> $b} keys %all_database_stat) {
+			$database_stat{'all'}{size} .= '[' . $t . ',' . $all_database_stat{$t} . '],';
+		}
+		my $id = &get_data_id('database-size', %data_info);
+		my %data = ();
+		foreach my $db (sort keys %database_stat) {
+			next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+			$database_stat{$db}{size} =~ s/,$//;
+			$data{$db} = $database_stat{$db}{size};
+			if ($db ne 'all') {
+				$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-size', \%{$data_info{$id}}, $db, $database_stat{$db}{size}) );
+			}
+			delete $database_stat{$db}{size};
+		}
+		print $FHCLUSTER &flotr2_linegraph_hash($IDX++, 'cluster-size', \%{$data_info{$id}}, 'all', %data);
+	}
+
+	# Compute graphs of database size statistics
+	if (!$NO_TB_STAT && ($file =~ /pg_stat_(all|user)_tables.csv/)) {
+		my %database_stat = ();
+		my %all_database_stat = ();
+		my %start_vals = ();
+		my $tmp_val = 0;
+		my $do_vacuum = 0;
+		my $old_time = 0;
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			push(@{$start_vals{$data[3]}}, @data) if ($#{$start_vals{$data[3]}} < 0);
+
+# Number of sequential versus index scan on the tables.
+# Number of vacuum + analyse
+# Number of autovacuum + autoanalyze.
+
+			# Get database statistics
+			(($data[4] - $start_vals{$data[3]}[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals{$data[3]}[4]);
+			$database_stat{$data[3]}{seq_scan} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],' if (!$SHOW_ALL_TB);
+			$all_database_stat{$data[0]}{seq_scan} += $tmp_val;
+			(($data[6] - $start_vals{$data[3]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[3]}[6]);
+			$database_stat{$data[3]}{idx_scan} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],' if (!$SHOW_ALL_TB);
+			$all_database_stat{$data[0]}{idx_scan} += $tmp_val;
+			if ($#data > 18) {
+				(($data[18] - $start_vals{$data[3]}[18]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[18] - $start_vals{$data[3]}[18]);
+				$database_stat{$data[3]}{vacuum_count} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],' if (!$SHOW_ALL_TB);
+				$all_database_stat{$data[0]}{vacuum_count} += $tmp_val;
+				(($data[19] - $start_vals{$data[3]}[19]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[19] - $start_vals{$data[3]}[19]);
+				$database_stat{$data[3]}{autovacuum_count} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],' if (!$SHOW_ALL_TB);
+				$all_database_stat{$data[0]}{autovacuum_count} += $tmp_val;
+				(($data[20] - $start_vals{$data[3]}[20]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[20] - $start_vals{$data[3]}[20]);
+				$database_stat{$data[3]}{analyze_count} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],' if (!$SHOW_ALL_TB);
+				$all_database_stat{$data[0]}{analyze_count} += $tmp_val;
+				(($data[21] - $start_vals{$data[3]}[21]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[21] - $start_vals{$data[3]}[21]);
+				$database_stat{$data[3]}{autoanalyze_count} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],' if (!$SHOW_ALL_TB);
+				$all_database_stat{$data[0]}{autoanalyze_count} += $tmp_val;
+				$do_vacuum = 1;
+			}
+			if ($old_time && ($old_time < $data[0])) {
+				$database_stat{all}{seq_scan} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$old_time}{seq_scan}/$interval)) . '],';
+				$database_stat{all}{idx_scan} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$old_time}{idx_scan}/$interval)) . '],';
+				if ($#data > 18) {
+					$database_stat{all}{vacuum_count} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$old_time}{vacuum_count}/$interval)) . '],';
+					$database_stat{all}{autovacuum_count} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$old_time}{autovacuum_count}/$interval)) . '],';
+					$database_stat{all}{analyze_count} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$old_time}{analyze_count}/$interval)) . '],';
+					$database_stat{all}{autoanalyze_count} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$old_time}{autoanalyze_count}/$interval)) . '],';
+				}
+				delete $all_database_stat{$old_time};
+				$old_time = $data[0];
+			} elsif (!$old_time) {
+				$old_time = $data[0];
+			}
+                        @{$start_vals{$data[3]}} = ();
+                        push(@{$start_vals{$data[3]}}, @data);
+		}
+		foreach my $t (sort {$a <=> $b} %all_database_stat) {
+			$all_database_stat{$t}{seq_scan} ||= 0;
+			$all_database_stat{$t}{idx_scan} ||= 0;
+			$database_stat{all}{seq_scan} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$t}{seq_scan}/$interval)) . '],';
+			$database_stat{all}{idx_scan} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$t}{idx_scan}/$interval)) . '],';
+			$database_stat{all}{vacuum_count} ||= 0;
+			$database_stat{all}{autovacuum_count} ||= 0;
+			$database_stat{all}{analyze_count} ||= 0;
+			$database_stat{all}{autoanalyze_count} ||= 0;
+			if (exists $all_database_stat{$t}{vacuum_count}) {
+				$database_stat{all}{vacuum_count} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$t}{vacuum_count}/$interval)) . '],';
+				$database_stat{all}{autovacuum_count} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$t}{autovacuum_count}/$interval)) . '],';
+				$database_stat{all}{analyze_count} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$t}{analyze_count}/$interval)) . '],';
+				$database_stat{all}{autoanalyze_count} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$t}{autoanalyze_count}/$interval)) . '],';
+			}
+		}
+		%all_database_stat = ();
+
+#		# Open filehandle to cluster file
+#		my $fhtable = new IO::File ">$OUTPUT_DIR/tables.html";
+#		if (not defined $fhtable) {
+#			die "FATAL: can't write to $OUTPUT_DIR/tables.html, $!\n";
+#		}
+#		&html_header($fhtable);
+#		print $fhtable "<ul id=\"slides\">\n";
+#		foreach my $id (sort {$a <=> $b} keys %data_info) {
+#			foreach my $tb (sort keys %database_stat) {
+#				next if (($#INCLUDE_TB >= 0) && ($tb ne 'all') && (!grep(/^$tb$/, @INCLUDE_TB)));
+#				if ($data_info{$id}{name} eq 'table-indexes') {
+#					$database_stat{$tb}{seq_scan} =~ s/,$//;
+#					$database_stat{$tb}{idx_scan} =~ s/,$//;
+#					print $fhtable &flotr2_linegraph_array($IDX++, 'table-indexes', \%{$data_info{$id}}, $data_info{$id}{title} . " ($tb)", $database_stat{$tb}{seq_scan}, $database_stat{$tb}{idx_scan});
+#					delete $database_stat{$tb}{idx_scan};
+#					delete $database_stat{$tb}{seq_scan};
+#				} elsif ( $do_vacuum && ($data_info{$id}{name} eq 'table-vacuums-analyzes') ) {
+#					$database_stat{$tb}{vacuum_count} =~ s/,$//;
+#					$database_stat{$tb}{autovacuum_count} =~ s/,$//;
+#					$database_stat{$tb}{analyze_count} =~ s/,$//;
+#					$database_stat{$tb}{autoanalyze_count} =~ s/,$//;
+#					print $fhtable &flotr2_linegraph_array($IDX++, 'table-vacuums-analyzes', \%{$data_info{$id}}, $data_info{$id}{title} . " ($tb)", $database_stat{$tb}{analyze_count}, $database_stat{$tb}{autoanalyze_count}, $database_stat{$tb}{vacuum_count}, $database_stat{$tb}{autovacuum_count});
+#					delete $database_stat{$tb}{vacuum_count};
+#					delete $database_stat{$tb}{autovacuum_count};
+#					delete $database_stat{$tb}{analyze_count};
+#					delete $database_stat{$tb}{autoanalyze_count};
+#				}
+#			}
+#		}
+#		# Terminate cluster statistics file
+#		print $fhtable "</ul>\n";
+#		&html_footer($fhtable);
+#		$fhtable->close;
+	}
+
+	# Compute graphs of bgwriter cluster statistics
+	if ($file  =~ /pg_stat_bgwriter.csv/) {
+		my %bgwriter_stat = ();
+		my @start_vals = ();
+		my %total_count = ();
+		my $tmp_val = 0;
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			push(@start_vals, @data) if ($#start_vals < 0);
+			(($data[1] - $start_vals[1]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[1] - $start_vals[1]);
+			$bgwriter_stat{checkpoints_timed} .= '[' . $data[0] . ',' . $tmp_val . '],';
+			(($data[2] - $start_vals[2]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[2] - $start_vals[2]);
+			$bgwriter_stat{checkpoints_req} .= '[' . $data[0] . ',' . $tmp_val . '],';
+			my $id = 0;
+			$id += 2 if ($#data > 10);
+			(($data[3+$id] - $start_vals[3+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3+$id] - $start_vals[3+$id]);
+			$bgwriter_stat{buffers_checkpoint} .= '[' . $data[0] . ',' . sprintf("%.2f", $tmp_val/$interval) . '],';
+			(($data[4+$id] - $start_vals[4+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4+$id] - $start_vals[4+$id]);
+			$bgwriter_stat{buffers_clean} .= '[' . $data[0] . ',' . sprintf("%.2f", $tmp_val/$interval) . '],';
+			(($data[6+$id] - $start_vals[6+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6+$id] - $start_vals[6+$id]);
+			$bgwriter_stat{buffers_backend} .= '[' . $data[0] . ',' . sprintf("%.2f", $tmp_val/$interval) . '],';
+			@start_vals = ();
+			push(@start_vals, @data);
+		}
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			if ($data_info{$id}{name} eq 'database-checkpoints') {
+				$bgwriter_stat{checkpoints_timed} =~ s/,$//;
+				$bgwriter_stat{checkpoints_req} =~ s/,$//;
+				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-checkpoints', \%{$data_info{$id}}, '', $bgwriter_stat{checkpoints_timed}, $bgwriter_stat{checkpoints_req});
+			} elsif ($data_info{$id}{name} eq 'database-bgwriter') {
+				$bgwriter_stat{buffers_checkpoint} =~ s/,$//;
+				$bgwriter_stat{buffers_clean} =~ s/,$//;
+				$bgwriter_stat{buffers_backend} =~ s/,$//;
+				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-bgwriter', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean},$bgwriter_stat{buffers_backend});
+			}
+		}
+	}
+
+	# Compute graphs of connections statistics
+	if ($file =~ /pg_stat_connections.csv/) {
+		my %connections_stat = ();
+		my %all_connections_stat = ();
+		my @start_vals = ();
+		my %total_count = ();
+		my $tmp_val = 0;
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+			my $db = 'all';
+			$db = $data[5] if ($#data == 5);
+			$all_connections_stat{$data[0]}{total} += $data[1];
+			$all_connections_stat{$data[0]}{active} += $data[2];
+			$all_connections_stat{$data[0]}{waiting} += $data[3];
+			$all_connections_stat{$data[0]}{idle_in_xact} += $data[4];
+			next if ($db eq 'all');
+			$connections_stat{$db}{total} .= '[' . $data[0] . ',' . ($data[1] || 0) . '],';
+			$connections_stat{$db}{active} .= '[' . $data[0] . ',' . ($data[2] || 0) . '],';
+			$connections_stat{$db}{waiting} .= '[' . $data[0] . ',' . ($data[3] || 0) . '],';
+			$connections_stat{$db}{idle_in_xact} .= '[' . $data[0] . ',' . ($data[4] || 0) . '],';
+		}
+		foreach my $time (sort {$a <=> $b} keys %all_connections_stat) {
+			$connections_stat{'all'}{total} .= '[' . $time . ',' . $all_connections_stat{$time}{total} . '],';
+			$connections_stat{'all'}{active} .= '[' . $time . ',' . $all_connections_stat{$time}{active} . '],';
+			$connections_stat{'all'}{waiting} .= '[' . $time . ',' . $all_connections_stat{$time}{waiting} . '],';
+			$connections_stat{'all'}{idle_in_xact} .= '[' . $time . ',' . $all_connections_stat{$time}{idle_in_xact} . '],';
+		}
+		my $id = &get_data_id('database-connections', %data_info);
+		foreach my $db (sort keys %connections_stat) {
+			next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+			$connections_stat{$db}{total} =~ s/,$//;
+			$connections_stat{$db}{active} =~ s/,$//;
+			$connections_stat{$db}{waiting} =~ s/,$//;
+			$connections_stat{$db}{idle_in_xact} =~ s/,$//;
+			if ($db ne 'all') {
+				$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-connections', \%{$data_info{$id}}, $db, $connections_stat{$db}{active}, $connections_stat{$db}{waiting}, $connections_stat{$db}{idle_in_xact}) );
+			} else {
+				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-connections', \%{$data_info{$id}}, 'all', $connections_stat{$db}{active}, $connections_stat{$db}{waiting}, $connections_stat{$db}{idle_in_xact});
+			}
+		}
+	}
+
+	# Compute graphs of user functions call statistics
+	if ($file =~ /pg_stat_user_functions.csv/) {
+		my %functions_stat = ();
+		my %all_functions_stat = ();
+		my @start_vals = ();
+		my %total_count = ();
+		my $tmp_val = 0;
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			push(@start_vals, @data) if ($#start_vals < 0);
+			(($data[4] - $start_vals[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals[4]);
+			$functions_stat{$data[3]}{calls} .= '[' . $data[0] . ',' . $tmp_val . '],';
+			$all_functions_stat{$data[0]}{calls} += $tmp_val;
+			(($data[5] - $start_vals[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals[5]);
+			$functions_stat{$data[3]}{total_time} .= '[' . $data[0] . ',' . $tmp_val . '],';
+			$all_functions_stat{$data[0]}{total_time} += $tmp_val;
+			(($data[6] - $start_vals[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals[6]);
+			$functions_stat{$data[3]}{self_time} .= '[' . $data[0] . ',' . $tmp_val . '],';
+			$all_functions_stat{$data[0]}{self_time} += $tmp_val;
+			@start_vals = ();
+			push(@start_vals, @data);
+		}
+		foreach my $time (sort {$a <=> $b} keys %all_functions_stat) {
+			$functions_stat{'all'}{calls} .= '[' . $time . ',' . $all_functions_stat{$time}{calls} . '],';
+			$functions_stat{'all'}{total_time} .= '[' . $time . ',' . $all_functions_stat{$time}{total_time} . '],';
+			$functions_stat{'all'}{self_time} .= '[' . $time . ',' . $all_functions_stat{$time}{self_time} . '],';
+		}
+		my $id1 = &get_data_id('database-functions_time', %data_info);
+		my $id2 = &get_data_id('database-functions_count', %data_info);
+		foreach my $db (sort keys %functions_stat) {
+			next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+			$functions_stat{$db}{calls} =~ s/,$//;
+			$functions_stat{$db}{total_time} =~ s/,$//;
+			$functions_stat{$db}{self_time} =~ s/,$//;
+			if ($db ne 'all') {
+				$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-functions_time', \%{$data_info{$id1}}, $db, $functions_stat{$db}{total_time}, $functions_stat{$db}{self_time}) );
+				$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-functions_count', \%{$data_info{$id2}}, $db, $functions_stat{$db}{calls}) );
+			} else {
+				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-functions_time', \%{$data_info{$id1}}, $db, $functions_stat{$db}{total_time}, $functions_stat{$db}{self_time});
+				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-functions_count', \%{$data_info{$id2}}, $db, $functions_stat{$db}{calls});
+			}
+		}
+	}
+
+	# Compute graphs of xlog cluster statistics
+	if ($file =~ /pg_xlog_stat.csv/) {
+
+		my %tmp_xlog_stat = ();
+		my %xlog_stat = ();
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			# case of pgstats file content
+			if ($#data == 3) {
+				$tmp_xlog_stat{$data[0]}{total}++;
+			} else {
+				# Case of pgusage_collector.pl file content
+				$xlog_stat{total} .= '[' . $data[0] . ',' . ($data[1] || 0) . '],';
+			}
+		}
+		foreach my $t (sort {$a <=> $b} keys %tmp_xlog_stat) {
+			$xlog_stat{total} .= '[' . $t . ',' . ($tmp_xlog_stat{$t}{total} || 0) . '],';
+		}
+		%tmp_xlog_stat = ();
+		my $id = &get_data_id('database-xlog_files', %data_info);
+		$xlog_stat{total} =~ s/,$//;
+		print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-xlog_files', \%{$data_info{$id}}, '', $xlog_stat{total});
+	}
+
+	# Compute graphs of repliction cluster statistics
+	if ($file =~ /pg_stat_replication.csv/) {
+		my %tmp_xlog_stat = ();
+		my @start_vals = ();
+		my %xlog_stat = ();
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			push(@start_vals, @data) if ($#start_vals < 0);
+			my $tmp_val = 0;
+			# Do not care about BACKUP connection
+			if (uc($data[9]) eq 'STREAMING') {
+				$tmp_xlog_stat{$data[0]}{master_location} = &getNumericalOffset($data[10]) - &getNumericalOffset($start_vals[10]) if (!$tmp_xlog_stat{$data[0]}{master_location});
+				my $name = $data[5];
+				$data[6] =~ s/"//g;
+				$name .= " - $data[6]" if ($data[6]);
+				((&getNumericalOffset($data[10]) - &getNumericalOffset($data[14])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[14]));
+				$xlog_stat{$name}{replay_location} .= '[' . $data[0] . ',' . sprintf("%.2f", ($tmp_val/$interval)) . '],';
+				((&getNumericalOffset($data[10]) - &getNumericalOffset($data[11])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[11]));
+				$xlog_stat{$name}{sent_location} .= '[' . $data[0] . ',' . sprintf("%.2f", ($tmp_val/$interval)) . '],';
+				((&getNumericalOffset($data[10]) - &getNumericalOffset($data[12])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[12]));
+				$xlog_stat{$name}{write_location} .= '[' . $data[0] . ',' . sprintf("%.2f", ($tmp_val/$interval)) . '],';
+				((&getNumericalOffset($data[10]) - &getNumericalOffset($data[13])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[13]));
+				$xlog_stat{$name}{flush_location} .= '[' . $data[0] . ',' . sprintf("%.2f", ($tmp_val/$interval)) . '],';
+			}
+			@start_vals = ();
+			push(@start_vals, @data);
+		}
+		foreach my $t (sort {$a <=> $b} keys %tmp_xlog_stat) {
+			$xlog_stat{master_location} .= '[' . $t . ',' . (sprintf("%.2f", $tmp_xlog_stat{$t}{master_location}/$interval) || 0) . '],';
+		}
+		%tmp_xlog_stat = ();
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			if (exists $xlog_stat{master_location} && ($data_info{$id}{name} eq 'database-xlog')) {
+				$xlog_stat{master_location} =~ s/,$//;
+				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-xlog', \%{$data_info{$id}}, '', $xlog_stat{master_location});
+				delete $xlog_stat{master_location};
+
+			} elsif ($data_info{$id}{name} eq 'database-replication') {
+				foreach my $host (sort {$a cmp $b} keys %xlog_stat) {
+					$xlog_stat{$host}{sent_location} =~ s/,$//;
+					$xlog_stat{$host}{write_location} =~ s/,$//;
+					$xlog_stat{$host}{flush_location} =~ s/,$//;
+					$xlog_stat{$host}{replay_location} =~ s/,$//;
+					print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-replication', \%{$data_info{$id}}, $data_info{$id}{title} . " $host", $xlog_stat{$host}{sent_location}, $xlog_stat{$host}{write_location}, $xlog_stat{$host}{replay_location});
+				}
+			}
+		}
+	}
+
+	# Compute graphs of pgbouncer cluster statistics
+	if ($file  =~ /pgbouncer_stats.csv/) {
+		my %pgbouncer_stat = ();
+		my %all_stat = ();
+		my %total_count = ();
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+			next if ($data[1] eq 'pgbouncer');
+
+			$pgbouncer_stat{$data[1]}{cl_active} .= '[' . $data[0] . ',' . $data[3] . '],';
+			$all_stat{$data[0]}{cl_active} += $data[3];
+			$pgbouncer_stat{$data[1]}{cl_waiting} .= '[' . $data[0] . ',' . $data[4] . '],';
+			$all_stat{$data[0]}{cl_waiting} += $data[4];
+			$pgbouncer_stat{$data[1]}{sv_active} .= '[' . $data[0] . ',' . $data[5] . '],';
+			$all_stat{$data[0]}{sv_active} += $data[5];
+			$pgbouncer_stat{$data[1]}{sv_idle} .= '[' . $data[0] . ',' . $data[6] . '],';
+			$all_stat{$data[0]}{sv_idle} += $data[6];
+			$pgbouncer_stat{$data[1]}{sv_used} .= '[' . $data[0] . ',' . $data[7] . '],';
+			$all_stat{$data[0]}{sv_used} += $data[7];
+			$pgbouncer_stat{$data[1]}{sv_tested} .= '[' . $data[0] . ',' . $data[8] . '],';
+			$all_stat{$data[0]}{sv_tested} += $data[8];
+			$pgbouncer_stat{$data[1]}{sv_login} .= '[' . $data[0] . ',' . $data[9] . '],';
+			$all_stat{$data[0]}{sv_login} += $data[9];
+			$pgbouncer_stat{$data[1]}{maxwait} .= '[' . $data[0] . ',' . $data[10] . '],';
+			$all_stat{$data[0]}{maxwait} += $data[10];
+		}
+		foreach my $t (sort {$a <=> $b} keys %all_stat) {
+			foreach my $k (keys %{$all_stat{$t}}) {
+				$pgbouncer_stat{'all'}{$k} .= '[' . $t . ',' . $all_stat{$t}{$k} . '],';
+			}
+		}
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			foreach my $db (sort {$a cmp $b} keys %pgbouncer_stat) {
+				if ($data_info{$id}{name} eq 'pgbouncer-clients') {
+					$pgbouncer_stat{$db}{cl_active} =~ s/,$//;
+					$pgbouncer_stat{$db}{cl_waiting} =~ s/,$//;
+					print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'pgbouncer-clients', \%{$data_info{$id}}, "$data_info{$id}{title} ($db)", $pgbouncer_stat{$db}{cl_active}, $pgbouncer_stat{$db}{cl_waiting});
+				} elsif ($data_info{$id}{name} eq 'pgbouncer-server') {
+					$pgbouncer_stat{$db}{sv_active} =~ s/,$//;
+					$pgbouncer_stat{$db}{sv_idle} =~ s/,$//;
+					$pgbouncer_stat{$db}{sv_used} =~ s/,$//;
+					print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'pgbouncer-server', \%{$data_info{$id}}, "$data_info{$id}{title} ($db)", $pgbouncer_stat{$db}{sv_active}, $pgbouncer_stat{$db}{sv_idle},$pgbouncer_stat{$db}{sv_used});
+				} elsif ($data_info{$id}{name} eq 'pgbouncer-maxwait') {
+					$pgbouncer_stat{$db}{maxwait} =~ s/,$//;
+					print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'pgbouncer-maxwait', \%{$data_info{$id}}, "$data_info{$id}{title} ($db)", $pgbouncer_stat{$db}{maxwait});
+				}
+			}
+		}
+	}
+
+	close(IN);
+
+}
+
+sub normalyze_line
+{
+	my $data = shift;
+
+	return 0 if ($data->[0] !~ /^\d+/);
+
+	$data->[0] = &convert_time($data->[0]);
+
+	# Skip unwanted lines
+	return 0 if ($BEGIN && ($data->[0] < $BEGIN));
+	return 0 if ($END   && ($data->[0] > $END));
+
+	chomp($data->[-1]);
+	map { s/,/\./g; s/^$/0/; } @$data;
+
+	# Always skip default template database
+	return 0 if ($data->[2] =~ /^template\d+$/);
+
+	return 1;
+}
+
+sub pretty_print_size
+{
+        my $val = shift;
+        return 0 if (!$val);
+
+        if ($val >= 1125899906842624) {
+                $val = ($val / 1125899906842624);
+                $val = sprintf("%0.2f", $val) . " PiB";
+        } elsif ($val >= 1099511627776) {
+                $val = ($val / 1099511627776);
+                $val = sprintf("%0.2f", $val) . " TiB";
+        } elsif ($val >= 1073741824) {
+                $val = ($val / 1073741824);
+                $val = sprintf("%0.2f", $val) . " GiB";
+        } elsif ($val >= 1048576) {
+                $val = ($val / 1048576);
+                $val = sprintf("%0.2f", $val) . " MiB";
+        } elsif ($val >= 1024) {
+                $val = ($val / 1024);
+                $val = sprintf("%0.2f", $val) . " KiB";
+        } else {
+                $val = $val . " B";
+        }
+
+        return $val;
+}
+
+sub generate_html_index
+{
+	my $fh = new IO::File ">$OUTPUT_DIR/index.html";
+	if (not defined $fh) {
+		die "FATAL: can't write to $OUTPUT_DIR/index.html, $!\n";
+	}
+
+	&html_header($fh);
+	
+	# Compute global statistics for home page dashboard
+	my %overall_database_stats = ();
+	if (exists $OVERALL_STATS{'cluster'}) {
+		$OVERALL_STATS{'cluster'}{'cache_ratio'} = sprintf("%.2f", ($OVERALL_STATS{'cluster'}{'blks_hit'} * 100) / (($OVERALL_STATS{'cluster'}{'blks_read'} + $OVERALL_STATS{'cluster'}{'blks_hit'}) || 1)) . "%";
+		$OVERALL_STATS{'cluster'}{'temp_bytes'} = &pretty_print_size($OVERALL_STATS{'cluster'}{'temp_bytes'});
+		foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
+			$OVERALL_STATS{'database'}{$db}{'cache_ratio'} = sprintf("%.2f", ($OVERALL_STATS{'database'}{$db}{'blks_hit'} * 100) / (($OVERALL_STATS{'database'}{$db}{'blks_read'} + $OVERALL_STATS{'database'}{$db}{'blks_hit'}) || 1));
+		}
+		foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
+			if (exists $OVERALL_STATS{'database'}{$db}{'size'}) {
+				$OVERALL_STATS{'cluster'}{'size'} += $OVERALL_STATS{'database'}{$db}{'size'};
+				if (!exists $overall_database_stats{'size'} || $OVERALL_STATS{'database'}{$db}{'size'} > $overall_database_stats{'size'}[1]) {
+					@{$overall_database_stats{'size'}} = ($db, $OVERALL_STATS{'database'}{$db}{'size'});
+				}
+			}
+			if (exists $OVERALL_STATS{'database'}{$db}{'nbackend'}) {
+				if (!exists $overall_database_stats{'nbackend'} || $OVERALL_STATS{'database'}{$db}{'nbackend'} > $overall_database_stats{'nbackend'}[1]) {
+					@{$overall_database_stats{'nbackend'}} = ($db, $OVERALL_STATS{'database'}{$db}{'nbackend'});
+				}
+			}
+			if (exists $OVERALL_STATS{'database'}{$db}{'read_tuples'}) {
+				if (!exists $overall_database_stats{'read_tuples'} || $OVERALL_STATS{'database'}{$db}{'read_tuples'} > $overall_database_stats{'read_tuples'}[1]) {
+					@{$overall_database_stats{'read_tuples'}} = ($db, $OVERALL_STATS{'database'}{$db}{'read_tuples'});
+				}
+			}
+			if (exists $OVERALL_STATS{'database'}{$db}{'temp_files'}) {
+				if (!exists $overall_database_stats{'temp_files'} || $OVERALL_STATS{'database'}{$db} {'temp_files'} > $overall_database_stats{'temp_files'}[1]) {
+					@{$overall_database_stats{'temp_files'}} = ($db, $OVERALL_STATS{'database'}{$db}{'temp_files'});
+				}
+			}
+			if (exists $OVERALL_STATS{'database'}{$db}{'temp_bytes'}) {
+				if (!exists $overall_database_stats{'temp_bytes'} || $OVERALL_STATS{'database'}{$db}{'temp_bytes'} > $overall_database_stats{'temp_bytes'}[1]) {
+					@{$overall_database_stats{'temp_bytes'}} = ($db, $OVERALL_STATS{'database'}{$db}{'temp_bytes'});
+				}
+			}
+			if (exists $OVERALL_STATS{'database'}{$db}{'deadlocks'}) {
+				if (!exists $overall_database_stats{'deadlocks'} || $OVERALL_STATS{'database'}{$db}{'deadlocks'} > $overall_database_stats{'deadlocks'}[1]) {
+					@{$overall_database_stats{'deadlocks'}} = ($db, $OVERALL_STATS{'database'}{$db}{'deadlocks'});
+				}
+			}
+			if (exists $OVERALL_STATS{'database'}{$db}{'cache_ratio'}) {
+				if (!exists $overall_database_stats{'cache_ratio'} || $OVERALL_STATS{'database'}{$db}{'cache_ratio'} < $overall_database_stats{'cache_ratio'}[1]) {
+					@{$overall_database_stats{'cache_ratio'}} = ($db, $OVERALL_STATS{'database'}{$db}{'cache_ratio'});
+				}
+			}
+		}
+		$OVERALL_STATS{'cluster'}{'size'} = &pretty_print_size($OVERALL_STATS{'cluster'}{'size'});
+		@{$overall_database_stats{'size'}} = ('unknown', 0) if (!exists $overall_database_stats{'size'});
+		$overall_database_stats{'size'}[1] = &pretty_print_size($overall_database_stats{'size'}[1]);
+		$overall_database_stats{'temp_bytes'}[1] = &pretty_print_size($overall_database_stats{'temp_bytes'}[1]);
+	}
+
+	my %overall_system_stats = ();
+	if (!$DISABLE_SAR) {
+		@{$OVERALL_STATS{'system'}{'cpu'}} = ('unknown', 0) if (!exists $OVERALL_STATS{'system'}{'cpu'});
+		@{$OVERALL_STATS{'system'}{'load'}} = ('unknown', 0) if (!exists $OVERALL_STATS{'system'}{'load'});
+		@{$OVERALL_STATS{'system'}{'kbcached'}} = ('unknown', 0) if (!exists $OVERALL_STATS{'system'}{'kbcached'});
+		@{$OVERALL_STATS{'system'}{'bread'}} = ('unknown', 0) if (!exists $OVERALL_STATS{'system'}{'bread'});
+		@{$OVERALL_STATS{'system'}{'bwrite'}} = ('unknown', 0) if (!exists $OVERALL_STATS{'system'}{'bwrite'});
+		@{$OVERALL_STATS{'system'}{'svctm'}} = ('unknown', 0) if (!exists $OVERALL_STATS{'system'}{'svctm'});
+		if (exists $OVERALL_STATS{'system'}{'devices'}) {
+			foreach my $d (keys %{$OVERALL_STATS{'system'}{'devices'}}) {
+				if (! exists $overall_system_stats{read} || ($overall_system_stats{read}[1] < $OVERALL_STATS{'system'}{'devices'}{$d}{read})) {
+					@{$overall_system_stats{read}} = ($d, $OVERALL_STATS{'system'}{'devices'}{$d}{read});
+				}
+				if (! exists $overall_system_stats{write} || ($overall_system_stats{write}[1] < $OVERALL_STATS{'system'}{'devices'}{$d}{write})) {
+					@{$overall_system_stats{write}} = ($d, $OVERALL_STATS{'system'}{'devices'}{$d}{write});
+				}
+			}
+		}
+		@{$overall_system_stats{read}} = ('unknown', 0) if (!exists $overall_system_stats{read});
+		@{$overall_system_stats{write}} = ('unknown', 0) if (!exists $overall_system_stats{write});
+		$overall_system_stats{read}[1] = &pretty_print_size(($overall_system_stats{read}[1]||0)*512);
+		$overall_system_stats{write}[1] = &pretty_print_size(($overall_system_stats{write}[1]||0)*512);
+		$OVERALL_STATS{'system'}{'kbcached'}[1] =  &pretty_print_size($OVERALL_STATS{'system'}{'kbcached'}[1]||0);
+		$OVERALL_STATS{'system'}{'bread'}[1] =  &pretty_print_size($OVERALL_STATS{'system'}{'bread'}[1]||0);
+		$OVERALL_STATS{'system'}{'bwrite'}[1] =  &pretty_print_size($OVERALL_STATS{'system'}{'bwrite'}[1]||0);
+	}
+
+	my $numcol = 4;
+	if ($DISABLE_SAR) {
+		$numcol = 6;
+	} elsif (!exists $OVERALL_STATS{'system'}) {
+		$numcol = 12;
+	}
+	print $fh <<EOF;
+<ul id="slides">
+<li class="slide active-slide" id="index-slide">
+
+    <div id="index"></div>
+
+    <!-- div class="jumbotron">
+       <h1>PostgreSQL Cluster utilization!</h1>
+	<p>A PostgreSQL performances monitoring and auditing tool.</p>
+    </div -->
+EOF
+	if (exists $OVERALL_STATS{'cluster'}) {
+		print $fh <<EOF;
+      <div class="row">
+            <div class="col-md-$numcol">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="fa fa-cogs fa-2x pull-left fa-border"></i><h2>Cluster</h2>
+              </div>
+              <div class="panel-body">
+		<div class="well key-figures">
+		<ul>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'size'}</span> <span class="figure-label">Size of the cluster</span></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'nbackend'}</span> <span class="figure-label">Number of connections</span></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'read_tuples'}</span> <span class="figure-label">Number of tuples fetched</span></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'cache_ratio'}%</span> <span class="figure-label">Cache utilization</span></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'temp_files'}</span> <span class="figure-label">Number of temporary files</span></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'temp_bytes'}</span> <span class="figure-label">Temporary files size</span></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'deadlocks'}</span> <span class="figure-label">Number of deadlocks</span></li>
+		</ul>
+		</div>
+              </div>
+              </div>
+            </div><!--/span-->
+            <div class="col-md-$numcol">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="fa fa-th fa-2x pull-left fa-border"></i><h2>Databases</h2>
+              </div>
+              <div class="panel-body">
+		<div class="well key-figures">
+		<ul>
+		<li><span class="figure">$overall_database_stats{'size'}[0] ($overall_database_stats{'size'}[1])</span> <span class="figure-label">Largest</span></li>
+		<li><span class="figure">$overall_database_stats{'nbackend'}[0] ($overall_database_stats{'nbackend'}[1])</span> <span class="figure-label">Most connections</span></li>
+		<li><span class="figure">$overall_database_stats{'read_tuples'}[0] ($overall_database_stats{'read_tuples'}[1])</span> <span class="figure-label">Most tuples fetched</span></li>
+		<li><span class="figure">$overall_database_stats{'cache_ratio'}[0] ($overall_database_stats{'cache_ratio'}[1]%)</span> <span class="figure-label">Worst cache utilization</span></li>
+		<li><span class="figure">$overall_database_stats{'temp_files'}[0] ($overall_database_stats{'temp_files'}[1])</span> <span class="figure-label">Most temporary files</span></li>
+		<li><span class="figure">$overall_database_stats{'temp_bytes'}[0] ($overall_database_stats{'temp_bytes'}[1])</span> <span class="figure-label">Most temporary bytes</span></li>
+		<li><span class="figure">$overall_database_stats{'deadlocks'}[0] ($overall_database_stats{'deadlocks'}[1])</span> <span class="figure-label">Most deadlocks</span></li>
+		</ul>
+		</div>
+              </div>
+              </div>
+            </div><!--/span-->
+EOF
+	}
+	if (!$DISABLE_SAR) {
+		print $fh <<EOF;
+            <div class="col-md-$numcol">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <span class="fa-stack fa-lg pull-left fa-border"><i class="fa fa-square fa-stack-2x"></i><i class="fa fa-terminal fa-stack-1x fa-inverse"></i></span> <h2>System</h2>
+              </div>
+              <div class="panel-body">
+		<div class="well key-figures">
+		<ul>
+		<li><span class="figure">$OVERALL_STATS{'system'}{'cpu'}[1]% ($OVERALL_STATS{'system'}{'cpu'}[0])</span> <span class="figure-label">Highest CPU utilization</span></li>
+		<li><span class="figure">$OVERALL_STATS{'system'}{'load'}[1] ($OVERALL_STATS{'system'}{'load'}[0])</span> <span class="figure-label">Highest system load</span></li>
+		<li><span class="figure">$OVERALL_STATS{'system'}{'kbcached'}[1] ($OVERALL_STATS{'system'}{'kbcached'}[0])</span> <span class="figure-label">Lowest system cache</span></li>
+		<!-- li><span class="figure">$OVERALL_STATS{'system'}{'bread'}[1] ($OVERALL_STATS{'system'}{'bread'}[0])</span> <span class="figure-label">Highest block read</span></li -->
+		<!-- li><span class="figure">$OVERALL_STATS{'system'}{'bwrite'}[1] ($OVERALL_STATS{'system'}{'bwrite'}[0])</span> <span class="figure-label">Highest block write</span></li -->
+		<li><span class="figure">$OVERALL_STATS{'system'}{'svctm'}[1] ($OVERALL_STATS{'system'}{'svctm'}[0])</span> <span class="figure-label">Highest device service time</span></li>
+		<li><span class="figure">$overall_system_stats{read}[0] ($overall_system_stats{read}[1])</span> <span class="figure-label">Most read device</span></li>
+		<li><span class="figure">$overall_system_stats{write}[0] ($overall_system_stats{write}[1])</span> <span class="figure-label">Most written device</span></li>
+		</ul>
+		</div>
+              </div>
+              </div>
+            </div><!--/span-->
+EOF
+	}
+	print $fh <<EOF;
+      </div>
+</li>
+
+<li class="slide" id="about-slide">
+
+	<div id="about"><br/><br/><br/></div>
+	<div class="jumbotron">
+	<h1>About $PROGRAM</h1>
+	<p>$PROGRAM is a Perl program used to perform a full audit of a PostgreSQL Cluster. It is divided in two parts, a collector used to grab statistics on the PostgreSQL cluster using psql and sysstat, a grapher that will generate all HTML output. It is fully open source and free of charge.</p>
+	</div>
+	<div class="row">
+            <div class="col-md-4">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="fa fa-chain-broken fa-2x pull-left fa-border"></i><h2>License</h2>
+              </div>
+              <div class="panel-body panel-height">
+              <p>$PROGRAM is licenced under the PostgreSQL Licence a liberal Open Source license, similar to the BSD or MIT licenses.</p>
+	      <p>That mean that all parts of the program are open source and free of charge.</p>
+	      <p>This is the case for both, the collecter and the grapher programs.</p>
+              </div>
+              </div>
+            </div><!--/span-->
+            <div class="col-md-4">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="fa fa-download fa-2x pull-left fa-border"></i><h2>Download</h2>
+              </div>
+              <div class="panel-body panel-height">
+              <p>Official releases at SourceForge:<br/>
+	      [ <a href="http://sourceforge.net/projects/pgcluu/">http://sourceforge.net/projects/pgcluu/</a> ].</p>
+	      <p>Source code at github:<br/>
+	      [ <a href="https://github.com/darold/pgcluu">https://github.com/darold/pgcluu</a> ].</p>
+	      <p>ChangeLog can be read on-line on GitHub repository <a href="https://github.com/darold/pgcluu/blob/master/ChangeLog">here</a>
+	      <p>Offical web site is hosted at <a href="http://pgcluu.darold.net/">pgcluu.darold.net</a>
+              </div>
+              </div>
+            </div><!--/span-->
+            <div class="col-md-4">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="fa fa-wrench fa-2x pull-left fa-border"></i><h2>Authors</h2>
+              </div>
+              <div class="panel-body panel-height">
+	      <p>$PROGRAM is an original development of <a href="http://www.darold.net/">Gilles Darold</a>.</p>
+	      <p>Some parts of the collector are taken from <a href="https://github.com/gleu/pgstats">pgstats</a> a C program writen by Guillaume Lelarge and especially the SQL queries including the compatibility with all PostgreSQL versions.</p>
+	      <p>Btw $PROGRAM grapher is compatible with files generated by pgstats, sar and sadc so you can use it independantly to graph those data. Some part of the sar output parser are taken from <a href="http://sysusage.darold.net/">SysUsage</a></p>
+              </div>
+              </div>
+            </div><!--/span-->
+	</div>
+</li>
+</ul> <!-- end of slides -->
+EOF
+        &html_footer($fh);
+        $fh->close;
+}
+
+sub html_header
+{
+	my $fh = shift();
+	my @db_list = @_;
+
+        my $date = localtime(time);
+        print $fh qq{
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="shortcut icon" href="favicon.png">
+
+    <title>$PROGRAM</title>
+
+    <!-- Bootstrap core CSS -->
+    <link href="bootstrap.min.css" rel="stylesheet">
+
+    <!-- FontAwesome CSS -->
+    <link rel="stylesheet" href="font-awesome.min.css">
+
+    <!-- Custom styles for this template -->
+    <link href="pgcluu.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+      <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
+    <![endif]-->
+    <script src="jquery.min.js"></script>
+    <script src="bootstrap.min.js"></script>
+    <script src="pgcluu.js"></script>
+  </head>
+
+ <body>
+
+<!-- Fixed navbar -->
+    <div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="index.html#">$PROGRAM</a>
+        </div>
+        <div class="navbar-collapse collapse">
+          <ul class="nav navbar-nav">
+              <li id="menu-index" class="dropdown"><a href="index.html#">Home</a></li>
+};
+	my $disable_replication = '';
+	my $disable_xlog = '';
+	if (!-e "$INPUT_DIR/pg_stat_replication.csv" || -z "$INPUT_DIR/pg_stat_replication.csv") {
+		$disable_replication = ' class="disabled"';
+	}
+	if (!-e "$INPUT_DIR/pg_xlog_stat.csv" || -z "$INPUT_DIR/pg_xlog_stat.csv") {
+		$disable_xlog = ' class="disabled"';
+	}
+	if ($#DATABASE_LIST >= 0) {
+		print $fh qq{
+              <li id="menu-cluster" class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown">Cluster <b class="caret"></b></a>
+                <ul class="dropdown-menu">
+		      <li id="menu-cluster-size"><a href="cluster.html#cluster-size">Databases sizes</a></li>
+		      <li id="menu-cluster-backends"><a href="cluster.html#cluster-backends">Connections</a></li>
+		      <li id="menu-cluster-connections"><a href="cluster.html#cluster-connections">Connections by type</a></li>
+		      <li id="menu-cluster-cache_ratio"><a href="cluster.html#cluster-cache_ratio">Cache utilization</a></li>
+		      <li id="menu-cluster-deadlocks"><a href="cluster.html#cluster-deadlocks">Deadlocks</a></li>
+		      <li class="divider"></li>
+		      <li id="menu-cluster-bgwriter"><a href="cluster.html#cluster-bgwriter">Background writer</a></li>
+		      <li id="menu-cluster-xlog_files"$disable_xlog><a href="cluster.html#cluster-xlog_files">Wal files</a></li>
+		      <li id="menu-cluster-replication"$disable_replication><a href="cluster.html#cluster-replication">Replication</a></li>
+		      <li id="menu-cluster-temporary_file"><a href="cluster.html#cluster-temporary_file">Temporary files</a></li>
+		      <li id="menu-cluster-temporary_file_bytes"><a href="cluster.html#cluster-temporary_file_bytes">Temporary files size</a></li>
+		      <li id="menu-cluster-checkpoints"><a href="cluster.html#cluster-checkpoints">Checkpoints</a></li>
+		      <li id="menu-cluster-read_ratio"><a href="cluster.html#cluster-read_ratio">Read tuples</a></li>
+		      <li id="menu-cluster-commits_rollbacks"><a href="cluster.html#cluster-commits_rollbacks">Commits vs Rollbacks</a></li>
+		      <li class="divider"></li>
+		      <li id="menu-cluster-write_ratio"><a href="cluster.html#cluster-write_ratio">Write ratio</a></li>
+		      <li id="menu-cluster-read_write_query"><a href="cluster.html#cluster-read_write_query">Read vs Write queries</a></li>
+		      <li id="menu-cluster-canceled_queries"><a href="cluster.html#cluster-canceled_queries">Canceled queries</a></li>
+		      <li id="menu-cluster-conflicts"><a href="cluster.html#cluster-conflicts">Conflicts</a></li>
+                </ul>
+              </li>
+              <li id="menu-database" class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown">Databases <b class="caret"></b></a>
+                <ul class="dropdown-menu">
+};
+	}
+
+	foreach my $db (@DATABASE_LIST) {
+		print $fh qq{
+		<li id="menu-$db" class="dropdown-submenu">
+		   <a href="#" tabindex="-1">$db </a>
+		      <ul class="dropdown-menu">
+		      <li id="menu-database-size"><a href="database-$db.html#database-size">Database size</a></li>
+		      <li id="menu-database-backends"><a href="database-$db.html#database-backends">Connections</a></li>
+		      <li id="menu-database-connections"><a href="database-$db.html#database-connections">Connections by type</a></li>
+		      <li id="menu-database-cache_ratio"><a href="database-$db.html#database-cache_ratio">Cache utilization</a></li>
+		      <li id="menu-database-deadlocks"><a href="database-$db.html#database-deadlocks">Deadlocks</a></li>
+		      <li class="divider"></li>
+		      <li id="menu-database-temporary_file"><a href="database-$db.html#database-temporary_file">Temporary files</a></li>
+		      <li id="menu-database-temporary_file_bytes"><a href="database-$db.html#database-temporary_file_bytes">Temporary files size</a></li>
+		      <li id="menu-database-read_ratio"><a href="database-$db.html#database-read_ratio">Read tuples</a></li>
+		      <li id="menu-database-commits_rollbacks"><a href="database-$db.html#database-commits_rollbacks">Commits vs Rollbacks</a></li>
+		      <li class="divider"></li>
+		      <li id="menu-database-write_ratio"><a href="database-$db.html#database-write_ratio">Write ratio</a></li>
+		      <li id="menu-database-read_write_query"><a href="database-$db.html#database-read_write_query">Read vs Write queries</a></li>
+		      <li id="menu-database-canceled_queries"><a href="database-$db.html#database-canceled_queries">Canceled queries</a></li>
+		      <li id="menu-database-conflicts"><a href="database-$db.html#database-conflicts">Conflicts</a></li>
+                      </ul>
+                </li>
+};
+	}
+	if ($#DATABASE_LIST >= 0) {
+		print $fh qq{
+                </ul>
+              </li>
+};
+	}
+	if (!$DISABLE_SAR) {
+		print $fh qq{
+              <li id="menu-system" class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown">System <b class="caret"></b></a>
+                <ul class="dropdown-menu">
+		  <li id="menu-cpu"><a href="system.html#system-cpu">Cpu</a></li>
+                  <li class="divider"></li>
+                  <li id="menu-system-memory"><a href="system.html#system-memory">Memory</a></li>
+                  <li id="menu-system-swap"><a href="system.html#system-swap">Swap</a></li>
+                  <li class="divider"></li>
+                  <li id="menu-system-load"><a href="system.html#system-load">Load</a></li>
+                  <li id="menu-system-process"><a href="system.html#system-process">Process</a></li>
+                  <li class="divider"></li>
+                  <li id="menu-system-block"><a href="system.html#system-block">Block</a></li>
+                  <li class="divider"></li>
+		  <li id="menu-device" class="dropdown-submenu">
+		     <a href="#" tabindex="-1">Devices </a>
+		      <ul class="dropdown-menu">
+};
+		for (my $i = 0; $i <= $#DEVICE_LIST; $i++) {
+			print $fh qq{
+		  <li id="menu-device$i" class="dropdown-submenu">
+		     <a href="#" tabindex="-1">$DEVICE_LIST[$i] </a>
+		      <ul class="dropdown-menu">
+		      <li id="menu-device-cpu"><a href="system-device$i.html#device-cpu">Cpu utilization</a></li>
+		      <li id="menu-device-read_write"><a href="system-device$i.html#device-read_write">Read/write bytes per second</a></li>
+		      <li id="menu-device-service_time"><a href="system-device$i.html#device-service_time">Average service time</a></li>
+		      </ul>
+		  </li>
+};
+		}
+		print $fh qq{
+		    </ul>
+		  </li>
+                </ul>
+              </li>
+};
+	}
+	print $fh qq{
+              <li id="menu-about" class="dropdown"><a href="index.html#about">About</a></li>
+
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
+    </div>
+
+<div class="container" id="main-container">
+};
+
+
+}
+
+sub html_footer
+{
+	my $fh = shift();
+
+        print $fh qq{
+
+      <hr>
+
+      <footer>
+        <p>&copy; Gilles Darold 2012-2013</p>
+	<p>Report generated by <a href="http://pgcluu.darold.net/">$PROGRAM</a> $VERSION.</p>
+      </footer>
+
+    </div><!--/.container-->
+  </body>
+</html>
+};
+
+}
+
+sub device_in_report
+{
+	my $device = shift;
+
+	return 1 if ($#INCLUDE_DEV == -1);
+
+	foreach my $g (@INCLUDE_DEV) {
+		return 1 if (grep(/^$g$/, $device));
+	}
+	return 0;
+}
+
+sub compute_cpu_report
+{
+	my $data_info = shift();
+
+	my %cpu_stat = ();
+	my %cpu_all_stat = ();
+	my $ncpu = 0;
+	for (my $i = 0; $i <= $#_; $i++) {
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+		next if ($data[3] eq 'all');
+		# hostname;interval;timestamp;CPU;%user;%nice;%system;%iowait;%steal;%idle
+		if ($data[3] >= $ncpu) {
+			$ncpu = $data[3];
+		} else {
+			last;
+		}
+	}
+	$ncpu += 1;
+	for (my $i = 0; $i <= $#_; $i++) {
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+		# hostname;interval;timestamp;CPU;%user;%nice;%system;%iowait;%steal;%idle
+		# hostname;interval;timestamp;CPU;%usr;%nice;%sys;%iowait;%steal;%irq;%soft;%guest;%idle
+		my $otime = $data[2];
+		$data[2] = &convert_time($data[2]);
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+
+		map { s/,/\./ } @data ;
+		if ($data[3] ne 'all') {
+			my $total_cpu = ($data[6]||0) + ($data[4]||0);
+			$cpu_stat{$data[3]}{total} .= '[' . $data[2] . ',' . $total_cpu . '],';
+			$cpu_stat{$data[3]}{system} .= '[' . $data[2] . ',' . ($data[6]||0) . '],';
+			$cpu_stat{$data[3]}{user}   .= '[' . $data[2] . ',' . ($data[4]||0) . '],';
+			$cpu_stat{$data[3]}{iowait} .= '[' . $data[2] . ',' . ($data[7]||0) . '],';
+			$cpu_stat{$data[3]}{idle}   .= '[' . $data[2] . ',' . ($data[-1]||0) . '],';
+		} else {
+			my $total_cpu = ($data[6]||0) + ($data[4]||0);
+			if (!exists $OVERALL_STATS{'system'}{'cpu'} || ($OVERALL_STATS{'system'}{'cpu'}[1] < $total_cpu)) {
+				@{$OVERALL_STATS{'system'}{'cpu'}} = ($otime,  $total_cpu);
+				$OVERALL_STATS{'system'}{'ncpu'} = $ncpu;
+			}
+			$cpu_all_stat{total} .= '[' . $data[2] . ',' . $total_cpu . '],';
+			$cpu_all_stat{system} .= '[' . $data[2] . ',' . ($data[6]||0) . '],';
+			$cpu_all_stat{user}   .= '[' . $data[2] . ',' . ($data[4]||0) . '],';
+			$cpu_all_stat{iowait} .= '[' . $data[2] . ',' . ($data[7]||0) . '],';
+			$cpu_all_stat{idle}   .= '[' . $data[2] . ',' . ($data[-1]||0) . '],';
+		}
+	}
+	$cpu_all_stat{total} =~ s/,$//;
+	$cpu_all_stat{system} =~ s/,$//;
+	$cpu_all_stat{user} =~ s/,$//;
+	$cpu_all_stat{iowait} =~ s/,$//;
+	$cpu_all_stat{idle} =~ s/,$//;
+	print $FH &flotr2_linegraph_array($IDX++, 'system-cpu', $data_info, 'all', $cpu_all_stat{total}, $cpu_all_stat{system}, $cpu_all_stat{user}, $cpu_all_stat{iowait});
+#	foreach my $n (sort { $a <=> $b } keys %cpu_stat) {
+#		$cpu_stat{$n}{total} =~ s/,$//;
+#		$cpu_stat{$n}{system} =~ s/,$//;
+#		$cpu_stat{$n}{user} =~ s/,$//;
+#		$cpu_stat{$n}{iowait} =~ s/,$//;
+#		$cpu_stat{$n}{idle} =~ s/,$//;
+#		my $id = $n + 1;
+#		print $FH &flotr2_linegraph_array($IDX++, 'system-cpu'.$n, $data_info, $n, $cpu_stat{$n}{total}, $cpu_stat{$n}{system}, $cpu_stat{$n}{user}, $cpu_stat{$n}{iowait});
+#	}
+}
+
+sub compute_load_report
+{
+	my $data_info = shift();
+
+	my %load_stat = ();
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;runq-sz;plist-sz;ldavg-1;ldavg-5;ldavg-15
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+		my $otime = $data[2];
+		$data[2] = &convert_time($data[2]);
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+		map { s/,/\./ } @data ;
+		if (!exists $OVERALL_STATS{'system'}{'load'} || ($OVERALL_STATS{'system'}{'load'}[1] < $data[5])) {
+			@{$OVERALL_STATS{'system'}{'load'}} = ($otime, $data[5]);
+		}
+		$load_stat{'ldavg-1'} .= '[' . $data[2] . ',' . ($data[5]||0) . '],';
+		$load_stat{'ldavg-5'}   .= '[' . $data[2] . ',' . ($data[6]||0) . '],';
+		$load_stat{'ldavg-15'} .= '[' . $data[2] . ',' . ($data[7]||0) . '],';
+	}
+	if (scalar keys %load_stat > 0) {
+		$load_stat{'ldavg-1'} =~ s/,$//;
+		$load_stat{'ldavg-5'} =~ s/,$//;
+		$load_stat{'ldavg-15'} =~ s/,$//;
+		print $FH &flotr2_linegraph_array($IDX++, 'system-load', $data_info, '', $load_stat{'ldavg-1'}, $load_stat{'ldavg-5'}, $load_stat{'ldavg-15'});
+	}
+}
+
+sub compute_process_report
+{
+	my $data_info = shift();
+
+	my %process_stat = ();
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;runq-sz;plist-sz;ldavg-1;ldavg-5;ldavg-15
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+		my $otime = $data[2];
+		$data[2] = &convert_time($data[2]);
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+		map { s/,/\./ } @data ;
+		if (!exists $OVERALL_STATS{'system'}{'process'} || ($OVERALL_STATS{'system'}{'process'}[1] < $data[4])) {
+			@{$OVERALL_STATS{'system'}{'process'}} = ($otime, $data[4]);
+		}
+		$process_stat{'plist-sz'}   .= '[' . $data[2] . ',' . ($data[4]||0) . '],';
+	}
+	if (scalar keys %process_stat > 0) {
+		$process_stat{'plist-sz'} =~ s/,$//;
+		print $FH &flotr2_linegraph_array($IDX++, 'system-process', $data_info, '', $process_stat{'plist-sz'});
+	}
+}
+
+sub compute_memory_report
+{
+	my $data_info = shift();
+
+	my %memory_stat = ();
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;kbmemfree;kbmemused;%memused;kbbuffers;kbcached;kbcommit;%commit
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+		my $otime = $data[2];
+		$data[2] = &convert_time($data[2]);
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+		map { s/,/\./ } @data ;
+		my $kbcached = $data[7]*1024;
+		if (!exists $OVERALL_STATS{'system'}{'kbcached'} || ($OVERALL_STATS{'system'}{'kbcached'}[1] > $kbcached)) {
+			@{$OVERALL_STATS{'system'}{'kbcached'}} = ($otime, $kbcached);
+		}
+		$memory_stat{'kbcached'} .= '[' . $data[2] . ',' . $kbcached . '],';
+		$memory_stat{'kbbuffers'}   .= '[' . $data[2] . ',' . $data[6]*1024 . '],';
+		$memory_stat{'kbmemfree'} .= '[' . $data[2] . ',' . $data[3]*1024 . '],';
+	}
+	if (scalar keys %memory_stat > 0) {
+		$memory_stat{'kbcached'} =~ s/,$//;
+		$memory_stat{'kbbuffers'} =~ s/,$//;
+		$memory_stat{'kbmemfree'} =~ s/,$//;
+		print $FH &flotr2_linegraph_array($IDX++, 'system-memory', $data_info, '', $memory_stat{'kbcached'}, $memory_stat{'kbbuffers'}, $memory_stat{'kbmemfree'});
+	}
+}
+
+sub compute_swap_report
+{
+	my $data_info = shift();
+
+	my %swap_stat = ();
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;pswpin/s;pswpout/s
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+		my $otime = $data[2];
+		$data[2] = &convert_time($data[2]);
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+		map { s/,/\./ } @data ;
+		if (!exists $OVERALL_STATS{'system'}{'pswpin'} || ($OVERALL_STATS{'system'}{'pswpin'}[1] < $data[3])) {
+			@{$OVERALL_STATS{'system'}{'pswpin'}} = ($otime, $data[3]);
+		}
+		if (!exists $OVERALL_STATS{'system'}{'pswpout'} || ($OVERALL_STATS{'system'}{'pswpout'}[1] < $data[4])) {
+			@{$OVERALL_STATS{'system'}{'pswpout'}} = ($otime, $data[4]);
+		}
+		$swap_stat{'pswpin/s'} .= '[' . $data[2] . ',' . ($data[3]||0) . '],';
+		$swap_stat{'pswpout/s'}   .= '[' . $data[2] . ',' . ($data[4]||0) . '],';
+	}
+	if (scalar keys %swap_stat > 0) {
+		$swap_stat{'pswpin/s'} =~ s/,$//;
+		$swap_stat{'pswpout/s'} =~ s/,$//;
+		print $FH &flotr2_linegraph_array($IDX++, 'system-swap', $data_info, '', $swap_stat{'pswpin/s'}, $swap_stat{'pswpout/s'});
+	}
+}
+
+sub compute_block_report
+{
+	my $data_info = shift();
+
+	my %block_stat = ();
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;tps;rtps;wtps;bread/s;bwrtn/s
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+		my $otime = $data[2];
+		$data[2] = &convert_time($data[2]);
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+		map { s/,/\./ } @data ;
+		if (!exists $OVERALL_STATS{'system'}{'bread'} || ($OVERALL_STATS{'system'}{'bread'}[1] < $data[6])) {
+			@{$OVERALL_STATS{'system'}{'bread'}} = ($otime, $data[6]);
+		}
+		if (!exists $OVERALL_STATS{'system'}{'bwrite'} || ($OVERALL_STATS{'system'}{'bwrite'}[1] < $data[7])) {
+			@{$OVERALL_STATS{'system'}{'bwrite'}} = ($otime, $data[7]);
+		}
+		$block_stat{'bread/s'} .= '[' . $data[2] . ',' . ($data[6]||0) . '],';
+		$block_stat{'bwrtn/s'}   .= '[' . $data[2] . ',' . ($data[7]||0) . '],';
+	}
+	if (scalar keys %block_stat > 0) {
+		$block_stat{'bread/s'} =~ s/,$//;
+		$block_stat{'bwrtn/s'} =~ s/,$//;
+		print $FH &flotr2_linegraph_array($IDX++, 'system-block', $data_info, '', $block_stat{'bread/s'}, $block_stat{'bwrtn/s'});
+	}
+}
+
+sub compute_srvtime_report
+{
+	my $data_info = shift();
+
+	my %devices_stat = ();
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+		my $otime = $data[2];
+		$data[2] = &convert_time($data[2]);
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+		next if (!&device_in_report($data[3]));
+		map { s/,/\./ } @data ;
+		if (!exists $OVERALL_STATS{'system'}{'svctm'} || ($OVERALL_STATS{'system'}{'svctm'}[1] < $data[10])) {
+			@{$OVERALL_STATS{'system'}{'svctm'}} = ($otime, $data[10]);
+		}
+		$devices_stat{$data[3]}{'await'}   .= '[' . $data[2] . ',' . ($data[9]||0) . '],';
+		$devices_stat{$data[3]}{'svctm'} .= '[' . $data[2] . ',' . ($data[10]||0) . '],';
+	}
+	if (scalar keys %devices_stat > 0) {
+		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
+			$devices_stat{$n}{'await'} =~ s/,$//;
+			$devices_stat{$n}{'svctm'} =~ s/,$//;
+			$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'device-service_time', $data_info, $n, $devices_stat{$n}{'svctm'}, $devices_stat{$n}{'await'}) );
+		}
+	}
+}
+
+sub compute_rw_device_report
+{
+	my $data_info = shift();
+
+	my %devices_stat = ();
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+		my $otime = $data[2];
+		$data[2] = &convert_time($data[2]);
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+		next if (!&device_in_report($data[3]));
+		map { s/,/\./ } @data ;
+		$OVERALL_STATS{'system'}{'devices'}{$data[3]}{read} += $data[5];
+		$OVERALL_STATS{'system'}{'devices'}{$data[3]}{write} += $data[6];
+		$devices_stat{$data[3]}{'rd_sec/s'} .= '[' . $data[2] . ',' . ($data[5]*512) . '],';
+		$devices_stat{$data[3]}{'wr_sec/s'}   .= '[' . $data[2] . ',' . ($data[6]*512) . '],';
+		#$devices_stat{$data[3]}{'tps'}   .= '[' . $data[2] . ',' . ($data[4]||0) . '],';
+	}
+	if (scalar keys %devices_stat > 0) {
+		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
+			$devices_stat{$n}{'rd_sec/s'} =~ s/,$//;
+			$devices_stat{$n}{'wr_sec/s'} =~ s/,$//;
+			#$devices_stat{$n}{'tps'} =~ s/,$//;
+			$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'device-read_write', $data_info, $n, $devices_stat{$n}{'rd_sec/s'}, $devices_stat{$n}{'wr_sec/s'}) );
+		}
+	}
+}
+
+sub compute_util_device_report
+{
+	my $data_info = shift();
+
+	my %devices_stat = ();
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+		$data[2] = &convert_time($data[2]);
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+		next if (!&device_in_report($data[3]));
+		map { s/,/\./ } @data ;
+		$devices_stat{$data[3]}{'%util'}   .= '[' . $data[2] . ',' . ($data[11]||0) . '],';
+	}
+	if (scalar keys %devices_stat > 0) {
+		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
+			$devices_stat{$n}{'%util'} =~ s/,$//;
+			$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'device-cpu', $data_info, $n, $devices_stat{$n}{'%util'}) );
+		}
+	}
+}
+
+sub compute_sarstat_graph
+{
+	my ($file, %data_info) = @_;
+
+	####
+	# Show CPU usage
+	####
+	if ($data_info{name} eq 'system-cpu') {
+		my $command = "$SADF_PROG -t -P ALL -D $file";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for cpu statistics
+		&compute_cpu_report(\%data_info, @content);
+	}
+
+	####
+	# Show load average
+	####
+	if ($data_info{name} eq 'system-load') {
+		my $command = "$SADF_PROG -t -D $file -- -q";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for load statistics
+		&compute_load_report(\%data_info, @content);
+	}
+
+	####
+	# Show process number
+	####
+	if ($data_info{name} eq 'system-process') {
+		my $command = "$SADF_PROG -t -D $file -- -q";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for process statistics
+		&compute_process_report(\%data_info, @content);
+	}
+
+
+	####
+	# Show memory usage
+	####
+	if ($data_info{name} eq 'system-memory') {
+		my $command = "$SADF_PROG -t -D $file -- -r";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for memory statistics
+		&compute_memory_report(\%data_info, @content);
+	}
+
+	####
+	# Show swap usage
+	####
+	if ($data_info{name} eq 'system-swap') {
+		my $command = "$SADF_PROG -t -D $file -- -W";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for block statistics
+		&compute_swap_report(\%data_info, @content);
+	}
+
+	####
+	# Show block in/out
+	####
+	if ($data_info{name} eq 'system-block') {
+		my $command = "$SADF_PROG -t -D $file -- -b";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for block statistics
+		&compute_block_report(\%data_info, @content);
+	}
+
+	####
+	# Show Device service time
+	####
+	if ($data_info{name} eq 'system-srvtime') {
+		my $command = "$SADF_PROG -t -P ALL -D $file -- -d -p";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for devices statistics
+		&compute_srvtime_report(\%data_info, @content);
+	}
+
+
+	####
+	# Show Device block read/write usage
+	####
+	if ($data_info{name} eq 'system-device') {
+		my $command = "$SADF_PROG -t -P ALL -D $file -- -d -p";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for devices statistics
+		&compute_rw_device_report(\%data_info, @content);
+	}
+
+	####
+	# Show Device usage
+	####
+	if ($data_info{name} eq 'system-cpudevice') {
+		my $command = "$SADF_PROG -t -P ALL -D $file -- -d -p";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for devices statistics
+		&compute_util_device_report(\%data_info, @content);
+	}
+}
+
+sub find_report_type
+{
+	my $data = shift;
+	my $type = '';
+
+	if ($data =~ m#proc/s#) {
+		$type = 'pcrea';
+	} elsif ($data =~ m#cswch/s#) {
+		$type = 'cswch';
+	} elsif ($data =~ m#CPU\s+i\d+#) {
+		$type = 'ncpu';
+	} elsif ($data =~ m#CPU\s+M#) {
+		$type = 'scpu';
+	} elsif ($data =~ m#CPU\s+w#) {
+		$type = 'wcpu';
+	} elsif ($data =~ m#CPU\s+#) {
+		$type = 'cpu';
+	} elsif ($data =~ m#INTR\s+#) {
+		$type = 'intr';
+	} elsif ($data =~ m#pgpgin/s\s+#) {
+		$type = 'page';
+	} elsif ($data =~ m#pswpin/s\s+#) {
+		$type = 'pswap';
+	} elsif ( ($data =~ m#tps\s+#) && ($data !~ m#DEV\s+#) ) {
+		$type = 'io';
+	} elsif ($data =~ m#frmpg/s\s+#) {
+		$type = 'mpage';
+	} elsif ($data =~ m#TTY\s+#) {
+		$type = 'tty';
+	} elsif ($data =~ m#IFACE\s+rxpck/s\s+#) {
+		$type = 'net';
+	} elsif ($data =~ m#IFACE\s+rxerr/s\s+#) {
+		$type = 'err';
+	} elsif ($data =~ m#DEV\s+#) {
+		$type = 'dev';
+	} elsif ($data =~ m#kbmemfree\s+#) {
+		$type = 'mem';
+	# New in sysstat 8.1.5
+	} elsif ($data =~ m#kbswpfree\s+#) {
+		$type = 'swap';
+	} elsif ($data =~ m#dentunusd\s+#) {
+		$type = 'file';
+	} elsif ($data =~ m#totsck\s+#) {
+		$type = 'sock';
+	} elsif ($data =~ m#runq-sz\s+#) {
+		$type = 'load';
+	# New in 8.1.7
+	} elsif ($data =~ m#active\/s\s+#) {
+		$type = 'tcp';
+	}
+
+	return $type;
+}
+
+sub compute_sarfile_graph
+{
+	my ($file, %data_info) = @_;
+
+	my $interval = 0;
+	my $hostname = 'unknown';
+
+	# Load data from file
+	if (!open(IN, "$file")) {
+		die "FATAL: can't read input file $file: $!\n";
+	}
+	my @content = ();
+	while (<IN>) {
+		chomp;
+		s///;
+		# Skip kernel header part
+		if ( ($_ eq '') || (/^\d+:\d+:\d+/) ) {
+			push(@content, $_);
+		}
+	}
+	close(IN);
+
+	my $type = '';
+	my @headers = ();
+	my $stored_date = '';
+	my %fulldata = ();
+	for (my $i = 0; $i <= $#content; $i++) {
+		# Empty line, maybe the end of a report
+		if ($content[$i] eq '') {
+			$type = '';
+			@headers = ();
+			$stored_date = '';
+			next;
+		}
+		# Remove average header if any
+		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /^\D:\s+/) ) {
+			$type = '';
+			@headers = ();
+			$stored_date = '';
+			next;
+		}
+
+		if ($#headers == -1) {
+			push(@headers, split(m#\s+#, $content[$i]));
+			# Try to find the kind of report
+			$type = &find_report_type($content[$i]);
+			if (!$type) {
+				@headers = ();
+				$stored_date = '';
+			} else {
+				shift(@headers);
+				push(@{$fulldata{$type}}, "hostname;interval;timestamp;" . join(";", @headers));
+			}
+			next;
+		}
+
+		# Get all values reported
+		my @values = ();
+		push(@values, split(m#\s+#, $content[$i]));
+		$stored_date = shift(@values);
+		if ($#values != $#headers) {
+			warn "ERROR: Parsing of sar output reports different values than headers allow. ($#values != $#headers)\n";
+			die "Header: " . join(';', @headers) . " | Values: " . join(';', @values) . "\n";
+		}
+		if (!$stored_date) {
+			die "ERROR: current date of the log is unknown.\n";
+		}
+		# Change decimal character to perl
+		map { s/,/\./; } @values;
+		push(@{$fulldata{$type}}, "$hostname;$interval;$stored_date;" . join(";", @values));
+		
+	}
+	@content = ();
+
+	####
+	# Show CPU usage
+	####
+	if ($data_info{name} eq 'system-cpu') {
+
+		# Compute graphs for cpu statistics
+		&compute_cpu_report(\%data_info, @{$fulldata{cpu}});
+
+	}
+
+	####
+	# Show load average
+	####
+	if ($data_info{name} eq 'system-load') {
+
+		# Compute graphs for load statistics
+		&compute_load_report(\%data_info, @{$fulldata{load}});
+
+	}
+
+	####
+	# Show process number
+	####
+	if ($data_info{name} eq 'system-process') {
+
+		# Compute graphs for process statistics
+		&compute_process_report(\%data_info, @{$fulldata{load}});
+
+	}
+
+	####
+	# Show memory usage
+	####
+	if ($data_info{name} eq 'system-memory') {
+
+		# Compute graphs for memory statistics
+		&compute_memory_report(\%data_info, @{$fulldata{mem}});
+
+	}
+
+	####
+	# Show swap usage
+	####
+	if ($data_info{name} eq 'system-swap') {
+
+		# Compute graphs for block statistics
+		&compute_swap_report(\%data_info, @{$fulldata{pswap}});
+
+	}
+
+	####
+	# Show block in/out
+	####
+	if ($data_info{name} eq 'system-block') {
+
+		# Compute graphs for block statistics
+		&compute_block_report(\%data_info, @{$fulldata{io}});
+
+	}
+
+	####
+	# Show Device service time
+	####
+	if ($data_info{name} eq 'system-srvtime') {
+
+		# Compute graphs for devices statistics
+		&compute_srvtime_report(\%data_info, @{$fulldata{dev}});
+
+	}
+
+
+	####
+	# Show Device read/write usage
+	####
+	if ($data_info{name} eq 'system-device') {
+
+		# Compute graphs for devices statistics
+		&compute_rw_device_report(\%data_info, @{$fulldata{dev}});
+
+	}
+
+	####
+	# Show Device usage
+	####
+	if ($data_info{name} eq 'system-cpudevice') {
+
+		# Compute graphs for devices statistics
+		&compute_util_device_report(\%data_info, @{$fulldata{dev}});
+
+	}
+
+}
+
+sub convert_time
+{
+	my $str = shift;
+
+	# 2012-07-16 12:35:29+02
+	if ($str =~ /(\d+)-(\d+)-(\d+) (\d+):(\d+):(\d+)/) {
+		return &timegm_nocheck($6, $5, $4, $3, $2 - 1, $1 - 1900) * 1000;
+	} elsif ($str =~ /(\d+):(\d+):(\d+)/) {
+		return &timegm_nocheck($3, $2, $1, $o_day, $o_month, $o_year) * 1000;
+	} elsif ($str !~ /\D/) {
+		return $str * 1000;
+	}
+
+	return $str;
+}
+
+sub flotr2_linegraph_array
+{
+	my ($buttonid, $divid, $infos, $title, @data) = @_;
+
+	my @legend = ();
+	my $id = 1;
+	for (my $i = 0; $i <= $#data; $i++) {
+		$data[$i] ||= '';
+		$data[$i] = "var d$id = [$data[$i]];\n";
+		push(@legend, "{ data: d$id, label: \"" . ($infos->{legends}[$i] || '') . "\" },\n");
+		$id++;
+	}
+	if ($title ne '') {
+		$title = sprintf($infos->{title}, $title);
+	} else {
+		$title = $infos->{title};
+	}
+	return &flotr2_linegraph($buttonid, $divid, $infos, $title, \@data, \@legend);
+}
+
+sub flotr2_linegraph_hash
+{
+	my ($buttonid, $divid, $infos, $title, %data_h) = @_;
+
+	my @legend = ();
+	my @data = ();
+	my $i = 1;
+	foreach my $id (sort keys %data_h) {
+		$data_h{$id} ||= '';
+		push(@data, "var d$i = [$data_h{$id}];\n");
+		push(@legend, "{ data: d$i, label: \"$id\" },\n");
+		$i++;
+	}
+	if ($title ne '') {
+		$title = sprintf($infos->{title}, $title);
+	} else {
+		$title = $infos->{title};
+	}
+
+	return &flotr2_linegraph($buttonid, $divid, $infos, $title, \@data, \@legend);
+}
+
+sub flotr2_linegraph
+{
+	my ($buttonid, $divid, $infos, $title, $data, $legend) = @_;
+
+	my $ylabel = $infos->{ylabel} || '';
+	my $type = '';
+	if ($ylabel =~ /size/i) {
+		$type = 'size';
+	} elsif ($ylabel =~ /duration/i) {
+		$type = 'duration';
+	}
+	my $active = '';
+	$active = ' active-slide' if ($infos->{active});
+
+	my $description = $infos->{description} || '';
+	my $str = qq{
+<li class="slide$active" id="$divid-slide">
+      <div id="$divid"><br/><br/><br/><br/></div>
+      <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <h2>$title</h2>
+		<p>$description</p>
+              </div>
+              <div class="panel-body">
+};
+
+	if ($#{$data} >= 0) {
+		$str .= <<EOF;
+<div id="$divid$buttonid" class="linegraph"></div>
+<script type="text/javascript">
+(function mouse_zoom(container) {
+
+    write_buttons($buttonid);
+@$data
+    var options = {
+        xaxis: {
+	    tickDecimals: 0,
+	    noTicks: 20,
+	    mode: "time",
+	    labelsAngle: 45
+        },
+        yaxis: {
+            mode: "normal",
+            title: "$ylabel",
+	    tickFormatter: function(val){ return pretty_print_number(val,'$type') },
+
+        },
+        selection: {
+            mode: "x",
+            fps: 30
+        },
+        title: "$title",
+        legend: {
+            position: "nw",
+            backgroundColor: "#D2E8FF",
+            backgroundOpacity: 0.4
+        },
+	mouse: {
+	    track: true,
+	    trackFormatter: function(obj){ return dateTracker(obj,'$type') },
+	    relative: true,
+	    sensibility: 5,
+	    trackDecimals: 2,
+	    lineColor: 'purple',
+        },
+        HtmlText: false,
+    };
+
+    function drawGraph(opts) {
+        var o = Flotr._.extend(Flotr._.clone(options), opts );
+        return Flotr.draw(
+        	container,
+        	[
+@$legend
+    		],
+    		o
+    	);
+    }
+
+    var graph = drawGraph();
+    Flotr.EventAdapter.observe(container, "flotr:select", function(area) {
+        f = drawGraph({
+            xaxis: {
+            mode: "time",
+            labelsAngle: 45,
+                min: area.x1,
+                max: area.x2
+            },
+            yaxis: {
+                min: area.y1,
+                max: area.y2
+            }
+        });
+    });
+    Flotr.EventAdapter.observe(container, "flotr:click", function() {
+        drawGraph();
+    });
+    document.getElementById('reset$buttonid').onclick = function() {
+      graph.download.restoreCanvas();
+    };
+    document.getElementById('download$buttonid').onclick = function() {
+	if (Flotr.isIE && Flotr.isIE < 9) {
+		alert(browser_warning);
+	}
+      graph.download.saveImage('$IMG_FORMAT');
+    };
+    document.getElementById('toimage$buttonid').onclick = function() {
+	if (Flotr.isIE && Flotr.isIE < 9) {
+		alert(browser_warning);
+	}
+      graph.download.saveImage('$IMG_FORMAT', null, null, true);
+    };
+
+})(document.getElementById("$divid$buttonid"));
+</script>
+EOF
+	} else {
+		$str .= '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
+	}
+	$str .= qq{
+              </div>
+              </div>
+            </div><!--/span-->
+      </div>
+</li>
+};
+
+	return $str;
+
+}
+
+sub flotr2_piegraph
+{
+	my ($buttonid, $divid, $infos, $title, %data) = @_;
+
+	my @datadef = ();
+	my @contdef = ();
+	my $i = 1;
+	foreach my $k (sort keys %data) {
+		push(@datadef, "var d$i = [ [0,$data{$k}] ];\n");
+		push(@contdef, "{ data: d$i, label: \"$k\" },\n");
+		$i++;
+	}
+
+	if ($title ne '') {
+		$title = sprintf($infos->{title}, $title);
+	} else {
+		$title = $infos->{title};
+	}
+	my $active = '';
+	$active = ' active-slide' if ($infos->{active});
+	my $description = $infos->{description} || '';
+	my $str = qq{
+<li class="slide$active" id="$divid-slide">
+      <div id="$divid"><br/><br/><br/><br/></div>
+      <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <h2>$title</h2>
+		<p>$description</p>
+              </div>
+              <div class="panel-body">
+
+};
+
+	if ($#datadef >= 0) {
+		$str .= <<EOF;
+<div id="$divid$buttonid" class="piegraph"></div>
+<script type="text/javascript">
+(function basic_pie(container) {
+
+    write_buttons($buttonid);
+
+    @datadef
+    var graph = Flotr.draw(container, [
+    @contdef
+    ], {
+        title: "$title",
+        HtmlText: false,
+        grid: {
+            verticalLines: false,
+            horizontalLines: false,
+	    backgroundColor: '#ffffff',
+	    outline: '',
+        },
+        xaxis: {
+            showLabels: false
+        },
+        yaxis: {
+            showLabels: false
+        },
+        pie: {
+            show: true,
+	    explode: 6
+        },
+        mouse: {
+            track: true,
+	    trackFormatter: function(obj){ return pieTracker(obj) },
+	    relative: true
+        },
+        legend: {
+            position: "sw",
+            backgroundColor: "#D2E8FF",
+	    backgroundOpacity: 0.4
+        }
+    });
+    document.getElementById('reset$buttonid').onclick = function() {
+      graph.download.restoreCanvas();
+    };
+    document.getElementById('download$buttonid').onclick = function(){
+	if (Flotr.isIE && Flotr.isIE < 9) {
+		alert(browser_warning);
+	}
+      graph.download.saveImage('$IMG_FORMAT');
+    };
+    document.getElementById('toimage$buttonid').onclick = function() {
+	if (Flotr.isIE && Flotr.isIE < 9) {
+		alert(browser_warning);
+	}
+      graph.download.saveImage('$IMG_FORMAT', null, null, true);
+    };
+
+
+})(document.getElementById("$divid$buttonid"));
+</script>
+EOF
+	} else {
+		$str .= '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
+	}
+	$str .= qq{
+	      </p>
+              </div>
+              </div>
+            </div><!--/span-->
+      </div>
+</li>
+};
+
+	return $str;
+}
+
+sub getNumericalOffset
+{
+	my $stringofs = shift;
+
+	my @pieces = split /\//, $stringofs;
+	die "Invalid offset: $stringofs" unless ($#pieces == 1);
+
+
+	# First part is logid, second part is record offset
+	return (hex("ffffffff") * hex($pieces[0])) + hex($pieces[1]);
+}
+

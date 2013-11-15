@@ -1,0 +1,10 @@
+2013-11-15 - Version 1.0 released
+
+This is the first public release of pgCluu, that is a packaging of the tools I
+use every day to collect statistics and build reports of PostgreSQL Cluster for
+performances auditing.
+
+At this time it report everything that is helpfull for a PostgreSQL Cluster
+performance auditing, but still need addtional information about queries from
+pg_stat_statement. This will comes in next release.
+

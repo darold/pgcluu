@@ -1,0 +1,892 @@
+#!/usr/bin/env perl
+#------------------------------------------------------------------------------
+#
+# PgUsage - PostgreSQL monitoring tool with statistics collector and grapher
+#
+# This program is open source, licensed under the PostgreSQL license.
+# For license terms, see the LICENSE file.
+#
+# Author: Gilles Darold
+# Copyright: (C) 2012-2013 Gilles Darold - All rights reserved.
+#------------------------------------------------------------------------------
+use vars qw($VERSION $PROGRAM);
+
+use strict qw(vars subs);
+
+use File::Basename;
+use POSIX;
+use Getopt::Long qw(:config bundling no_ignore_case_always);
+use POSIX qw(locale_h sys_wait_h);
+setlocale(LC_ALL, 'C');
+
+$| = 1;
+
+$VERSION = '1.0';
+$PROGRAM = 'pgcluu_collectd';
+
+# Default path to the external programs
+# They can be specified into command line options
+my $SAR_PROG    = '/usr/bin/sar';
+my $PSQL_PROG   = '/usr/bin/psql';
+my $SAR_FILE    = 'sar_stats.dat';
+my $PIDFILE     = "/tmp/$PROGRAM.pid";
+my $SQL_PROBE   = '';
+my %DB_INFO     = ();
+my $HELP        = 0;
+my $DAEMONIZE   = 0;
+my $DISABLE_SAR = 0;
+my $INTERVAL    = 60; # wait 60 seconds between runs
+my $DEBUG       = 0;
+my $DBNAME      = '';
+my $DBUSER      = '';
+my $DBHOST      = '';
+my $DBPORT      = '';
+my $DBPASS      = '';
+my @METRICS     = ();
+my $LIST_METRIC = 0;
+my $FILE_REDIR  = '>>';
+my $PGBOUNCER_ARGS = '';
+my $PG_VERSION  = 0;
+my $DBSERVICE   = '';
+my $STAT_TYPE   = 'user';
+my $KILL        = 0;
+
+# Definition to collect metrics from the database
+my %METRICS_COMMANDS = (
+	'database_stats' => {
+		'output' => 'pg_stat_database.csv',
+		'command' => \&dump_pgstatdatabase
+	},
+	'bgwriter_stats' => {
+		'output' => 'pg_stat_bgwriter.csv',
+		'command' => 'dump_pgstatbgwriter'
+	},
+# Too much data, may be repalced by pg_stat_statement information
+#	'activity_stats' => {
+#		'output' => 'pg_stat_activity.csv',
+#		'command' => 'dump_pgstatactivity'
+#	},
+	'conflict_stats' => {
+		'output' => 'pg_stat_database_conflicts.csv',
+		'command' => 'dump_pgstatdatabaseconflicts'
+	},
+	'replication_stats' => {
+		'output' => 'pg_stat_replication.csv',
+		'command' => 'dump_pgstatreplication'
+	},
+	'all_tables_stats' => {
+		'output' => 'pg_stat_all_tables.csv',
+		'command' => 'dump_pgstattables'
+	},
+	'user_tables_stats' => {
+		'output' => 'pg_stat_user_tables.csv',
+		'command' => 'dump_pgstattables_user'
+	},
+	'all_tables_io_stats' => {
+		'output' => 'pg_statio_all_tables.csv',
+		'command' => 'dump_pgstatiotables'
+	},
+	'user_tables_io_stats' => {
+		'output' => 'pg_statio_user_tables.csv',
+		'command' => 'dump_pgstatiotables_user'
+	},
+	'all_indexes_stats' => {
+		'output' => 'pg_stat_all_indexes.csv',
+		'command' => 'dump_pgstatindexes'
+	},
+	'user_indexes_stats' => {
+		'output' => 'pg_stat_user_indexes.csv',
+		'command' => 'dump_pgstatindexes_user'
+	},
+	'all_indexes_io_stats' => {
+		'output' => 'pg_statio_all_indexes.csv',
+		'command' => 'dump_pgstatioindexes'
+	},
+	'user_indexes_io_stats' => {
+		'output' => 'pg_statio_user_indexes.csv',
+		'command' => 'dump_pgstatioindexes_user'
+	},
+	'all_sequences_io_stats' => {
+		'output' => 'pg_statio_all_sequences.csv',
+		'command' => 'dump_pgstatiosequences'
+	},
+	'user_sequences_io_stats' => {
+		'output' => 'pg_statio_user_sequences.csv',
+		'command' => 'dump_pgstatiosequences_user'
+	},
+	'functions_stats' => {
+		'output' => 'pg_stat_user_functions.csv',
+		'command' => 'dump_pgstatuserfunctions'
+	},
+	'xact_functions_stats' => {
+		'output' => 'pg_stat_xact_user_functions.csv',
+		'command' => 'dump_pgstatxactuserfunctions'
+	},
+	'all_xact_tables_stats' => {
+		'output' => 'pg_stat_xact_all_tables.csv',
+		'command' => 'dump_pgstatxacttables'
+	},
+	'user_xact_tables_stats' => {
+		'output' => 'pg_stat_xact_user_tables.csv',
+		'command' => 'dump_pgstatxacttables_user'
+	},
+	'class_size_stats' => {
+		'output' => 'pg_class_size.csv',
+		'command' => 'dump_pgclass_size'
+	},
+	'statements_stats' => {
+		'output' => 'pg_stat_statements.csv',
+		'command' => 'dump_pgstatstatements'
+	},
+	'xlog_stats' => {
+		'output' => 'pg_xlog_stat.csv',
+		'command' => 'dump_xlog_stat'
+	},
+	'database_size_stats' => {
+		'output' => 'pg_database_size.csv',
+		'command' => 'dump_pgdatabase_size'
+	},
+	'connections_stats' => {
+		'output' => 'pg_stat_connections.csv',
+		'command' => 'dump_pgstatconnections'
+	},
+	'pgbouncer_stats' => {
+		'output' => 'pgbouncer_stats.csv',
+		'command' => 'dump_pgbouncerstats'
+	},
+
+);
+
+# Process command line options and look for an action keyword. There
+# are no mandatory options.
+my $result = GetOptions(
+	"d|dbname=s"     => \$DBNAME,
+	"D|daemonize!"   => \$DAEMONIZE,
+	"f|pid-file=s"   => \$PIDFILE,
+	"h|host=s"       => \$DBHOST,
+	"i|interval=i"   => \$INTERVAL,
+	"k|kill!"        => \$KILL,
+	"m|metric=s"     => \@METRICS,
+	"p|port=i"       => \$DBPORT,
+	"P|psql=s"       => \$PSQL_PROG,
+	"s|sar=s"        => \$SAR_PROG,
+	"S|disable-sar!" => \$DISABLE_SAR,
+	"U|dbuser=s"     => \$DBUSER,
+	"W|password=s"   => \$DBPASS,
+	"pgversion=s"    => \$PG_VERSION,
+	"pgservice=s"    => \$DBSERVICE,
+	"help!"          => \$HELP,
+	"stat-type=s"    => \$STAT_TYPE,
+	"sar-file=s"     => \$SAR_FILE,
+	"list-metric!"   => \$LIST_METRIC,
+	"pgbouncer-args=s" => \$PGBOUNCER_ARGS,
+) or die &usage();
+
+# The daemon should be stopped
+if ($KILL) {
+	if (-e "$PIDFILE") {
+		system("kill -15 `cat $PIDFILE`");
+		exit 0;
+	} else {
+		die "ERROR: can't find $PIDFILE, is $PROGRAM running?\n";
+	}
+}
+
+# Display usage if help is asked
+&usage if $HELP;
+
+# Set the multi host information
+my @MULTI_HOST_INFO = ();
+my @dbnames = split(/,/, $DBNAME);
+my @dbports = split(/,/, $DBPORT);
+my @dbhosts = split(/,/, $DBHOST);
+my @dbusers = split(/,/, $DBUSER);
+my @dbpass = split(/,/, $DBPASS);
+for (my $i = 0; $i <= $#dbhosts; $i++) {
+	push(@MULTI_HOST_INFO, { 'ip' => $dbhosts[$i] || 'localhost', 'port' => $dbports[$i] || 5432, 'db' => $dbnames[$i] || 'postgres', 'user' => $dbusers[$i] || 'postgres', 'password' => $dbpass[$i] || ''});
+}
+
+# Get the output dir from command line
+my $OUTPUT_DIR = $ARGV[0] || '';
+
+# List metrics and associated SQL commands
+if ($LIST_METRIC) {
+
+	# Detect PostgreSQL version
+	&fetch_version() if ($PG_VERSION);
+
+	print "List of available metrics:\n\n";
+	foreach my $c (sort {$a cmp $b} keys %METRICS_COMMANDS) {
+		next if (($c =~ /^(user|all)_/) && ($c !~ /^$STAT_TYPE/)); 
+		$c =~ s/_stats$//;
+		print "\t$c\n";
+	}
+	print "\n";
+	exit 0;
+}
+
+
+# Check if an other process is already running
+if (-f $PIDFILE) {
+	&dprint("FATAL: an other process is already started, see pid in $PIDFILE\n");
+	exit 1;
+}
+
+# Validate action(s) to execute
+if ($#METRICS >= 0) {
+
+	my @list_metric = ();
+	push(@list_metric, $METRICS[0]);
+	@METRICS = ();
+	foreach my $a (@list_metric) {
+		if (!grep(/^${a}_stats$/, keys %METRICS_COMMANDS)) {
+			&dprint("FATAL: metric $a does not exist. Use --list-metric to show the available metrics.\n");
+			exit 1;
+		} else {
+			push(@METRICS, "${a}_stats");
+		}
+	}
+}
+
+# Set the default actions outside Nagios mode
+# Perform all metrics actions per default
+push(@METRICS, sort {$a cmp $b} keys %METRICS_COMMANDS);
+
+# Create output directory if not exists
+if (!$OUTPUT_DIR) {
+	&dprint("FATAL: no output directory\n");
+	&usage();
+} else {
+	# Ensure this is not a relative path
+	if (dirname($OUTPUT_DIR) eq '.') {
+		&dprint("FATAL: output directory ($OUTPUT_DIR) is not an absolute path.\n");
+		exit 1;
+	}
+}
+if (!-d $OUTPUT_DIR) {
+	&dprint("FATAL: output directory $OUTPUT_DIR doesn't exists\n");
+	exit 1;
+} else {
+	# Check if we can write in this directory
+	unless(open(OUT, ">$OUTPUT_DIR/wtest")) {
+		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
+		exit 1;
+	}
+	unlink("$OUTPUT_DIR/wtest");
+}
+
+# Go to that directory
+chdir($OUTPUT_DIR);
+
+# Die cleanly on signal
+sub terminate
+{
+	# block signal
+	local $SIG{TERM} = 'IGNORE';
+	local $SIG{INT}  = 'IGNORE';
+	local $SIG{QUIT} = 'IGNORE';
+
+	&dprint("LOG: Received terminating signal.\n");
+	if (-f $PIDFILE) {
+		unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
+	}
+
+	exit 0;
+}
+
+# Die on kill -2, -3 or -15 
+$SIG{'INT'} = $SIG{'QUIT'} = $SIG{'TERM'} = 'terminate';
+
+# Run in interactive mode if required
+if (!$DAEMONIZE) {
+	# Start in interactive mode
+	print "\n*** $PROGRAM v$VERSION (pid:$$) started at " . localtime(time) . "\n";
+} else {
+        # detach from terminal
+        my $pid = fork;
+        exit 0 if ($pid);
+        die "FATAL: Couldn't fork: $!" unless defined($pid);
+        POSIX::setsid() or die "Can't detach: \$!";
+        &dprint("LOG: Detach from terminal with pid: $$\n");
+}
+
+# Set name of the program without path*
+my $orig_name = $0;
+$0 = $PROGRAM;
+
+# Create pid file
+unless(open(OUT, ">$PIDFILE")) {
+	&dprint("FATAL: can't create pid file $PIDFILE, $!\n");
+	exit 1;
+}
+print OUT $$;
+close(OUT);
+
+my $sysstat_version = &sysstat_version() || '';
+
+# Generate the psql command
+$PSQL_PROG .= " -At -F';' -f - ";
+my $PGBOUNCER_PROG = $PSQL_PROG . ' ' . $PGBOUNCER_ARGS . ' pgbouncer';
+
+$PSQL_PROG .= " -h $DBHOST" if ($DBHOST);
+$PSQL_PROG .= " -p $DBPORT" if ($DBPORT);
+$PSQL_PROG .= " -U $DBUSER" if ($DBUSER);
+$PSQL_PROG .= " -d $DBNAME"  if ($DBNAME);
+if ($DBPASS) {
+	$ENV{PGPASSWORD} = $DBPASS;
+}
+
+# Generate the sar command
+my $sar_command = "LC_ALL=C $SAR_PROG -t -p -A $INTERVAL 1 >>$SAR_FILE";
+
+# Remove action that can't be run with the PostgreSQL version
+&verify_action();
+
+# Generating statistics collector SQL script 
+my $script_sql = &create_sql_script();
+if (!$script_sql) {
+	# No action can be perform with this PostgreSQL version
+	&dprint("FATAL: no action will be run on this PostgreSQL version $DB_INFO{major}.$DB_INFO{minor}, $!\n");
+	exit 1;
+}
+
+while (1) {
+
+	# Collecting database statistics
+	open(PSQL, "| $PSQL_PROG");
+	print PSQL $script_sql, "\n";
+	close(PSQL);
+
+	# Collecting pgbouncer statistics
+	if (grep(/pgbouncer_stats/, @METRICS) and $PGBOUNCER_ARGS) {
+		# create a timestamp to registrer pgbouncer statistics
+		my $timestamp = &get_current_timestamp();
+
+		my $sql = '';
+		eval { $sql = &{$METRICS_COMMANDS{'pgbouncer_stats'}->{command}}; };
+		if (!$sql || $@) {
+			if (-f $PIDFILE) {
+				unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
+			}
+			die "FATAL: no SQL with metric command pgbouncer_stats ($sql).\n" if (!$sql || $@);
+		}
+		`$PGBOUNCER_PROG -c "$sql" | sed 's/^/$timestamp;/' $FILE_REDIR $OUTPUT_DIR/$METRICS_COMMANDS{'pgbouncer_stats'}->{output}`;
+		if ($? != 0) {
+			&dprint("LOG: $PGBOUNCER_PROG -c \"$sql\" | sed 's/^/$timestamp;/' $FILE_REDIR $OUTPUT_DIR/$METRICS_COMMANDS{'pgbouncer_stats'}->{output}\n");
+			&dprint("ERROR: pgbouncer pool query failure, $!\n");
+		}
+	}
+
+	# Collecting system statistics
+	if (!$DISABLE_SAR && ($sysstat_version > -1)) {
+		&dprint(`$sar_command`);
+	}
+
+	# Wait next run and allow signal
+	sleep($INTERVAL);
+}
+
+exit 0;
+
+sub verify_action
+{
+	# Detect PostgreSQL version
+	&fetch_version();
+
+	# Has pg_stat_statements ?
+	&backend_has_pgstatstatements();
+
+	if (!&backend_minimum_version(8, 3)) {
+		delete $METRICS_COMMANDS{'bgwriter_stats'};
+	}
+	if (!&backend_minimum_version(9, 1)) {
+		delete $METRICS_COMMANDS{'conflict_stats'};
+		delete $METRICS_COMMANDS{'replication_stats'};
+	}
+	if (!&backend_minimum_version(9, 0)) {
+		delete $METRICS_COMMANDS{'hot_standby_delay'};
+	}
+	if (!&backend_minimum_version(8, 4)) {
+		delete $METRICS_COMMANDS{'functions_stats'};
+	}
+	if (!&backend_minimum_version(8, 2)) {
+		delete $METRICS_COMMANDS{'xlog_stats'};
+	}
+	if (!$DB_INFO{has_stat_statement}) {
+		delete $METRICS_COMMANDS{'statements_stats'};
+	}
+	if (!&is_superuser($DBUSER)) {
+		delete $METRICS_COMMANDS{'xlog_stats'};
+	}
+}
+
+sub create_sql_script
+{
+	# Prepare the SQL script
+	my $sql_queries = '';
+	foreach my $type (sort {$a cmp $b} keys %METRICS_COMMANDS) {
+		next if ($type eq 'pgbouncer_stats');
+		next if (($type =~ /^(user|all)_/) && ($type !~ /^$STAT_TYPE/)); 
+		next if (($#METRICS >= 0) && !grep(/^$type$/, @METRICS));
+		my $sql = $METRICS_COMMANDS{$type}->{command}->();
+		if (!$sql) {
+			if (-f $PIDFILE) {
+				unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
+			}
+			die "FATAL: no SQL with metric command $type ($sql).\n";
+		}
+		$sql_queries .= <<EOF
+-- $type
+\\o | cat $FILE_REDIR $OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}
+COPY ($sql) TO STDOUT CSV DELIMITER ';';
+
+EOF
+	}
+
+	return $sql_queries
+}
+
+sub fetch_version
+{
+	if ($PG_VERSION) {
+		if ($PG_VERSION =~ /^(\d+)\.(\d+)/) {
+			$DB_INFO{major} = $1;
+			$DB_INFO{minor} = $2;
+			return "$1.$2";
+		}
+	}
+
+	my $pg_ver = `$PSQL_PROG -c "SELECT version();"`;
+	if ($? != 0) {
+		&dprint("FATAL: psql error.\n");
+		# remove the pidfile
+		if (-f $PIDFILE) {
+			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
+		}
+		exit 0;
+	}
+	chomp($pg_ver);
+
+	if ($pg_ver =~ /^PostgreSQL (\d+)\.(\d+)/) {
+		$DB_INFO{major} = $1;
+		$DB_INFO{minor} = $2;
+	}
+	return "$1.$2";
+}
+
+sub backend_has_pgstatstatements
+{
+	$DB_INFO{has_stat_statement} = `$PSQL_PROG -c "SELECT 1 FROM pg_proc p, pg_namespace n WHERE p.proname='pg_stat_statements' AND p.pronamespace=n.oid"`;
+
+}
+
+sub is_superuser
+{
+	my $usr = shift;
+
+	# Assume it is superuser per default. In any case this will raise a psql error.
+	return 1 if (!$usr);
+
+	$DB_INFO{is_superuser} = `$PSQL_PROG -c "SELECT 1 FROM pg_user WHERE usename='$usr' AND usesuper"`;
+
+}
+
+sub sysstat_version
+{
+	if (!$DISABLE_SAR) {
+		my $ver = 0;
+		$ver = `$SAR_PROG -V 2>&1 | grep "sysstat version"`;
+		if ($?) {
+			&dprint("ERROR: $SAR_PROG execution failure: $!\n");
+			return -1;
+		}
+		if ($ver =~ m!^sysstat version (\d+)\.!) {
+			return $1;
+		}
+	}
+	return -1;
+}
+
+
+sub usage
+{
+    print qq{
+usage: $PROGRAM [options] output_dir
+
+	output_dir: directory where pgcluu_collectd will store statistics.
+
+options:
+
+  -d, --dbname=DATABASE    database name(s) to connect to. Default to current username.
+  -D, --daemonize          detach from console and enter in daemon mode.
+  -f, --pid-file=FILE      path to the pid file. Default: $PIDFILE.
+  -h, --host=HOSTNAME      database server host or socket directory
+  -i, --interval=NUM       time to wait between runs
+  -k, --kill		   stop current $PROGRAM running daemon.
+  -m, --metric=METRIC      set the metric or coma separated list of metrics to perform.
+  -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
+  -P, --psql=BIN           path to the psql command. Default: $PSQL_PROG.
+  -s, --sar=BIN            path to the sar sysstat command. Default: $SAR_PROG.
+  -S, --disable-sar        disable collect of system statistics with sar.
+  -U, --dbuser=USERNAME    database user(s) to connect as. Default to current user.
+  --list-metric            list available metrics actions that can be performed.
+  --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
+			   database. Ex: -p 6432 -U postgres -h 192.168.1.100
+  --sar-file=FILE          path to sar output data file for sysstat stats
+                           Default to output_dir/sar_stats.dat.
+  --stat-type all|user     Set the type of stats tables to read. Default: user. Value
+			   can be 'all' or 'user' to look at pg_stat_(all|user) tables.
+  --pgversion X.Y          force the PostgreSQL version to the given value.
+  --pgservice NAME         The name of a service inside of the pg_service.conf file.
+  --help                   print usage
+
+};
+    exit 1
+}
+
+sub dprint
+{
+	foreach (@_) {
+		next if (/^DEBUG:/s && !$DEBUG);
+		print "$_"
+	}
+}
+
+# Compare given major and minor numbers to the one of the connected server
+sub backend_minimum_version
+{
+	my ($major, $minor) = @_;
+
+	return if (!$major);
+	return if (!$minor);
+
+	return ($DB_INFO{major} > $major) || (($DB_INFO{major} == $major) && ($DB_INFO{minor} >= $minor));
+}
+
+sub dump_pgstatactivity
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), datid, datname, %s, " .
+		"usesysid, usename, %s%s%s%s%s" .
+		"date_trunc('seconds', query_start) AS query_start, " .
+		"%s%s%s " .
+		"FROM pg_stat_activity " .
+		"ORDER BY %s",
+		&backend_minimum_version(9, 2) ? "pid" : "procpid",
+		&backend_minimum_version(9, 0) ? "application_name, " : "",
+		&backend_minimum_version(8, 1) ? "client_addr, " : "",
+		&backend_minimum_version(9, 1) ? "client_hostname, " : "",
+		&backend_minimum_version(8, 1) ? "client_port, date_trunc('seconds', backend_start) AS backend_start, " : "",
+		&backend_minimum_version(8, 3) ? "date_trunc('seconds', xact_start) AS xact_start, " : "",
+		&backend_minimum_version(9, 2) ? "state_change, " : "",
+		&backend_minimum_version(8, 2) ? "waiting, " : "",
+		&backend_minimum_version(9, 2) ? "query" : "current_query",
+		&backend_minimum_version(9, 2) ? "pid" : "procpid"
+	);
+
+	return $sql;
+}
+
+sub dump_pgstatbgwriter
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), checkpoints_timed, " .
+		"checkpoints_req, %sbuffers_checkpoint, buffers_clean, " .
+		"maxwritten_clean, buffers_backend, %sbuffers_alloc%s " .
+		"FROM pg_stat_bgwriter ",
+		&backend_minimum_version(9, 2) ? "checkpoint_write_time, checkpoint_sync_time, " : "",
+		&backend_minimum_version(9, 1) ? "buffers_backend_fsync, " : "",
+		&backend_minimum_version(9, 1) ? ", date_trunc('seconds', stats_reset) AS stats_reset " : ""
+	);
+
+	return $sql;
+}
+
+sub dump_pgstatdatabase
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), datid, datname, " .
+		"numbackends, xact_commit, xact_rollback, blks_read, blks_hit" .
+		"%s%s%s " .
+		"FROM pg_stat_database " .
+		"ORDER BY datname",
+		&backend_minimum_version(8, 3) ? ", tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted" : "",
+		&backend_minimum_version(9, 1) ? ", conflicts, date_trunc('seconds', stats_reset) AS stats_reset" : "",
+		&backend_minimum_version(9, 2) ? ", temp_files, temp_bytes, deadlocks, blk_read_time, blk_write_time" : ""
+	);
+
+	return $sql;
+}
+
+sub dump_pgstatdatabaseconflicts
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), * " .
+		"FROM pg_stat_database_conflicts " .
+		"ORDER BY datname"
+	);
+
+	return $sql;
+}
+
+sub dump_pgstatreplication
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), %s, usesysid, usename, " .
+		"application_name, client_addr, client_hostname, client_port, " .
+		"date_trunc('seconds', backend_start) AS backend_start, state, " .
+		"pg_current_xlog_location() AS master_location, " .
+		"sent_location, write_location, flush_location, replay_location, " .
+		"sync_priority, " .
+		"sync_state " .
+		"FROM pg_stat_replication " .
+		"ORDER BY application_name",
+		&backend_minimum_version(9, 2) ? "pid" : "procpid"
+	);
+
+	return $sql;
+}
+
+sub dump_pgstattables_user { return dump_pgstattables('user'); };
+
+sub dump_pgstattables
+{
+	my $type = shift;
+
+	$type ||= 'all';
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), relid, schemaname, relname, " .
+		"seq_scan, seq_tup_read, idx_scan, idx_tup_fetch, n_tup_ins, " .
+		"n_tup_upd, n_tup_del" .
+		"%s" .
+		"%s" .
+		"%s" .
+		" FROM pg_stat_${type}_tables " .
+		"WHERE schemaname <> 'information_schema' " .
+		"ORDER BY schemaname, relname",
+		&backend_minimum_version(8, 3) ? ", n_tup_hot_upd, n_live_tup, n_dead_tup" : "",
+		&backend_minimum_version(8, 2) ? ", date_trunc('seconds', last_vacuum) AS last_vacuum, date_trunc('seconds', last_autovacuum) AS last_autovacuum, date_trunc('seconds',last_analyze) AS last_analyze, date_trunc('seconds',last_autoanalyze) AS last_autoanalyze" : "",
+		&backend_minimum_version(9, 1) ? ", vacuum_count, autovacuum_count, analyze_count, autoanalyze_count" : ""
+	);
+
+	return $sql;
+}
+
+sub dump_pgstatindexes_user { return dump_pgstatindexes('user'); };
+
+sub dump_pgstatindexes
+{
+	my $type = shift;
+
+	$type ||= 'all';
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), * " .
+		"FROM pg_stat_${type}_indexes " .
+		"WHERE schemaname <> 'information_schema' " .
+		"ORDER BY schemaname, relname"
+	);
+
+	return $sql;
+}
+
+sub dump_pgstatiotables_user { return dump_pgstatiotables('user'); };
+
+sub dump_pgstatiotables
+{
+	my $type = shift;
+
+	$type ||= 'all';
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), * " . 
+		"FROM pg_statio_${type}_tables " .
+		"WHERE schemaname <> 'information_schema' " .
+		"ORDER BY schemaname, relname"
+	);
+
+	return $sql;
+}
+
+sub dump_pgstatioindexes_user { return dump_pgstatioindexes('user'); };
+
+sub dump_pgstatioindexes
+{
+	my $type = shift;
+
+	$type ||= 'all';
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), * " .
+		"FROM pg_statio_${type}_indexes " .
+		"WHERE schemaname <> 'information_schema' " .
+		"ORDER BY schemaname, relname"
+	);
+
+	return $sql;
+}
+
+sub dump_pgstatiosequences_user { return dump_pgstatiosequences('user'); };
+
+sub dump_pgstatiosequences
+{
+	my $type = shift;
+
+	$type ||= 'all';
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), * " .
+		"FROM pg_statio_${type}_sequences " .
+		"WHERE schemaname <> 'information_schema' " .
+		"ORDER BY schemaname, relname"
+	);
+
+	return $sql;
+}
+
+sub dump_pgstatuserfunctions
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), * " . 
+		"FROM pg_stat_user_functions " .
+		"WHERE schemaname <> 'information_schema' " .
+		"ORDER BY schemaname, funcname"
+	);
+
+	return $sql;
+}
+
+sub dump_pgclass_size
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), n.nspname, c.relname, c.relkind, c.reltuples, c.relpages%s " .
+		"FROM pg_class c, pg_namespace n " .
+		"WHERE n.oid=c.relnamespace AND n.nspname <> 'information_schema' " .
+		"ORDER BY n.nspname, c.relname",
+		&backend_minimum_version(8, 1) ? ", pg_relation_size(c.oid)" : ""
+	);
+
+	return $sql;
+}
+
+sub dump_pgstatstatements
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), r.rolname, d.datname, " .
+		"regexp_replace(query, E'\\n', ' ', 'g') as query, calls, total_time, rows, " .
+		"shared_blks_hit, shared_blks_read, shared_blks_written, " .
+		"local_blks_hit, local_blks_read, local_blks_written, " .
+		"temp_blks_read, temp_blks_written " .
+		"FROM pg_stat_statements q, pg_database d, pg_roles r " .
+		"WHERE q.userid=r.oid and q.dbid=d.oid " .
+		"ORDER BY r.rolname, d.datname"
+	);
+
+	return $sql;
+}
+
+sub dump_xlog_stat
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), count(*), " .
+		"pg_xlogfile_name(pg_current_xlog_location()) AS current " .
+		"FROM pg_ls_dir('pg_xlog') " .
+		"WHERE pg_ls_dir ~ E'^[0-9A-F]{24}\$' "
+	);
+
+
+	return $sql;
+}
+
+sub dump_pgdatabase_size
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), datid, datname, pg_database_size(datid) AS size " .
+		"FROM pg_stat_database " .
+		"ORDER BY datname"
+	);
+
+	return $sql;
+}
+
+sub dump_pgstatconnections
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), COUNT(*) AS total, coalesce(SUM((%s)::integer), 0) AS active, " .
+		"coalesce(SUM(waiting::integer), 0) AS waiting, " .
+		"coalesce(SUM((%s)::integer), 0) AS idle_in_xact, datname " .
+		"FROM pg_stat_activity WHERE %s <> pg_backend_pid() GROUP BY datname" ,
+		&backend_minimum_version(9, 2) ? "state NOT LIKE 'idle%'" : "current_query NOT IN ('<IDLE>','<IDLE> in transaction')",
+		&backend_minimum_version(9, 2) ? "state = 'idle in transaction'" : "current_query = '<IDLE> in transaction'",
+		&backend_minimum_version(9, 2) ? "pid" : "procpid" ,
+	);
+
+	return $sql;
+}
+
+sub dump_pgbouncerstats
+{
+
+	my $sql = sprintf(
+		"SHOW POOLS"
+	);
+
+	return $sql;
+}
+
+
+sub get_current_timestamp
+{
+	
+	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
+
+	$year += 1900;
+	$mon++;
+
+	return $year . '-' . sprintf("%02d", $mon) . '-' . sprintf("%02d", $mday) . ' ' .
+		 sprintf("%02d", $hour) . ':' . sprintf("%02d", $min) . ':' . sprintf("%02d", $sec);
+}
+
+sub dump_pgstatxactuserfunctions
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), * " . 
+		"FROM pg_stat_xact_user_functions " .
+		"WHERE schemaname <> 'information_schema' " .
+		"ORDER BY 3, 4"
+	);
+
+	return $sql;
+}
+
+sub dump_pgstatxacttables_user { return dump_pgstatxacttables('user'); };
+
+sub dump_pgstatxacttables
+{
+	my $type = shift;
+
+	$type ||= 'all';
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), * " . 
+		"FROM pg_stat_xact_${type}_tables " .
+		"WHERE schemaname <> 'information_schema' " .
+		"ORDER BY 3, 4"
+	);
+
+	return $sql;
+}
+
