@@ -70,10 +70,16 @@ USAGE
             [... wait some time and activity on you PostgreSQL Cluster ...]
             pgclu_collectd -k
             mkdir report_db1/
+            cp /usr/local/share/pgcluu/* report_db1/
             pgcluu -o report_db1/ stat_db1/
 
     You should obtain something like example at
     http://pgcluu.darold.net/example/
+
+    By default all javascript, css and the webfont fontawesome are embedded
+    into each generated HTML file. If you want to save space and have
+    smaller HTML page you can just copy all the files from the resources/
+    directory into the output directory before running pgcluu.
 
 COLLECTING STATISTICS
     To generate reports about your PostgreSQL Cluster Utilization you must
@@ -186,6 +192,7 @@ GENERATING REPORTS
     command:
 
             mkdir report_db1/
+            cp /usr/local/share/pgcluu/* report_db1/
             pgcluu -o report_db1/ stat_db1/
 
 LICENSE

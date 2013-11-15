@@ -66,6 +66,7 @@ ul#slides li div div {
 .panel-body { background-color: #ffffff; font-size: 1.2em;}
 .panel-footer { background-color: #f5f5f5}
 .panel-height { height: 300px}
+.panel-xlheight { height: 400px}
 .btn { margin-top: 10px};
 .key-figures ul {
 	margin: 0;
@@ -77,7 +78,7 @@ ul#slides li div div {
 }
 .figure {
 	font-weight: bold;
-	font-size: 1.4em;
+	font-size: 1.2em;
 	color:#c43c35;
 }
 .figure-label {
