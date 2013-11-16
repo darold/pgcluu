@@ -90,33 +90,33 @@ COLLECTING STATISTICS
     using option -i you can customize it. See below for a complete list of
     command line options.
 
-    usage: pgusage_collector [options] output_dir
+    usage: pgcluu_collectd [options] output_dir
 
             output_dir: directory where pgcluu_collectd will store statistics.
 
     options:
 
-      -d, --dbname=DATABASE    database name(s) to connect to. Default to current username.
+      -d, --dbname=DATABASE    database name to connect to. Default to current user.
       -D, --daemonize          detach from console and enter in daemon mode.
-      -f, --pid-file=FILE      path to the pid file. Default: /tmp/pgcluu_collectd.pid.
+      -f, --pid-file=FILE      path to pid file. Default: /tmp/pgcluu_collectd.pid.
       -h, --host=HOSTNAME      database server host or socket directory
       -i, --interval=NUM       time to wait between runs
       -k, --kill               stop current pgcluu_collectd running daemon.
-      -m, --metric=METRIC      set the metric or coma separated list of metrics to perform.
+      -m, --metric=METRIC      set a coma separated list of metrics to perform.
       -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
       -P, --psql=BIN           path to the psql command. Default: /usr/bin/psql.
-      -s, --sar=BIN            path to the sar sysstat command. Default: /usr/bin/sar.
+      -s, --sar=BIN            path to sar sysstat command. Default: /usr/bin/sar.
       -S, --disable-sar        disable collect of system statistics with sar.
-      -U, --dbuser=USERNAME    database user(s) to connect as. Default to current user.
+      -U, --dbuser=USERNAME    database user to connect as. Default to current user.
       --list-metric            list available metrics actions that can be performed.
       --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
                                database. Ex: -p 6432 -U postgres -h 192.168.1.100
       --sar-file=FILE          path to sar output data file for sysstat stats
                                Default to output_dir/sar_stats.dat.
-      --stat-type all|user     Set the type of stats tables to read. Default: user. Value
-                               can be 'all' or 'user' to look at pg_stat_(all|user) tables.
+      --stat-type all|user     Set stats tables to read. Values: 'all' or 'user' to
+                               look at pg_stat_(all|user) tables. Default: user.
       --pgversion X.Y          force the PostgreSQL version to the given value.
-      --pgservice NAME         The name of a service inside of the pg_service.conf file.
+      --pgservice NAME         Name of service inside of the pg_service.conf file.
       --help                   print usage
 
     For example, as postgres user:
@@ -163,7 +163,6 @@ GENERATING REPORTS
     usage: ./pgcluu [options] [-i sar_file | -I sadc_file] [input_dir]
 
             input_dir: directory where pgclu_collectd or pgstats and sar data
-                       files are stored.
 
     options:
 

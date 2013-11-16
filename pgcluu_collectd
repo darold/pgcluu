@@ -517,27 +517,27 @@ usage: $PROGRAM [options] output_dir
 
 options:
 
-  -d, --dbname=DATABASE    database name(s) to connect to. Default to current username.
+  -d, --dbname=DATABASE    database name to connect to. Default to current user.
   -D, --daemonize          detach from console and enter in daemon mode.
-  -f, --pid-file=FILE      path to the pid file. Default: $PIDFILE.
+  -f, --pid-file=FILE      path to pid file. Default: $PIDFILE.
   -h, --host=HOSTNAME      database server host or socket directory
   -i, --interval=NUM       time to wait between runs
   -k, --kill		   stop current $PROGRAM running daemon.
-  -m, --metric=METRIC      set the metric or coma separated list of metrics to perform.
+  -m, --metric=METRIC      set a coma separated list of metrics to perform.
   -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
   -P, --psql=BIN           path to the psql command. Default: $PSQL_PROG.
-  -s, --sar=BIN            path to the sar sysstat command. Default: $SAR_PROG.
+  -s, --sar=BIN            path to sar sysstat command. Default: $SAR_PROG.
   -S, --disable-sar        disable collect of system statistics with sar.
-  -U, --dbuser=USERNAME    database user(s) to connect as. Default to current user.
+  -U, --dbuser=USERNAME    database user to connect as. Default to current user.
   --list-metric            list available metrics actions that can be performed.
   --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
 			   database. Ex: -p 6432 -U postgres -h 192.168.1.100
   --sar-file=FILE          path to sar output data file for sysstat stats
                            Default to output_dir/sar_stats.dat.
-  --stat-type all|user     Set the type of stats tables to read. Default: user. Value
-			   can be 'all' or 'user' to look at pg_stat_(all|user) tables.
+  --stat-type all|user     Set stats tables to read. Values: 'all' or 'user' to
+			   look at pg_stat_(all|user) tables. Default: user.
   --pgversion X.Y          force the PostgreSQL version to the given value.
-  --pgservice NAME         The name of a service inside of the pg_service.conf file.
+  --pgservice NAME         Name of service inside of the pg_service.conf file.
   --help                   print usage
 
 };
