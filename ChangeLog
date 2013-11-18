@@ -1,10 +1,22 @@
-2013-11-15 - Version 1.0 released
+2013-11-18 - Version 1.0 released
 
 This is the first public release of pgCluu, that is a packaging of the tools I
 use every day to collect statistics and build reports of PostgreSQL Cluster for
 performances auditing.
 
-At this time it report everything that is helpfull for a PostgreSQL Cluster
-performance auditing, but still need addtional information about queries from
-pg_stat_statement. This will comes in next release.
+At this time it collect and report most of that is helpful for a PostgreSQL
+Cluster performance auditing. There's lot of others reports to be included:
+
+	- Statistics reports concerning tables.
+	- Statistics reports about pg_stat_statement.
+	- More Sar statistiques reports.
+	- ...
+
+This will comes in next release.
+
+The goal of this project is to provide a complete PostgreSQL auditing tool that
+do not need any dependency so that it can be run on any server.
+
+If you just have a sar output file, pgCluu can be use to draw graphs about the
+system utilization only.
 
