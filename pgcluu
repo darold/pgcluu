@@ -544,6 +544,12 @@ options:
 
   --help                   print usage
 
+For example, you can generate all HTML reports from data files stored into
+/tmp/stat_db1/ with the following commands:
+
+        mkdir /tmp/report_db1/
+        pgcluu -o /tmp/report_db1/ /tmp/stat_db1/
+
 };
     exit 0;
 }

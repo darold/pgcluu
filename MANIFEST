@@ -3,7 +3,6 @@ Makefile.PL
 pgcluu
 pgcluu_collectd
 README
-resources
 doc/pgCluu.pod
 resources/bootstrap.min.css
 resources/bootstrap.min.js

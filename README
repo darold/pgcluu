@@ -65,13 +65,22 @@ USAGE
     options. For the impatients, here some simple commands that could be run
     as postgres user:
 
-            mkdir stat_db1/
-            pgclu_collectd -D -i 60 stat_db1/
-            [... wait some time and activity on you PostgreSQL Cluster ...]
+            mkdir /tmp/stat_db1/
+            pgclu_collectd -D -i 60 /tmp/stat_db1/
+            LOG: Detach from terminal with pid: 11323
+
+    or with more options
+
+            pgclu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb
+            LOG: Detach from terminal with pid: 14671
+
+    wait some time and activity on your PostgreSQL Cluster... Then stop the
+    pgclu_collectd daemon and generate the report:
+
             pgclu_collectd -k
-            mkdir report_db1/
-            cp /usr/local/share/pgcluu/* report_db1/
-            pgcluu -o report_db1/ stat_db1/
+            LOG: Received terminating signal.
+            mkdir /tmp/report_db1/
+            pgcluu -o /tmp/report_db1/ /tmp/stat_db1/
 
     You should obtain something like example at
     http://pgcluu.darold.net/example/
@@ -79,7 +88,9 @@ USAGE
     By default all javascript, css and the webfont fontawesome are embedded
     into each generated HTML file. If you want to save space and have
     smaller HTML page you can just copy all the files from the resources/
-    directory into the output directory before running pgcluu.
+    directory into the output directory before running pgcluu. pgcluu will
+    detect the presence of the files in the output directory and won't
+    include css and javascript code into all html pages.
 
 COLLECTING STATISTICS
     To generate reports about your PostgreSQL Cluster Utilization you must
@@ -92,7 +103,8 @@ COLLECTING STATISTICS
 
     usage: pgcluu_collectd [options] output_dir
 
-            output_dir: directory where pgcluu_collectd will store statistics.
+            output_dir: full path to directory where pgcluu_collectd will
+                        store statistics.
 
     options:
 
@@ -121,8 +133,8 @@ COLLECTING STATISTICS
 
     For example, as postgres user:
 
-            mkdir stat_db1/
-            pgclu_collectd -D -i 60 stat_db1/
+            mkdir /tmp/stat_db1/
+            pgclu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb
 
     then after some long time and activities on the database, stop the
     daemon:
@@ -131,7 +143,7 @@ COLLECTING STATISTICS
 
     The output directory should look likes:
 
-            stat_db1/
+            /tmp/stat_db1/
             ├── pg_class_size.csv
             ├── pg_database_size.csv
             ├── pg_stat_bgwriter.csv
@@ -190,9 +202,8 @@ GENERATING REPORTS
     Using the example above, you can generate all reports with the following
     command:
 
-            mkdir report_db1/
-            cp /usr/local/share/pgcluu/* report_db1/
-            pgcluu -o report_db1/ stat_db1/
+            mkdir /tmp/report_db1/
+            pgcluu -o /tmp/report_db1/ /tmp/stat_db1/
 
 LICENSE
     Copyright (c) 2012-2013, Gilles Darold
