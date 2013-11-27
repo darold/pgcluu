@@ -681,7 +681,7 @@ sub get_device_list
 				my @values = ();
 				push(@values, split(m#\s+#, $l));
 				last if ($#values != $#headers);
-				if (!grep(m#^$values[1]$#, @DEVICE_LIST)) {
+				if (!grep(m#^$values[1]$#, @dev_list)) {
 					push(@dev_list, $values[1]);
 				}
 			}
