@@ -196,6 +196,9 @@ GENERATING REPORTS
                                for the whole database.
       -T, --with-table table   Only report for the whole tables and the given
                                table name. You can use it multiple time.
+      -z, --timezone +/-XX     Set the number of hour(s) from GMT of the timezone.
+                               Use this to adjust date/time from the sar output as
+                               pgcluu use GMT time to draw charts.
 
       --help                   print usage
 
