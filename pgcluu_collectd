@@ -495,7 +495,7 @@ sub sysstat_version
 {
 	if (!$DISABLE_SAR) {
 		my $ver = 0;
-		$ver = `$SAR_PROG -V 2>&1 | grep "sysstat version"`;
+		$ver = `LC_ALL=C $SAR_PROG -V 2>&1 | grep "sysstat version"`;
 		if ($?) {
 			&dprint("ERROR: $SAR_PROG execution failure: $!\n");
 			return -1;
