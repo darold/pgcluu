@@ -46,7 +46,6 @@ my $END         = '';
 my $NUMBER_CPU  = 0;
 my $START_DATE  = '';
 my $TIMEZONE    = '00';
-my $ORIG_START_DATE    = '';
 my $SADC_INPUT_FILE    = '';
 my $SAR_INPUT_FILE     = '';
 my @DATABASE_LIST      = ();
@@ -57,6 +56,12 @@ my %OVERALL_STATS      = ();
 my ($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
 $o_year += 1900;
 $o_month++;
+
+# Variable use to construct the date part of the sar output
+# it is set with de date found in sar file kernel header.
+my $sar_year  = '';
+my $sar_month = '';
+my $sar_day   = '';
 
 # Statistics files to use with report
 my %DB_GRAPH_INFOS = (
@@ -672,7 +677,9 @@ sub get_device_list
 			chomp($l);
 			$l =~ s///;
 			# Skip kernel header part
-			next if ($l !~ /^\d+:\d+:\d+/);
+			if ($l !~ /^\d+:\d+:\d+/) {
+				next;
+			}
 			if ($l =~ m#DEV\s+#) {
 				if ($#headers == -1) {
 					push(@headers, split(m#\s+#, $l));
@@ -1077,7 +1084,6 @@ sub compute_dbstat_graph
 		my %database_stat = ();
 		my %all_database_stat = ();
 		my $total_val = 0;
-		my $old_time = 0;
 		while (<IN>) {
 			my @data = split(/;/);
 			next if (!&normalyze_line(\@data));
@@ -1996,17 +2002,11 @@ sub compute_cpu_report
 	}
 	$ncpu += 1;
 
-	$START_DATE = '';
-	$ORIG_START_DATE = '';
-	my $old_time = '';
 	for (my $i = 0; $i <= $#_; $i++) {
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
 		# hostname;interval;timestamp;CPU;%user;%nice;%system;%iowait;%steal;%idle
 		# hostname;interval;timestamp;CPU;%usr;%nice;%sys;%iowait;%steal;%irq;%soft;%guest;%idle
-		my $otime = $data[2];
-		$data[2] = &convert_sar_time($data[2], $old_time);
-		$old_time = $data[2];
 
 		# Skip unwanted lines
 		next if ($BEGIN && ($data[2] < $BEGIN));
@@ -2023,7 +2023,7 @@ sub compute_cpu_report
 		} else {
 			my $total_cpu = ($data[6]||0) + ($data[4]||0);
 			if (!exists $OVERALL_STATS{'system'}{'cpu'} || ($OVERALL_STATS{'system'}{'cpu'}[1] < $total_cpu)) {
-				@{$OVERALL_STATS{'system'}{'cpu'}} = ($otime,  $total_cpu);
+				@{$OVERALL_STATS{'system'}{'cpu'}} = (localtime($data[2]),  $total_cpu);
 				$OVERALL_STATS{'system'}{'ncpu'} = $ncpu;
 			}
 			$cpu_all_stat{total} .= '[' . $data[2] . ',' . $total_cpu . '],';
@@ -2055,22 +2055,18 @@ sub compute_load_report
 	my $data_info = shift();
 
 	my %load_stat = ();
-	my $old_time = '';
-	$START_DATE = '';
-	$ORIG_START_DATE = '';
 	for (my $i = 0; $i <= $#_; $i++) {
 		# hostname;interval;timestamp;runq-sz;plist-sz;ldavg-1;ldavg-5;ldavg-15
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
-		my $otime = $data[2];
-		$data[2] = &convert_sar_time($data[2], $old_time);
-		$old_time = $data[2];
+
 		# Skip unwanted lines
 		next if ($BEGIN && ($data[2] < $BEGIN));
 		next if ($END   && ($data[2] > $END));
+
 		map { s/,/\./ } @data ;
 		if (!exists $OVERALL_STATS{'system'}{'load'} || ($OVERALL_STATS{'system'}{'load'}[1] < $data[5])) {
-			@{$OVERALL_STATS{'system'}{'load'}} = ($otime, $data[5]);
+			@{$OVERALL_STATS{'system'}{'load'}} = (localtime($data[2]), $data[5]);
 		}
 		$load_stat{'ldavg-1'} .= '[' . $data[2] . ',' . ($data[5]||0) . '],';
 		$load_stat{'ldavg-5'}   .= '[' . $data[2] . ',' . ($data[6]||0) . '],';
@@ -2089,22 +2085,18 @@ sub compute_process_report
 	my $data_info = shift();
 
 	my %process_stat = ();
-	my $old_time = '';
-	$START_DATE = '';
-	$ORIG_START_DATE = '';
 	for (my $i = 0; $i <= $#_; $i++) {
 		# hostname;interval;timestamp;runq-sz;plist-sz;ldavg-1;ldavg-5;ldavg-15
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
-		my $otime = $data[2];
-		$data[2] = &convert_sar_time($data[2], $old_time);
-		$old_time = $data[2];
+
 		# Skip unwanted lines
 		next if ($BEGIN && ($data[2] < $BEGIN));
 		next if ($END   && ($data[2] > $END));
+
 		map { s/,/\./ } @data ;
 		if (!exists $OVERALL_STATS{'system'}{'process'} || ($OVERALL_STATS{'system'}{'process'}[1] < $data[4])) {
-			@{$OVERALL_STATS{'system'}{'process'}} = ($otime, $data[4]);
+			@{$OVERALL_STATS{'system'}{'process'}} = (localtime($data[2]), $data[4]);
 		}
 		$process_stat{'plist-sz'}   .= '[' . $data[2] . ',' . ($data[4]||0) . '],';
 	}
@@ -2118,24 +2110,20 @@ sub compute_memory_report
 {
 	my $data_info = shift();
 
-	$START_DATE = '';
-	$ORIG_START_DATE = '';
 	my %memory_stat = ();
-	my $old_time = '';
 	for (my $i = 0; $i <= $#_; $i++) {
 		# hostname;interval;timestamp;kbmemfree;kbmemused;%memused;kbbuffers;kbcached;kbcommit;%commit
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
-		my $otime = $data[2];
-		$data[2] = &convert_sar_time($data[2], $old_time);
-		$old_time = $data[2];
+
 		# Skip unwanted lines
 		next if ($BEGIN && ($data[2] < $BEGIN));
 		next if ($END   && ($data[2] > $END));
+
 		map { s/,/\./ } @data ;
 		my $kbcached = $data[7]*1024;
 		if (!exists $OVERALL_STATS{'system'}{'kbcached'} || ($OVERALL_STATS{'system'}{'kbcached'}[1] > $kbcached)) {
-			@{$OVERALL_STATS{'system'}{'kbcached'}} = ($otime, $kbcached);
+			@{$OVERALL_STATS{'system'}{'kbcached'}} = (localtime($data[2]), $kbcached);
 		}
 		$memory_stat{'kbcached'} .= '[' . $data[2] . ',' . $kbcached . '],';
 		$memory_stat{'kbbuffers'}   .= '[' . $data[2] . ',' . $data[6]*1024 . '],';
@@ -2154,25 +2142,21 @@ sub compute_swap_report
 	my $data_info = shift();
 
 	my %swap_stat = ();
-	my $old_time = '';
-	$START_DATE = '';
-	$ORIG_START_DATE = '';
 	for (my $i = 0; $i <= $#_; $i++) {
 		# hostname;interval;timestamp;pswpin/s;pswpout/s
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
-		my $otime = $data[2];
-		$data[2] = &convert_sar_time($data[2], $old_time);
-		$old_time = $data[2];
+
 		# Skip unwanted lines
 		next if ($BEGIN && ($data[2] < $BEGIN));
 		next if ($END   && ($data[2] > $END));
+
 		map { s/,/\./ } @data ;
 		if (!exists $OVERALL_STATS{'system'}{'pswpin'} || ($OVERALL_STATS{'system'}{'pswpin'}[1] < $data[3])) {
-			@{$OVERALL_STATS{'system'}{'pswpin'}} = ($otime, $data[3]);
+			@{$OVERALL_STATS{'system'}{'pswpin'}} = (localtime($data[2]), $data[3]);
 		}
 		if (!exists $OVERALL_STATS{'system'}{'pswpout'} || ($OVERALL_STATS{'system'}{'pswpout'}[1] < $data[4])) {
-			@{$OVERALL_STATS{'system'}{'pswpout'}} = ($otime, $data[4]);
+			@{$OVERALL_STATS{'system'}{'pswpout'}} = (localtime($data[2]), $data[4]);
 		}
 		$swap_stat{'pswpin/s'} .= '[' . $data[2] . ',' . ($data[3]||0) . '],';
 		$swap_stat{'pswpout/s'}   .= '[' . $data[2] . ',' . ($data[4]||0) . '],';
@@ -2189,25 +2173,21 @@ sub compute_block_report
 	my $data_info = shift();
 
 	my %block_stat = ();
-	my $old_time = '';
-	$START_DATE = '';
-	$ORIG_START_DATE = '';
 	for (my $i = 0; $i <= $#_; $i++) {
 		# hostname;interval;timestamp;tps;rtps;wtps;bread/s;bwrtn/s
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
-		my $otime = $data[2];
-		$data[2] = &convert_sar_time($data[2], $old_time);
-		$old_time = $data[2];
+
 		# Skip unwanted lines
 		next if ($BEGIN && ($data[2] < $BEGIN));
 		next if ($END   && ($data[2] > $END));
+
 		map { s/,/\./ } @data ;
 		if (!exists $OVERALL_STATS{'system'}{'bread'} || ($OVERALL_STATS{'system'}{'bread'}[1] < $data[6])) {
-			@{$OVERALL_STATS{'system'}{'bread'}} = ($otime, $data[6]);
+			@{$OVERALL_STATS{'system'}{'bread'}} = (localtime($data[2]), $data[6]);
 		}
 		if (!exists $OVERALL_STATS{'system'}{'bwrite'} || ($OVERALL_STATS{'system'}{'bwrite'}[1] < $data[7])) {
-			@{$OVERALL_STATS{'system'}{'bwrite'}} = ($otime, $data[7]);
+			@{$OVERALL_STATS{'system'}{'bwrite'}} = (localtime($data[2]), $data[7]);
 		}
 		$block_stat{'bread/s'} .= '[' . $data[2] . ',' . ($data[6]||0) . '],';
 		$block_stat{'bwrtn/s'}   .= '[' . $data[2] . ',' . ($data[7]||0) . '],';
@@ -2224,23 +2204,19 @@ sub compute_srvtime_report
 	my $data_info = shift();
 
 	my %devices_stat = ();
-	my $old_time = '';
-	$START_DATE = '';
-	$ORIG_START_DATE = '';
 	for (my $i = 0; $i <= $#_; $i++) {
 		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
-		my $otime = $data[2];
-		$data[2] = &convert_sar_time($data[2], $old_time);
-		$old_time = $data[2];
+
 		# Skip unwanted lines
 		next if ($BEGIN && ($data[2] < $BEGIN));
 		next if ($END   && ($data[2] > $END));
 		next if (!&device_in_report($data[3]));
+
 		map { s/,/\./ } @data ;
 		if (!exists $OVERALL_STATS{'system'}{'svctm'} || ($OVERALL_STATS{'system'}{'svctm'}[1] < $data[10])) {
-			@{$OVERALL_STATS{'system'}{'svctm'}} = ($otime, $data[10]);
+			@{$OVERALL_STATS{'system'}{'svctm'}} = (localtime($data[2]), $data[10]);
 		}
 		$devices_stat{$data[3]}{'await'}   .= '[' . $data[2] . ',' . ($data[9]||0) . '],';
 		$devices_stat{$data[3]}{'svctm'} .= '[' . $data[2] . ',' . ($data[10]||0) . '],';
@@ -2259,20 +2235,16 @@ sub compute_rw_device_report
 	my $data_info = shift();
 
 	my %devices_stat = ();
-	my $old_time = '';
-	$START_DATE = '';
-	$ORIG_START_DATE = '';
 	for (my $i = 0; $i <= $#_; $i++) {
 		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
-		my $otime = $data[2];
-		$data[2] = &convert_sar_time($data[2], $old_time);
-		$old_time = $data[2];
+
 		# Skip unwanted lines
 		next if ($BEGIN && ($data[2] < $BEGIN));
 		next if ($END   && ($data[2] > $END));
 		next if (!&device_in_report($data[3]));
+
 		map { s/,/\./ } @data ;
 		$OVERALL_STATS{'system'}{'devices'}{$data[3]}{read} += $data[5];
 		$OVERALL_STATS{'system'}{'devices'}{$data[3]}{write} += $data[6];
@@ -2295,19 +2267,16 @@ sub compute_util_device_report
 	my $data_info = shift();
 
 	my %devices_stat = ();
-	my $old_time = '';
-	$START_DATE = '';
-	$ORIG_START_DATE = '';
 	for (my $i = 0; $i <= $#_; $i++) {
 		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
-		$data[2] = &convert_sar_time($data[2], $old_time);
-		$old_time = $data[2];
+
 		# Skip unwanted lines
 		next if ($BEGIN && ($data[2] < $BEGIN));
 		next if ($END   && ($data[2] > $END));
 		next if (!&device_in_report($data[3]));
+
 		map { s/,/\./ } @data ;
 		$devices_stat{$data[3]}{'%util'}   .= '[' . $data[2] . ',' . ($data[11]||0) . '],';
 	}
@@ -2554,12 +2523,12 @@ sub compute_sarfile_graph
 		die "FATAL: can't read input file $file: $!\n";
 	}
 	my @content = ();
-	while (<IN>) {
-		chomp;
-		s///;
+	while (my $l = <IN>) {
+		chomp($l);
+		$l =~ s///;
 		# Skip kernel header part
-		if ( ($_ eq '') || (/^\d+:\d+:\d+/) ) {
-			push(@content, $_);
+		if ( ($l eq '') || ($l =~ /^\d+:\d+:\d+/) || ($l =~ /\d+\/\d+\/\d+$/)) {
+			push(@content, $l);
 		}
 	}
 	close(IN);
@@ -2568,10 +2537,23 @@ sub compute_sarfile_graph
 	my @headers = ();
 	my $timestamp = '';
 	my %fulldata = ();
+	my $old_time = '';
 
 	for (my $i = 0; $i <= $#content; $i++) {
 		# Empty line, maybe the end of a report
 		if ($content[$i] eq '') {
+			$type = '';
+			@headers = ();
+			$timestamp = '';
+			next;
+		}
+		# look for kernel header to find the date
+		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /(\d+)\/(\d+)\/(\d+)$/) ) {
+			$sar_month = $1;
+			$sar_day = $2;
+			$sar_year = $3+2000;
+			my $tz = ((0-$TIMEZONE)*3600);
+			$START_DATE = &timegm_nocheck(0, 0, 0, $sar_day, $sar_month - 1, $sar_year - 1900) + $tz;
 			$type = '';
 			@headers = ();
 			$timestamp = '';
@@ -2587,13 +2569,13 @@ sub compute_sarfile_graph
 
 		if ($#headers == -1) {
 			push(@headers, split(m#\s+#, $content[$i]));
+			$timestamp = shift(@headers);
 			# Try to find the kind of report
 			$type = &find_report_type($content[$i]);
 			if (!$type) {
 				@headers = ();
 				$timestamp = '';
 			} else {
-				shift(@headers);
 				push(@{$fulldata{$type}}, "hostname;interval;timestamp;" . join(";", @headers));
 			}
 			next;
@@ -2602,13 +2584,27 @@ sub compute_sarfile_graph
 		# Get all values reported
 		my @values = ();
 		push(@values, split(m#\s+#, $content[$i]));
-		$timestamp = shift(@values);
+		if (!$timestamp) {
+			$timestamp = shift(@values);
+		} else {
+			shift(@values);
+		}
 		if ($#values != $#headers) {
 			warn "ERROR: Parsing of sar output reports different values than headers allow. ($#values != $#headers)\n";
 			die "Header: " . join(';', @headers) . " | Values: " . join(';', @values) . "\n";
 		}
 		if (!$timestamp) {
 			die "ERROR: current date of the log is unknown.\n";
+		} else {
+			if ($timestamp =~ /:/) {
+				$timestamp = &convert_sar_time($timestamp, $old_time, $content[$i], $content[$i-1]);
+			}
+			if (!$timestamp) {
+				print STDERR "ERROR: unkown time information from sar file.\n";
+				print STDERR "HEADER: $timestamp ", join(" ", @headers), "\n";
+				die "DATA: $content[$i]\n";
+			}
+			$old_time = $timestamp;
 		}
 		# Change decimal character to perl
 		map { s/,/\./; } @values;
@@ -2726,34 +2722,27 @@ sub convert_time
 	return $str;
 }
 
-			$START_DATE = &timegm_nocheck(0, 0, 0, $o_day, $o_month - 1, $o_year - 1900);
 sub convert_sar_time
 {
-	my ($str, $old_time) = @_;
+	my ($str, $old_time, $a, $b) = @_;
 
-	my $tz = ((0-$TIMEZONE)*3600);
-	# 2012-07-16 12:35:29+02
-	if ($str =~ /(\d+)-(\d+)-(\d+) (\d+):(\d+):(\d+)/) {
-		if (!$ORIG_START_DATE) {
-			$ORIG_START_DATE = &timegm_nocheck(0, 0, 0, $3, $2 - 1, $1 - 1900) + $tz;
-		}
-		return (&timegm_nocheck($6, $5, $4, $3, $2 - 1, $1 - 1900) + $tz) * 1000;
-	} elsif ($str =~ /(\d+):(\d+):(\d+)/) {
+	$old_time ||= 0;
+
+	if ($str =~ /^(\d+):(\d+):(\d+)/) {
+
 		my $time = ($1*3600)+($2*60)+$3;
-		if (!$ORIG_START_DATE) {
-			$ORIG_START_DATE = &timegm_nocheck(0, 0, 0, $o_day, $o_month - 1, $o_year - 1900) + $tz;
+
+		if (!$START_DATE) {
+			my $tz = ((0-$TIMEZONE)*3600);
+			$START_DATE = &timegm_nocheck(0, 0, 0, ($sar_day || $o_day), ($sar_month || $o_month) - 1, ($sar_year || $o_year) - 1900) + $tz;
 		}
-		$START_DATE = $ORIG_START_DATE;
-		if ($old_time && ((($START_DATE+$time)* 1000) < $old_time)) {
-			$ORIG_START_DATE += 86399;
-			$START_DATE = $ORIG_START_DATE;
+		while ($old_time > (($START_DATE+$time) * 1000)) {
+			$START_DATE += 86399;
 		}
 		return ($START_DATE + $time) * 1000;
-	} elsif ($str !~ /\D/) {
-		return ($str + $tz) * 1000;
 	}
 
-	return $str;
+	return 0;
 }
 
 sub flotr2_linegraph_array
