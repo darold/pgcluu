@@ -1586,8 +1586,12 @@ sub generate_html_index
 		}
 		$OVERALL_STATS{'cluster'}{'size'} = &pretty_print_size($OVERALL_STATS{'cluster'}{'size'});
 		@{$overall_database_stats{'size'}} = ('unknown', 0) if (!exists $overall_database_stats{'size'});
-		$overall_database_stats{'size'}[1] = &pretty_print_size($overall_database_stats{'size'}[1]);
-		$overall_database_stats{'temp_bytes'}[1] = &pretty_print_size($overall_database_stats{'temp_bytes'}[1]);
+		if (exists $overall_database_stats{'size'}) {
+			$overall_database_stats{'size'}[1] = &pretty_print_size($overall_database_stats{'size'}[1]);
+		}
+		if (exists $overall_database_stats{'temp_bytes'}) {
+			$overall_database_stats{'temp_bytes'}[1] = &pretty_print_size($overall_database_stats{'temp_bytes'}[1]);
+		}
 	}
 
 	my %overall_system_stats = ();
@@ -1635,6 +1639,13 @@ sub generate_html_index
     </div -->
 EOF
 	if (exists $OVERALL_STATS{'cluster'}) {
+		$OVERALL_STATS{'cluster'}{'size'} ||= 0;
+		$OVERALL_STATS{'cluster'}{'nbackend'} ||= 0;
+		$OVERALL_STATS{'cluster'}{'read_tuples'} ||= 0;
+		$OVERALL_STATS{'cluster'}{'cache_ratio'} ||= 0;
+		$OVERALL_STATS{'cluster'}{'temp_files'} ||= 0;
+		$OVERALL_STATS{'cluster'}{'temp_bytes'} ||= 0;
+		$OVERALL_STATS{'cluster'}{'deadlocks'} ||= 0;
 		print $fh <<EOF;
       <div class="row">
             <div class="col-md-$numcol">
@@ -1658,6 +1669,9 @@ EOF
               </div>
               </div>
             </div><!--/span-->
+EOF
+		# Perform some initialization in case
+		print $fh <<EOF;
             <div class="col-md-$numcol">
               <div class="panel panel-default">
               <div class="panel-heading">
@@ -1671,9 +1685,23 @@ EOF
 		<li><span class="figure">$overall_database_stats{'nbackend'}[0] ($overall_database_stats{'nbackend'}[1])</span> <span class="figure-label">Most connections</span></li>
 		<li><span class="figure">$overall_database_stats{'read_tuples'}[0] ($overall_database_stats{'read_tuples'}[1])</span> <span class="figure-label">Most tuples fetched</span></li>
 		<li><span class="figure">$overall_database_stats{'cache_ratio'}[0] ($overall_database_stats{'cache_ratio'}[1]%)</span> <span class="figure-label">Worst cache utilization</span></li>
+EOF
+		if (exists $overall_database_stats{'temp_files'}) {
+			print $fh <<EOF;
 		<li><span class="figure">$overall_database_stats{'temp_files'}[0] ($overall_database_stats{'temp_files'}[1])</span> <span class="figure-label">Most temporary files</span></li>
+EOF
+		}
+		if (exists $overall_database_stats{'temp_bytes'}) {
+			print $fh <<EOF;
 		<li><span class="figure">$overall_database_stats{'temp_bytes'}[0] ($overall_database_stats{'temp_bytes'}[1])</span> <span class="figure-label">Most temporary bytes</span></li>
+EOF
+		}
+		if (exists $overall_database_stats{'deadlocks'}) {
+			print $fh <<EOF;
 		<li><span class="figure">$overall_database_stats{'deadlocks'}[0] ($overall_database_stats{'deadlocks'}[1])</span> <span class="figure-label">Most deadlocks</span></li>
+EOF
+		}
+		print $fh <<EOF;
 		</ul>
 		</div>
               </div>
@@ -2034,11 +2062,13 @@ sub compute_cpu_report
 			$cpu_all_stat{idle}   .= '[' . $data[2] . ',' . ($data[-1]||0) . '],';
 		}
 	}
-	$cpu_all_stat{total} =~ s/,$//;
-	$cpu_all_stat{system} =~ s/,$//;
-	$cpu_all_stat{user} =~ s/,$//;
-	$cpu_all_stat{iowait} =~ s/,$//;
-	$cpu_all_stat{idle} =~ s/,$//;
+	if (exists $cpu_all_stat{total}) {
+		$cpu_all_stat{total} =~ s/,$//;
+		$cpu_all_stat{system} =~ s/,$//;
+		$cpu_all_stat{user} =~ s/,$//;
+		$cpu_all_stat{iowait} =~ s/,$//;
+		$cpu_all_stat{idle} =~ s/,$//;
+	}
 	print $FH &flotr2_linegraph_array($IDX++, 'system-cpu', $data_info, 'all', $cpu_all_stat{total}, $cpu_all_stat{system}, $cpu_all_stat{user}, $cpu_all_stat{iowait});
 #	foreach my $n (sort { $a <=> $b } keys %cpu_stat) {
 #		$cpu_stat{$n}{total} =~ s/,$//;
