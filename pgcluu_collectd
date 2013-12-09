@@ -50,6 +50,7 @@ my $PG_VERSION  = 0;
 my $DBSERVICE   = '';
 my $STAT_TYPE   = 'user';
 my $KILL        = 0;
+my $OS_INFO     = 0;
 
 # Definition to collect metrics from the database
 my %METRICS_COMMANDS = (
@@ -180,6 +181,7 @@ my $result = GetOptions(
 	"sar-file=s"     => \$SAR_FILE,
 	"list-metric!"   => \$LIST_METRIC,
 	"pgbouncer-args=s" => \$PGBOUNCER_ARGS,
+	"os-info!"       => \$OS_INFO,
 ) or die &usage();
 
 # The daemon should be stopped
@@ -224,7 +226,6 @@ if ($LIST_METRIC) {
 	print "\n";
 	exit 0;
 }
-
 
 # Check if an other process is already running
 if (-f $PIDFILE) {
@@ -278,6 +279,13 @@ if (!-d $OUTPUT_DIR) {
 # Go to that directory
 chdir($OUTPUT_DIR);
 
+# Get Os information and exit
+if ($OS_INFO) {
+	&grab_os_information();
+	exit 0;
+}
+
+
 # Die cleanly on signal
 sub terminate
 {
@@ -310,7 +318,8 @@ if (!$DAEMONIZE) {
         &dprint("LOG: Detach from terminal with pid: $$\n");
 }
 
-# Set name of the program without path*
+
+# Set name of the program without path
 my $orig_name = $0;
 $0 = $PROGRAM;
 
@@ -321,6 +330,9 @@ unless(open(OUT, ">$PIDFILE")) {
 }
 print OUT $$;
 close(OUT);
+
+# Get Os information
+&grab_os_information();
 
 my $sysstat_version = &sysstat_version() || '';
 
@@ -507,6 +519,45 @@ sub sysstat_version
 	return -1;
 }
 
+sub grab_os_information
+{
+
+	# Look at CPU informations
+	my @cpuinfo = `cat /proc/cpuinfo | grep -E "model name|cpu MHz|cache size|cpu cores|processor" 2>/dev/null`;
+	# Look at kernel informations
+	my $kernel_info = `uname -a  2>/dev/null`;
+	# Look at memory informations
+	my @meminfo = `cat /proc/meminfo 2>/dev/null`;
+	# Look at filesystem informations
+	my @dfinfo = `df -h 2>/dev/null`;
+	# Mount informations
+	my @mountinfo = `mount -l 2>/dev/null`;
+	# Fstab informations
+	my @fstabinfo = `cat /etc/fstab | grep -v "^#" 2>/dev/null`;
+	# PCI information
+	my @pciinfo = `lspci  2>/dev/null`;
+
+	unless(open(OUT, ">$OUTPUT_DIR/sysinfo.txt")) {
+		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
+		exit 1;
+	}
+	print OUT "[CPU]\n";
+	print OUT @cpuinfo;
+	print OUT "[KERNEL]\n";
+	print OUT $kernel_info;
+	print OUT "[MEMORY]\n";
+	print OUT @meminfo;
+	print OUT "[DF]\n";
+	print OUT @dfinfo;
+	print OUT "[MOUNT]\n";
+	print OUT @mountinfo;
+	print OUT "[FSTAB]\n";
+	print OUT @fstabinfo;
+	print OUT "[PCI]\n";
+	print OUT @pciinfo;
+	
+	close(OUT);
+}
 
 sub usage
 {
@@ -531,6 +582,7 @@ options:
   -S, --disable-sar        disable collect of system statistics with sar.
   -U, --dbuser=USERNAME    database user to connect as. Default to current user.
   --list-metric            list available metrics actions that can be performed.
+  --os-info                grab operating system information and exit.
   --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
 			   database. Ex: -p 6432 -U postgres -h 192.168.1.100
   --sar-file=FILE          path to sar output data file for sysstat stats
