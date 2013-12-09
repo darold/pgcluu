@@ -1273,7 +1273,7 @@ sub compute_dbstat_graph
 		my $tmp_val = 0;
 		while (<IN>) {
 			my @data = split(/;/);
-			next if (!&normalyze_line(\@data));
+			next if (!&normalyze_line(\@data, 5));
 			my $db = 'all';
 			$db = $data[5] if ($#data == 5);
 			$all_connections_stat{$data[0]}{total} += $data[1];
@@ -1489,6 +1489,10 @@ sub normalyze_line
 {
 	my $data = shift;
 
+	# Get position of the database name
+	my $pos  = shift;
+	$pos ||= 2;
+
 	return 0 if ($data->[0] !~ /^\d+/);
 
 	$data->[0] = &convert_time($data->[0]);
@@ -1501,7 +1505,7 @@ sub normalyze_line
 	map { s/,/\./g; s/^$/0/; } @$data;
 
 	# Always skip default template database
-	return 0 if ($data->[2] =~ /^template\d+$/);
+	return 0 if ($data->[$pos] =~ /template/);
 
 	return 1;
 }
