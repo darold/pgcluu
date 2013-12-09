@@ -52,6 +52,7 @@ my @DATABASE_LIST      = ();
 my @DEVICE_LIST        = ();
 my $FIST_DATABASE_LINK = '#';
 my %OVERALL_STATS      = ();
+my @GRAPH_COLORS       = ('#6e9dc9', '#f4ab3a', '#ac7fa8', '#8dbd0f'); 
 
 my ($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
 $o_year += 1900;
@@ -85,6 +86,7 @@ my %DB_GRAPH_INFOS = (
 			'description' => 'Per database cache hit/miss ratio',
 			'ylabel' => 'Blocks per second',
 			'legends' => ['Cache hit','Cache miss','hit/miss ratio'],
+			'y2label' => 'Percentage',
 		},
 		'4' => {
 			'name' =>  'database-commits_rollbacks',
@@ -2818,11 +2820,20 @@ sub flotr2_linegraph_array
 	my ($buttonid, $divid, $infos, $title, @data) = @_;
 
 	my @legend = ();
+	my $data2 = '';
 	my $id = 1;
 	for (my $i = 0; $i <= $#data; $i++) {
 		$data[$i] ||= '';
 		$data[$i] = "var d$id = [$data[$i]];\n";
-		push(@legend, "{ data: d$id, label: \"" . ($infos->{legends}[$i] || '') . "\" },\n");
+		my $color = '';
+		if ($GRAPH_COLORS[$i]) {
+			$color = ", color: \"$GRAPH_COLORS[$i]\"";
+		}
+		if ($infos->{y2label} && ($i == $#data)) {
+			push(@legend, "{ data: d$id, label: \"" . ($infos->{legends}[$i] || '') . "\"$color, yaxis: 2 },\n");
+		} else {
+			push(@legend, "{ data: d$id, label: \"" . ($infos->{legends}[$i] || '') . "\"$color, mouse:{track:true} },\n");
+		}
 		$id++;
 	}
 	if ($title ne '') {
@@ -2842,8 +2853,12 @@ sub flotr2_linegraph_hash
 	my $i = 1;
 	foreach my $id (sort keys %data_h) {
 		$data_h{$id} ||= '';
+		my $color = '';
+		if ($GRAPH_COLORS[$i]) {
+			$color = ", color: \"$GRAPH_COLORS[$i]\"";
+		}
 		push(@data, "var d$i = [$data_h{$id}];\n");
-		push(@legend, "{ data: d$i, label: \"$id\" },\n");
+		push(@legend, "{ data: d$i, label: \"$id\"$color, mouse:{track:true} },\n");
 		$i++;
 	}
 	if ($title ne '') {
@@ -2882,6 +2897,15 @@ sub flotr2_linegraph
               </div>
               <div class="panel-body">
 };
+	my $yaxis2 = '';
+	if ($infos->{y2label}) {
+		my $color = '';
+		if ($GRAPH_COLORS[$#{$data}]) {
+			$color = ", color: \"$GRAPH_COLORS[$#{$data}]\"";
+		}
+		my $y2label = $infos->{y2label} || '';
+		$yaxis2 = "y2axis: { mode: \"normal\", title: \"$y2label\", min: 0$color },";
+	}
 
 	if ($#{$data} >= 0) {
 		$str .= <<EOF;
@@ -2904,6 +2928,7 @@ sub flotr2_linegraph
 	    tickFormatter: function(val){ return pretty_print_number(val,'$type') },
 
         },
+	$yaxis2
         selection: {
             mode: "x",
             fps: 30
