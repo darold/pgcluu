@@ -123,7 +123,7 @@ my %DB_GRAPH_INFOS = (
 		},
 		'9' => {
 			'name' =>  'database-temporary_file',
-			'title' => 'Number of temporary file on %s database',
+			'title' => 'Number of temporary files on %s database',
 			'description' => 'Number of temporary files created by queries per database.',
 			'ylabel' => 'Number of files',
 			'legends' => ['temporary files'],
