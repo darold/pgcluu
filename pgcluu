@@ -1702,24 +1702,24 @@ EOF
 		<div class="key-figures">
 		<ul>
 		<li></li>
-		<li><span class="figure">$overall_database_stats{'size'}[0] ($overall_database_stats{'size'}[1])</span> <span class="figure-label">Largest</span></li>
-		<li><span class="figure">$overall_database_stats{'nbackend'}[0] ($overall_database_stats{'nbackend'}[1])</span> <span class="figure-label">Most connections</span></li>
-		<li><span class="figure">$overall_database_stats{'read_tuples'}[0] ($overall_database_stats{'read_tuples'}[1])</span> <span class="figure-label">Most tuples fetched</span></li>
-		<li><span class="figure">$overall_database_stats{'cache_ratio'}[0] ($overall_database_stats{'cache_ratio'}[1]%)</span> <span class="figure-label">Worst cache utilization</span></li>
+		<li><span class="figure">$overall_database_stats{'size'}[1]</span> <span class="figure-label">Largest database</span><br/><span class="figure-date">($overall_database_stats{'size'}[0])</span></li>
+		<li><span class="figure">$overall_database_stats{'nbackend'}[1]</span> <span class="figure-label">Most connections</span><br/><span class="figure-date">($overall_database_stats{'nbackend'}[0])</span></li>
+		<li><span class="figure">$overall_database_stats{'read_tuples'}[1]</span> <span class="figure-label">Most tuples fetched</span><br/><span class="figure-date">($overall_database_stats{'read_tuples'}[0])</span></li>
+		<li><span class="figure">$overall_database_stats{'cache_ratio'}[1]%</span> <span class="figure-label">Worst cache utilization</span><br/><span class="figure-date">($overall_database_stats{'cache_ratio'}[0])</span></li>
 EOF
 		if (exists $overall_database_stats{'temp_files'} && $overall_database_stats{'temp_files'}[1]) {
 			print $fh <<EOF;
-		<li><span class="figure">$overall_database_stats{'temp_files'}[0] ($overall_database_stats{'temp_files'}[1])</span> <span class="figure-label">Most temporary files</span></li>
+		<li><span class="figure">$overall_database_stats{'temp_files'}[1]</span> <span class="figure-label">Most temporary files</span><br/><span class="figure-date">($overall_database_stats{'temp_files'}[0])</span></li>
 EOF
 		}
 		if (exists $overall_database_stats{'temp_bytes'} && $overall_database_stats{'temp_bytes'}[1]) {
 			print $fh <<EOF;
-		<li><span class="figure">$overall_database_stats{'temp_bytes'}[0] ($overall_database_stats{'temp_bytes'}[1])</span> <span class="figure-label">Most temporary bytes</span></li>
+		<li><span class="figure">$overall_database_stats{'temp_bytes'}[1]</span> <span class="figure-label">Most temporary bytes</span><br/><span class="figure-date">($overall_database_stats{'temp_bytes'}[0])</span></li>
 EOF
 		}
 		if (exists $overall_database_stats{'deadlocks'} && $overall_database_stats{'deadlocks'}[1]) {
 			print $fh <<EOF;
-		<li><span class="figure">$overall_database_stats{'deadlocks'}[0] ($overall_database_stats{'deadlocks'}[1])</span> <span class="figure-label">Most deadlocks</span></li>
+		<li><span class="figure">$overall_database_stats{'deadlocks'}[1]</span> <span class="figure-label">Most deadlocks</span><br/><span class="figure-date">($overall_database_stats{'deadlocks'}[0])</span></li>
 EOF
 		}
 		print $fh <<EOF;
@@ -1748,8 +1748,8 @@ EOF
 		<!-- li><span class="figure">$OVERALL_STATS{'system'}{'bread'}[1]</span> <span class="figure-label">Highest block read</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'bread'}[0])</span></li -->
 		<!-- li><span class="figure">$OVERALL_STATS{'system'}{'bwrite'}[1]</span> <span class="figure-label">Highest block write</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'bwrite'}[0])</span> </li -->
 		<li><span class="figure">$OVERALL_STATS{'system'}{'svctm'}[1]</span> <span class="figure-label">Highest device service time</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'svctm'}[0])</span></li>
-		<li><span class="figure">$overall_system_stats{read}[0] ($overall_system_stats{read}[1])</span> <span class="figure-label">Most read device</span></li>
-		<li><span class="figure">$overall_system_stats{write}[0] ($overall_system_stats{write}[1])</span> <span class="figure-label">Most written device</span></li>
+		<li><span class="figure">$overall_system_stats{read}[0]</span> <span class="figure-label">Most read device</span><br/><span class="figure-date"> ($overall_system_stats{read}[1])</span></li>
+		<li><span class="figure">$overall_system_stats{write}[0]</span> <span class="figure-label">Most written device</span><br/><span class="figure-date">($overall_system_stats{write}[1])</span></li>
 		</ul>
 		</div>
               </div>
@@ -3411,7 +3411,7 @@ ul#slides li div div {
 .panel-body { background-color: #ffffff; font-size: 1.2em;}
 .panel-footer { background-color: #f5f5f5}
 .panel-height { height: 300px}
-.panel-xlheight { height: 400px}
+.panel-xlheight { height: 450px}
 .btn { margin-top: 10px};
 .key-figures ul {
 	margin: 0;
@@ -3431,7 +3431,7 @@ ul#slides li div div {
 }
 .figure-date {
 	color: #333;
-	font-size: 0.7em;
+	font-size: 0.8em;
 }
 /*
 &.danger {
