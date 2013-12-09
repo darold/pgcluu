@@ -1545,10 +1545,10 @@ sub generate_html_index
 	# Compute global statistics for home page dashboard
 	my %overall_database_stats = ();
 	if (exists $OVERALL_STATS{'cluster'}) {
-		$OVERALL_STATS{'cluster'}{'cache_ratio'} = sprintf("%.1f", ($OVERALL_STATS{'cluster'}{'blks_hit'} * 100) / (($OVERALL_STATS{'cluster'}{'blks_read'} + $OVERALL_STATS{'cluster'}{'blks_hit'}) || 1)) . "%";
+		$OVERALL_STATS{'cluster'}{'cache_ratio'} = sprintf("%3d", ($OVERALL_STATS{'cluster'}{'blks_hit'} * 100) / (($OVERALL_STATS{'cluster'}{'blks_read'} + $OVERALL_STATS{'cluster'}{'blks_hit'}) || 1)) . "%";
 		$OVERALL_STATS{'cluster'}{'temp_bytes'} = &pretty_print_size($OVERALL_STATS{'cluster'}{'temp_bytes'});
 		foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
-			$OVERALL_STATS{'database'}{$db}{'cache_ratio'} = sprintf("%.1f", ($OVERALL_STATS{'database'}{$db}{'blks_hit'} * 100) / (($OVERALL_STATS{'database'}{$db}{'blks_read'} + $OVERALL_STATS{'database'}{$db}{'blks_hit'}) || 1));
+			$OVERALL_STATS{'database'}{$db}{'cache_ratio'} = sprintf("%3d", ($OVERALL_STATS{'database'}{$db}{'blks_hit'} * 100) / (($OVERALL_STATS{'database'}{$db}{'blks_read'} + $OVERALL_STATS{'database'}{$db}{'blks_hit'}) || 1));
 		}
 		foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
 			if (exists $OVERALL_STATS{'database'}{$db}{'size'}) {
