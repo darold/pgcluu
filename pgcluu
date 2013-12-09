@@ -756,6 +756,8 @@ sub compute_dbstat_graph
 			$total_query_type{$data[2]}{'select'} += $tmp_val;
 			$OVERALL_STATS{'cluster'}{'read_tuples'} += $tmp_val;
 			$OVERALL_STATS{'database'}{$data[2]}{'read_tuples'} += $tmp_val;
+			$OVERALL_STATS{'start_date'} = $data[0] if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} > $data[0]));
+			$OVERALL_STATS{'end_date'} = $data[0] if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} < $data[0]));
 
 			# Gather insert statement
 			(($data[10] - $start_vals{$data[2]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[2]}[10]);
@@ -1092,6 +1094,8 @@ sub compute_dbstat_graph
 			$database_stat{$data[2]}{size} .= '[' . $data[0] . ',' . $data[3] . '],';
 			$all_database_stat{$data[0]} += $data[3];
 			$OVERALL_STATS{'database'}{$data[2]}{'size'} = $data[3];
+			$OVERALL_STATS{'start_date'} = $data[0] if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} > $data[0]));
+			$OVERALL_STATS{'end_date'} = $data[0] if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} < $data[0]));
 		}
 		foreach my $t (sort {$a <=> $b} keys %all_database_stat) {
 			$database_stat{'all'}{size} .= '[' . $t . ',' . $all_database_stat{$t} . '],';
@@ -1334,19 +1338,19 @@ sub compute_dbstat_graph
 		}
 		my $id1 = &get_data_id('database-functions_time', %data_info);
 		my $id2 = &get_data_id('database-functions_count', %data_info);
-		foreach my $db (sort keys %functions_stat) {
-			next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
-			$functions_stat{$db}{calls} =~ s/,$//;
-			$functions_stat{$db}{total_time} =~ s/,$//;
-			$functions_stat{$db}{self_time} =~ s/,$//;
-			if ($db ne 'all') {
-				$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-functions_time', \%{$data_info{$id1}}, $db, $functions_stat{$db}{total_time}, $functions_stat{$db}{self_time}) );
-				$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-functions_count', \%{$data_info{$id2}}, $db, $functions_stat{$db}{calls}) );
-			} else {
-				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-functions_time', \%{$data_info{$id1}}, $db, $functions_stat{$db}{total_time}, $functions_stat{$db}{self_time});
-				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-functions_count', \%{$data_info{$id2}}, $db, $functions_stat{$db}{calls});
-			}
-		}
+#		foreach my $db (sort keys %functions_stat) {
+#			next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+#			$functions_stat{$db}{calls} =~ s/,$//;
+#			$functions_stat{$db}{total_time} =~ s/,$//;
+#			$functions_stat{$db}{self_time} =~ s/,$//;
+#			if ($db ne 'all') {
+#				$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-functions_time', \%{$data_info{$id1}}, $db, $functions_stat{$db}{total_time}, $functions_stat{$db}{self_time}) );
+#				$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-functions_count', \%{$data_info{$id2}}, $db, $functions_stat{$db}{calls}) );
+#			} else {
+#				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-functions_time', \%{$data_info{$id1}}, $db, $functions_stat{$db}{total_time}, $functions_stat{$db}{self_time});
+#				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-functions_count', \%{$data_info{$id2}}, $db, $functions_stat{$db}{calls});
+#			}
+#		}
 	}
 
 	# Compute graphs of xlog cluster statistics
@@ -1541,10 +1545,10 @@ sub generate_html_index
 	# Compute global statistics for home page dashboard
 	my %overall_database_stats = ();
 	if (exists $OVERALL_STATS{'cluster'}) {
-		$OVERALL_STATS{'cluster'}{'cache_ratio'} = sprintf("%.2f", ($OVERALL_STATS{'cluster'}{'blks_hit'} * 100) / (($OVERALL_STATS{'cluster'}{'blks_read'} + $OVERALL_STATS{'cluster'}{'blks_hit'}) || 1)) . "%";
+		$OVERALL_STATS{'cluster'}{'cache_ratio'} = sprintf("%.1f", ($OVERALL_STATS{'cluster'}{'blks_hit'} * 100) / (($OVERALL_STATS{'cluster'}{'blks_read'} + $OVERALL_STATS{'cluster'}{'blks_hit'}) || 1)) . "%";
 		$OVERALL_STATS{'cluster'}{'temp_bytes'} = &pretty_print_size($OVERALL_STATS{'cluster'}{'temp_bytes'});
 		foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
-			$OVERALL_STATS{'database'}{$db}{'cache_ratio'} = sprintf("%.2f", ($OVERALL_STATS{'database'}{$db}{'blks_hit'} * 100) / (($OVERALL_STATS{'database'}{$db}{'blks_read'} + $OVERALL_STATS{'database'}{$db}{'blks_hit'}) || 1));
+			$OVERALL_STATS{'database'}{$db}{'cache_ratio'} = sprintf("%.1f", ($OVERALL_STATS{'database'}{$db}{'blks_hit'} * 100) / (($OVERALL_STATS{'database'}{$db}{'blks_read'} + $OVERALL_STATS{'database'}{$db}{'blks_hit'}) || 1));
 		}
 		foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
 			if (exists $OVERALL_STATS{'database'}{$db}{'size'}) {
@@ -1646,6 +1650,23 @@ EOF
 		$OVERALL_STATS{'cluster'}{'temp_files'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'temp_bytes'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'deadlocks'} ||= 0;
+		my $temp_file_info = qq{
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'temp_files'}</span> <span class="figure-label">Temporary files</span></li>
+};
+		if ($OVERALL_STATS{'cluster'}{'temp_files'}) {
+			$temp_file_info = qq{
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'temp_files'}</span> <span class="figure-label">Temporary files</span></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'temp_bytes'}</span> <span class="figure-label">Temporary files size</span></li>
+};
+		}
+		if (exists $OVERALL_STATS{'start_date'}) {
+			$OVERALL_STATS{'start_date'} = localtime($OVERALL_STATS{'start_date'}/1000);
+			$OVERALL_STATS{'end_date'} = localtime($OVERALL_STATS{'end_date'}/1000);
+		}
+		if (exists $OVERALL_STATS{'sar_start_date'}) {
+			$OVERALL_STATS{'sar_start_date'} = localtime($OVERALL_STATS{'sar_start_date'}/1000);
+			$OVERALL_STATS{'sar_end_date'} = localtime($OVERALL_STATS{'sar_end_date'}/1000);
+		}
 		print $fh <<EOF;
       <div class="row">
             <div class="col-md-$numcol">
@@ -1655,15 +1676,15 @@ EOF
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
+		<span class="figure-date">$OVERALL_STATS{'start_date'} to $OVERALL_STATS{'end_date'}</span>
 		<ul>
 		<li></li>
-		<li><span class="figure">$OVERALL_STATS{'cluster'}{'size'}</span> <span class="figure-label">Size of the cluster</span></li>
-		<li><span class="figure">$OVERALL_STATS{'cluster'}{'nbackend'}</span> <span class="figure-label">Number of connections</span></li>
-		<li><span class="figure">$OVERALL_STATS{'cluster'}{'read_tuples'}</span> <span class="figure-label">Number of tuples fetched</span></li>
-		<li><span class="figure">$OVERALL_STATS{'cluster'}{'cache_ratio'}%</span> <span class="figure-label">Cache utilization</span></li>
-		<li><span class="figure">$OVERALL_STATS{'cluster'}{'temp_files'}</span> <span class="figure-label">Number of temporary files</span></li>
-		<li><span class="figure">$OVERALL_STATS{'cluster'}{'temp_bytes'}</span> <span class="figure-label">Temporary files size</span></li>
-		<li><span class="figure">$OVERALL_STATS{'cluster'}{'deadlocks'}</span> <span class="figure-label">Number of deadlocks</span></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'size'}</span> <span class="figure-label">Cluster size</span></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'nbackend'}</span> <span class="figure-label">Connections</span></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'read_tuples'}</span> <span class="figure-label">Tuples fetched</span></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'cache_ratio'}</span> <span class="figure-label">Hit cache ratio</span></li>
+		$temp_file_info
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'deadlocks'}</span> <span class="figure-label">Deadlocks</span></li>
 		</ul>
 		</div>
               </div>
@@ -1686,17 +1707,17 @@ EOF
 		<li><span class="figure">$overall_database_stats{'read_tuples'}[0] ($overall_database_stats{'read_tuples'}[1])</span> <span class="figure-label">Most tuples fetched</span></li>
 		<li><span class="figure">$overall_database_stats{'cache_ratio'}[0] ($overall_database_stats{'cache_ratio'}[1]%)</span> <span class="figure-label">Worst cache utilization</span></li>
 EOF
-		if (exists $overall_database_stats{'temp_files'}) {
+		if (exists $overall_database_stats{'temp_files'} && $overall_database_stats{'temp_files'}[1]) {
 			print $fh <<EOF;
 		<li><span class="figure">$overall_database_stats{'temp_files'}[0] ($overall_database_stats{'temp_files'}[1])</span> <span class="figure-label">Most temporary files</span></li>
 EOF
 		}
-		if (exists $overall_database_stats{'temp_bytes'}) {
+		if (exists $overall_database_stats{'temp_bytes'} && $overall_database_stats{'temp_bytes'}[1]) {
 			print $fh <<EOF;
 		<li><span class="figure">$overall_database_stats{'temp_bytes'}[0] ($overall_database_stats{'temp_bytes'}[1])</span> <span class="figure-label">Most temporary bytes</span></li>
 EOF
 		}
-		if (exists $overall_database_stats{'deadlocks'}) {
+		if (exists $overall_database_stats{'deadlocks'} && $overall_database_stats{'deadlocks'}[1]) {
 			print $fh <<EOF;
 		<li><span class="figure">$overall_database_stats{'deadlocks'}[0] ($overall_database_stats{'deadlocks'}[1])</span> <span class="figure-label">Most deadlocks</span></li>
 EOF
@@ -1718,6 +1739,7 @@ EOF
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
+		<span class="figure-date">$OVERALL_STATS{'sar_start_date'} to $OVERALL_STATS{'sar_end_date'}</span>
 		<ul>
 		<li></li>
 		<li><span class="figure">$OVERALL_STATS{'system'}{'cpu'}[1]% ($OVERALL_STATS{'system'}{'cpu'}[0])</span> <span class="figure-label">Highest CPU utilization</span></li>
@@ -2061,6 +2083,8 @@ sub compute_cpu_report
 			$cpu_all_stat{iowait} .= '[' . $data[2] . ',' . ($data[7]||0) . '],';
 			$cpu_all_stat{idle}   .= '[' . $data[2] . ',' . ($data[-1]||0) . '],';
 		}
+		$OVERALL_STATS{'sar_start_date'} = $data[2] if (!$OVERALL_STATS{'sar_start_date'} || ($OVERALL_STATS{'sar_start_date'} > $data[2]));
+		$OVERALL_STATS{'sar_end_date'} = $data[2] if (!$OVERALL_STATS{'sar_end_date'} || ($OVERALL_STATS{'sar_end_date'} < $data[2]));
 	}
 	if (exists $cpu_all_stat{total}) {
 		$cpu_all_stat{total} =~ s/,$//;
@@ -2558,7 +2582,7 @@ sub compute_sarfile_graph
 		chomp($l);
 		$l =~ s///;
 		# Skip kernel header part
-		if ( ($l eq '') || ($l =~ /^\d+:\d+:\d+/) || ($l =~ /\d+\/\d+\/\d+$/)) {
+		if ( ($l eq '') || ($l =~ /^\d+:\d+:\d+/) || ($l =~ /\d+\/\d+\/\d+/)) {
 			push(@content, $l);
 		}
 	}
@@ -2579,7 +2603,7 @@ sub compute_sarfile_graph
 			next;
 		}
 		# look for kernel header to find the date
-		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /(\d+)\/(\d+)\/(\d+)$/) ) {
+		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /(\d+)\/(\d+)\/(\d+)/) ) {
 			$sar_month = $1;
 			$sar_day = $2;
 			$sar_year = $3+2000;
@@ -3395,6 +3419,10 @@ ul#slides li div div {
 }
 .figure-label {
 	color: #666;
+}
+.figure-date {
+	color: #333;
+	font-size: 0.7em;
 }
 /*
 &.danger {
