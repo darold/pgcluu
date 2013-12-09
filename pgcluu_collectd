@@ -536,6 +536,8 @@ sub grab_os_information
 	my @fstabinfo = `cat /etc/fstab | grep -v "^#" 2>/dev/null`;
 	# PCI information
 	my @pciinfo = `lspci  2>/dev/null`;
+	# Release informations
+	my @releaseinfo = `cat /etc/*release 2>/dev/null`;
 
 	unless(open(OUT, ">$OUTPUT_DIR/sysinfo.txt")) {
 		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
@@ -555,6 +557,8 @@ sub grab_os_information
 	print OUT @fstabinfo;
 	print OUT "[PCI]\n";
 	print OUT @pciinfo;
+	print OUT "[RELEASE]\n";
+	print OUT @releaseinfo;
 	
 	close(OUT);
 }
