@@ -1742,12 +1742,12 @@ EOF
 		<span class="figure-date">$OVERALL_STATS{'sar_start_date'} to $OVERALL_STATS{'sar_end_date'}</span>
 		<ul>
 		<li></li>
-		<li><span class="figure">$OVERALL_STATS{'system'}{'cpu'}[1]% ($OVERALL_STATS{'system'}{'cpu'}[0])</span> <span class="figure-label">Highest CPU utilization</span></li>
-		<li><span class="figure">$OVERALL_STATS{'system'}{'load'}[1] ($OVERALL_STATS{'system'}{'load'}[0])</span> <span class="figure-label">Highest system load</span></li>
-		<li><span class="figure">$OVERALL_STATS{'system'}{'kbcached'}[1] ($OVERALL_STATS{'system'}{'kbcached'}[0])</span> <span class="figure-label">Lowest system cache</span></li>
-		<!-- li><span class="figure">$OVERALL_STATS{'system'}{'bread'}[1] ($OVERALL_STATS{'system'}{'bread'}[0])</span> <span class="figure-label">Highest block read</span></li -->
-		<!-- li><span class="figure">$OVERALL_STATS{'system'}{'bwrite'}[1] ($OVERALL_STATS{'system'}{'bwrite'}[0])</span> <span class="figure-label">Highest block write</span></li -->
-		<li><span class="figure">$OVERALL_STATS{'system'}{'svctm'}[1] ($OVERALL_STATS{'system'}{'svctm'}[0])</span> <span class="figure-label">Highest device service time</span></li>
+		<li><span class="figure">$OVERALL_STATS{'system'}{'cpu'}[1]%</span> <span class="figure-label">Highest CPU utilization</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'cpu'}[0])</span></li>
+		<li><span class="figure">$OVERALL_STATS{'system'}{'load'}[1]</span> <span class="figure-label">Highest system load</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'load'}[0])</span></li>
+		<li><span class="figure">$OVERALL_STATS{'system'}{'kbcached'}[1]</span> <span class="figure-label">Lowest system cache</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'kbcached'}[0])</span></li>
+		<!-- li><span class="figure">$OVERALL_STATS{'system'}{'bread'}[1]</span> <span class="figure-label">Highest block read</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'bread'}[0])</span></li -->
+		<!-- li><span class="figure">$OVERALL_STATS{'system'}{'bwrite'}[1]</span> <span class="figure-label">Highest block write</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'bwrite'}[0])</span> </li -->
+		<li><span class="figure">$OVERALL_STATS{'system'}{'svctm'}[1]</span> <span class="figure-label">Highest device service time</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'svctm'}[0])</span></li>
 		<li><span class="figure">$overall_system_stats{read}[0] ($overall_system_stats{read}[1])</span> <span class="figure-label">Most read device</span></li>
 		<li><span class="figure">$overall_system_stats{write}[0] ($overall_system_stats{write}[1])</span> <span class="figure-label">Most written device</span></li>
 		</ul>
@@ -2074,7 +2074,8 @@ sub compute_cpu_report
 		} else {
 			my $total_cpu = ($data[6]||0) + ($data[4]||0);
 			if (!exists $OVERALL_STATS{'system'}{'cpu'} || ($OVERALL_STATS{'system'}{'cpu'}[1] < $total_cpu)) {
-				@{$OVERALL_STATS{'system'}{'cpu'}} = (localtime($data[2]),  $total_cpu);
+				my $t = localtime($data[2]/1000);
+				@{$OVERALL_STATS{'system'}{'cpu'}} = ($t, $total_cpu);
 				$OVERALL_STATS{'system'}{'ncpu'} = $ncpu;
 			}
 			$cpu_all_stat{total} .= '[' . $data[2] . ',' . $total_cpu . '],';
@@ -2121,7 +2122,8 @@ sub compute_load_report
 
 		map { s/,/\./ } @data ;
 		if (!exists $OVERALL_STATS{'system'}{'load'} || ($OVERALL_STATS{'system'}{'load'}[1] < $data[5])) {
-			@{$OVERALL_STATS{'system'}{'load'}} = (localtime($data[2]), $data[5]);
+			my $t = localtime($data[2]/1000);
+			@{$OVERALL_STATS{'system'}{'load'}} = ($t, $data[5]);
 		}
 		$load_stat{'ldavg-1'} .= '[' . $data[2] . ',' . ($data[5]||0) . '],';
 		$load_stat{'ldavg-5'}   .= '[' . $data[2] . ',' . ($data[6]||0) . '],';
@@ -2151,7 +2153,8 @@ sub compute_process_report
 
 		map { s/,/\./ } @data ;
 		if (!exists $OVERALL_STATS{'system'}{'process'} || ($OVERALL_STATS{'system'}{'process'}[1] < $data[4])) {
-			@{$OVERALL_STATS{'system'}{'process'}} = (localtime($data[2]), $data[4]);
+			my $t = localtime($data[2]/1000);
+			@{$OVERALL_STATS{'system'}{'process'}} = ($t, $data[4]);
 		}
 		$process_stat{'plist-sz'}   .= '[' . $data[2] . ',' . ($data[4]||0) . '],';
 	}
@@ -2178,7 +2181,8 @@ sub compute_memory_report
 		map { s/,/\./ } @data ;
 		my $kbcached = $data[7]*1024;
 		if (!exists $OVERALL_STATS{'system'}{'kbcached'} || ($OVERALL_STATS{'system'}{'kbcached'}[1] > $kbcached)) {
-			@{$OVERALL_STATS{'system'}{'kbcached'}} = (localtime($data[2]), $kbcached);
+			my $t = localtime($data[2]/1000);
+			@{$OVERALL_STATS{'system'}{'kbcached'}} = ($t, $kbcached);
 		}
 		$memory_stat{'kbcached'} .= '[' . $data[2] . ',' . $kbcached . '],';
 		$memory_stat{'kbbuffers'}   .= '[' . $data[2] . ',' . $data[6]*1024 . '],';
@@ -2208,10 +2212,12 @@ sub compute_swap_report
 
 		map { s/,/\./ } @data ;
 		if (!exists $OVERALL_STATS{'system'}{'pswpin'} || ($OVERALL_STATS{'system'}{'pswpin'}[1] < $data[3])) {
-			@{$OVERALL_STATS{'system'}{'pswpin'}} = (localtime($data[2]), $data[3]);
+			my $t = localtime($data[2]/1000);
+			@{$OVERALL_STATS{'system'}{'pswpin'}} = ($t, $data[3]);
 		}
 		if (!exists $OVERALL_STATS{'system'}{'pswpout'} || ($OVERALL_STATS{'system'}{'pswpout'}[1] < $data[4])) {
-			@{$OVERALL_STATS{'system'}{'pswpout'}} = (localtime($data[2]), $data[4]);
+			my $t = localtime($data[2]/1000);
+			@{$OVERALL_STATS{'system'}{'pswpout'}} = ($t, $data[4]);
 		}
 		$swap_stat{'pswpin/s'} .= '[' . $data[2] . ',' . ($data[3]||0) . '],';
 		$swap_stat{'pswpout/s'}   .= '[' . $data[2] . ',' . ($data[4]||0) . '],';
@@ -2239,10 +2245,12 @@ sub compute_block_report
 
 		map { s/,/\./ } @data ;
 		if (!exists $OVERALL_STATS{'system'}{'bread'} || ($OVERALL_STATS{'system'}{'bread'}[1] < $data[6])) {
-			@{$OVERALL_STATS{'system'}{'bread'}} = (localtime($data[2]), $data[6]);
+			my $t = localtime($data[2]/1000);
+			@{$OVERALL_STATS{'system'}{'bread'}} = ($t, $data[6]);
 		}
 		if (!exists $OVERALL_STATS{'system'}{'bwrite'} || ($OVERALL_STATS{'system'}{'bwrite'}[1] < $data[7])) {
-			@{$OVERALL_STATS{'system'}{'bwrite'}} = (localtime($data[2]), $data[7]);
+			my $t = localtime($data[2]/1000);
+			@{$OVERALL_STATS{'system'}{'bwrite'}} = ($t, $data[7]);
 		}
 		$block_stat{'bread/s'} .= '[' . $data[2] . ',' . ($data[6]||0) . '],';
 		$block_stat{'bwrtn/s'}   .= '[' . $data[2] . ',' . ($data[7]||0) . '],';
@@ -2271,7 +2279,8 @@ sub compute_srvtime_report
 
 		map { s/,/\./ } @data ;
 		if (!exists $OVERALL_STATS{'system'}{'svctm'} || ($OVERALL_STATS{'system'}{'svctm'}[1] < $data[10])) {
-			@{$OVERALL_STATS{'system'}{'svctm'}} = (localtime($data[2]), $data[10]);
+			my $t = localtime($data[2]/1000);
+			@{$OVERALL_STATS{'system'}{'svctm'}} = ($t, $data[10]);
 		}
 		$devices_stat{$data[3]}{'await'}   .= '[' . $data[2] . ',' . ($data[9]||0) . '],';
 		$devices_stat{$data[3]}{'svctm'} .= '[' . $data[2] . ',' . ($data[10]||0) . '],';
