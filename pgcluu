@@ -92,8 +92,9 @@ my %DB_GRAPH_INFOS = (
 			'name' =>  'database-commits_rollbacks',
 			'title' => 'Commits/Rollbacks per second on %s database',
 			'description' => 'Number of commits / rollbacks per second and number of backends by database',
-			'ylabel' => 'Transaction/sec - Number of backend',
+			'ylabel' => 'Transaction/sec',
 			'legends' => ['commit','rollback','backends'],
+			'y2label' => 'Number of backend',
 		},
 		'5' => {
 			'name' =>  'database-write_ratio',
