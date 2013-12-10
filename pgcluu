@@ -1816,6 +1816,45 @@ EOF
             </div><!--/span-->
 	</div>
 </li>
+
+<li class="slide" id="info-slide">
+
+	<div id="info"><br/><br/><br/></div>
+	<div class="row">
+            <div class="col-md-4">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="fa fa-desktop fa-2x pull-left fa-border"></i><h2>System</h2>
+              </div>
+              <div class="panel-body panel-height">
+	      <p>blah</p>
+              </div>
+              </div>
+            </div><!--/span-->
+            <div class="col-md-4">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="fa fa-tasks fa-2x pull-left fa-border"></i><h2>Memory</h2>
+              </div>
+              <div class="panel-body panel-height">
+	      <p>blah</p>
+              </div>
+              </div>
+            </div><!--/span-->
+            <div class="col-md-4">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="fa fa-hdd-o fa-2x pull-left fa-border"></i><h2>Filesystem</h2>
+              </div>
+              <div class="panel-body panel-height">
+	      <p>blah</p>
+              </div>
+              </div>
+            </div><!--/span-->
+	</div>
+</li>
+
+
 </ul> <!-- end of slides -->
 EOF
         &html_footer($fh);
@@ -1893,6 +1932,9 @@ sub html_header
 	if (!-e "$INPUT_DIR/pg_xlog_stat.csv" || -z "$INPUT_DIR/pg_xlog_stat.csv") {
 		$disable_xlog = ' class="disabled"';
 	}
+
+	my $global_info = 'Infos sur le system';
+
 	if ($#DATABASE_LIST >= 0) {
 		print $fh qq{
               <li id="menu-cluster" class="dropdown">
@@ -1995,8 +2037,8 @@ sub html_header
 	}
 	print $fh qq{
               <li id="menu-about" class="dropdown"><a href="index.html#about">About</a></li>
-
           </ul>
+	<li id="menu-info" class="dropdown"><a class="pull-right btn btn-info" title="System Info" href="index.html#info"><i class="fa fa-info fa-1x fa-border"></i></a></li>
         </div><!--/.nav-collapse -->
       </div>
     </div>
