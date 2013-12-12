@@ -46,6 +46,7 @@ my $END         = '';
 my $NUMBER_CPU  = 0;
 my $START_DATE  = '';
 my $TIMEZONE    = '00';
+my $REVERT_DATE = 0;
 my $SADC_INPUT_FILE    = '';
 my $SAR_INPUT_FILE     = '';
 my @DATABASE_LIST      = ();
@@ -53,6 +54,7 @@ my @DEVICE_LIST        = ();
 my $FIST_DATABASE_LINK = '#';
 my %OVERALL_STATS      = ();
 my @GRAPH_COLORS       = ('#6e9dc9', '#f4ab3a', '#ac7fa8', '#8dbd0f'); 
+my $FROM_SA_FILE = 0;
 
 my ($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
 $o_year += 1900;
@@ -342,6 +344,7 @@ GetOptions(
 	"o|output=s"     => \$OUTPUT_DIR,
 	"p|dev-only=s"   => \@INCLUDE_DEV,
 	"s|sadf=s"       => \$SADF_PROG,
+	"r|reverse-date" => \$REVERT_DATE,
 	"S|disable-sar!" => \$DISABLE_SAR,
 	"t|all-table!"   => \$SHOW_ALL_TB,
 	"T|with-table=s" => \@INCLUDE_TB,
@@ -546,11 +549,13 @@ options:
   -I, --sadc-file=FILE     sadc binary data file to read to generate system
 			   reports. Default to input_dir/sadc_stats.dat.
   -o, --output=DIR         output directory
-  -p, --dev-only device    Only report I/O stats for a particular device
+  -p, --dev-only device    Onnly report I/O stats for a particular device
 			   You can use it multiple time.
+  -r, --reverse-date       By default pgcluu look at mm/dd/yy format in sar file.
+                           When enabled pgcluu will look at dd/mm/yy format.
   -s, --sadf=BIN           path to the sadf sysstat command used to read the
                            sadc binary data file. Default: $SADF_PROG.
-  -S, --disable-sar        disable collect of system statistics with sar.
+  -S, --disable-sar        dhisable collect of system statistics with sar.
   -t, --all-table          report per table statistics, default is report
                            for the whole database.
   -T, --with-table table   Only report for the whole tables and the given
@@ -851,7 +856,6 @@ sub compute_dbstat_graph
 				$OVERALL_STATS{'database'}{$data[2]}{'deadlocks'} += $tmp_val;
 				$has_temp = 1;
 			}
-
 
 			@{$start_vals{$data[2]}} = ();
 			push(@{$start_vals{$data[2]}}, @data);
@@ -2143,18 +2147,21 @@ sub compute_cpu_report
 	my %cpu_stat = ();
 	my %cpu_all_stat = ();
 	my $ncpu = 0;
+	my $count = 0;
 	for (my $i = 0; $i <= $#_; $i++) {
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
+		$count++ if ($data[3] eq 'all');
 		next if ($data[3] eq 'all');
 		# hostname;interval;timestamp;CPU;%user;%nice;%system;%iowait;%steal;%idle
 		if ($data[3] >= $ncpu) {
 			$ncpu = $data[3];
 		} else {
-			last;
+			
 		}
 	}
 	$ncpu += 1;
+	$FROM_SA_FILE = 1 if ($count > 1);
 
 	for (my $i = 0; $i <= $#_; $i++) {
 		my @data = split(/;/, $_[$i]);
@@ -2705,10 +2712,16 @@ sub compute_sarfile_graph
 	my $timestamp = '';
 	my %fulldata = ();
 	my $old_time = '';
+	my $old_value = '';
 
 	for (my $i = 0; $i <= $#content; $i++) {
 		# Empty line, maybe the end of a report
 		if ($content[$i] eq '') {
+			if ($FROM_SA_FILE) {
+				my $tz = ((0-$TIMEZONE)*3600);
+				$START_DATE = &timegm_nocheck(0, 0, 0, $sar_day, $sar_month - 1, $sar_year - 1900) + $tz;
+				$old_time = '';
+			}
 			$type = '';
 			@headers = ();
 			$timestamp = '';
@@ -2718,12 +2731,21 @@ sub compute_sarfile_graph
 		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /(\d+)\/(\d+)\/(\d+)/) ) {
 			$sar_month = $1;
 			$sar_day = $2;
-			$sar_year = $3+2000;
+			$sar_year = $3;
+			if (length($sar_year) == 2) {
+				$sar_year += 2000;
+			}
+			if ($REVERT_DATE || ($sar_month > 12)) {
+				my $tmp = $sar_day;
+				$sar_day = $sar_month;
+				$sar_month = $tmp;
+			}
 			my $tz = ((0-$TIMEZONE)*3600);
 			$START_DATE = &timegm_nocheck(0, 0, 0, $sar_day, $sar_month - 1, $sar_year - 1900) + $tz;
 			$type = '';
 			@headers = ();
 			$timestamp = '';
+			$old_time = '';
 			next;
 		}
 		# Remove average header if any
@@ -2745,38 +2767,37 @@ sub compute_sarfile_graph
 			} else {
 				push(@{$fulldata{$type}}, "hostname;interval;timestamp;" . join(";", @headers));
 			}
+			if ($FROM_SA_FILE) {
+				my $tz = ((0-$TIMEZONE)*3600);
+				$START_DATE = &timegm_nocheck(0, 0, 0, $sar_day, $sar_month - 1, $sar_year - 1900) + $tz;
+				$old_time = '';
+			}
 			next;
 		}
 
 		# Get all values reported
 		my @values = ();
 		push(@values, split(m#\s+#, $content[$i]));
-		if (!$timestamp) {
-			$timestamp = shift(@values);
-		} else {
-			shift(@values);
-		}
+		# Extract the timestamp of the line
+		$timestamp = shift(@values);
+
 		if ($#values != $#headers) {
 			warn "ERROR: Parsing of sar output reports different values than headers allow. ($#values != $#headers)\n";
 			die "Header: " . join(';', @headers) . " | Values: " . join(';', @values) . "\n";
 		}
-		if (!$timestamp) {
-			die "ERROR: current date of the log is unknown.\n";
-		} else {
-			if ($timestamp =~ /:/) {
-				$timestamp = &convert_sar_time($timestamp, $old_time, $content[$i], $content[$i-1]);
-			}
-			if (!$timestamp) {
-				print STDERR "ERROR: unkown time information from sar file.\n";
-				print STDERR "HEADER: $timestamp ", join(" ", @headers), "\n";
-				die "DATA: $content[$i]\n";
-			}
-			$old_time = $timestamp;
+		if ($timestamp =~ /\d+:\d+:\d+/) {
+			$timestamp = &convert_sar_time($timestamp, $old_time);
 		}
+		if (!$timestamp) {
+			print STDERR "ERROR: unkown time information from sar file.\n";
+			print STDERR "HEADER: $timestamp ", join(" ", @headers), "\n";
+			die "DATA: $content[$i]\n";
+		}
+		$old_time = $timestamp;
+
 		# Change decimal character to perl
 		map { s/,/\./; } @values;
 		push(@{$fulldata{$type}}, "$hostname;$interval;$timestamp;" . join(";", @values));
-		
 	}
 	@content = ();
 
@@ -2891,11 +2912,11 @@ sub convert_time
 
 sub convert_sar_time
 {
-	my ($str, $old_time, $a, $b) = @_;
+	my ($str, $old_time) = @_;
 
 	$old_time ||= 0;
 
-	if ($str =~ /^(\d+):(\d+):(\d+)/) {
+	if ($str =~ /(\d+):(\d+):(\d+)/) {
 
 		my $time = ($1*3600)+($2*60)+$3;
 
