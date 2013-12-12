@@ -1840,14 +1840,30 @@ EOF
 		<div class="key-figures">
 		<ul>
 		<li></li>
-	      <li><span class="figure">$sysinfo{CPU}{'model name'}</span></li>
-	      <li><span class="figure">$sysinfo{CPU}{'speed'}</span> <span class="figure-label">Speed</span> <span class="figure">$sysinfo{CPU}{'cache size'}</span> <span class="figure-label">Cache</span></li>
-	      <li><span class="figure">$sysinfo{CPU}{'cpu cores'}</span> <span class="figure-label">Sockets</span> <span class="figure">$sysinfo{CPU}{'processor'}</span> <span class="figure-label">Cores</span></li>
 	      <li><span class="figure">$sysinfo{KERNEL}{'hostname'}</span> <span class="figure-label">Hostname</span></li>
 	      <li><span class="figure">$sysinfo{KERNEL}{'kernel'}</span> <span class="figure-label">Kernel</span></li>
 	      <li><span class="figure">$sysinfo{KERNEL}{'arch'}</span> <span class="figure-label">Arch</span></li>
 	      <li><span class="figure">$sysinfo{RELEASE}{'name'}</span> <span class="figure-label">Distribution</span></li>
 	      <li><span class="figure">$sysinfo{RELEASE}{'version'}</span> <span class="figure-label">Version</span></li>
+		</ul>
+		</div>
+              </div>
+              </div>
+            </div><!--/span-->
+            <div class="col-md-4">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="fa fa-desktop fa-2x pull-left fa-border"></i><h2>CPU</h2>
+              </div>
+              <div class="panel-body panel-xlheight">
+		<div class="key-figures">
+		<ul>
+		<li></li>
+	      <li><span class="figure">$sysinfo{CPU}{'model name'}</span></li>
+	      <li><span class="figure">$sysinfo{CPU}{'speed'}</span> <span class="figure-label">Speed</span></li>
+	      <li><span class="figure">$sysinfo{CPU}{'cache size'}</span> <span class="figure-label">Cache</span></li>
+	      <li><span class="figure">$sysinfo{CPU}{'cpu cores'}</span> <span class="figure-label">Sockets</span></li>
+	      <li><span class="figure">$sysinfo{CPU}{'processor'}</span> <span class="figure-label">Cores</span></li>
 		</ul>
 		</div>
               </div>
@@ -1876,33 +1892,37 @@ EOF
               </div>
               </div>
             </div><!--/span-->
-            <div class="col-md-4">
+	</div>
+
+	<div class="row">
+            <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
               <i class="fa fa-hdd-o fa-2x pull-left fa-border"></i><h2>Filesystem</h2>
               </div>
-              <div class="panel-body panel-xlheight">
+              <div class="panel-body panel-lheight">
 		<div class="key-figures">
 		<ul>
 		<li></li>
-		<li><span class="figure-date">
+		<li>
 		<table>
 		<tr><th>Filesystem</th><th>Size</th><th>Used</th><th>Free</th><th>Use%</th><th>Mount</th></tr>
 		@{$sysinfo{DF}}
-		</table></li>
+		</li>
 		</span>
-		<li><span class="figure-date">
+		<li>
 		<table>
 		<tr><th>Filesystem</th><th>Mount</th><th>type</th><th>Options</th></tr>
 		@{$sysinfo{MOUNT}}
 		</table>
-		</span></li>
+		</li>
 		</ul>
 		</div>
               </div>
               </div>
             </div><!--/span-->
 	</div>
+
 </li>
 EOF
 	}
