@@ -417,6 +417,9 @@ sub verify_action
 	}
 	if (!&backend_minimum_version(9, 0)) {
 		delete $METRICS_COMMANDS{'hot_standby_delay'};
+		delete $METRICS_COMMANDS{'user_xact_tables_stats'};
+		delete $METRICS_COMMANDS{'all_xact_tables_stats'};
+		delete $METRICS_COMMANDS{'xact_functions_stats'};
 	}
 	if (!&backend_minimum_version(8, 4)) {
 		delete $METRICS_COMMANDS{'functions_stats'};
