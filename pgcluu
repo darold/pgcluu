@@ -1844,7 +1844,13 @@ EOF
 	      <li><span class="figure">$sysinfo{KERNEL}{'kernel'}</span> <span class="figure-label">Kernel</span></li>
 	      <li><span class="figure">$sysinfo{KERNEL}{'arch'}</span> <span class="figure-label">Arch</span></li>
 	      <li><span class="figure">$sysinfo{RELEASE}{'name'}</span> <span class="figure-label">Distribution</span></li>
+EOF
+		if ($sysinfo{RELEASE}{'version'}) {
+			print $fh <<EOF;
 	      <li><span class="figure">$sysinfo{RELEASE}{'version'}</span> <span class="figure-label">Version</span></li>
+EOF
+		}
+		print $fh <<EOF;
 		</ul>
 		</div>
               </div>
@@ -3313,8 +3319,8 @@ sub read_sysinfo
 				$val =~ s/"//g;
 				$sysinfo{$section}{lc($key)} = $val;
 			} else {
-				$sysinfo{RELEASE}{'name'} = 'unknown';
-				$sysinfo{RELEASE}{'version'} = 'unknown';
+				$sysinfo{RELEASE}{'name'} = $key;
+				$sysinfo{RELEASE}{'version'} = '';
 			}
 		}
 		if ($section eq 'MEMORY') {
