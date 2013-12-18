@@ -3309,8 +3309,13 @@ sub read_sysinfo
 		}
 		if ($section eq 'RELEASE') {
 			my ($key, $val) = split(/=/, $l);
-			$val =~ s/"//g;
-			$sysinfo{$section}{lc($key)} = $val;
+			if ($val) {
+				$val =~ s/"//g;
+				$sysinfo{$section}{lc($key)} = $val;
+			} else {
+				$sysinfo{RELEASE}{'name'} = 'unknown';
+				$sysinfo{RELEASE}{'version'} = 'unknown';
+			}
 		}
 		if ($section eq 'MEMORY') {
 			my ($key, $val) = split(/:\s+/, $l);
