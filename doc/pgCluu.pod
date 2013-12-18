@@ -87,12 +87,8 @@ Then stop the pgclu_collectd daemon and generate the report:
 
 You should obtain something like example at http://pgcluu.darold.net/example/
 
-By default all javascript, css and the webfont fontawesome are embedded into
-each generated HTML file. If you want to save space and have smaller HTML page
-you can just copy all the files from the resources/ directory into the output
-directory before running pgcluu. pgcluu will detect the presence of the files
-in the output directory and won't include css and javascript code into all html
-pages.
+By default all javascript, css and the webfont fontawesome are automatically
+generated into the output directory if those files does not already exits.
 
 =head1 COLLECTING STATISTICS
 
