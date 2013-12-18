@@ -146,7 +146,7 @@ jQuery(function (){
 	jQuery('.navbar li.dropdown').click(function() {
 		var id = jQuery(this).attr("id");
 		id = id.substring(5);
-		if ( (id == 'index') || (id == 'about') || (id == 'contact') ) {
+		if ( (id == 'index') || (id == 'about') || (id == 'contact') || (id == 'info') ) {
 			var slideId = '#'+id+'-slide';
 			var currentSlide = jQuery('#main-container .active-slide').attr("id");
 			currentSlide = '#'+currentSlide;
