@@ -603,7 +603,7 @@ options:
 For example, as postgres user:
 
 	mkdir /tmp/stat_db1/
-	pgclu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb
+	pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb
 
 };
     exit 1

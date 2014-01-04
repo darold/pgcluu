@@ -66,18 +66,18 @@ USAGE
     as postgres user:
 
             mkdir /tmp/stat_db1/
-            pgclu_collectd -D -i 60 /tmp/stat_db1/
+            pgcluu_collectd -D -i 60 /tmp/stat_db1/
             LOG: Detach from terminal with pid: 11323
 
     or with more options
 
-            pgclu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb
+            pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb
             LOG: Detach from terminal with pid: 14671
 
     wait some time and activity on your PostgreSQL Cluster... Then stop the
-    pgclu_collectd daemon and generate the report:
+    pgcluu_collectd daemon and generate the report:
 
-            pgclu_collectd -k
+            pgcluu_collectd -k
             LOG: Received terminating signal.
             mkdir /tmp/report_db1/
             pgcluu -o /tmp/report_db1/ /tmp/stat_db1/
@@ -131,12 +131,12 @@ COLLECTING STATISTICS
     For example, as postgres user:
 
             mkdir /tmp/stat_db1/
-            pgclu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb
+            pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb
 
     then after some long time and activities on the database, stop the
     daemon:
 
-            pgclu_collectd -k
+            pgcluu_collectd -k
 
     The output directory should look likes:
 
@@ -171,7 +171,7 @@ GENERATING REPORTS
 
     usage: ./pgcluu [options] [-i sar_file | -I sadc_file] [input_dir]
 
-            input_dir: directory where pgclu_collectd or pgstats and sar data
+            input_dir: directory where pgcluu_collectd or pgstats and sar data
 
     options:
 
