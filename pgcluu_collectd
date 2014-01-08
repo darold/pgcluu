@@ -541,7 +541,8 @@ sub grab_os_information
 	my @pciinfo = `lspci  2>/dev/null`;
 	# Release informations
 	my @releaseinfo = `cat /etc/*release 2>/dev/null`;
-
+	# System kernel tuning parameters
+	my @system = `/sbin/sysctl -a 2>/dev/null| grep -E "vm.overcommit|dirty_.*ratio|swappiness|zone_reclaim_mode|shmmax|shmall"`;
 	unless(open(OUT, ">$OUTPUT_DIR/sysinfo.txt")) {
 		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
 		exit 1;
@@ -562,6 +563,8 @@ sub grab_os_information
 	print OUT @pciinfo;
 	print OUT "[RELEASE]\n";
 	print OUT @releaseinfo;
+	print OUT "[SYSTEM]\n";
+	print OUT @system;
 	
 	close(OUT);
 }
