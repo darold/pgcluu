@@ -164,7 +164,7 @@ my %DB_GRAPH_INFOS = (
 			'title' => 'checkpoints stats',
 			'description' => 'Background writer statistics on checkpoints. "checkpoints_timed" is checkpoints issued because of checkpoint_timeout and "checkpoints_req" is checkpoint issued by request',
 			'ylabel' => 'Number of checkpoints',
-			'legends' => ['checkpoints requests'],
+			'legends' => ['checkpoints timed','checkpoints requests'],
 		},
 		'2' => {
 			'name' =>  'database-bgwriter',
