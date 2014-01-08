@@ -169,9 +169,9 @@ my %DB_GRAPH_INFOS = (
 		'2' => {
 			'name' =>  'database-bgwriter',
 			'title' => 'background writer clean stats',
-			'description' => 'Background writer cache cleaning statistics by checkpoints, lru and backends',
+			'description' => 'Background writer cache cleaning statistics by checkpoints, lru and backends. Maxwritten clean reports the number of times the background writer stopped a cleaning scan because it had written too many buffers.',
 			'ylabel' => 'Buffers per second',
-			'legends' => ['checkpoint buffers','clean buffers','backend buffers'],
+			'legends' => ['checkpoint buffers','clean buffers','backend buffers','maxwritten clean'],
 		},
 	},
 	'pg_stat_connections.csv' => {
@@ -1255,6 +1255,8 @@ sub compute_dbstat_graph
 			$bgwriter_stat{buffers_checkpoint} .= '[' . $data[0] . ',' . sprintf("%.2f", $tmp_val/$interval) . '],';
 			(($data[4+$id] - $start_vals[4+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4+$id] - $start_vals[4+$id]);
 			$bgwriter_stat{buffers_clean} .= '[' . $data[0] . ',' . sprintf("%.2f", $tmp_val/$interval) . '],';
+			(($data[5+$id] - $start_vals[5+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5+$id] - $start_vals[5+$id]);
+			$bgwriter_stat{maxwritten_clean} .= '[' . $data[0] . ',' . sprintf("%.2f", $tmp_val/$interval) . '],';
 			(($data[6+$id] - $start_vals[6+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6+$id] - $start_vals[6+$id]);
 			$bgwriter_stat{buffers_backend} .= '[' . $data[0] . ',' . sprintf("%.2f", $tmp_val/$interval) . '],';
 			@start_vals = ();
@@ -1269,7 +1271,8 @@ sub compute_dbstat_graph
 				$bgwriter_stat{buffers_checkpoint} =~ s/,$//;
 				$bgwriter_stat{buffers_clean} =~ s/,$//;
 				$bgwriter_stat{buffers_backend} =~ s/,$//;
-				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-bgwriter', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean},$bgwriter_stat{buffers_backend});
+				$bgwriter_stat{maxwritten_clean} =~ s/,$//;
+				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-bgwriter', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean}, $bgwriter_stat{buffers_backend}, $bgwriter_stat{maxwritten_clean});
 			}
 		}
 	}
@@ -1859,7 +1862,7 @@ EOF
 		foreach my $k (sort keys %{$sysinfo{SYSTEM}}) {
 			next if ($k =~ /kernel/);
 			print $fh <<EOF;
-	      <span class="figure-label">$k</span> <span class="figure">$sysinfo{SYSTEM}{$k}</span><br>
+	     <span class="figure-label">$k</span> <span class="figure">$sysinfo{SYSTEM}{$k}</span><br>
 EOF
 		}
 		print $fh "</li>\n";
