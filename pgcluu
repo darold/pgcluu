@@ -169,9 +169,16 @@ my %DB_GRAPH_INFOS = (
 		'2' => {
 			'name' =>  'database-bgwriter',
 			'title' => 'background writer clean stats',
-			'description' => 'Background writer cache cleaning statistics by checkpoints, lru and backends. Maxwritten clean reports the number of times the background writer stopped a cleaning scan because it had written too many buffers.',
+			'description' => 'Background writer cache cleaning statistics by checkpoints, lru and backends.',
 			'ylabel' => 'Buffers per second',
-			'legends' => ['checkpoint buffers','clean buffers','backend buffers','maxwritten clean'],
+			'legends' => ['checkpoint buffers','clean buffers','backend buffers'],
+		},
+		'3' => {
+			'name' =>  'database-bgwriter_count',
+			'title' => 'background writer count stats',
+			'description' => 'Background writer counter stats. Max written clean reports the number of times the background writer stopped a cleaning scan because it had written too many buffers. Buffers backend fsync reports the number of times a backend had to execute its own fsync call (normally the background writer handles those even when the backend does its own write)',
+			'ylabel' => 'Times per second',
+			'legends' => ['maxwritten clean','buffers backend fsync'],
 		},
 	},
 	'pg_stat_connections.csv' => {
@@ -1259,6 +1266,8 @@ sub compute_dbstat_graph
 			$bgwriter_stat{maxwritten_clean} .= '[' . $data[0] . ',' . sprintf("%.2f", $tmp_val/$interval) . '],';
 			(($data[6+$id] - $start_vals[6+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6+$id] - $start_vals[6+$id]);
 			$bgwriter_stat{buffers_backend} .= '[' . $data[0] . ',' . sprintf("%.2f", $tmp_val/$interval) . '],';
+			(($data[7+$id] - $start_vals[7+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7+$id] - $start_vals[7+$id]);
+			$bgwriter_stat{buffers_backend_fsync} .= '[' . $data[0] . ',' . sprintf("%.2f", $tmp_val/$interval) . '],';
 			@start_vals = ();
 			push(@start_vals, @data);
 		}
@@ -1271,8 +1280,11 @@ sub compute_dbstat_graph
 				$bgwriter_stat{buffers_checkpoint} =~ s/,$//;
 				$bgwriter_stat{buffers_clean} =~ s/,$//;
 				$bgwriter_stat{buffers_backend} =~ s/,$//;
-				$bgwriter_stat{maxwritten_clean} =~ s/,$//;
 				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-bgwriter', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean}, $bgwriter_stat{buffers_backend}, $bgwriter_stat{maxwritten_clean});
+			} elsif ($data_info{$id}{name} eq 'database-bgwriter_count') {
+				$bgwriter_stat{maxwritten_clean} =~ s/,$//;
+				$bgwriter_stat{buffers_backend_fsync} =~ s/,$//;
+				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-bgwriter_count', \%{$data_info{$id}}, '',  $bgwriter_stat{maxwritten_clean}, $bgwriter_stat{buffers_backend_fsync});
 			}
 		}
 	}
@@ -2029,7 +2041,8 @@ sub html_header
 		      <li id="menu-cluster-cache_ratio"><a href="cluster.html#cluster-cache_ratio">Cache utilization</a></li>
 		      <li id="menu-cluster-deadlocks"><a href="cluster.html#cluster-deadlocks">Deadlocks</a></li>
 		      <li class="divider"></li>
-		      <li id="menu-cluster-bgwriter"><a href="cluster.html#cluster-bgwriter">Background writer</a></li>
+		      <li id="menu-cluster-bgwriter"><a href="cluster.html#cluster-bgwriter">Background writer buffers</a></li>
+		      <li id="menu-cluster-bgwriter_count"><a href="cluster.html#cluster-bgwriteri_count">Background writer counters</a></li>
 		      <li id="menu-cluster-xlog_files"$disable_xlog><a href="cluster.html#cluster-xlog_files">Wal files</a></li>
 		      <li id="menu-cluster-replication"$disable_replication><a href="cluster.html#cluster-replication">Replication</a></li>
 		      <li id="menu-cluster-temporary_file"><a href="cluster.html#cluster-temporary_file">Temporary files</a></li>
