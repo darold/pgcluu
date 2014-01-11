@@ -343,6 +343,13 @@ my %SAR_GRAPH_INFOS = (
 		'ylabel' => 'Milliseconds',
 		'legends' => ['svctm','await'],
 	},
+	'10' => {
+		'name' =>  'system-runqueue',
+		'title' => 'Run queue length',
+		'description' => 'Number of tasks waiting for run time.',
+		'ylabel' => 'Run queue length',
+		'legends' => ['runq-sz'],
+	},
 );
 
 # Process command line options and look for an action keyword. There
@@ -2125,6 +2132,7 @@ sub html_header
                   <li class="divider"></li>
                   <li id="menu-system-load"><a href="system.html#system-load">Load</a></li>
                   <li id="menu-system-process"><a href="system.html#system-process">Process</a></li>
+                  <li id="menu-system-runqueue"><a href="system.html#system-runqueue">Run queue</a></li>
                   <li class="divider"></li>
                   <li id="menu-system-block"><a href="system.html#system-block">Block</a></li>
                   <li class="divider"></li>
@@ -2329,11 +2337,14 @@ sub compute_process_report
 			my $t = localtime($data[2]/1000);
 			@{$OVERALL_STATS{'system'}{'process'}} = ($t, $data[4]);
 		}
-		$process_stat{'plist-sz'}   .= '[' . $data[2] . ',' . ($data[4]||0) . '],';
+		$process_stat{'plist-sz'}  .= '[' . $data[2] . ',' . ($data[4]||0) . '],';
+		$process_stat{'runq-sz'}   .= '[' . $data[2] . ',' . ($data[3]||0) . '],';
 	}
 	if (scalar keys %process_stat > 0) {
 		$process_stat{'plist-sz'} =~ s/,$//;
+		$process_stat{'runq-sz'} =~ s/,$//;
 		print $FH &flotr2_linegraph_array($IDX++, 'system-process', $data_info, '', $process_stat{'plist-sz'});
+		print $FH &flotr2_linegraph_array($IDX++, 'system-runqueue', $data_info, '', $process_stat{'runq-sz'});
 	}
 }
 
