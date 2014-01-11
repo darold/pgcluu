@@ -2067,8 +2067,10 @@ sub html_header
 	my $disable_tempfile = '';
 	my $disable_deadlock = '';
 	my $disable_checkpointwrite = '';
+	my $disable_canceled = '';
 	if (!-e "$INPUT_DIR/pg_stat_replication.csv" || -z "$INPUT_DIR/pg_stat_replication.csv") {
 		$disable_replication = ' class="disabled"';
+		$disable_canceled = ' class="disabled"';
 	}
 	if (!-e "$INPUT_DIR/pg_xlog_stat.csv" || -z "$INPUT_DIR/pg_xlog_stat.csv") {
 		$disable_xlog = ' class="disabled"';
@@ -2105,7 +2107,7 @@ sub html_header
 		      <li class="divider"></li>
 		      <li id="menu-cluster-write_ratio"><a href="cluster.html#cluster-write_ratio">Write ratio</a></li>
 		      <li id="menu-cluster-read_write_query"><a href="cluster.html#cluster-read_write_query">Read vs Write queries</a></li>
-		      <li id="menu-cluster-canceled_queries"><a href="cluster.html#cluster-canceled_queries">Canceled queries</a></li>
+		      <li id="menu-cluster-canceled_queries"$disable_canceled><a href="cluster.html#cluster-canceled_queries">Canceled queries</a></li>
 		      <li id="menu-cluster-conflicts"><a href="cluster.html#cluster-conflicts">Conflicts</a></li>
                 </ul>
               </li>
@@ -2133,7 +2135,7 @@ sub html_header
 		      <li class="divider"></li>
 		      <li id="menu-database-write_ratio"><a href="database-$db.html#database-write_ratio">Write ratio</a></li>
 		      <li id="menu-database-read_write_query"><a href="database-$db.html#database-read_write_query">Read vs Write queries</a></li>
-		      <li id="menu-database-canceled_queries"><a href="database-$db.html#database-canceled_queries">Canceled queries</a></li>
+		      <li id="menu-database-canceled_queries"$disable_canceled><a href="database-$db.html#database-canceled_queries">Canceled queries</a></li>
 		      <li id="menu-database-conflicts"><a href="database-$db.html#database-conflicts">Conflicts</a></li>
                       </ul>
                 </li>
