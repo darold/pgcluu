@@ -2371,14 +2371,20 @@ sub compute_process_report
 			my $t = localtime($data[2]/1000);
 			@{$OVERALL_STATS{'system'}{'process'}} = ($t, $data[4]);
 		}
-		$process_stat{'plist-sz'}  .= '[' . $data[2] . ',' . ($data[4]||0) . '],';
-		$process_stat{'runq-sz'}   .= '[' . $data[2] . ',' . ($data[3]||0) . '],';
+		if ($data_info->{name} eq 'system-process') {
+			$process_stat{'plist-sz'}  .= '[' . $data[2] . ',' . ($data[4]||0) . '],';
+		} elsif ($data_info->{name} eq 'system-runqueue') {
+			$process_stat{'runq-sz'}   .= '[' . $data[2] . ',' . ($data[3]||0) . '],';
+		}
 	}
 	if (scalar keys %process_stat > 0) {
-		$process_stat{'plist-sz'} =~ s/,$//;
-		$process_stat{'runq-sz'} =~ s/,$//;
-		print $FH &flotr2_linegraph_array($IDX++, 'system-process', $data_info, '', $process_stat{'plist-sz'});
-		print $FH &flotr2_linegraph_array($IDX++, 'system-runqueue', $data_info, '', $process_stat{'runq-sz'});
+		if ($data_info->{name} eq 'system-process') {
+			$process_stat{'plist-sz'} =~ s/,$//;
+			print $FH &flotr2_linegraph_array($IDX++, 'system-process', $data_info, '', $process_stat{'plist-sz'});
+		} elsif ($data_info->{name} eq 'system-runqueue') {
+			$process_stat{'runq-sz'} =~ s/,$//;
+			print $FH &flotr2_linegraph_array($IDX++, 'system-runqueue', $data_info, '', $process_stat{'runq-sz'});
+		}
 	}
 }
 
@@ -2628,6 +2634,23 @@ sub compute_sarstat_graph
 		&compute_process_report(\%data_info, @content);
 	}
 
+	####
+	# Show run queue length
+	####
+	if ($data_info{name} eq 'system-runqueue') {
+		my $command = "$SADF_PROG -t -D $file -- -q";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for process statistics
+		&compute_process_report(\%data_info, @content);
+	}
 
 	####
 	# Show memory usage
@@ -2938,6 +2961,17 @@ sub compute_sarfile_graph
 		&compute_process_report(\%data_info, @{$fulldata{load}});
 
 	}
+
+	####
+	# Show run queue length
+	####
+	if ($data_info{name} eq 'system-runqueue') {
+
+		# Compute graphs for process statistics
+		&compute_process_report(\%data_info, @{$fulldata{load}});
+
+	}
+
 
 	####
 	# Show memory usage
