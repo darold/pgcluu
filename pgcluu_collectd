@@ -486,6 +486,15 @@ sub fetch_version
 		$DB_INFO{major} = $1;
 		$DB_INFO{minor} = $2;
 	}
+
+	unless(open(OUT, ">>$OUTPUT_DIR/sysinfo.txt")) {
+		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
+		exit 1;
+	}
+	print OUT "[PGVERSION]\n";
+	print OUT "$pg_ver\n";
+	close(OUT);
+
 	return "$1.$2";
 }
 

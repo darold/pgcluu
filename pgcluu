@@ -66,6 +66,9 @@ my $sar_year  = '';
 my $sar_month = '';
 my $sar_day   = '';
 
+# Hash used to store system information
+my %sysinfo   = ();
+
 # Statistics files to use with report
 my %DB_GRAPH_INFOS = (
 	'pg_stat_database.csv' => {
@@ -437,8 +440,14 @@ if ($END) {
 	}
 }
 
+# Look at system information
+if (-e "$INPUT_DIR/sysinfo.txt") {
+	%sysinfo = &read_sysinfo("$INPUT_DIR/sysinfo.txt");
+	$sysinfo{RELEASE}{'name'} ||= 'unknow';
+}
+
+# Extract the device list first
 if (!$DISABLE_SAR) {
-	# Extract the device list first
 	@DEVICE_LIST = &get_device_list();
 }
 
@@ -665,6 +674,18 @@ sub get_database_list
 		next if (!&normalyze_line(\@data));
 		# Get database name
 		push(@db_list, $data[2]) if (!grep(/^$data[2]$/, @db_list));
+		# Estimate pg version
+		if (!$sysinfo{'PGVERSION'}{major}) {
+			if ($#data < 8) {
+				$sysinfo{'PGVERSION'}{major} = '8.2';
+			} elsif ($#data < 13) {
+				$sysinfo{'PGVERSION'}{major} = '8.3';
+			} elsif ($#data < 15) {
+				$sysinfo{'PGVERSION'}{major} = '9.1';
+			} else {
+				$sysinfo{'PGVERSION'}{major} = '9.2';
+			}
+		}
 	}
 	close(DBSIZEFILE);
 
@@ -1300,8 +1321,8 @@ sub compute_dbstat_graph
 				if (exists $bgwriter_stat{checkpoint_write_time}) {
 					$bgwriter_stat{checkpoint_sync_time} =~ s/,$//;
 					$bgwriter_stat{checkpoint_write_time} =~ s/,$//;
+					print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-checkpoints_time', \%{$data_info{$id}}, '', $bgwriter_stat{checkpoint_write_time}, $bgwriter_stat{checkpoint_sync_time});
 				}
-				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-checkpoints_time', \%{$data_info{$id}}, '', $bgwriter_stat{checkpoint_write_time}, $bgwriter_stat{checkpoint_sync_time});
 			} elsif ($data_info{$id}{name} eq 'database-bgwriter') {
 				$bgwriter_stat{buffers_checkpoint} =~ s/,$//;
 				$bgwriter_stat{buffers_clean} =~ s/,$//;
@@ -1705,13 +1726,17 @@ EOF
 		$OVERALL_STATS{'cluster'}{'temp_files'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'temp_bytes'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'deadlocks'} ||= 0;
-		my $temp_file_info = qq{
-		<li><span class="figure">$OVERALL_STATS{'cluster'}{'temp_files'}</span> <span class="figure-label">Temporary files</span></li>
-};
+		my $temp_file_info = '';
 		if ($OVERALL_STATS{'cluster'}{'temp_files'}) {
 			$temp_file_info = qq{
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'temp_files'}</span> <span class="figure-label">Temporary files</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'temp_bytes'}</span> <span class="figure-label">Temporary files size</span></li>
+};
+		}
+		my $deadlock_info = '';
+		if ($OVERALL_STATS{'cluster'}{'deadlocks'}) {
+			$deadlock_info = qq{
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'deadlocks'}</span> <span class="figure-label">Deadlocks</span></li>
 };
 		}
 		if (exists $OVERALL_STATS{'start_date'}) {
@@ -1722,6 +1747,7 @@ EOF
 			$OVERALL_STATS{'sar_start_date'} = localtime($OVERALL_STATS{'sar_start_date'}/1000);
 			$OVERALL_STATS{'sar_end_date'} = localtime($OVERALL_STATS{'sar_end_date'}/1000);
 		}
+		$sysinfo{PGVERSION}{'full_version'} ||= '';
 		print $fh <<EOF;
       <div class="row">
             <div class="col-md-$numcol">
@@ -1739,8 +1765,9 @@ EOF
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'read_tuples'}</span> <span class="figure-label">Tuples fetched</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'cache_ratio'}</span> <span class="figure-label">Hit cache ratio</span></li>
 		$temp_file_info
-		<li><span class="figure">$OVERALL_STATS{'cluster'}{'deadlocks'}</span> <span class="figure-label">Deadlocks</span></li>
+		$deadlock_info
 		</ul>
+		<span class="figure-date">$sysinfo{PGVERSION}{'full_version'}</span>
 		</div>
               </div>
               </div>
@@ -1869,9 +1896,6 @@ EOF
 EOF
 
 	if (-e "$INPUT_DIR/sysinfo.txt") {
-		my %sysinfo = &read_sysinfo("$INPUT_DIR/sysinfo.txt");
-		$sysinfo{RELEASE}{'name'} ||= 'unknow';
-
 		print $fh <<EOF;
 <li class="slide" id="info-slide">
 
@@ -2047,11 +2071,21 @@ sub html_header
 };
 	my $disable_replication = '';
 	my $disable_xlog = '';
+	my $disable_tempfile = '';
+	my $disable_deadlock = '';
+	my $disable_checkpointwrite = '';
+	my $disable_canceled = '';
 	if (!-e "$INPUT_DIR/pg_stat_replication.csv" || -z "$INPUT_DIR/pg_stat_replication.csv") {
 		$disable_replication = ' class="disabled"';
+		$disable_canceled = ' class="disabled"';
 	}
 	if (!-e "$INPUT_DIR/pg_xlog_stat.csv" || -z "$INPUT_DIR/pg_xlog_stat.csv") {
 		$disable_xlog = ' class="disabled"';
+	}
+	if ($sysinfo{'PGVERSION'}{major} < 9.2) {
+		$disable_tempfile = ' class="disabled"';
+		$disable_deadlock = ' class="disabled"';
+		$disable_checkpointwrite = ' class="disabled"';
 	}
 
 	my $global_info = 'Infos sur le system';
@@ -2065,22 +2099,22 @@ sub html_header
 		      <li id="menu-cluster-backends"><a href="cluster.html#cluster-backends">Connections</a></li>
 		      <li id="menu-cluster-connections"><a href="cluster.html#cluster-connections">Connections by type</a></li>
 		      <li id="menu-cluster-cache_ratio"><a href="cluster.html#cluster-cache_ratio">Cache utilization</a></li>
-		      <li id="menu-cluster-deadlocks"><a href="cluster.html#cluster-deadlocks">Deadlocks</a></li>
+		      <li id="menu-cluster-deadlocks"$disable_deadlock><a href="cluster.html#cluster-deadlocks">Deadlocks</a></li>
 		      <li class="divider"></li>
 		      <li id="menu-cluster-bgwriter"><a href="cluster.html#cluster-bgwriter">Background writer buffers</a></li>
-		      <li id="menu-cluster-bgwriter_count"><a href="cluster.html#cluster-bgwriteri_count">Background writer counters</a></li>
+		      <li id="menu-cluster-bgwriter_count"><a href="cluster.html#cluster-bgwriter_count">Background writer counters</a></li>
 		      <li id="menu-cluster-xlog_files"$disable_xlog><a href="cluster.html#cluster-xlog_files">Wal files</a></li>
 		      <li id="menu-cluster-replication"$disable_replication><a href="cluster.html#cluster-replication">Replication</a></li>
-		      <li id="menu-cluster-temporary_file"><a href="cluster.html#cluster-temporary_file">Temporary files</a></li>
-		      <li id="menu-cluster-temporary_file_bytes"><a href="cluster.html#cluster-temporary_file_bytes">Temporary files size</a></li>
+		      <li id="menu-cluster-temporary_file"$disable_tempfile><a href="cluster.html#cluster-temporary_file">Temporary files</a></li>
+		      <li id="menu-cluster-temporary_file_bytes"$disable_tempfile><a href="cluster.html#cluster-temporary_file_bytes">Temporary files size</a></li>
 		      <li id="menu-cluster-checkpoints"><a href="cluster.html#cluster-checkpoints">Checkpoints counter</a></li>
-		      <li id="menu-cluster-checkpoints_time"><a href="cluster.html#cluster-checkpoints">Checkpoints write time</a></li>
+		      <li id="menu-cluster-checkpoints_time"$disable_checkpointwrite><a href="cluster.html#cluster-checkpoints">Checkpoints write time</a></li>
 		      <li id="menu-cluster-read_ratio"><a href="cluster.html#cluster-read_ratio">Read tuples</a></li>
 		      <li id="menu-cluster-commits_rollbacks"><a href="cluster.html#cluster-commits_rollbacks">Commits vs Rollbacks</a></li>
 		      <li class="divider"></li>
 		      <li id="menu-cluster-write_ratio"><a href="cluster.html#cluster-write_ratio">Write ratio</a></li>
 		      <li id="menu-cluster-read_write_query"><a href="cluster.html#cluster-read_write_query">Read vs Write queries</a></li>
-		      <li id="menu-cluster-canceled_queries"><a href="cluster.html#cluster-canceled_queries">Canceled queries</a></li>
+		      <li id="menu-cluster-canceled_queries"$disable_canceled><a href="cluster.html#cluster-canceled_queries">Canceled queries</a></li>
 		      <li id="menu-cluster-conflicts"><a href="cluster.html#cluster-conflicts">Conflicts</a></li>
                 </ul>
               </li>
@@ -2099,16 +2133,16 @@ sub html_header
 		      <li id="menu-database-backends"><a href="database-$db.html#database-backends">Connections</a></li>
 		      <li id="menu-database-connections"><a href="database-$db.html#database-connections">Connections by type</a></li>
 		      <li id="menu-database-cache_ratio"><a href="database-$db.html#database-cache_ratio">Cache utilization</a></li>
-		      <li id="menu-database-deadlocks"><a href="database-$db.html#database-deadlocks">Deadlocks</a></li>
+		      <li id="menu-database-deadlocks"$disable_deadlock><a href="database-$db.html#database-deadlocks">Deadlocks</a></li>
 		      <li class="divider"></li>
-		      <li id="menu-database-temporary_file"><a href="database-$db.html#database-temporary_file">Temporary files</a></li>
-		      <li id="menu-database-temporary_file_bytes"><a href="database-$db.html#database-temporary_file_bytes">Temporary files size</a></li>
+		      <li id="menu-database-temporary_file"$disable_tempfile><a href="database-$db.html#database-temporary_file">Temporary files</a></li>
+		      <li id="menu-database-temporary_file_bytes"$disable_tempfile><a href="database-$db.html#database-temporary_file_bytes">Temporary files size</a></li>
 		      <li id="menu-database-read_ratio"><a href="database-$db.html#database-read_ratio">Read tuples</a></li>
 		      <li id="menu-database-commits_rollbacks"><a href="database-$db.html#database-commits_rollbacks">Commits vs Rollbacks</a></li>
 		      <li class="divider"></li>
 		      <li id="menu-database-write_ratio"><a href="database-$db.html#database-write_ratio">Write ratio</a></li>
 		      <li id="menu-database-read_write_query"><a href="database-$db.html#database-read_write_query">Read vs Write queries</a></li>
-		      <li id="menu-database-canceled_queries"><a href="database-$db.html#database-canceled_queries">Canceled queries</a></li>
+		      <li id="menu-database-canceled_queries"$disable_canceled><a href="database-$db.html#database-canceled_queries">Canceled queries</a></li>
 		      <li id="menu-database-conflicts"><a href="database-$db.html#database-conflicts">Conflicts</a></li>
                       </ul>
                 </li>
@@ -3389,6 +3423,12 @@ sub read_sysinfo
 		if ($section eq 'SYSTEM') {
 			my ($key, $val) = split(/\s+=\s+/, $l);
 			$sysinfo{$section}{$key} = $val if ($key);
+		}
+		if ($section eq 'PGVERSION') {
+			$sysinfo{$section}{full_version} = $l;
+			$l =~ /^PostgreSQL (\d+)\.(\d+)\.(\d+)/;
+			$sysinfo{$section}{major} = "$1.$2";
+			$sysinfo{$section}{minor} = "$1.$2.$3";
 		}
 	}
 	close(IN);
