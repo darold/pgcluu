@@ -3167,6 +3167,16 @@ sub flotr2_linegraph
 		$yaxis2 = "y2axis: { mode: \"normal\", title: \"$y2label\", min: 0$color },";
 	}
 
+	my $dateTracker_lblopts = '';
+	map { if (/label: "([^"]+)"/) { $dateTracker_lblopts .= "'$1',"; } } @$legend;
+	$dateTracker_lblopts =~ s/,$//;
+	$dateTracker_lblopts = "[$dateTracker_lblopts]";
+
+	my $dateTracker_dataopts = '';
+	map { if (/var (d\d+) =/) { $dateTracker_dataopts .= "$1,"; } } @$data;
+	$dateTracker_dataopts =~ s/,$//;
+	$dateTracker_dataopts = "[$dateTracker_dataopts]";
+
 	if ($#{$data} >= 0) {
 		$str .= <<EOF;
 <div id="$divid$buttonid" class="linegraph"></div>
@@ -3201,7 +3211,7 @@ sub flotr2_linegraph
         },
 	mouse: {
 	    track: true,
-	    trackFormatter: function(obj){ return dateTracker(obj,'$type') },
+	    trackFormatter: function(obj){ return dateTracker(obj,'$type',$dateTracker_lblopts,$dateTracker_dataopts) },
 	    relative: true,
 	    sensibility: 5,
 	    trackDecimals: 2,
@@ -3600,6 +3610,26 @@ ul#slides li div div {
 	color: #333;
 	font-size: 0.8em;
 }
+
+.mouse-figures {
+	font-weight: bold;
+	font-size: 1.0em;
+	margin: 0;
+	padding: 0;
+}       
+
+.mfigure {
+	font-weight: bold;
+	font-size: 1.2em;
+	color:#d26115;
+}
+
+.mfigure small {
+	font-weight: bold;
+	font-size: 0.6em;
+	color:#ffffff;
+}
+
 /*
 &.danger {
     .gradientBar(#ee5f5b, #c43c35);
@@ -3699,23 +3729,46 @@ var browser_warning = "Your browser doesn't allow you to get a bitmap image from
 	}
  }
  
- function write_buttons(idbutton) 
- {
+function write_buttons(idbutton) 
+{
      document.writeln(
  	'<a class="btn btn-danger" href="#" role="button" id="toimage'+idbutton+'" onclick="return false;">To image</a>'+
  	'<a class="btn btn-danger" href="#" role="button" id="download'+idbutton+'" onclick="return false;">Download</a>' +
  	'<a class="btn btn-danger" href="#" role="button" id="reset'+idbutton+'" onclick="return false;">Reset</a>'
      );
- }
+}
  
- function dateTracker(obj, gtype) 
- {
- 	var dateToDisplay = new Date(parseInt(obj.x)); 
- 	return dateToDisplay.toGMTString()+', '+obj.series.label+': '+pretty_print_number(obj.y, gtype);
- }
+function dateTracker(obj, gtype, labels, datasets) 
+{
+	var dateToDisplay = new Date(parseInt(obj.x)); 
+	var posValue = parseInt(obj.x);
+
+	// look for the position in data arrays 
+	var pos = 0;
+	if (datasets != undefined) { 
+		for (pos=0; pos < datasets[0].length; pos++) {
+			// If timestamp are the same we have found the position
+			if (datasets[0][pos][0] == posValue) {
+				// get out of here
+				break;
+			}
+		}
+	} else {
+		return '<span class="mfigure">NO DATASET</span>';
+	}
+
+	var textToShow = '<div class="mouse-figures">On '+dateToDisplay.toGMTString();
+	for (var i = 0; i < labels.length; i++) {
+		if (datasets[i] != undefined) {
+			textToShow += '<br><span class="mfigure">'+pretty_print_number(datasets[i][pos][1], gtype)+' <small>'+labels[i]+'</small></span>';
+		}
+	}
+	textToShow += '</div>';
+	return textToShow;
+}
  
- function pretty_print_number(val, type) 
- {
+function pretty_print_number(val, type) 
+{
  	if (type == 'size') {
  		if (val >= 1125899906842624) {
  			val = (val / 1125899906842624);

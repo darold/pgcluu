@@ -27,11 +27,34 @@ var browser_warning = "Your browser doesn't allow you to get a bitmap image from
      );
  }
  
- function dateTracker(obj, gtype) 
- {
- 	var dateToDisplay = new Date(parseInt(obj.x)); 
- 	return dateToDisplay.toGMTString()+', '+obj.series.label+': '+pretty_print_number(obj.y, gtype);
- }
+function dateTracker(obj, gtype, labels, datasets)
+{
+        var dateToDisplay = new Date(parseInt(obj.x));
+        var posValue = parseInt(obj.x);
+
+        // look for the position in data arrays
+        var pos = 0;
+        if (datasets != undefined) {
+                for (pos=0; pos < datasets[0].length; pos++) {
+                        // If timestamp are the same we have found the position
+                        if (datasets[0][pos][0] == posValue) {
+                                // get out of here
+                                break;
+                        }
+                }
+        } else {
+                return '<span class="mfigure">NO DATASET</span>';
+        }
+
+        var textToShow = '<div class="mouse-figures">On '+dateToDisplay.toGMTString();
+        for (var i = 0; i < labels.length; i++) {
+                if (datasets[i] != undefined) {
+                        textToShow += '<br><span class="mfigure">'+pretty_print_number(datasets[i][pos][1], gtype)+' <small>'+labels[i]+'</small></span>';
+                }
+        }
+        textToShow += '</div>';
+        return textToShow;
+}
  
  function pretty_print_number(val, type) 
  {
