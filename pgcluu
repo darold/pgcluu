@@ -3217,6 +3217,11 @@ sub flotr2_linegraph
 	    trackDecimals: 2,
 	    lineColor: 'purple',
         },
+        crosshair: {
+            mode: 'x',
+            color: '#000000',
+            hideCursor: false,
+        },
         HtmlText: false,
     };
 
