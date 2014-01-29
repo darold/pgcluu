@@ -37,6 +37,7 @@ my $IMG_FORMAT  = 'png';
 my $FH          = undef;
 my $FHCLUSTER   = undef;
 my %DBFH        = ();
+my %PGBFH       = ();
 my %DEVFH       = ();
 my $IDX         = 1;
 my $HELP        = 0;
@@ -50,8 +51,10 @@ my $REVERT_DATE = 0;
 my $SADC_INPUT_FILE    = '';
 my $SAR_INPUT_FILE     = '';
 my @DATABASE_LIST      = ();
+my @PGBOUNCER_LIST     = ();
 my @DEVICE_LIST        = ();
 my $FIST_DATABASE_LINK = '#';
+my $FIST_PGBOUNCER_LINK = '#';
 my %OVERALL_STATS      = ();
 my @GRAPH_COLORS       = ('#6e9dc9', '#f4ab3a', '#ac7fa8', '#8dbd0f'); 
 my $FROM_SA_FILE = 0;
@@ -257,26 +260,51 @@ my %DB_GRAPH_INFOS = (
 			'legends' => ['Sent','Write','Replay'],
 		},
 	},
-	'pgbouncer_stat.csv' => {
+	'pgbouncer_stats.csv' => {
 		'1' => {
 			'name' =>  'pgbouncer-clients',
-			'title' => 'pgbouncer active/waiting clients',
+			'title' => 'pgbouncer clients connections on %s',
 			'description' => 'Number of active/waiting clients in each pgbouncer pool',
 			'ylabel' => 'Number of clients',
 			'legends' => ['active','waiting'],
 		},
 		'2' => {
 			'name' =>  'pgbouncer-server',
+			'title' => 'pgbouncer server connections on %s',
 			'description' => 'Number of active/idle/used server connections in each pgbouncer pool',
 			'ylabel' => 'Number of connections',
 			'legends' => ['active','idle','used'],
 		},
 		'3' => {
 			'name' =>  'pgbouncer-maxwait',
-			'title' => 'pgbouncer clients wait time',
+			'title' => 'pgbouncer clients wait time on %s',
 			'description' => 'Maximum wait duration for client connections in pgbouncer pools',
 			'ylabel' => 'Duration',
 			'legends' => ['maxwait'],
+		},
+		'4' => {
+			'name' =>  'pgbouncer-connections',
+			'title' => 'pgbouncer connections statistics on %s',
+			'description' => 'Number of active/waiting clients, active/idle/used server connections and maximum wait duration for client connections in each pgbouncer pool',
+			'ylabel' => 'Number of connexions',
+			'legends' => ['Client active','Client waiting','Server active','Server idle','Server used','Clients wait time'],
+			'y2label' => 'Duration',
+		},
+	},
+	'pgbouncer_req_stats.csv' => {
+		'1' => {
+			'name' =>  'pgbouncer-duration',
+			'title' => 'pgbouncer average queries duration on %s',
+			'description' => 'Average queries duration in each pgbouncer pool',
+			'ylabel' => 'mDuration',
+			'legends' => ['avg_query'],
+		},
+		'2' => {
+			'name' =>  'pgbouncer-number',
+			'title' => 'pgbouncer queries per second on %s',
+			'description' => 'Number of queries per second in each pgbouncer pool',
+			'ylabel' => 'Number',
+			'legends' => ['avg_req'],
 		},
 	},
 );
@@ -460,6 +488,9 @@ if (-d "$INPUT_DIR") {
 	# Get the list of databases from the statistics collected
 	@DATABASE_LIST = &get_database_list();
 
+	# Get the list of databases preported by pgbouncer 
+	@PGBOUNCER_LIST = &get_pgbouncer_list();
+
 	print "DEBUG: looking for CSV file into directory $INPUT_DIR/\n" if ($DEBUG);
 	opendir(IDIR, "$INPUT_DIR") || die "FATAL: can't opendir $INPUT_DIR: $!";
 	my @files = grep { !/^\./ && -f "$INPUT_DIR/$_" && /\.csv$/ } readdir(IDIR);
@@ -477,6 +508,16 @@ if (-d "$INPUT_DIR") {
 		$FIST_DATABASE_LINK = "database-$db.html" if ($FIST_DATABASE_LINK eq '#');
 		&html_header($DBFH{$db});
 		$DBFH{$db}->print("<ul id=\"slides\">\n");
+	}
+	foreach my $db (@PGBOUNCER_LIST) {
+		# Open a filehandle for each database
+		$PGBFH{$db} = new IO::File ">$OUTPUT_DIR/pgbouncer-$db.html";
+		if (not defined $PGBFH{$db}) {
+			die "FATAL: can't write to $OUTPUT_DIR/pgbouncer-$db.html, $!\n";
+		}
+		$FIST_PGBOUNCER_LINK = "pgbouncer-$db.html" if ($FIST_PGBOUNCER_LINK eq '#');
+		&html_header($PGBFH{$db});
+		$PGBFH{$db}->print("<ul id=\"slides\">\n");
 	}
 	# Open filehandle to cluster file
 	$FHCLUSTER = new IO::File ">$OUTPUT_DIR/cluster.html";
@@ -505,6 +546,12 @@ if (-d "$INPUT_DIR") {
 		$DBFH{$db}->print("</ul>\n");
 		&html_footer($DBFH{$db});
 		$DBFH{$db}->close;
+	}
+	# Terminate all pgbouncer database statistic file
+	foreach my $db (@PGBOUNCER_LIST) {
+		$PGBFH{$db}->print("</ul>\n");
+		&html_footer($PGBFH{$db});
+		$PGBFH{$db}->close;
 	}
 
 } elsif (!$SAR_INPUT_FILE) {
@@ -691,6 +738,27 @@ sub get_database_list
 
 	return @db_list;
 }
+
+sub get_pgbouncer_list
+{
+	# Compute graphs of database size statistics
+	my @db_list = ();
+	my $file = "$INPUT_DIR/pgbouncer_stats.csv";
+	if (!-e $file || -z $file) {
+		return ();
+	}
+	open(PGBFILE, "$file") or die "FATAL: can't read $file\n";
+	while (<PGBFILE>) {
+		my @data = split(/;/);
+		next if (!&normalyze_line(\@data));
+		# Get database name
+		push(@db_list, $data[1]) if (!grep(/^$data[1]$/, @db_list));
+	}
+	close(PGBFILE);
+
+	return @db_list;
+}
+
 
 sub get_device_list
 {
@@ -1502,7 +1570,8 @@ sub compute_dbstat_graph
 		}
 	}
 
-	# Compute graphs of pgbouncer cluster statistics
+	# Compute graphs of pgbouncer statistics
+
 	if ($file  =~ /pgbouncer_stats.csv/) {
 		my %pgbouncer_stat = ();
 		my %all_stat = ();
@@ -1512,6 +1581,7 @@ sub compute_dbstat_graph
 			next if (!&normalyze_line(\@data));
 			next if ($data[1] eq 'pgbouncer');
 
+			# timestamp|database|user|cl_active|cl_waiting|sv_active|sv_idle|sv_used|sv_tested|sv_login|maxwait
 			$pgbouncer_stat{$data[1]}{cl_active} .= '[' . $data[0] . ',' . $data[3] . '],';
 			$all_stat{$data[0]}{cl_active} += $data[3];
 			$pgbouncer_stat{$data[1]}{cl_waiting} .= '[' . $data[0] . ',' . $data[4] . '],';
@@ -1536,22 +1606,72 @@ sub compute_dbstat_graph
 		}
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			foreach my $db (sort {$a cmp $b} keys %pgbouncer_stat) {
+				next if ($db eq 'all');
 				if ($data_info{$id}{name} eq 'pgbouncer-clients') {
 					$pgbouncer_stat{$db}{cl_active} =~ s/,$//;
 					$pgbouncer_stat{$db}{cl_waiting} =~ s/,$//;
-					print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'pgbouncer-clients', \%{$data_info{$id}}, "$data_info{$id}{title} ($db)", $pgbouncer_stat{$db}{cl_active}, $pgbouncer_stat{$db}{cl_waiting});
+					$PGBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'pgbouncer-clients', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{cl_active}, $pgbouncer_stat{$db}{cl_waiting}) );
 				} elsif ($data_info{$id}{name} eq 'pgbouncer-server') {
 					$pgbouncer_stat{$db}{sv_active} =~ s/,$//;
 					$pgbouncer_stat{$db}{sv_idle} =~ s/,$//;
 					$pgbouncer_stat{$db}{sv_used} =~ s/,$//;
-					print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'pgbouncer-server', \%{$data_info{$id}}, "$data_info{$id}{title} ($db)", $pgbouncer_stat{$db}{sv_active}, $pgbouncer_stat{$db}{sv_idle},$pgbouncer_stat{$db}{sv_used});
+					$PGBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'pgbouncer-server', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{sv_active}, $pgbouncer_stat{$db}{sv_idle},$pgbouncer_stat{$db}{sv_used}) );
 				} elsif ($data_info{$id}{name} eq 'pgbouncer-maxwait') {
 					$pgbouncer_stat{$db}{maxwait} =~ s/,$//;
-					print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'pgbouncer-maxwait', \%{$data_info{$id}}, "$data_info{$id}{title} ($db)", $pgbouncer_stat{$db}{maxwait});
+					$PGBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'pgbouncer-maxwait', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{maxwait}) );
+				} elsif ($data_info{$id}{name} eq 'pgbouncer-connections') {
+					$PGBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'pgbouncer-connections', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{cl_active}, $pgbouncer_stat{$db}{cl_waiting}, $pgbouncer_stat{$db}{sv_active}, $pgbouncer_stat{$db}{sv_idle},$pgbouncer_stat{$db}{sv_used}, $pgbouncer_stat{$db}{maxwait}) );
 				}
 			}
 		}
 	}
+
+	if ($file  =~ /pgbouncer_req_stats.csv/) {
+		my %pgbouncer_stat = ();
+		my %all_stat = ();
+		my %total_count = ();
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+			next if ($data[1] eq 'pgbouncer');
+
+			# timestamp|database|total_requests|total_received|total_sent|total_query_time|avg_req|avg_recv|avg_sent|avg_query
+			$pgbouncer_stat{$data[1]}{total_requests} .= '[' . $data[0] . ',' . $data[2] . '],';
+			$all_stat{$data[0]}{total_requests} += $data[2];
+			$pgbouncer_stat{$data[1]}{total_received} .= '[' . $data[0] . ',' . $data[3] . '],';
+			$all_stat{$data[0]}{total_received} += $data[3];
+			$pgbouncer_stat{$data[1]}{total_sent} .= '[' . $data[0] . ',' . $data[4] . '],';
+			$all_stat{$data[0]}{total_sent} += $data[4];
+			$pgbouncer_stat{$data[1]}{total_query_time} .= '[' . $data[0] . ',' . $data[5] . '],';
+			$all_stat{$data[0]}{total_query_time} += $data[5];
+			$pgbouncer_stat{$data[1]}{avg_req} .= '[' . $data[0] . ',' . $data[6] . '],';
+			$all_stat{$data[0]}{avg_req} += $data[6];
+			$pgbouncer_stat{$data[1]}{avg_recv} .= '[' . $data[0] . ',' . $data[7] . '],';
+			$all_stat{$data[0]}{avg_recv} += $data[7];
+			$pgbouncer_stat{$data[1]}{avg_sent} .= '[' . $data[0] . ',' . $data[8] . '],';
+			$all_stat{$data[0]}{avg_sent} += $data[8];
+			$pgbouncer_stat{$data[1]}{avg_query} .= '[' . $data[0] . ',' . $data[9] . '],';
+			$all_stat{$data[0]}{avg_query} += $data[9];
+		}
+		foreach my $t (sort {$a <=> $b} keys %all_stat) {
+			foreach my $k (keys %{$all_stat{$t}}) {
+				$pgbouncer_stat{'all'}{$k} .= '[' . $t . ',' . $all_stat{$t}{$k} . '],';
+			}
+		}
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			foreach my $db (sort {$a cmp $b} keys %pgbouncer_stat) {
+				next if ($db eq 'all');
+				if ($data_info{$id}{name} eq 'pgbouncer-duration') {
+					$pgbouncer_stat{$db}{avg_query} =~ s/,$//;
+					$PGBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'pgbouncer-duration', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_query}) );
+				} elsif ($data_info{$id}{name} eq 'pgbouncer-number') {
+					$pgbouncer_stat{$db}{avg_req} =~ s/,$//;
+					$PGBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'pgbouncer-number', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_req}) );
+				}
+			}
+		}
+	}
+
 
 	close(IN);
 
@@ -2154,6 +2274,34 @@ sub html_header
               </li>
 };
 	}
+
+	if ($#PGBOUNCER_LIST >= 0) {
+		print $fh qq{
+              <li id="menu-database" class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown">pgBouncer <b class="caret"></b></a>
+                <ul class="dropdown-menu">
+};
+		foreach my $db (@PGBOUNCER_LIST) {
+			print $fh qq{
+			<li id="menu-$db" class="dropdown-submenu">
+			   <a href="#" tabindex="-1">$db </a>
+			      <ul class="dropdown-menu">
+			      <li id="menu-pgbouncer-client"><a href="pgbouncer-$db.html#pgbouncer-client">Clients connections</a></li>
+			      <li id="menu-pgbouncer-server"><a href="pgbouncer-$db.html#pgbouncer-server">Server connections</a></li>
+			      <li id="menu-pgbouncer-maxwait"><a href="pgbouncer-$db.html#pgbouncer-maxwait">Clients wait time</a></li>
+			      <li id="menu-pgbouncer-connections"><a href="pgbouncer-$db.html#pgbouncer-connections">Clients / servers connections</a></li>
+			      <li id="menu-pgbouncer-duration"><a href="pgbouncer-$db.html#pgbouncer-duration">Average queries duration</a></li>
+			      <li id="menu-pgbouncer-number"><a href="pgbouncer-$db.html#pgbouncer-number">Queries per second</a></li>
+                             </ul>
+                        </li>
+};
+		}
+		print $fh qq{
+                </ul>
+              </li>
+};
+	}
+
 	if (!$DISABLE_SAR) {
 		print $fh qq{
               <li id="menu-system" class="dropdown">
@@ -3043,6 +3191,8 @@ sub convert_time
 	# 2012-07-16 12:35:29+02
 	if ($str =~ /(\d+)-(\d+)-(\d+) (\d+):(\d+):(\d+)/) {
 		return &timegm_nocheck($6, $5, $4, $3, $2 - 1, $1 - 1900) * 1000;
+	} elsif ($str =~ /(\d+)-(\d+)-(\d+) (\d+):(\d+)/) {
+		return &timegm_nocheck(0, $5, $4, $3, $2 - 1, $1 - 1900) * 1000;
 	} elsif ($str =~ /(\d+):(\d+):(\d+)/) {
 		return &timegm_nocheck($3, $2, $1, $o_day, $o_month - 1, $o_year - 1900) * 1000;
 	} elsif ($str !~ /\D/) {
@@ -3138,8 +3288,9 @@ sub flotr2_linegraph
 	my $type = '';
 	if ($ylabel =~ /size/i) {
 		$type = 'size';
-	} elsif ($ylabel =~ /duration/i) {
-		$type = 'duration';
+	} elsif ($ylabel =~ /mduration/i) {
+		$type = 'mduration';
+		$ylabel =~ s/m(duration)/$1/i;
 	}
 	my $active = '';
 	$active = ' active-slide' if ($infos->{active});
@@ -3799,6 +3950,16 @@ function pretty_print_number(val, type)
  			val = val.toFixed(3) + " sec";
  		} else {
  			val = val + " ms";
+ 		}
+ 	} else if (type == 'mduration') {
+ 		if (val >= 1000000) {
+ 			val = (val / 1000000);
+ 			val = val.toFixed(3) + " sec";
+ 		} else if (val >= 1000) {
+ 			val = (val / 1000);
+ 			val = val.toFixed(3) + " ms";
+ 		} else {
+ 			val = val + " µs";
  		}
  	} else {
  		if (val >= 1000000000000000) {

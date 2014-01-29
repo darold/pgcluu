@@ -45,12 +45,12 @@ my $DBPASS      = '';
 my @METRICS     = ();
 my $LIST_METRIC = 0;
 my $FILE_REDIR  = '>>';
-my $PGBOUNCER_ARGS = '';
 my $PG_VERSION  = 0;
 my $DBSERVICE   = '';
 my $STAT_TYPE   = 'user';
 my $KILL        = 0;
 my $OS_INFO     = 0;
+my $PGBOUNCER_ARGS = '';
 
 # Definition to collect metrics from the database
 my %METRICS_COMMANDS = (
@@ -153,7 +153,11 @@ my %METRICS_COMMANDS = (
 	},
 	'pgbouncer_stats' => {
 		'output' => 'pgbouncer_stats.csv',
-		'command' => 'dump_pgbouncerstats'
+		'command' => 'dump_pgbouncerpoolstats'
+	},
+	'pgbouncer_req_stats' => {
+		'output' => 'pgbouncer_req_stats.csv',
+		'command' => 'dump_pgbouncerquerystats'
 	},
 
 );
@@ -604,6 +608,8 @@ options:
   --os-info                grab operating system information and exit.
   --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
 			   database. Ex: -p 6432 -U postgres -h 192.168.1.100
+                           You must at least give one parameter to enable
+                           pgbouncer monitoring.
   --sar-file=FILE          path to sar output data file for sysstat stats
                            Default to output_dir/sar_stats.dat.
   --stat-type all|user     Set stats tables to read. Values: 'all' or 'user' to
@@ -616,6 +622,11 @@ For example, as postgres user:
 
 	mkdir /tmp/stat_db1/
 	pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb
+
+to collect statistics from pgbouncer too:
+
+	pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb \
+		--pgbouncer-args='-p 5342'
 
 };
     exit 1
@@ -913,7 +924,7 @@ sub dump_pgstatconnections
 	return $sql;
 }
 
-sub dump_pgbouncerstats
+sub dump_pgbouncerpoolstats
 {
 
 	my $sql = sprintf(
@@ -922,6 +933,17 @@ sub dump_pgbouncerstats
 
 	return $sql;
 }
+
+sub dump_pgbouncerquerystats
+{
+
+	my $sql = sprintf(
+		"SHOW STATS"
+	);
+
+	return $sql;
+}
+
 
 
 sub get_current_timestamp

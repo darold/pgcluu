@@ -120,6 +120,8 @@ COLLECTING STATISTICS
       --list-metric            list available metrics actions that can be performed.
       --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
                                database. Ex: -p 6432 -U postgres -h 192.168.1.100
+                               You must at least give one parameter to enable
+                               pgbouncer monitoring, for example: '-p 5432'.
       --sar-file=FILE          path to sar output data file for sysstat stats
                                Default to output_dir/sar_stats.dat.
       --stat-type all|user     Set stats tables to read. Values: 'all' or 'user' to
@@ -132,6 +134,11 @@ COLLECTING STATISTICS
 
             mkdir /tmp/stat_db1/
             pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb
+
+    to collect statistics from pgbouncer too:
+
+            pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb \
+                    --pgbouncer-args='-p 5342'
 
     then after some long time and activities on the database, stop the
     daemon:
