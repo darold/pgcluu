@@ -374,22 +374,25 @@ while (1) {
 	close(PSQL);
 
 	# Collecting pgbouncer statistics
-	if (grep(/pgbouncer_stats/, @METRICS) and $PGBOUNCER_ARGS) {
-		# create a timestamp to registrer pgbouncer statistics
-		my $timestamp = &get_current_timestamp();
+	if ($PGBOUNCER_ARGS) {
+		foreach my $c (@METRICS) {
+			next if ($c !~ /^pgbouncer_/);
+			# create a timestamp to registrer pgbouncer statistics
+			my $timestamp = &get_current_timestamp();
 
-		my $sql = '';
-		eval { $sql = &{$METRICS_COMMANDS{'pgbouncer_stats'}->{command}}; };
-		if (!$sql || $@) {
-			if (-f $PIDFILE) {
-				unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
+			my $sql = '';
+			eval { $sql = &{$METRICS_COMMANDS{$c}->{command}}; };
+			if (!$sql || $@) {
+				if (-f $PIDFILE) {
+					unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
+				}
+				die "FATAL: no SQL with metric command pgbouncer_stats ($sql).\n" if (!$sql || $@);
 			}
-			die "FATAL: no SQL with metric command pgbouncer_stats ($sql).\n" if (!$sql || $@);
-		}
-		`$PGBOUNCER_PROG -c "$sql" | sed 's/^/$timestamp;/' $FILE_REDIR $OUTPUT_DIR/$METRICS_COMMANDS{'pgbouncer_stats'}->{output}`;
-		if ($? != 0) {
-			&dprint("LOG: $PGBOUNCER_PROG -c \"$sql\" | sed 's/^/$timestamp;/' $FILE_REDIR $OUTPUT_DIR/$METRICS_COMMANDS{'pgbouncer_stats'}->{output}\n");
-			&dprint("ERROR: pgbouncer pool query failure, $!\n");
+			`$PGBOUNCER_PROG -c "$sql" | sed 's/^/$timestamp;/' $FILE_REDIR $OUTPUT_DIR/$METRICS_COMMANDS{$c}->{output}`;
+			if ($? != 0) {
+				&dprint("LOG: $PGBOUNCER_PROG -c \"$sql\" | sed 's/^/$timestamp;/' $FILE_REDIR $OUTPUT_DIR/$METRICS_COMMANDS{$c}->{output}\n");
+				&dprint("ERROR: pgbouncer pool query failure, $!\n");
+			}
 		}
 	}
 
@@ -444,7 +447,7 @@ sub create_sql_script
 	# Prepare the SQL script
 	my $sql_queries = '';
 	foreach my $type (sort {$a cmp $b} keys %METRICS_COMMANDS) {
-		next if ($type eq 'pgbouncer_stats');
+		next if ($type =~ /^pgbouncer_/);
 		next if (($type =~ /^(user|all)_/) && ($type !~ /^$STAT_TYPE/)); 
 		next if (($#METRICS >= 0) && !grep(/^$type$/, @METRICS));
 		my $sql = $METRICS_COMMANDS{$type}->{command}->();
