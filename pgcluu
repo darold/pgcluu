@@ -3767,7 +3767,7 @@ ul#slides li div div {
 }
 .figure {
 	font-weight: bold;
-	font-size: 1.2em;
+	font-size: 1.1em;
 	color:#c43c35;
 }
 .figure-label {
