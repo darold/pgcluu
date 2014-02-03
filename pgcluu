@@ -262,27 +262,6 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pgbouncer_stats.csv' => {
 		'1' => {
-			'name' =>  'pgbouncer-clients',
-			'title' => 'pgbouncer clients connections on %s',
-			'description' => 'Number of active/waiting clients in each pgbouncer pool',
-			'ylabel' => 'Number of clients',
-			'legends' => ['active','waiting'],
-		},
-		'2' => {
-			'name' =>  'pgbouncer-server',
-			'title' => 'pgbouncer server connections on %s',
-			'description' => 'Number of active/idle/used server connections in each pgbouncer pool',
-			'ylabel' => 'Number of connections',
-			'legends' => ['active','idle','used'],
-		},
-		'3' => {
-			'name' =>  'pgbouncer-maxwait',
-			'title' => 'pgbouncer clients wait time on %s',
-			'description' => 'Maximum wait duration for client connections in pgbouncer pools',
-			'ylabel' => 'Duration',
-			'legends' => ['maxwait'],
-		},
-		'4' => {
 			'name' =>  'pgbouncer-connections',
 			'title' => 'pgbouncer connections statistics on %s',
 			'description' => 'Number of active/waiting clients, active/idle/used server connections and maximum wait duration for client connections in each pgbouncer pool',
@@ -1574,6 +1553,7 @@ sub compute_dbstat_graph
 
 	if ($file  =~ /pgbouncer_stats.csv/) {
 		my %pgbouncer_stat = ();
+		my %all_pool = ();
 		my %all_stat = ();
 		my %total_count = ();
 		while (<IN>) {
@@ -1582,45 +1562,71 @@ sub compute_dbstat_graph
 			next if ($data[1] eq 'pgbouncer');
 
 			# timestamp|database|user|cl_active|cl_waiting|sv_active|sv_idle|sv_used|sv_tested|sv_login|maxwait
-			$pgbouncer_stat{$data[1]}{cl_active} .= '[' . $data[0] . ',' . $data[3] . '],';
+			$pgbouncer_stat{"$data[1]/$data[2]"}{cl_active} .= '[' . $data[0] . ',' . $data[3] . '],';
+			$all_pool{$data[1]}{$data[0]}{cl_active} += $data[3];
 			$all_stat{$data[0]}{cl_active} += $data[3];
-			$pgbouncer_stat{$data[1]}{cl_waiting} .= '[' . $data[0] . ',' . $data[4] . '],';
+			$pgbouncer_stat{"$data[1]/$data[2]"}{cl_waiting} .= '[' . $data[0] . ',' . $data[4] . '],';
+			$all_pool{$data[1]}{$data[0]}{cl_waiting} += $data[4];
 			$all_stat{$data[0]}{cl_waiting} += $data[4];
-			$pgbouncer_stat{$data[1]}{sv_active} .= '[' . $data[0] . ',' . $data[5] . '],';
+			$pgbouncer_stat{"$data[1]/$data[2]"}{sv_active} .= '[' . $data[0] . ',' . $data[5] . '],';
+			$all_pool{$data[1]}{$data[0]}{sv_active} += $data[5];
 			$all_stat{$data[0]}{sv_active} += $data[5];
-			$pgbouncer_stat{$data[1]}{sv_idle} .= '[' . $data[0] . ',' . $data[6] . '],';
+			$pgbouncer_stat{"$data[1]/$data[2]"}{sv_idle} .= '[' . $data[0] . ',' . $data[6] . '],';
+			$all_pool{$data[1]}{$data[0]}{sv_idle} += $data[6];
 			$all_stat{$data[0]}{sv_idle} += $data[6];
-			$pgbouncer_stat{$data[1]}{sv_used} .= '[' . $data[0] . ',' . $data[7] . '],';
+			$pgbouncer_stat{"$data[1]/$data[2]"}{sv_used} .= '[' . $data[0] . ',' . $data[7] . '],';
+			$all_pool{$data[1]}{$data[0]}{sv_used} += $data[7];
 			$all_stat{$data[0]}{sv_used} += $data[7];
-			$pgbouncer_stat{$data[1]}{sv_tested} .= '[' . $data[0] . ',' . $data[8] . '],';
+			$pgbouncer_stat{"$data[1]/$data[2]"}{sv_tested} .= '[' . $data[0] . ',' . $data[8] . '],';
+			$all_pool{$data[1]}{$data[0]}{sv_tested} += $data[8];
 			$all_stat{$data[0]}{sv_tested} += $data[8];
-			$pgbouncer_stat{$data[1]}{sv_login} .= '[' . $data[0] . ',' . $data[9] . '],';
+			$pgbouncer_stat{"$data[1]/$data[2]"}{sv_login} .= '[' . $data[0] . ',' . $data[9] . '],';
+			$all_pool{$data[1]}{$data[0]}{sv_login} += $data[9];
 			$all_stat{$data[0]}{sv_login} += $data[9];
-			$pgbouncer_stat{$data[1]}{maxwait} .= '[' . $data[0] . ',' . $data[10] . '],';
+			$pgbouncer_stat{"$data[1]/$data[2]"}{maxwait} .= '[' . $data[0] . ',' . $data[10] . '],';
+			$all_pool{$data[1]}{$data[0]}{maxwait} += $data[10];
 			$all_stat{$data[0]}{maxwait} += $data[10];
 		}
+
+		# A pgbouncer db alias have a pool per db/user pair, summarize on pool name only
+		foreach my $p (sort keys %all_pool) {
+			foreach my $t (sort {$a <=> $b} keys %{$all_pool{$p}}) {
+				foreach my $k (keys %{$all_pool{$p}{$t}}) {
+					$pgbouncer_stat{$p}{$k} .= '[' . $t . ',' . $all_pool{$p}{$t}{$k} . '],';
+				}
+			}
+		}
+
+		# Build graph dataset for all pgbouncer pool
 		foreach my $t (sort {$a <=> $b} keys %all_stat) {
 			foreach my $k (keys %{$all_stat{$t}}) {
 				$pgbouncer_stat{'all'}{$k} .= '[' . $t . ',' . $all_stat{$t}{$k} . '],';
 			}
 		}
+
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			foreach my $db (sort {$a cmp $b} keys %pgbouncer_stat) {
 				next if ($db eq 'all');
-				if ($data_info{$id}{name} eq 'pgbouncer-clients') {
+				next if ($db =~ /\//);
+				if ($data_info{$id}{name} eq 'pgbouncer-connections') {
 					$pgbouncer_stat{$db}{cl_active} =~ s/,$//;
 					$pgbouncer_stat{$db}{cl_waiting} =~ s/,$//;
-					$PGBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'pgbouncer-clients', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{cl_active}, $pgbouncer_stat{$db}{cl_waiting}) );
-				} elsif ($data_info{$id}{name} eq 'pgbouncer-server') {
 					$pgbouncer_stat{$db}{sv_active} =~ s/,$//;
 					$pgbouncer_stat{$db}{sv_idle} =~ s/,$//;
 					$pgbouncer_stat{$db}{sv_used} =~ s/,$//;
-					$PGBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'pgbouncer-server', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{sv_active}, $pgbouncer_stat{$db}{sv_idle},$pgbouncer_stat{$db}{sv_used}) );
-				} elsif ($data_info{$id}{name} eq 'pgbouncer-maxwait') {
 					$pgbouncer_stat{$db}{maxwait} =~ s/,$//;
-					$PGBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'pgbouncer-maxwait', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{maxwait}) );
-				} elsif ($data_info{$id}{name} eq 'pgbouncer-connections') {
 					$PGBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'pgbouncer-connections', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{cl_active}, $pgbouncer_stat{$db}{cl_waiting}, $pgbouncer_stat{$db}{sv_active}, $pgbouncer_stat{$db}{sv_idle},$pgbouncer_stat{$db}{sv_used}, $pgbouncer_stat{$db}{maxwait}) );
+					foreach my $pool (sort {$a cmp $b} keys %pgbouncer_stat) {
+						next if ($pool !~ /^$db\//);
+						$pgbouncer_stat{$pool}{cl_active} =~ s/,$//;
+						$pgbouncer_stat{$pool}{cl_waiting} =~ s/,$//;
+						$pgbouncer_stat{$pool}{sv_active} =~ s/,$//;
+						$pgbouncer_stat{$pool}{sv_idle} =~ s/,$//;
+						$pgbouncer_stat{$pool}{sv_used} =~ s/,$//;
+						$pgbouncer_stat{$pool}{maxwait} =~ s/,$//;
+						$PGBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'pgbouncer-connections+', \%{$data_info{$id}}, $pool, $pgbouncer_stat{$pool}{cl_active}, $pgbouncer_stat{$pool}{cl_waiting}, $pgbouncer_stat{$pool}{sv_active}, $pgbouncer_stat{$pool}{sv_idle},$pgbouncer_stat{$pool}{sv_used}, $pgbouncer_stat{$pool}{maxwait}) );
+					}
+					$PGBFH{$db}->print("</li>\n");
 				}
 			}
 		}
@@ -2286,9 +2292,6 @@ sub html_header
 			<li id="menu-$db" class="dropdown-submenu">
 			   <a href="#" tabindex="-1">$db </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-pgbouncer-client"><a href="pgbouncer-$db.html#pgbouncer-client">Clients connections</a></li>
-			      <li id="menu-pgbouncer-server"><a href="pgbouncer-$db.html#pgbouncer-server">Server connections</a></li>
-			      <li id="menu-pgbouncer-maxwait"><a href="pgbouncer-$db.html#pgbouncer-maxwait">Clients wait time</a></li>
 			      <li id="menu-pgbouncer-connections"><a href="pgbouncer-$db.html#pgbouncer-connections">Clients / servers connections</a></li>
 			      <li id="menu-pgbouncer-duration"><a href="pgbouncer-$db.html#pgbouncer-duration">Average queries duration</a></li>
 			      <li id="menu-pgbouncer-number"><a href="pgbouncer-$db.html#pgbouncer-number">Queries per second</a></li>
@@ -3296,9 +3299,16 @@ sub flotr2_linegraph
 	$active = ' active-slide' if ($infos->{active});
 
 	my $description = $infos->{description} || '';
-	my $str = qq{
+	my $str = '';
+	if ($divid !~ /\+$/) {
+		$str = qq{
 <li class="slide$active" id="$divid-slide">
       <div id="$divid"><br/><br/><br/><br/></div>
+};
+	} else {
+		$divid =~ s/\+$//;
+	}
+	$str .= qq{
       <div class="row">
             <div class="col-md-12">
               <div class="panel panel-default">
@@ -3432,9 +3442,10 @@ EOF
               </div>
             </div><!--/span-->
       </div>
-</li>
 };
-
+	$str .= qq{
+</li>
+} if ($divid !~ /^pgbouncer/);
 	return $str;
 
 }
