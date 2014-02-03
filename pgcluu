@@ -1893,7 +1893,6 @@ EOF
 		$temp_file_info
 		$deadlock_info
 		</ul>
-		<span class="figure-date">$sysinfo{PGVERSION}{'full_version'}</span>
 		</div>
               </div>
               </div>
@@ -1967,6 +1966,7 @@ EOF
 	}
 	print $fh <<EOF;
       </div>
+<span class="figure-label">$sysinfo{PGVERSION}{'full_version'}</span>
 </li>
 
 <li class="slide" id="about-slide">
