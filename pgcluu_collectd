@@ -723,6 +723,7 @@ sub dump_pgtablespace_size
 		"SELECT date_trunc('seconds', now()), spcname, " .
 		"pg_tablespace_size(spcname), %s " .
 		"FROM pg_tablespace " .
+		"WHERE spcname NOT IN ('pg_default', 'pg_global) " .
 		"ORDER BY spcname",
 		&backend_minimum_version(9, 2) ? "pg_tablespace_location(oid)" : "spclocation"
 	);

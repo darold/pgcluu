@@ -161,6 +161,7 @@ my %DB_GRAPH_INFOS = (
 			'description' => 'Sizes of databases',
 			'ylabel' => 'Size',
 			'legends' => ['size'],
+			'active' => 1,
 		},
 	},
 	'pg_tablespace_size.csv' => {
@@ -170,7 +171,6 @@ my %DB_GRAPH_INFOS = (
 			'description' => 'Sizes of tablespaces',
 			'ylabel' => 'Size',
 			'legends' => ['size'],
-			'active' => 1,
 		},
 	},
 	'pg_stat_bgwriter.csv' => {
@@ -2248,6 +2248,7 @@ sub html_header
 	my $disable_deadlock = '';
 	my $disable_checkpointwrite = '';
 	my $disable_canceled = '';
+	my $disable_tablespace = '';
 	if (!-e "$INPUT_DIR/pg_stat_replication.csv" || -z "$INPUT_DIR/pg_stat_replication.csv") {
 		$disable_replication = ' class="disabled"';
 		$disable_canceled = ' class="disabled"';
@@ -2260,6 +2261,9 @@ sub html_header
 		$disable_deadlock = ' class="disabled"';
 		$disable_checkpointwrite = ' class="disabled"';
 	}
+	if (!-e "$INPUT_DIR/pg_tablespace_size.csv" || -z "$INPUT_DIR/pg_tablespace_size.csv") {
+		$disable_tablespace = ' class="disabled"';
+	}
 
 	my $global_info = 'Infos sur le system';
 
@@ -2268,7 +2272,6 @@ sub html_header
               <li id="menu-cluster" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">Cluster <b class="caret"></b></a>
                 <ul class="dropdown-menu">
-		      <li id="menu-tablespace-cluster-size"><a href="cluster.html#tablespace-cluster-size">Tablespaces sizes</a></li>
 		      <li id="menu-cluster-size"><a href="cluster.html#cluster-size">Databases sizes</a></li>
 		      <li id="menu-cluster-backends"><a href="cluster.html#cluster-backends">Connections</a></li>
 		      <li id="menu-cluster-connections"><a href="cluster.html#cluster-connections">Connections by type</a></li>
@@ -2290,6 +2293,8 @@ sub html_header
 		      <li id="menu-cluster-read_write_query"><a href="cluster.html#cluster-read_write_query">Read vs Write queries</a></li>
 		      <li id="menu-cluster-canceled_queries"$disable_canceled><a href="cluster.html#cluster-canceled_queries">Canceled queries</a></li>
 		      <li id="menu-cluster-conflicts"><a href="cluster.html#cluster-conflicts">Conflicts</a></li>
+		      <li class="divider"></li>
+		      <li id="menu-tablespace-cluster-size"$disable_tablespace><a href="cluster.html#tablespace-cluster-size">Tablespaces sizes</a></li>
                 </ul>
               </li>
               <li id="menu-database" class="dropdown">
