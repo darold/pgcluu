@@ -1933,6 +1933,7 @@ EOF
 		<ul>
 		<li></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'size'}</span> <span class="figure-label">Cluster size</span></li>
+		<li><span class="figure">$database_number</span> <span class="figure-label">Databases</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'nbackend'}</span> <span class="figure-label">Connections</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'read_tuples'}</span> <span class="figure-label">Tuples fetched</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'cache_ratio'}</span> <span class="figure-label">Hit cache ratio</span></li>
