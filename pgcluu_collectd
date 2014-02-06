@@ -370,6 +370,26 @@ if (!$script_sql) {
 	exit 1;
 }
 
+# Look for all installed extensions
+my @alldbs = &get_databases();
+push(@alldbs, $DBNAME) if (($#alldbs == -1) && $DBNAME);
+if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
+	my @extensions = ();
+	unless(open(OUT, ">>$OUTPUT_DIR/sysinfo.txt")) {
+		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
+		exit 1;
+	}
+	print OUT "[EXTENSION]\n";
+	foreach my $db (@alldbs) {
+		my @ext = &get_extensions($db);
+		push(@extensions, "$db=" . join(',', @ext)) if ($#ext >= 0);
+	}
+	foreach my $e (@extensions) {
+		print OUT "$e\n";
+	}
+	close(OUT);
+}
+
 while (1) {
 
 	# Collecting database statistics
@@ -507,6 +527,48 @@ sub fetch_version
 	close(OUT);
 
 	return "$1.$2";
+}
+
+####
+# Retrieve installed extension for a given database.
+####
+sub get_extensions
+{
+	my $database = shift;
+
+	my $LOCAL_PSQL_PROG = $PSQL_PROG;
+	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $DBNAME/-d $database/i)) {
+		$LOCAL_PSQL_PROG .= " -d $database";
+	}
+	my @db_extension = `$LOCAL_PSQL_PROG -c "SELECT extname FROM pg_extension;"`;
+	if ($? != 0) {
+		&dprint("FATAL: psql error.\n");
+		# remove the pidfile
+		if (-f $PIDFILE) {
+			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
+		}
+		exit 0;
+	}
+	chomp(@db_extension);
+
+	return @db_extension;
+}
+
+sub get_databases
+{
+
+	my @dbs = `$PSQL_PROG -c "SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn;"`;
+	if ($? != 0) {
+		&dprint("FATAL: psql error.\n");
+		# remove the pidfile
+		if (-f $PIDFILE) {
+			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
+		}
+		exit 0;
+	}
+	chomp(@dbs);
+
+	return @dbs;
 }
 
 sub backend_has_pgstatstatements
@@ -723,7 +785,7 @@ sub dump_pgtablespace_size
 		"SELECT date_trunc('seconds', now()), spcname, " .
 		"pg_tablespace_size(spcname), %s " .
 		"FROM pg_tablespace " .
-		"WHERE spcname NOT IN ('pg_default', 'pg_global) " .
+		"WHERE spcname NOT IN ('pg_default', 'pg_global') " .
 		"ORDER BY spcname",
 		&backend_minimum_version(9, 2) ? "pg_tablespace_location(oid)" : "spclocation"
 	);

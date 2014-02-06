@@ -3694,6 +3694,10 @@ sub read_sysinfo
 			$sysinfo{$section}{major} = "$1.$2";
 			$sysinfo{$section}{minor} = "$1.$2.$3";
 		}
+		if ($section eq 'EXTENSION') {
+			my ($db, @vals) = split(/[=,]+/, $l);
+			push(@{$sysinfo{$section}{db}}, @vals);
+		}
 	}
 	close(IN);
 
