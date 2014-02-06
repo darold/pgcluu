@@ -58,6 +58,10 @@ my %METRICS_COMMANDS = (
 		'output' => 'pg_stat_database.csv',
 		'command' => \&dump_pgstatdatabase
 	},
+	'tablespace_size_stats' => {
+		'output' => 'pg_tablespace_size.csv',
+		'command' => \&dump_pgtablespace_size
+	},
 	'bgwriter_stats' => {
 		'output' => 'pg_stat_bgwriter.csv',
 		'command' => 'dump_pgstatbgwriter'
@@ -707,6 +711,20 @@ sub dump_pgstatdatabase
 		&backend_minimum_version(8, 3) ? ", tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted" : "",
 		&backend_minimum_version(9, 1) ? ", conflicts, date_trunc('seconds', stats_reset) AS stats_reset" : "",
 		&backend_minimum_version(9, 2) ? ", temp_files, temp_bytes, deadlocks, blk_read_time, blk_write_time" : ""
+	);
+
+	return $sql;
+}
+
+sub dump_pgtablespace_size
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), spcname, " .
+		"pg_tablespace_size(spcname), %s " .
+		"FROM pg_tablespace " .
+		"ORDER BY spcname",
+		&backend_minimum_version(9, 2) ? "pg_tablespace_location(oid)" : "spclocation"
 	);
 
 	return $sql;
