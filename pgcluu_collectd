@@ -50,6 +50,7 @@ my $DBSERVICE   = '';
 my $STAT_TYPE   = 'user';
 my $KILL        = 0;
 my $OS_INFO     = 0;
+my $NOTABLESPACE= 0;
 my $PGBOUNCER_ARGS = '';
 
 # Definition to collect metrics from the database
@@ -180,6 +181,7 @@ my $result = GetOptions(
 	"P|psql=s"       => \$PSQL_PROG,
 	"s|sar=s"        => \$SAR_PROG,
 	"S|disable-sar!" => \$DISABLE_SAR,
+	"T|notablespace!"=> \$NOTABLESPACE,
 	"U|dbuser=s"     => \$DBUSER,
 	"W|password=s"   => \$DBPASS,
 	"pgversion=s"    => \$PG_VERSION,
@@ -464,6 +466,9 @@ sub verify_action
 	if (!&is_superuser($DBUSER)) {
 		delete $METRICS_COMMANDS{'xlog_stats'};
 	}
+	if ($NOTABLESPACE) {
+		delete $METRICS_COMMANDS{'tablespace_size_stats'};
+	}
 }
 
 sub create_sql_script
@@ -672,6 +677,8 @@ options:
   -P, --psql=BIN           path to the psql command. Default: $PSQL_PROG.
   -s, --sar=BIN            path to sar sysstat command. Default: $SAR_PROG.
   -S, --disable-sar        disable collect of system statistics with sar.
+  -T, --notablespace       disable lookup at tablespace when the connect user
+			   is not superuser to avoid printing an error message.
   -U, --dbuser=USERNAME    database user to connect as. Default to current user.
   --list-metric            list available metrics actions that can be performed.
   --os-info                grab operating system information and exit.
@@ -941,7 +948,7 @@ sub dump_pgclass_size
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), n.nspname, c.relname, c.relkind, c.reltuples, c.relpages%s " .
 		"FROM pg_class c, pg_namespace n " .
-		"WHERE n.oid=c.relnamespace AND n.nspname <> 'information_schema' " .
+		"WHERE n.oid=c.relnamespace AND n.nspname <> 'information_schema' AND n.nspname <> 'pg_catalog'" .
 		"ORDER BY n.nspname, c.relname",
 		&backend_minimum_version(8, 1) ? ", pg_relation_size(c.oid)" : ""
 	);
