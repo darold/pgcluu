@@ -859,7 +859,7 @@ sub write_database_info
 	foreach my $k (sort keys %RELKIND) {
 	        $objects_count .= qq{<li><span class="figure">$OVERALL_STATS{'class'}{$k}</span> <span class="figure-label">$RELKIND{$k}</span></li>} if (exists $OVERALL_STATS{'class'}{$k});
 	}
-
+	my $dbsize = &pretty_print_size($OVERALL_STATS{'database'}{$db}{'size'});
 	$DBFH{$db}->print( qq{
 <li class="slide" id="database-info-slide">
 
@@ -875,6 +875,7 @@ sub write_database_info
 		<div class="key-figures">
 		<ul>
 		<li></li>
+	        <li><span class="figure">$dbsize</span> <span class="figure-label">Total size</span></li>
 	        <li><span class="figure">$next</span> <span class="figure-label">Installed extensions$extlist</span></li>
 	        <li><span class="figure">$nsch</span> <span class="figure-label">Schemas$schlist</span></li>
 	        <li><span class="figure">$procount</span> <span class="figure-label">Stored procedures</span></li>
