@@ -372,15 +372,17 @@ if (!$script_sql) {
 	exit 1;
 }
 
-# Look for all installed extensions
+# Collect general information about each database
 my @alldbs = &get_databases();
 push(@alldbs, $DBNAME) if (($#alldbs == -1) && $DBNAME);
 if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
 	my @extensions = ();
+	my @schemas = ();
 	unless(open(OUT, ">>$OUTPUT_DIR/sysinfo.txt")) {
 		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
 		exit 1;
 	}
+	# Look for all installed extensions
 	print OUT "[EXTENSION]\n";
 	foreach my $db (@alldbs) {
 		my @ext = &get_extensions($db);
@@ -388,6 +390,15 @@ if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
 	}
 	foreach my $e (@extensions) {
 		print OUT "$e\n";
+	}
+	# Look for all schema in a database
+	print OUT "[SCHEMA]\n";
+	foreach my $db (@alldbs) {
+		my @sch = &get_extensions($db);
+		push(@schemas, "$db=" . join(',', @sch)) if ($#sch >= 0);
+	}
+	foreach my $s (@schemas) {
+		print OUT "$s\n";
 	}
 	close(OUT);
 }
@@ -559,6 +570,9 @@ sub get_extensions
 	return @db_extension;
 }
 
+####
+# Get the list of database that are not template and that allow connction
+####
 sub get_databases
 {
 
@@ -575,6 +589,32 @@ sub get_databases
 
 	return @dbs;
 }
+
+####
+# Retrieve schemas for a given database.
+####
+sub get_schemas
+{
+	my $database = shift;
+
+	my $LOCAL_PSQL_PROG = $PSQL_PROG;
+	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $DBNAME/-d $database/i)) {
+		$LOCAL_PSQL_PROG .= " -d $database";
+	}
+	my @db_schema = `$LOCAL_PSQL_PROG -c "SELECT nspname FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' ORDER BY 1"`;
+	if ($? != 0) {
+		&dprint("FATAL: psql error.\n");
+		# remove the pidfile
+		if (-f $PIDFILE) {
+			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
+		}
+		exit 0;
+	}
+	chomp(@db_schema);
+
+	return @db_schema;
+}
+
 
 sub backend_has_pgstatstatements
 {
