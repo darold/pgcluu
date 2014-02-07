@@ -378,6 +378,7 @@ push(@alldbs, $DBNAME) if (($#alldbs == -1) && $DBNAME);
 if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
 	my @extensions = ();
 	my @schemas = ();
+	my @procs = ();
 	unless(open(OUT, ">>$OUTPUT_DIR/sysinfo.txt")) {
 		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
 		exit 1;
@@ -399,6 +400,15 @@ if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
 	}
 	foreach my $s (@schemas) {
 		print OUT "$s\n";
+	}
+	# Look for all schema in a database
+	print OUT "[PROCEDURE]\n";
+	foreach my $db (@alldbs) {
+		my @pro = &get_proc_name($db);
+		push(@procs, "$db=" . join(',', @pro)) if ($#pro >= 0);
+	}
+	foreach my $p (@procs) {
+		print OUT "$p\n";
 	}
 	close(OUT);
 }
@@ -986,7 +996,7 @@ sub dump_pgclass_size
 {
 
 	my $sql = sprintf(
-		"SELECT date_trunc('seconds', now()), n.nspname, c.relname, c.relkind, c.reltuples, c.relpages%s " .
+		"SELECT date_trunc('seconds', now()), current_database(), n.nspname, c.relname, c.relkind, c.reltuples, c.relpages%s " .
 		"FROM pg_class c, pg_namespace n " .
 		"WHERE n.oid=c.relnamespace AND n.nspname <> 'information_schema' AND n.nspname <> 'pg_catalog'" .
 		"ORDER BY n.nspname, c.relname",
@@ -1120,3 +1130,25 @@ sub dump_pgstatxacttables
 	return $sql;
 }
 
+sub get_proc_name
+{
+	my $database = shift;
+
+	my $LOCAL_PSQL_PROG = $PSQL_PROG;
+	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $DBNAME/-d $database/i)) {
+		$LOCAL_PSQL_PROG .= " -d $database";
+	}
+	my @db_proc = `$LOCAL_PSQL_PROG -c "SELECT n.nspname||'.'||p.proname FROM pg_proc p, pg_namespace n WHERE p.pronamespace=n.oid AND n.nspname NOT IN ('pg_catalog', 'information_schema');"`;
+	if ($? != 0) {
+		&dprint("FATAL: psql error.\n");
+		# remove the pidfile
+		if (-f $PIDFILE) {
+			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
+		}
+		exit 0;
+	}
+	chomp(@db_proc);
+
+	return @db_proc;
+
+}
