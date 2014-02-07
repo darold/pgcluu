@@ -394,7 +394,7 @@ if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
 	# Look for all schema in a database
 	print OUT "[SCHEMA]\n";
 	foreach my $db (@alldbs) {
-		my @sch = &get_extensions($db);
+		my @sch = &get_schemas($db);
 		push(@schemas, "$db=" . join(',', @sch)) if ($#sch >= 0);
 	}
 	foreach my $s (@schemas) {
