@@ -58,6 +58,15 @@ my $FIST_PGBOUNCER_LINK = '#';
 my %OVERALL_STATS      = ();
 my @GRAPH_COLORS       = ('#6e9dc9', '#f4ab3a', '#ac7fa8', '#8dbd0f'); 
 my $FROM_SA_FILE = 0;
+my %RELKIND = (
+	'r' => 'table',
+	'i' => 'index',
+	'S' => 'sequence',
+	'v' => 'view',
+	'c' => 'composite type',
+	't' => 'toast table'
+);
+
 
 my ($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
 $o_year += 1900;
@@ -293,6 +302,16 @@ my %DB_GRAPH_INFOS = (
 			'description' => 'Number of queries per second in each pgbouncer pool',
 			'ylabel' => 'Number',
 			'legends' => ['avg_req'],
+		},
+	},
+	'pg_class_size.csv' => {
+		'1' => {
+			'name' =>  'class-size',
+			'title' => 'Size of object %s',
+			'description' => 'Disk space used by the table or index with number of rows if the object is a table.',
+			'ylabel' => 'Size',
+			'legends' => ['Object size', 'Number of tuples' ],
+			'y2label' => 'Number',
 		},
 	},
 );
@@ -531,6 +550,12 @@ if (-d "$INPUT_DIR") {
 	$FHCLUSTER->close;
 	# Terminate all database statistic file
 	foreach my $db (@DATABASE_LIST) {
+
+		# Add database general information
+		if (-e "$INPUT_DIR/sysinfo.txt") {
+			&write_database_info($db);
+		}
+
 		$DBFH{$db}->print("</ul>\n");
 		&html_footer($DBFH{$db});
 		$DBFH{$db}->close;
@@ -816,6 +841,55 @@ sub get_device_list
 	}
 
 	return @dev_list;
+}
+
+sub write_database_info
+{
+	my $db = shift;
+
+	my $next = $#{$sysinfo{EXTENSION}{$db}} + 1;
+	my $extlist = join(',', @{$sysinfo{EXTENSION}{$db}});
+	$extlist = ' (' . $extlist . ')' if ($extlist);
+	my $nsch = $#{$sysinfo{SCHEMA}{$db}} + 1;
+	my $schlist = join(',', @{$sysinfo{SCHEMA}{$db}});
+	$schlist = ' (' . $schlist . ')' if ($schlist);
+	my $procount = $#{$sysinfo{PROCEDURE}{$db}} + 1;
+
+	my $objects_count = '';
+	foreach my $k (sort keys %RELKIND) {
+	        $objects_count .= qq{<li><span class="figure">$OVERALL_STATS{'class'}{$k}</span> <span class="figure-label">$RELKIND{$k}</span></li>} if (exists $OVERALL_STATS{'class'}{$k});
+	}
+
+	$DBFH{$db}->print( qq{
+<li class="slide" id="database-info-slide">
+
+	<div id="database-info"><br/><br/><br/></div>
+
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="fa fa-desktop fa-2x pull-left fa-border"></i><h2>Database $db</h2>
+              </div>
+              <div class="panel-body">
+		<div class="key-figures">
+		<ul>
+		<li></li>
+	        <li><span class="figure">$next</span> <span class="figure-label">Installed extensions$extlist</span></li>
+	        <li><span class="figure">$nsch</span> <span class="figure-label">Schemas$schlist</span></li>
+	        <li><span class="figure">$procount</span> <span class="figure-label">Stored procedures</span></li>
+		$objects_count
+		</ul>
+		</div>
+              </div>
+              </div>
+            </div><!--/span-->
+	</div>
+
+</li>
+}
+	);
+
 }
 
 sub compute_dbstat_graph
@@ -1192,6 +1266,7 @@ sub compute_dbstat_graph
 
 	# Compute graphs of database size statistics
 	if ($file =~ /pg_database_size.csv/) {
+
 		my %database_stat = ();
 		my %all_database_stat = ();
 		my $total_val = 0;
@@ -1723,6 +1798,43 @@ sub compute_dbstat_graph
 		}
 	}
 
+	# Compute graphs of object size statistics
+	if ($file =~ /pg_class_size.csv/) {
+
+		my %class_stat = ();
+		my %all_class_stat = ();
+		my $total_val = 0;
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+			if ($data[4] !~ /^[a-zA-Z]$/) {
+				print STDERR "WARNING: incompatible type of file pg_class_size.csv, the second field should be the database name\n";
+				last;
+			}
+
+			# timestamp | dbname | nspname | relname | relkind | reltuples | relpages | relsize
+			my $size = $data[6]*8192;
+			$size = $data[7] if ($#data == 7);
+			# Get class size statistics
+			$class_stat{$data[1]}{$data[4]}{"$data[1].$data[2]"}{size} .= '[' . $data[0] . ',' . $size . '],';
+			$class_stat{$data[1]}{$data[4]}{"$data[1].$data[2]"}{tuples} .= '[' . $data[0] . ',' . $data[5] . '],';
+			# Count the number of object
+			$OVERALL_STATS{'class'}{$data[4]}++;
+		}
+		my $id = &get_data_id('class-size', %data_info);
+		my %data = ();
+		foreach my $db (sort keys %class_stat) {
+			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
+			foreach my $k (sort keys %{$class_stat{$db}}) {
+				foreach my $o (sort keys %{$class_stat{$db}{$k}}) {
+					$class_stat{$db}{$k}{$o}{size} =~ s/,$//;
+					$class_stat{$db}{$k}{$o}{tuples} =~ s/,$//;
+					#$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'class-size', \%{$data_info{$id}}, "$db.$o", $class_stat{$db}{$k}{$o}{size}, $class_stat{$db}{$k}{$o}{tuples}) );
+				}
+			}
+			delete $class_stat{$db};
+		}
+	}
 
 	close(IN);
 
@@ -2070,9 +2182,9 @@ EOF
 
 	if (-e "$INPUT_DIR/sysinfo.txt") {
 		print $fh <<EOF;
-<li class="slide" id="info-slide">
+<li class="slide" id="sysinfo-slide">
 
-	<div id="info"><br/><br/><br/></div>
+	<div id="sysinfo"><br/><br/><br/></div>
 	<div class="row">
             <div class="col-md-4">
               <div class="panel panel-default">
@@ -2308,6 +2420,14 @@ sub html_header
 		<li id="menu-$db" class="dropdown-submenu">
 		   <a href="#" tabindex="-1">$db </a>
 		      <ul class="dropdown-menu">
+};
+		if (-e "$INPUT_DIR/sysinfo.txt") {
+			print $fh qq{
+		      <li id="menu-database-info"><a href="database-$db.html#database-info">Database info</a></li>
+		      <li class="divider"></li>
+};
+		}
+		print $fh qq{
 		      <li id="menu-database-size"><a href="database-$db.html#database-size">Database size</a></li>
 		      <li id="menu-database-backends"><a href="database-$db.html#database-backends">Connections</a></li>
 		      <li id="menu-database-connections"><a href="database-$db.html#database-connections">Connections by type</a></li>
@@ -2357,12 +2477,20 @@ sub html_header
               </li>
 };
 	}
-
-	if (!$DISABLE_SAR) {
-		print $fh qq{
+	print $fh qq{
               <li id="menu-system" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">System <b class="caret"></b></a>
                 <ul class="dropdown-menu">
+};
+	if (-e "$INPUT_DIR/sysinfo.txt") {
+		print $fh qq{
+		  <li id="menu-sysinfo"><a href="index.html#sysinfo">System info</a></li>
+                  <li class="divider"></li>
+};
+	}
+
+	if (!$DISABLE_SAR) {
+		print $fh qq{
 		  <li id="menu-cpu"><a href="system.html#system-cpu">Cpu</a></li>
                   <li class="divider"></li>
                   <li id="menu-system-memory"><a href="system.html#system-memory">Memory</a></li>
@@ -2380,33 +2508,26 @@ sub html_header
 };
 		for (my $i = 0; $i <= $#DEVICE_LIST; $i++) {
 			print $fh qq{
-		  <li id="menu-device$i" class="dropdown-submenu">
-		     <a href="#" tabindex="-1">$DEVICE_LIST[$i] </a>
-		      <ul class="dropdown-menu">
-		      <li id="menu-device-cpu"><a href="system-device$i.html#device-cpu">Cpu utilization</a></li>
-		      <li id="menu-device-read_write"><a href="system-device$i.html#device-read_write">Read/write bytes per second</a></li>
-		      <li id="menu-device-service_time"><a href="system-device$i.html#device-service_time">Average service time</a></li>
-		      </ul>
-		  </li>
+			  <li id="menu-device$i" class="dropdown-submenu">
+			     <a href="#" tabindex="-1">$DEVICE_LIST[$i] </a>
+			      <ul class="dropdown-menu">
+			      <li id="menu-device-cpu"><a href="system-device$i.html#device-cpu">Cpu utilization</a></li>
+			      <li id="menu-device-read_write"><a href="system-device$i.html#device-read_write">Read/write bytes per second</a></li>
+			      <li id="menu-device-service_time"><a href="system-device$i.html#device-service_time">Average service time</a></li>
+			      </ul>
+			  </li>
 };
 		}
 		print $fh qq{
 		    </ul>
 		  </li>
-                </ul>
-              </li>
 };
 	}
 	print $fh qq{
+                </ul>
+              </li>
               <li id="menu-about" class="dropdown"><a href="index.html#about">About</a></li>
           </ul>
-};
-	if (-e "$INPUT_DIR/sysinfo.txt") {
-		print $fh qq{
-	<li id="menu-info" class="dropdown"><a class="pull-right btn btn-info" title="System Info" href="index.html#info"><i class="fa fa-info fa-1x fa-border"></i></a></li>
-};
-	}
-		print $fh qq{
         </div><!--/.nav-collapse -->
       </div>
     </div>
@@ -3696,7 +3817,15 @@ sub read_sysinfo
 		}
 		if ($section eq 'EXTENSION') {
 			my ($db, @vals) = split(/[=,]+/, $l);
-			push(@{$sysinfo{$section}{db}}, @vals);
+			push(@{$sysinfo{$section}{$db}}, @vals);
+		}
+		if ($section eq 'SCHEMA') {
+			my ($db, @vals) = split(/[=,]+/, $l);
+			push(@{$sysinfo{$section}{$db}}, @vals);
+		}
+		if ($section eq 'PROCEDURE') {
+			my ($db, @vals) = split(/[=,]+/, $l);
+			push(@{$sysinfo{$section}{$db}}, @vals);
 		}
 	}
 	close(IN);
@@ -4085,7 +4214,7 @@ jQuery(function (){
 	jQuery('.navbar li.dropdown').click(function() {
 		var id = jQuery(this).attr("id");
 		id = id.substring(5);
-		if ( (id == 'index') || (id == 'about') || (id == 'contact') || (id == 'info') ) {
+		if ( (id == 'index') || (id == 'about') ) {
 			var slideId = '#'+id+'-slide';
 			var currentSlide = jQuery('#main-container .active-slide').attr("id");
 			currentSlide = '#'+currentSlide;
