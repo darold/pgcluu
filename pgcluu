@@ -857,7 +857,7 @@ sub write_database_info
 
 	my $objects_count = '';
 	foreach my $k (sort keys %RELKIND) {
-	        $objects_count .= qq{<li><span class="figure">$OVERALL_STATS{'class'}{$k}</span> <span class="figure-label">$RELKIND{$k}</span></li>} if (exists $OVERALL_STATS{'class'}{$k});
+	        $objects_count .= qq{<li><span class="figure">$OVERALL_STATS{'class'}{$db}{$k}</span> <span class="figure-label">$RELKIND{$k}</span></li>} if (exists $OVERALL_STATS{'class'}{$db}{$k});
 	}
 	my $dbsize = &pretty_print_size($OVERALL_STATS{'database'}{$db}{'size'});
 	$DBFH{$db}->print( qq{
@@ -1819,14 +1819,14 @@ sub compute_dbstat_graph
 			# Get class size statistics
 			$class_stat{$data[1]}{$data[4]}{"$data[1].$data[2]"}{size} .= '[' . $data[0] . ',' . $size . '],';
 			$class_stat{$data[1]}{$data[4]}{"$data[1].$data[2]"}{tuples} .= '[' . $data[0] . ',' . $data[5] . '],';
-			# Count the number of object
-			$OVERALL_STATS{'class'}{$data[4]}++;
 		}
 		my $id = &get_data_id('class-size', %data_info);
 		my %data = ();
 		foreach my $db (sort keys %class_stat) {
 			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			foreach my $k (sort keys %{$class_stat{$db}}) {
+				# Count the number of object
+				$OVERALL_STATS{'class'}{$db}{$k} = scalar keys %{$class_stat{$db}{$k}};
 				foreach my $o (sort keys %{$class_stat{$db}{$k}}) {
 					$class_stat{$db}{$k}{$o}{size} =~ s/,$//;
 					$class_stat{$db}{$k}{$o}{tuples} =~ s/,$//;
