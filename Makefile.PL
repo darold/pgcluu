@@ -18,6 +18,22 @@ $ENV{DESTDIR} =~ s/\/$//;
 # Default install path
 my $DESTDIR = $ENV{DESTDIR} || '';
 my $INSTALLDIRS = $ENV{INSTALLDIRS} || 'site';
+my %merge_compat = ();
+
+if ($ExtUtils::MakeMaker::VERSION >= 6.46) {
+	%merge_compat = (
+		'META_MERGE'   => {
+			resources  => {
+				homepage => 'http://pgcluu.darold.net/',
+				repository  => {
+					type => 'git',
+					git => 'git@github.com:darold/pgcluu.git',
+					web => 'http://pgcluu.darold.net/',
+				},
+			},
+		}
+	);
+}
 
 WriteMakefile(
 	'DISTNAME'	=> 'pgcluu',
@@ -34,16 +50,6 @@ WriteMakefile(
 	'DESTDIR'      => $DESTDIR,
 	'INSTALLDIRS'  => $INSTALLDIRS,
 	'clean'	       => {},
-	($ExtUtils::MakeMaker::VERSION < 6.46 ? () : 'META_MERGE'   => {
-		resources  => {
-			homepage => 'http://pgcluu.darold.net/',
-			repository  => {
-				type => 'git',
-				git => 'git@github.com:darold/pgcluu.git',
-				web => 'http://pgcluu.darold.net/',
-			},
-		},
-        }
-    )
+	%merge_compat
 );
 
