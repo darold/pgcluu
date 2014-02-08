@@ -59,12 +59,12 @@ my %OVERALL_STATS      = ();
 my @GRAPH_COLORS       = ('#6e9dc9', '#f4ab3a', '#ac7fa8', '#8dbd0f'); 
 my $FROM_SA_FILE = 0;
 my %RELKIND = (
-	'r' => 'table',
-	'i' => 'index',
-	'S' => 'sequence',
-	'v' => 'view',
-	'c' => 'composite type',
-	't' => 'toast table'
+	'r' => 'tables',
+	'i' => 'indexes',
+	'S' => 'sequences',
+	'v' => 'views',
+	'c' => 'composite types',
+	't' => 'toast tables'
 );
 
 
