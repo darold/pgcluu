@@ -137,12 +137,13 @@ my %METRICS_COMMANDS = (
 		'command' => 'dump_pgstatxacttables_user'
 	},
 	'class_size_stats' => {
-		'output' => 'pg_class_size.csv',
-		'command' => 'dump_pgclass_size'
+		'output'  => 'pg_class_size.csv',
+		'command' => 'dump_pgclass_size',
+		'repeat'  => 1,
 	},
 	'statements_stats' => {
-		'output' => 'pg_stat_statements.csv',
-		'command' => 'dump_pgstatstatements'
+		'output'   => 'pg_stat_statements.csv',
+		'command'  => 'dump_pgstatstatements'
 	},
 	'xlog_stats' => {
 		'output' => 'pg_xlog_stat.csv',
@@ -353,7 +354,7 @@ my $PGBOUNCER_PROG = $PSQL_PROG . ' ' . $PGBOUNCER_ARGS . ' pgbouncer';
 $PSQL_PROG .= " -h $DBHOST" if ($DBHOST);
 $PSQL_PROG .= " -p $DBPORT" if ($DBPORT);
 $PSQL_PROG .= " -U $DBUSER" if ($DBUSER);
-$PSQL_PROG .= " -d $DBNAME"  if ($DBNAME);
+$PSQL_PROG .= " -d $dbnames[0]"  if ($#dbnames >= 0);
 if ($DBPASS) {
 	$ENV{PGPASSWORD} = $DBPASS;
 }
@@ -364,7 +365,7 @@ my $sar_command = "LC_ALL=C $SAR_PROG -t -p -A $INTERVAL 1 >>$SAR_FILE";
 # Remove action that can't be run with the PostgreSQL version
 &verify_action();
 
-# Generating statistics collector SQL script 
+# Generating global statistics collector SQL script 
 my $script_sql = &create_sql_script();
 if (!$script_sql) {
 	# No action can be perform with this PostgreSQL version
@@ -372,9 +373,17 @@ if (!$script_sql) {
 	exit 1;
 }
 
+# Get list of database in the PostgreSQL cluster
+my @alldbs = ();
+if ($#dbnames >= 0) {
+	# from command line
+	push(@alldbs, @dbnames);
+} else {
+	# or by querying the database list
+	@alldbs = &get_databases();
+}
+
 # Collect general information about each database
-my @alldbs = &get_databases();
-push(@alldbs, $DBNAME) if (($#alldbs == -1) && $DBNAME);
 if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
 	my @extensions = ();
 	my @schemas = ();
@@ -419,6 +428,26 @@ while (1) {
 	open(PSQL, "| $PSQL_PROG");
 	print PSQL $script_sql, "\n";
 	close(PSQL);
+
+	# Generating per database statistics collector SQL script 
+	my @dblist = &get_databases();
+	push(@dblist, $DBNAME) if (($#dblist == -1) && $DBNAME);
+	foreach my $db (@dblist) {
+		my $script_repeat_sql = &create_sql_script($db);
+		if (!$script_repeat_sql) {
+			# No action can be perform with this PostgreSQL version
+			&dprint("FATAL: no action will be run on this PostgreSQL version $DB_INFO{major}.$DB_INFO{minor}, $!\n");
+			last;
+		}
+		my $LOCAL_PSQL_PROG = $PSQL_PROG;
+		if ($db && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $db/i)) {
+			$LOCAL_PSQL_PROG .= " -d $db";
+		}
+		# Collecting database statistics
+		open(PSQL, "| $LOCAL_PSQL_PROG");
+		print PSQL $script_repeat_sql, "\n";
+		close(PSQL);
+	}
 
 	# Collecting pgbouncer statistics
 	if ($PGBOUNCER_ARGS) {
@@ -494,9 +523,13 @@ sub verify_action
 
 sub create_sql_script
 {
+	my $db = shift;
+
 	# Prepare the SQL script
 	my $sql_queries = '';
 	foreach my $type (sort {$a cmp $b} keys %METRICS_COMMANDS) {
+		next if (!$db && $METRICS_COMMANDS{$type}->{repeat});
+		next if ($db && !$METRICS_COMMANDS{$type}->{repeat});
 		next if ($type =~ /^pgbouncer_/);
 		next if (($type =~ /^(user|all)_/) && ($type !~ /^$STAT_TYPE/)); 
 		next if (($#METRICS >= 0) && !grep(/^$type$/, @METRICS));
@@ -563,7 +596,7 @@ sub get_extensions
 	my $database = shift;
 
 	my $LOCAL_PSQL_PROG = $PSQL_PROG;
-	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $DBNAME/-d $database/i)) {
+	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
 		$LOCAL_PSQL_PROG .= " -d $database";
 	}
 	my @db_extension = `$LOCAL_PSQL_PROG -c "SELECT extname FROM pg_extension;"`;
@@ -608,7 +641,7 @@ sub get_schemas
 	my $database = shift;
 
 	my $LOCAL_PSQL_PROG = $PSQL_PROG;
-	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $DBNAME/-d $database/i)) {
+	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
 		$LOCAL_PSQL_PROG .= " -d $database";
 	}
 	my @db_schema = `$LOCAL_PSQL_PROG -c "SELECT nspname FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' ORDER BY 1"`;
@@ -1135,7 +1168,7 @@ sub get_proc_name
 	my $database = shift;
 
 	my $LOCAL_PSQL_PROG = $PSQL_PROG;
-	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $DBNAME/-d $database/i)) {
+	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
 		$LOCAL_PSQL_PROG .= " -d $database";
 	}
 	my @db_proc = `$LOCAL_PSQL_PROG -c "SELECT n.nspname||'.'||p.proname FROM pg_proc p, pg_namespace n WHERE p.pronamespace=n.oid AND n.nspname NOT IN ('pg_catalog', 'information_schema');"`;

@@ -551,6 +551,17 @@ if (-d "$INPUT_DIR") {
 	# Terminate all database statistic file
 	foreach my $db (@DATABASE_LIST) {
 
+		foreach my $k (sort {$a cmp $b } keys %DB_GRAPH_INFOS) {
+			if (-e "$INPUT_DIR/$db-$k" && !-z "$INPUT_DIR/$db-$k") {
+				&compute_dbstat_graph("$db-$k", %{$DB_GRAPH_INFOS{$k}});
+			} elsif ($k =~ /_all_/) {
+				my $f = $k;
+				$f =~ s/_all_/_user_/;
+				if (-e "$INPUT_DIR/$db-$f" && !-z "$INPUT_DIR/$db-$f") {
+					&compute_dbstat_graph("$db-$f", %{$DB_GRAPH_INFOS{$k}});
+				}
+			}
+		}
 		# Add database general information
 		if (-e "$INPUT_DIR/sysinfo.txt") {
 			&write_database_info($db);
@@ -1817,8 +1828,8 @@ sub compute_dbstat_graph
 			my $size = $data[6]*8192;
 			$size = $data[7] if ($#data == 7);
 			# Get class size statistics
-			$class_stat{$data[1]}{$data[4]}{"$data[1].$data[2]"}{size} .= '[' . $data[0] . ',' . $size . '],';
-			$class_stat{$data[1]}{$data[4]}{"$data[1].$data[2]"}{tuples} .= '[' . $data[0] . ',' . $data[5] . '],';
+			$class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{size} .= '[' . $data[0] . ',' . $size . '],';
+			$class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{tuples} .= '[' . $data[0] . ',' . $data[5] . '],';
 		}
 		my $id = &get_data_id('class-size', %data_info);
 		my %data = ();
