@@ -865,6 +865,7 @@ sub write_database_info
 	my $schlist = join(',', @{$sysinfo{SCHEMA}{$db}});
 	$schlist = ' (' . $schlist . ')' if ($schlist);
 	my $procount = $#{$sysinfo{PROCEDURE}{$db}} + 1;
+	my $trigcount = $sysinfo{TRIGGER}{$db};
 
 	my $objects_count = '';
 	foreach my $k (sort keys %RELKIND) {
@@ -890,6 +891,7 @@ sub write_database_info
 	        <li><span class="figure">$next</span> <span class="figure-label">Installed extensions$extlist</span></li>
 	        <li><span class="figure">$nsch</span> <span class="figure-label">Schemas$schlist</span></li>
 	        <li><span class="figure">$procount</span> <span class="figure-label">Stored procedures</span></li>
+	        <li><span class="figure">$trigcount</span> <span class="figure-label">Triggers</span></li>
 		$objects_count
 		</ul>
 		</div>
@@ -3838,6 +3840,10 @@ sub read_sysinfo
 		if ($section eq 'PROCEDURE') {
 			my ($db, @vals) = split(/[=,]+/, $l);
 			push(@{$sysinfo{$section}{$db}}, @vals);
+		}
+		if ($section eq 'TRIGGER') {
+			my ($db, $val) = split(/[=]+/, $l);
+			$sysinfo{$section}{$db} = $val;
 		}
 	}
 	close(IN);

@@ -388,6 +388,7 @@ if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
 	my @extensions = ();
 	my @schemas = ();
 	my @procs = ();
+	my @trigs = ();
 	unless(open(OUT, ">>$OUTPUT_DIR/sysinfo.txt")) {
 		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
 		exit 1;
@@ -418,6 +419,15 @@ if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
 	}
 	foreach my $p (@procs) {
 		print OUT "$p\n";
+	}
+	# Look for all schema in a database
+	print OUT "[TRIGGER]\n";
+	foreach my $db (@alldbs) {
+		my $tgs = &get_triggers($db);
+		push(@trigs, "$db=$tgs");
+	}
+	foreach my $t (@trigs) {
+		print OUT "$t\n";
 	}
 	close(OUT);
 }
@@ -1185,3 +1195,30 @@ sub get_proc_name
 	return @db_proc;
 
 }
+
+####
+# Retrieve user triggers count for a given database.
+####
+sub get_triggers
+{
+	my $database = shift;
+
+	my $LOCAL_PSQL_PROG = $PSQL_PROG;
+	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
+		$LOCAL_PSQL_PROG .= " -d $database";
+	}
+	my $db_trigger = `$LOCAL_PSQL_PROG -c "SELECT count(tgname) FROM pg_trigger WHERE NOT tgisinternal;"`;
+	if ($? != 0) {
+		&dprint("FATAL: psql error.\n");
+		# remove the pidfile
+		if (-f $PIDFILE) {
+			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
+		}
+		exit 0;
+	}
+	chomp($db_trigger);
+
+	return $db_trigger;
+}
+
+
