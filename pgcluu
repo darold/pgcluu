@@ -329,12 +329,14 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_class_size.csv' => {
 		'1' => {
-			'name' =>  'class-size',
+			'name' =>  'table-size',
 			'title' => 'Size of object %s',
 			'description' => 'Disk space used by the table or index with number of rows if the object is a table.',
 			'ylabel' => 'Size',
 			'legends' => ['Object size', 'Number of tuples' ],
 			'y2label' => 'Number',
+			'active' => 1,
+			'menu' => 'Size and tuples',
 		},
 	},
 );
@@ -1534,7 +1536,7 @@ sub compute_dbstat_graph
 				}
 				print $fhtable qq{
 		<ul id="slides">
-		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database tables</h2>
 		<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
 			<div class="span11">
 				<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
@@ -1997,7 +1999,7 @@ sub compute_dbstat_graph
 	if ($file =~ /pg_class_size.csv/) {
 
 		my %class_stat = ();
-		my %all_class_stat = ();
+		my %cumul_class_stat = ();
 		my $total_val = 0;
 		while (<IN>) {
 			my @data = split(/;/);
@@ -2013,20 +2015,97 @@ sub compute_dbstat_graph
 			# Get class size statistics
 			$class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{size} .= '[' . $data[0] . ',' . $size . '],';
 			$class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{tuples} .= '[' . $data[0] . ',' . $data[5] . '],';
+			$cumul_class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{size} = $size;
+			$cumul_class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{tuples} = $data[5];
+			$cumul_class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{width} = sprintf("%.2f", $size/($data[5]||1));
 		}
-		my $id = &get_data_id('class-size', %data_info);
+		my $id = &get_data_id('table-size', %data_info);
 		my %data = ();
 		foreach my $db (sort keys %class_stat) {
 			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			foreach my $k (sort keys %{$class_stat{$db}}) {
 				# Count the number of object
 				$OVERALL_STATS{'class'}{$db}{$k} = scalar keys %{$class_stat{$db}{$k}};
-				foreach my $o (sort keys %{$class_stat{$db}{$k}}) {
-					$class_stat{$db}{$k}{$o}{size} =~ s/,$//;
-					$class_stat{$db}{$k}{$o}{tuples} =~ s/,$//;
-					#$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'class-size', \%{$data_info{$id}}, "$db.$o", $class_stat{$db}{$k}{$o}{size}, $class_stat{$db}{$k}{$o}{tuples}) );
-				}
 			}
+			foreach my $id (sort {$a <=> $b} keys %data_info) {
+				next if ($data_info{$id}{name} !~ /^table-/);
+				# Open filehandle to cluster file
+				my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
+				if (not defined $fhtable) {
+					die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
+				}
+				&html_header($fhtable);
+				$HAS_TABLE_STATS{$db} = 1;
+				my $table_header = '';
+				my $colspan = '';
+				if ($data_info{$id}{name} eq 'table-size') {
+					$table_header = qq{
+						<th>Size</th>
+						<th>Tuples</th>
+						<th>Avg width</th>
+};
+					$colspan = ' colspan="4"';
+				}
+				print $fhtable qq{
+		<ul id="slides">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database tables</h2>
+		<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+			<div class="span11">
+				<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
+					<thead>
+						<tr>
+							<th>Table</th>
+							$table_header
+							<th>Graph</th>
+						</tr>
+					</thead>
+					<tbody>
+};
+				my $found_table_stat = 0;
+				foreach my $k (sort keys %{$class_stat{$db}}) {
+					next if (($k ne 't') && ($k ne 'r') && ($data_info{$id}{name} eq 'table-size'));
+					foreach my $tb (sort {$cumul_class_stat{$db}{$k}{$b}{size} <=> $cumul_class_stat{$db}{$k}{$a}{size} } keys %{$cumul_class_stat{$db}{$k}}) {
+						next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
+						my $table_data = '';
+						if ($data_info{$id}{name} eq 'table-size') {
+							if (!$cumul_class_stat{$db}{$k}{$tb}{size} && !$cumul_class_stat{$db}{$k}{$tb}{tuples}) {
+								next;
+							}
+							$found_table_stat = 1;
+							$class_stat{$db}{$k}{$tb}{size} =~ s/,$// if (exists $class_stat{$db}{$k}{$tb}{size});
+							$class_stat{$db}{$k}{$tb}{tuples} =~ s/,$// if (exists $class_stat{$db}{$k}{$tb}{tuples});
+							my $table_graph = &flotr2_linegraph_array($IDX++, 'table-size', \%{$data_info{$id}}, $tb, $class_stat{$db}{$k}{$tb}{size}, $class_stat{$db}{$k}{$tb}{tuples});
+							$table_graph ||= 'No graph';
+							foreach ('size','tuples','width') {
+								delete $class_stat{$db}{$k}{$tb}{$_};
+								$cumul_class_stat{$db}{$k}{$tb}{$_} ||= 0;
+							}
+							$table_data = "<tr><th>$tb</th><td>" . &pretty_print_size($cumul_class_stat{$db}{$k}{$tb}{size}) . "</td><td>" . int($cumul_class_stat{$db}{$k}{$tb}{tuples}) . "</td><td>$cumul_class_stat{$db}{$k}{$tb}{width}</td><td>$table_graph</td></tr>\n";
+							$table_graph ||= 'No graph';
+						}
+						if ($table_data) {
+							print $fhtable qq{$table_data} if ($table_data);
+						}
+					}
+					if (!$found_table_stat) {
+						print $fhtable qq{<tr><td$colspan><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td></tr>};
+					}
+				}
+				print $fhtable qq{
+					</tbody>
+				</table>
+			</div>
+		</div>
+};
+				# Terminate cluster statistics file
+				print $fhtable "</ul>\n";
+				&html_footer($fhtable);
+				$fhtable->close;
+			}
+
+
+
+
 			delete $class_stat{$db};
 		}
 	}
@@ -2667,6 +2746,13 @@ sub generate_html_menu
 			      <ul class="dropdown-menu">
 };
 			my %data_info = %{$DB_GRAPH_INFOS{'pg_stat_all_tables.csv'}};
+			foreach my $id (sort {$a <=> $b} keys %data_info) {
+				next if ($data_info{$id}{name} !~ /^table-/);
+				print $fh qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+			}
+			%data_info = %{$DB_GRAPH_INFOS{'pg_class_size.csv'}};
 			foreach my $id (sort {$a <=> $b} keys %data_info) {
 				next if ($data_info{$id}{name} !~ /^table-/);
 				print $fh qq{
