@@ -28,7 +28,6 @@ my $OUTPUT_DIR  = '';
 my $SADF_PROG   = '/usr/bin/sadf';
 my $DISABLE_SAR = 0;
 my $HTML        = '';
-my $SHOW_ALL_TB = 0;
 my $NO_TB_STAT  = 0;
 my @INCLUDE_DB  = ();
 my @INCLUDE_TB  = ();
@@ -66,7 +65,7 @@ my %RELKIND = (
 	'c' => 'composite types',
 	't' => 'toast tables'
 );
-
+my %HAS_TABLE_STATS = ();
 
 my ($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
 $o_year += 1900;
@@ -240,17 +239,41 @@ my %DB_GRAPH_INFOS = (
 	'pg_stat_all_tables.csv' => {
 		'1' => {
 			'name' =>  'table-indexes',
-			'title' => 'Sequencial scan / Index scan',
+			'title' => 'Sequencial vs Index scan on %s',
 			'description' => 'Sequencial scan versus index scan per table',
 			'ylabel' => 'Number per second',
-			'legends' => ['sequencial scan','index scan'],
+			'legends' => ['sequencial scan','index scan','% index scan ratio'],
+			'y2label' => 'Percent',
+			'active' => 1,
+			'menu' => 'Index scan ratio',
 		},
 		'2' => {
 			'name' =>  'table-vacuums-analyzes',
-			'title' => 'Analyze/vacuums and autoanalyze/autovacuum count',
+			'title' => 'Analyze/vacuums count on %s',
 			'description' => 'Number of analyze, autoanalyze, vacuum and autovacuum count per table',
-			'ylabel' => 'Number per seconde',
+			'ylabel' => 'Number',
 			'legends' => ['Analyze','Autoanalyze','Vacuum','Autovacuum'],
+			'active' => 1,
+			'menu' => 'Vacuums/analyzes',
+		},
+		'3' => {
+			'name' =>  'table-query-tuples',
+			'title' => 'Insert/update/delete and hot update tuples on %s',
+			'description' => 'Number of Insert/update/delete and hot update tuples count per table',
+			'ylabel' => 'Number per seconde',
+			'legends' => ['Insert','Update','Delete','Hot update'],
+			'active' => 1,
+			'menu' => 'Insert/update/delete',
+		},
+		'4' => {
+			'name' =>  'table-kind-tuples',
+			'title' => 'Live vs dead tuples on %s',
+			'description' => 'Number of live and dead tuples per table',
+			'ylabel' => 'Number',
+			'legends' => ['Live','Dead','% Bloat ratio'],
+			'y2label' => 'Percent',
+			'active' => 1,
+			'menu' => 'Live vs dead tuples',
 		},
 	},
 	'pg_xlog_stat.csv' => {
@@ -399,14 +422,13 @@ GetOptions(
 	"h|help!"        => \$HELP,
 	"i|sar-file=s"   => \$SAR_INPUT_FILE,
 	"I|sadc-file=s"  => \$SADC_INPUT_FILE,
-	"n|no-table!"    => \$NO_TB_STAT,
 	"o|output=s"     => \$OUTPUT_DIR,
 	"p|dev-only=s"   => \@INCLUDE_DEV,
 	"s|sadf=s"       => \$SADF_PROG,
 	"r|reverse-date" => \$REVERT_DATE,
 	"S|disable-sar!" => \$DISABLE_SAR,
-	"t|all-table!"   => \$SHOW_ALL_TB,
-	"T|with-table=s" => \@INCLUDE_TB,
+	"t|with-table=s" => \@INCLUDE_TB,
+	"T|no-table!"    => \$NO_TB_STAT,
 	"v|verbose!"     => \$DEBUG,
 	"z|timezone=s"   => \$TIMEZONE,
 ) or die usage();
@@ -630,6 +652,7 @@ if (!$DISABLE_SAR) {
 
 if ($OUTPUT_DIR) {
 	&generate_html_index();
+	&generate_html_menu();
 }
 
 exit 0;
@@ -865,7 +888,7 @@ sub write_database_info
 	my $schlist = join(',', @{$sysinfo{SCHEMA}{$db}});
 	$schlist = ' (' . $schlist . ')' if ($schlist);
 	my $procount = $#{$sysinfo{PROCEDURE}{$db}} + 1;
-	my $trigcount = $sysinfo{TRIGGER}{$db};
+	my $trigcount = $sysinfo{TRIGGER}{$db} || 0;
 
 	my $objects_count = '';
 	foreach my $k (sort keys %RELKIND) {
@@ -1351,6 +1374,8 @@ sub compute_dbstat_graph
 	if (!$NO_TB_STAT && ($file =~ /pg_stat_(all|user)_tables.csv/)) {
 		my %database_stat = ();
 		my %all_database_stat = ();
+		my %cumul_database_stat = ();
+		my %last_all_database_stat = ();
 		my %start_vals = ();
 		my $tmp_val = 0;
 		my $do_vacuum = 0;
@@ -1359,102 +1384,258 @@ sub compute_dbstat_graph
 			my @data = split(/;/);
 			next if (!&normalyze_line(\@data));
 
-			push(@{$start_vals{$data[3]}}, @data) if ($#{$start_vals{$data[3]}} < 0);
+#Top ten tables with the worst ratio sequential versus index scan
+#Top ten tables with the most autovacuum and autoanalyze
 
-# Number of sequential versus index scan on the tables.
-# Number of vacuum + analyse
-# Number of autovacuum + autoanalyze.
+			# timestamp | dbname | relid | schemaname | relname | seq_scan | seq_tup_read | idx_scan | idx_tup_fetch | n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | last_vacuum | last_autovacuum | last_analyze | last_autoanalyze | vacuum_count | autovacuum_count | analyze_count | autoanalyze_count
+			$data[4] = "$data[3].$data[4]";
+			push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
 
 			# Get database statistics
-			(($data[4] - $start_vals{$data[3]}[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals{$data[3]}[4]);
-			$database_stat{$data[3]}{seq_scan} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],' if (!$SHOW_ALL_TB);
-			$all_database_stat{$data[0]}{seq_scan} += $tmp_val;
-			(($data[6] - $start_vals{$data[3]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[3]}[6]);
-			$database_stat{$data[3]}{idx_scan} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],' if (!$SHOW_ALL_TB);
-			$all_database_stat{$data[0]}{idx_scan} += $tmp_val;
-			if ($#data > 18) {
-				(($data[18] - $start_vals{$data[3]}[18]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[18] - $start_vals{$data[3]}[18]);
-				$database_stat{$data[3]}{vacuum_count} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],' if (!$SHOW_ALL_TB);
-				$all_database_stat{$data[0]}{vacuum_count} += $tmp_val;
-				(($data[19] - $start_vals{$data[3]}[19]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[19] - $start_vals{$data[3]}[19]);
-				$database_stat{$data[3]}{autovacuum_count} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],' if (!$SHOW_ALL_TB);
-				$all_database_stat{$data[0]}{autovacuum_count} += $tmp_val;
-				(($data[20] - $start_vals{$data[3]}[20]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[20] - $start_vals{$data[3]}[20]);
-				$database_stat{$data[3]}{analyze_count} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],' if (!$SHOW_ALL_TB);
-				$all_database_stat{$data[0]}{analyze_count} += $tmp_val;
-				(($data[21] - $start_vals{$data[3]}[21]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[21] - $start_vals{$data[3]}[21]);
-				$database_stat{$data[3]}{autoanalyze_count} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],' if (!$SHOW_ALL_TB);
-				$all_database_stat{$data[0]}{autoanalyze_count} += $tmp_val;
+			(($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]);
+			$database_stat{$data[1]}{$data[4]}{seq_scan} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[1]}{$data[0]}{seq_scan} += $tmp_val;
+			$cumul_database_stat{$data[1]}{$data[4]}{seq_scan} += $tmp_val;
+			my $save_seq_scan = $tmp_val;
+			(($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]);
+			$database_stat{$data[1]}{$data[4]}{idx_scan} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[1]}{$data[0]}{idx_scan} += $tmp_val;
+			$cumul_database_stat{$data[1]}{$data[4]}{idx_scan} += $tmp_val;
+			my $save_idx_scan = $tmp_val;
+			$database_stat{$data[1]}{$data[4]}{idx_scan_vs_seq_scan} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($save_idx_scan*100)/(($save_idx_scan+$save_seq_scan) || 1) ) . '],';
+			(($data[9] - $start_vals{$data[1]}{$data[4]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[4]}[9]);
+			$database_stat{$data[1]}{$data[4]}{n_tup_ins} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$cumul_database_stat{$data[1]}{$data[4]}{n_tup_ins} += $tmp_val;
+			$all_database_stat{$data[1]}{$data[0]}{n_tup_ins} += $tmp_val;
+			(($data[10] - $start_vals{$data[1]}{$data[4]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[1]}{$data[4]}[10]);
+			$database_stat{$data[1]}{$data[4]}{n_tup_upd} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$cumul_database_stat{$data[1]}{$data[4]}{n_tup_upd} += $tmp_val;
+			$all_database_stat{$data[1]}{$data[0]}{n_tup_upd} += $tmp_val;
+			(($data[11] - $start_vals{$data[1]}{$data[4]}[11]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[11] - $start_vals{$data[1]}{$data[4]}[11]);
+			$cumul_database_stat{$data[1]}{$data[4]}{n_tup_del} += $tmp_val;
+			$database_stat{$data[1]}{$data[4]}{n_tup_del} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[1]}{$data[0]}{n_tup_del} += $tmp_val;
+			(($data[12] - $start_vals{$data[1]}{$data[4]}[12]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[12] - $start_vals{$data[1]}{$data[4]}[12]);
+			$database_stat{$data[1]}{$data[4]}{n_tup_hot_upd} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[1]}{$data[0]}{n_tup_hot_upd} += $tmp_val;
+			$cumul_database_stat{$data[1]}{$data[4]}{n_tup_hot_upd} += $tmp_val;
+			$database_stat{$data[1]}{$data[4]}{n_live_tup} .= '[' . $data[0] . ',' . $data[13] . '],';
+			$all_database_stat{$data[1]}{$data[0]}{n_live_tup} += $data[13];
+			$cumul_database_stat{$data[1]}{$data[4]}{n_live_tup} = $data[13];
+			$database_stat{$data[1]}{$data[4]}{n_dead_tup} .= '[' . $data[0] . ',' . $data[14] . '],';
+			$all_database_stat{$data[1]}{$data[0]}{n_dead_tup} += $data[14];
+			$cumul_database_stat{$data[1]}{$data[4]}{n_dead_tup} = $data[14];
+			$database_stat{$data[1]}{$data[4]}{live_vs_dead} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($data[14]*100)/(($data[14]+$data[13]) || 1) ) . '],';
+			if ($#data > 19) {
+				(($data[19] - $start_vals{$data[1]}{$data[4]}[19]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[19] - $start_vals{$data[1]}{$data[4]}[19]);
+				$database_stat{$data[1]}{$data[4]}{vacuum_count} .= '[' . $data[0] . ',' . $tmp_val . '],';
+				$all_database_stat{$data[1]}{$data[0]}{vacuum_count} += $tmp_val;
+				(($data[20] - $start_vals{$data[1]}{$data[4]}[20]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[20] - $start_vals{$data[1]}{$data[4]}[20]);
+				$database_stat{$data[4]}{autovacuum_count} .= '[' . $data[0] . ',' . $tmp_val . '],';
+				$all_database_stat{$data[1]}{$data[0]}{autovacuum_count} += $tmp_val;
+				(($data[21] - $start_vals{$data[1]}{$data[4]}[21]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[21] - $start_vals{$data[1]}{$data[4]}[21]);
+				$database_stat{$data[1]}{$data[4]}{analyze_count} .= '[' . $data[0] . ',' . $tmp_val . '],';
+				$all_database_stat{$data[1]}{$data[0]}{analyze_count} += $tmp_val;
+				(($data[22] - $start_vals{$data[1]}{$data[4]}[22]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[22] - $start_vals{$data[1]}{$data[4]}[22]);
+				$database_stat{$data[1]}{$data[4]}{autoanalyze_count} .= '[' . $data[0] . ',' . $tmp_val . '],';
+				$all_database_stat{$data[1]}{$data[0]}{autoanalyze_count} += $tmp_val;
 				$do_vacuum = 1;
 			}
 			if ($old_time && ($old_time < $data[0])) {
-				$database_stat{all}{seq_scan} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$old_time}{seq_scan}/$interval)) . '],';
-				$database_stat{all}{idx_scan} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$old_time}{idx_scan}/$interval)) . '],';
-				if ($#data > 18) {
-					$database_stat{all}{vacuum_count} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$old_time}{vacuum_count}/$interval)) . '],';
-					$database_stat{all}{autovacuum_count} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$old_time}{autovacuum_count}/$interval)) . '],';
-					$database_stat{all}{analyze_count} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$old_time}{analyze_count}/$interval)) . '],';
-					$database_stat{all}{autoanalyze_count} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$old_time}{autoanalyze_count}/$interval)) . '],';
+				$database_stat{$data[1]}{all}{seq_scan} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{seq_scan}/$interval)) . '],';
+				$database_stat{$data[1]}{all}{idx_scan} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{idx_scan}/$interval)) . '],';
+				$database_stat{$data[1]}{all}{idx_scan_vs_seq_scan} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{idx_scan}*100)/(($all_database_stat{$data[1]}{$old_time}{idx_scan}+$all_database_stat{$data[1]}{$old_time}{seq_scan}) || 1)) . '],';
+				$database_stat{$data[1]}{all}{n_tup_ins} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{n_tup_ins}/$interval)) . '],';
+				$database_stat{$data[1]}{all}{n_tup_upd} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{n_tup_upd}/$interval)) . '],';
+				$database_stat{$data[1]}{all}{n_tup_del} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{n_tup_del}/$interval)) . '],';
+				$database_stat{$data[1]}{all}{n_tup_hot_upd} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{n_tup_hot_upd}/$interval)) . '],';
+				$database_stat{$data[1]}{all}{n_live_tup} .= '[' . $old_time . ',' . $all_database_stat{$data[1]}{$old_time}{n_live_tup} . '],';
+				$database_stat{$data[1]}{all}{n_dead_tup} .= '[' . $old_time . ',' . $all_database_stat{$data[1]}{$old_time}{n_dead_tup} . '],';
+				$database_stat{$data[1]}{all}{live_vs_dead} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{n_dead_tup}*100)/(($all_database_stat{$data[1]}{$old_time}{n_dead_tup}+$all_database_stat{$data[1]}{$old_time}{n_live_tup}) || 1)) . '],';
+				if ($#data > 19) {
+					$database_stat{$data[1]}{all}{vacuum_count} .= '[' . $old_time . ',' . $all_database_stat{$data[1]}{$old_time}{vacuum_count} . '],';
+					$database_stat{$data[1]}{all}{autovacuum_count} .= '[' . $old_time . ',' . $all_database_stat{$data[1]}{$old_time}{autovacuum_count} . '],';
+					$database_stat{$data[1]}{all}{analyze_count} .= '[' . $old_time . ',' . $all_database_stat{$data[1]}{$old_time}{analyze_count} . '],';
+					$database_stat{$data[1]}{all}{autoanalyze_count} .= '[' . $old_time . ',' . $all_database_stat{$data[1]}{$old_time}{autoanalyze_count} . '],';
 				}
-				delete $all_database_stat{$old_time};
+				delete $all_database_stat{$data[1]}{$old_time};
 				$old_time = $data[0];
 			} elsif (!$old_time) {
 				$old_time = $data[0];
 			}
-                        @{$start_vals{$data[3]}} = ();
-                        push(@{$start_vals{$data[3]}}, @data);
+                        @{$start_vals{$data[1]}{$data[4]}} = ();
+                        push(@{$start_vals{$data[1]}{$data[4]}}, @data);
 		}
-		foreach my $t (sort {$a <=> $b} %all_database_stat) {
-			$all_database_stat{$t}{seq_scan} ||= 0;
-			$all_database_stat{$t}{idx_scan} ||= 0;
-			$database_stat{all}{seq_scan} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$t}{seq_scan}/$interval)) . '],';
-			$database_stat{all}{idx_scan} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$t}{idx_scan}/$interval)) . '],';
-			$database_stat{all}{vacuum_count} ||= 0;
-			$database_stat{all}{autovacuum_count} ||= 0;
-			$database_stat{all}{analyze_count} ||= 0;
-			$database_stat{all}{autoanalyze_count} ||= 0;
-			if (exists $all_database_stat{$t}{vacuum_count}) {
-				$database_stat{all}{vacuum_count} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$t}{vacuum_count}/$interval)) . '],';
-				$database_stat{all}{autovacuum_count} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$t}{autovacuum_count}/$interval)) . '],';
-				$database_stat{all}{analyze_count} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$t}{analyze_count}/$interval)) . '],';
-				$database_stat{all}{autoanalyze_count} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$t}{autoanalyze_count}/$interval)) . '],';
-			}
-		}
-		%all_database_stat = ();
 
-#		# Open filehandle to cluster file
-#		my $fhtable = new IO::File ">$OUTPUT_DIR/tables.html";
-#		if (not defined $fhtable) {
-#			die "FATAL: can't write to $OUTPUT_DIR/tables.html, $!\n";
-#		}
-#		&html_header($fhtable);
-#		print $fhtable "<ul id=\"slides\">\n";
-#		foreach my $id (sort {$a <=> $b} keys %data_info) {
-#			foreach my $tb (sort keys %database_stat) {
-#				next if (($#INCLUDE_TB >= 0) && ($tb ne 'all') && (!grep(/^$tb$/, @INCLUDE_TB)));
-#				if ($data_info{$id}{name} eq 'table-indexes') {
-#					$database_stat{$tb}{seq_scan} =~ s/,$//;
-#					$database_stat{$tb}{idx_scan} =~ s/,$//;
-#					print $fhtable &flotr2_linegraph_array($IDX++, 'table-indexes', \%{$data_info{$id}}, $data_info{$id}{title} . " ($tb)", $database_stat{$tb}{seq_scan}, $database_stat{$tb}{idx_scan});
-#					delete $database_stat{$tb}{idx_scan};
-#					delete $database_stat{$tb}{seq_scan};
-#				} elsif ( $do_vacuum && ($data_info{$id}{name} eq 'table-vacuums-analyzes') ) {
-#					$database_stat{$tb}{vacuum_count} =~ s/,$//;
-#					$database_stat{$tb}{autovacuum_count} =~ s/,$//;
-#					$database_stat{$tb}{analyze_count} =~ s/,$//;
-#					$database_stat{$tb}{autoanalyze_count} =~ s/,$//;
-#					print $fhtable &flotr2_linegraph_array($IDX++, 'table-vacuums-analyzes', \%{$data_info{$id}}, $data_info{$id}{title} . " ($tb)", $database_stat{$tb}{analyze_count}, $database_stat{$tb}{autoanalyze_count}, $database_stat{$tb}{vacuum_count}, $database_stat{$tb}{autovacuum_count});
-#					delete $database_stat{$tb}{vacuum_count};
-#					delete $database_stat{$tb}{autovacuum_count};
-#					delete $database_stat{$tb}{analyze_count};
-#					delete $database_stat{$tb}{autoanalyze_count};
-#				}
-#			}
-#		}
-#		# Terminate cluster statistics file
-#		print $fhtable "</ul>\n";
-#		&html_footer($fhtable);
-#		$fhtable->close;
+		foreach my $db (keys %all_database_stat) {
+			foreach my $t (sort {$a <=> $b} keys %{$all_database_stat{$db}}) {
+				foreach (qw/seq_scan idx_scan n_tup_ins n_tup_upd n_tup_del n_tup_hot_upd n_live_tup n_dead_tup vacuum_count autovacuum_count analyze_count autoanalyze_count/) {
+					$all_database_stat{$db}{$t}{$_} ||= 0;
+				}
+				$database_stat{$db}{all}{seq_scan} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{seq_scan}/$interval)) . '],';
+				$database_stat{$db}{all}{idx_scan} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{idx_scan}/$interval)) . '],';
+				$database_stat{$db}{all}{idx_scan_vs_seq_scan} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{idx_scan}*100)/(($all_database_stat{$db}{$t}{idx_scan}+$all_database_stat{$db}{$t}{seq_scan}) || 1)) . '],';
+				$database_stat{$db}{all}{n_tup_ins} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{n_tup_ins}/$interval)) . '],';
+				$database_stat{$db}{all}{n_tup_upd} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{n_tup_upd}/$interval)) . '],';
+				$database_stat{$db}{all}{n_tup_del} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{n_tup_del}/$interval)) . '],';
+				$database_stat{$db}{all}{n_tup_hot_upd} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{n_tup_hot_upd}/$interval)) . '],';
+				$database_stat{$db}{all}{n_live_tup} .= '[' . $t . ',' . $all_database_stat{$db}{$t}{n_live_tup} . '],';
+				$database_stat{$db}{all}{n_dead_tup} .= '[' . $t . ',' . $all_database_stat{$db}{$t}{n_dead_tup} . '],';
+				$database_stat{$db}{all}{live_vs_dead} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{n_dead_tup}*100)/(($all_database_stat{$db}{$t}{n_dead_tup}+$all_database_stat{$db}{$t}{n_live_tup}) || 1)) . '],';
+				foreach (qw/vacuum_count autovacuum_count analyze_count autoanalyze_count/) {
+					if (exists $all_database_stat{$db}{$t}{$_}) {
+						$database_stat{$db}{all}{$_} .= '[' . $t . ',' . $all_database_stat{$db}{$t}{$_} . '],';
+					}
+				}
+			}
+			delete $all_database_stat{$db};
+
+			foreach my $id (sort {$a <=> $b} keys %data_info) {
+				next if ($data_info{$id}{name} !~ /^table-/);
+				# Open filehandle to cluster file
+				my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
+				if (not defined $fhtable) {
+					die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
+				}
+				&html_header($fhtable);
+				$HAS_TABLE_STATS{$db} = 1;
+				my $table_header = '';
+				my $colspan = '';
+				if ($data_info{$id}{name} eq 'table-indexes') {
+					$table_header = qq{
+						<th>Sequencial scan</th>
+						<th>Index scan</th>
+						<th>Index vs Sequencial</th>
+};
+					$colspan = ' colspan="5"';
+				} elsif ($data_info{$id}{name} eq 'table-query-tuples') {
+					$table_header = qq{
+						<th>Inserted</th>
+						<th>Updated</th>
+						<th>Deleted</th>
+						<th>Hot updated</th>
+};
+					$colspan = ' colspan="6"';
+				} elsif ($data_info{$id}{name} eq 'table-kind-tuples') {
+					$table_header = qq{
+						<th>Live tuples</th>
+						<th>Dead tuples</th>
+						<th>Dead vs Live</th>
+};
+					$colspan = ' colspan="5"';
+				} elsif ( $do_vacuum && ($data_info{$id}{name} eq 'table-vacuums-analyzes') ) {
+					$table_header = qq{
+						<th>vacuum</th>
+						<th>autovacuum</th>
+						<th>analyze</th>
+						<th>autoanalyze</th>
+};
+					$colspan = ' colspan="6"';
+				}
+				print $fhtable qq{
+		<ul id="slides">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+			<div class="span11">
+				<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
+					<thead>
+						<tr>
+							<th>Table</th>
+							$table_header
+							<th>Graph</th>
+						</tr>
+					</thead>
+					<tbody>
+};
+				my $found_table_stat = 0;
+				foreach my $tb (sort keys %{$database_stat{$db}}) {
+					next if ($tb eq 'all');
+					next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
+					my $table_data = '';
+					if ($data_info{$id}{name} eq 'table-indexes') {
+						if (!$cumul_database_stat{$db}{$tb}{seq_scan} && !$cumul_database_stat{$db}{$tb}{idx_scan}) {
+							next;
+						}
+						$found_table_stat = 1;
+						$database_stat{$db}{$tb}{seq_scan} =~ s/,$//;
+						$database_stat{$db}{$tb}{idx_scan} =~ s/,$//;
+						$database_stat{$db}{$tb}{idx_scan_vs_seq_scan} =~ s/,$//;
+                                                my $table_graph = &flotr2_linegraph_array($IDX++, 'table-indexes', \%{$data_info{$id}}, $tb, $database_stat{$db}{$tb}{seq_scan}, $database_stat{$db}{$tb}{idx_scan},$database_stat{$db}{all}{idx_scan_vs_seq_scan});
+						$table_graph ||= 'No graph';
+						foreach ('idx_scan','seq_scan','idx_scan_vs_seq_scan') {
+							delete $database_stat{$db}{$tb}{$_};
+							$cumul_database_stat{$db}{$tb}{$_} ||= 0;
+						}
+						$table_data = qq{<tr><th>$tb</th><td>$cumul_database_stat{$db}{$tb}{seq_scan}</td><td>$cumul_database_stat{$db}{$tb}{idx_scan}</td><td>$cumul_database_stat{$db}{$tb}{idx_scan_vs_seq_scan}%</td><td>$table_graph</td></tr>};
+						$table_graph ||= 'No graph';
+					} elsif ($data_info{$id}{name} eq 'table-query-tuples') {
+						if (!$cumul_database_stat{$db}{$tb}{n_tup_ins} && !$cumul_database_stat{$db}{$tb}{n_tup_upd} && !$cumul_database_stat{$db}{$tb}{n_tup_del} && !$cumul_database_stat{$db}{$tb}{n_tup_hot_upd}) {
+							next;
+						}
+						$found_table_stat = 1;
+						$database_stat{$db}{$tb}{n_tup_ins} =~ s/,$//;
+						$database_stat{$db}{$tb}{n_tup_upd} =~ s/,$//;
+						$database_stat{$db}{$tb}{n_tup_del} =~ s/,$//;
+						$database_stat{$db}{$tb}{n_tup_hot_upd} =~ s/,$//;
+						my $table_graph = &flotr2_linegraph_array($IDX++, 'table-query-tuples', \%{$data_info{$id}}, $tb, $database_stat{$db}{$tb}{n_tup_ins}, $database_stat{$db}{$tb}{n_tup_upd}, $database_stat{$db}{$tb}{n_tup_del}, $database_stat{$db}{$tb}{n_tup_hot_upd});
+						$table_graph ||= 'No graph';
+						foreach ('n_tup_ins','n_tup_upd','n_tup_del','n_tup_hot_upd') {
+							delete $database_stat{$db}{$tb}{$_};
+							$cumul_database_stat{$db}{$tb}{$_} ||= 0;
+						}
+						$table_data = qq{<tr><th>$tb</th><td>$cumul_database_stat{$db}{$tb}{n_tup_ins}</td><td>$cumul_database_stat{$db}{$tb}{n_tup_upd}</td><td>$cumul_database_stat{$db}{$tb}{n_tup_del}</td><td>$cumul_database_stat{$db}{$tb}{n_tup_hot_upd}</td><td>$table_graph</td></tr>};
+					} elsif ($data_info{$id}{name} eq 'table-kind-tuples') {
+						if (!$cumul_database_stat{$db}{$tb}{n_live_tup} && !$cumul_database_stat{$db}{$tb}{n_dead_tup}) {
+							next;
+						}
+						$found_table_stat = 1;
+						$database_stat{$db}{$tb}{n_live_tup} =~ s/,$//;
+						$database_stat{$db}{$tb}{n_dead_tup} =~ s/,$//;
+						$database_stat{$db}{$tb}{live_vs_dead} =~ s/,$//;
+						my $table_graph = &flotr2_linegraph_array($IDX++, 'table-kind-tuples', \%{$data_info{$id}}, $tb, $database_stat{$db}{$tb}{n_live_tup}, $database_stat{$db}{$tb}{n_dead_tup}, $database_stat{$db}{$tb}{live_vs_dead});
+						$table_graph ||= 'No graph';
+						foreach ('n_live_tup','n_dead_tup','live_vs_dead') {
+							delete $database_stat{$db}{$tb}{$_};
+							$cumul_database_stat{$db}{$tb}{$_} ||= 0;
+						}
+						$table_data = qq{<tr><th>$tb</th><td>$cumul_database_stat{$db}{$tb}{n_live_tup}</td><td>$cumul_database_stat{$db}{$tb}{n_dead_tup}</td><td>$cumul_database_stat{$db}{$tb}{live_vs_dead}%</td><td>$table_graph</td></tr>};
+					} elsif ( $do_vacuum && ($data_info{$id}{name} eq 'table-vacuums-analyzes') ) {
+						if (!$cumul_database_stat{$db}{$tb}{vacuum_count} && !$cumul_database_stat{$db}{$tb}{autovacuum_count} && !$cumul_database_stat{$db}{$tb}{analyze_count} && !$cumul_database_stat{$db}{$tb}{analyze_count}) {
+							next;
+						}
+						$found_table_stat = 1;
+						$database_stat{$db}{$tb}{vacuum_count} =~ s/,$// if (exists $database_stat{$db}{$tb}{vacuum_count});
+						$database_stat{$db}{$tb}{autovacuum_count} =~ s/,$// if (exists $database_stat{$db}{$tb}{autovacuum_count});
+						$database_stat{$db}{$tb}{analyze_count} =~ s/,$// if (exists $database_stat{$db}{$tb}{analyze_count});
+						$database_stat{$db}{$tb}{autoanalyze_count} =~ s/,$// if (exists $database_stat{$db}{$tb}{autoanalyze_count});
+						my $table_graph = &flotr2_linegraph_array($IDX++, 'table-vacuums-analyzes', \%{$data_info{$id}}, $tb, $database_stat{$db}{$tb}{analyze_count}, $database_stat{$db}{$tb}{autoanalyze_count}, $database_stat{$db}{$tb}{vacuum_count}, $database_stat{$db}{$tb}{autovacuum_count});
+						$table_graph ||= 'No graph';
+						foreach ('vacuum_count','autovacuum_count','analyze_count','autoanalyze_count') {
+							delete $database_stat{$db}{$tb}{$_};
+							$cumul_database_stat{$db}{$tb}{$_} ||= 0;
+						}
+						$table_data = qq{<tr><th>$tb</th><td>$cumul_database_stat{$db}{$tb}{vacuum_count}</td><td>$cumul_database_stat{$db}{$tb}{autovacuum_count}</td><td>$cumul_database_stat{$db}{$tb}{analyze_count}</td><td>$cumul_database_stat{$db}{$tb}{autoanalyze_count}</td><td>$table_graph</td></tr>};
+					}
+					if ($table_data) {
+						print $fhtable qq{$table_data} if ($table_data);
+					}
+				}
+				if (!$found_table_stat) {
+					print $fhtable qq{<tr><td$colspan><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td></tr>};
+				}
+				print $fhtable qq{
+					</tbody>
+				</table>
+			</div>
+		</div>
+};
+				# Terminate cluster statistics file
+				print $fhtable "</ul>\n";
+				&html_footer($fhtable);
+				$fhtable->close;
+			}
+			delete $database_stat{$db};
+		}
 	}
 
 	# Compute graphs of bgwriter cluster statistics
@@ -2353,7 +2534,48 @@ sub html_header
 
  <body>
 
-<!-- Fixed navbar -->
+<!-- Load navbar -->
+<div id="navigation"></div>
+<script>
+\$("#navigation").load("menu.html");
+</script>
+
+<div class="container" id="main-container">
+};
+
+
+}
+
+sub html_footer
+{
+	my $fh = shift();
+
+        print $fh qq{
+
+      <hr>
+
+      <footer>
+        <p>&copy; Gilles Darold 2012-2014</p>
+	<p>Report generated by <a href="http://pgcluu.darold.net/">$PROGRAM</a> $VERSION.</p>
+      </footer>
+
+    </div><!--/.container-->
+  </body>
+</html>
+};
+
+}
+
+sub generate_html_menu
+{
+        my $date = localtime(time);
+
+	my $fh = new IO::File ">$OUTPUT_DIR/menu.html";
+	if (not defined $fh) {
+		die "FATAL: can't write menu HTML file for reports.\n";
+	}
+        print $fh qq{
+<!-- Fixed navbar imported using jQuery in $PROGRAM html files-->
     <div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
       <div class="container">
         <div class="navbar-header">
@@ -2390,8 +2612,6 @@ sub html_header
 	if (!-e "$INPUT_DIR/pg_tablespace_size.csv" || -z "$INPUT_DIR/pg_tablespace_size.csv") {
 		$disable_tablespace = ' class="disabled"';
 	}
-
-	my $global_info = 'Infos sur le system';
 
 	if ($#DATABASE_LIST >= 0) {
 		print $fh qq{
@@ -2438,10 +2658,28 @@ sub html_header
 		if (-e "$INPUT_DIR/sysinfo.txt") {
 			print $fh qq{
 		      <li id="menu-database-info"><a href="database-$db.html#database-info">Database info</a></li>
-		      <li class="divider"></li>
+};
+		}
+		if (exists $HAS_TABLE_STATS{$db}) {
+			print $fh qq{
+			<li id="menu-$db-table" class="dropdown-submenu">
+			   <a href="#" tabindex="-1">Tables statistics </a>
+			      <ul class="dropdown-menu">
+};
+			my %data_info = %{$DB_GRAPH_INFOS{'pg_stat_all_tables.csv'}};
+			foreach my $id (sort {$a <=> $b} keys %data_info) {
+				next if ($data_info{$id}{name} !~ /^table-/);
+				print $fh qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+			}
+			print $fh qq{
+			  </ul>
+		      </li>
 };
 		}
 		print $fh qq{
+		      <li class="divider"></li>
 		      <li id="menu-database-size"><a href="database-$db.html#database-size">Database size</a></li>
 		      <li id="menu-database-backends"><a href="database-$db.html#database-backends">Connections</a></li>
 		      <li id="menu-database-connections"><a href="database-$db.html#database-connections">Connections by type</a></li>
@@ -2546,31 +2784,11 @@ sub html_header
       </div>
     </div>
 
-<div class="container" id="main-container">
 };
 
 
 }
 
-sub html_footer
-{
-	my $fh = shift();
-
-        print $fh qq{
-
-      <hr>
-
-      <footer>
-        <p>&copy; Gilles Darold 2012-2014</p>
-	<p>Report generated by <a href="http://pgcluu.darold.net/">$PROGRAM</a> $VERSION.</p>
-      </footer>
-
-    </div><!--/.container-->
-  </body>
-</html>
-};
-
-}
 
 sub device_in_report
 {
@@ -3488,7 +3706,7 @@ sub flotr2_linegraph
 
 	my $description = $infos->{description} || '';
 	my $str = '';
-	if ($divid !~ /\+$/) {
+	if (($divid !~ /\+$/) && ($divid !~ /^table-/)) {
 		$str = qq{
 <li class="slide$active" id="$divid-slide">
       <div id="$divid"><br/><br/><br/><br/></div>
@@ -3505,7 +3723,7 @@ sub flotr2_linegraph
 		<p>$description</p>
               </div>
               <div class="panel-body">
-};
+} if ($divid !~ /^table-/);
 	my $yaxis2 = '';
 	if ($infos->{y2label}) {
 		my $color = '';
@@ -3526,23 +3744,35 @@ sub flotr2_linegraph
 	$dateTracker_dataopts =~ s/,$//;
 	$dateTracker_dataopts = "[$dateTracker_dataopts]";
 
+	my $cssgraph = 'linegraph';
+	my $write_buttons = "write_buttons($buttonid);";
+	my $hnoTicks = 20;
+	my $vnoTicks = 10;
+	if ($divid =~ /^table-/) {
+		$cssgraph = 'smallgraph';
+		$write_buttons = '';
+		$hnoTicks = 15;
+		$vnoTicks = 4;
+	}
+
 	if ($#{$data} >= 0) {
 		$str .= <<EOF;
-<div id="$divid$buttonid" class="linegraph"></div>
+<div id="$divid$buttonid" class="$cssgraph"></div>
 <script type="text/javascript">
 (function mouse_zoom(container) {
 
-    write_buttons($buttonid);
+    $write_buttons
 @$data
     var options = {
         xaxis: {
 	    tickDecimals: 0,
-	    noTicks: 20,
+	    noTicks: $hnoTicks,
 	    mode: "time",
 	    labelsAngle: 45
         },
         yaxis: {
             mode: "normal",
+	    noTicks: $vnoTicks,
             title: "$ylabel",
 	    tickFormatter: function(val){ return pretty_print_number(val,'$type') },
 
@@ -3630,10 +3860,11 @@ EOF
               </div>
             </div><!--/span-->
       </div>
-};
+} if ($divid !~ /^table-/);
 	$str .= qq{
 </li>
-} if ($divid !~ /^(pgbouncer|tablespace)/);
+} if ($divid !~ /^(pgbouncer|tablespace|table-)/);
+
 	return $str;
 
 }
@@ -3946,6 +4177,21 @@ ul#slides li div div {
 	box-shadow:3px 3px 6px 2px #A9A9A9;
 	-moz-box-shadow:3px 3px 6px 2px #A9A9A9;
 	-webkit-box-shadow:3px 3px 6px #A9A9A9;
+}
+
+.smallgraph {
+        width : 600px;
+        height: 150px;
+        background:#FFFFFF;
+        border:4px double white;
+        padding:0 10px;
+        margin:30px 0 30px 0;
+        border-radius:10px;
+        -moz-border-radius:10px;
+        -webkit-border-radius:10px;
+        box-shadow:3px 3px 6px 2px #A9A9A9;
+        -moz-box-shadow:3px 3px 6px 2px #A9A9A9;
+        -webkit-box-shadow:3px 3px 6px #A9A9A9;
 }
 
 .dropdown-submenu{position:relative;}

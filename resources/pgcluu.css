@@ -55,6 +55,21 @@ ul#slides li div div {
 	-webkit-box-shadow:3px 3px 6px #A9A9A9;
 }
 
+.smallgraph {
+        width : 600px;
+        height: 150px;
+        background:#FFFFFF;
+        border:4px double white;
+        padding:0 10px;
+        margin:30px 0 30px 0;
+        border-radius:10px;
+        -moz-border-radius:10px;
+        -webkit-border-radius:10px;
+        box-shadow:3px 3px 6px 2px #A9A9A9;
+        -moz-box-shadow:3px 3px 6px 2px #A9A9A9;
+        -webkit-box-shadow:3px 3px 6px #A9A9A9;
+}
+
 .dropdown-submenu{position:relative;}
 .dropdown-submenu>.dropdown-menu{top:0;left:100%;margin-top:-6px;margin-left:-1px;-webkit-border-radius:0 6px 6px 6px;-moz-border-radius:0 6px 6px 6px;border-radius:0 6px 6px 6px;}
 .dropdown-submenu:hover>.dropdown-menu{display:block;}
@@ -66,7 +81,7 @@ ul#slides li div div {
 .panel-body { background-color: #ffffff; font-size: 1.2em;}
 .panel-footer { background-color: #f5f5f5}
 .panel-height { height: 300px}
-.panel-xlheight { height: 400px}
+.panel-xlheight { height: 450px}
 .btn { margin-top: 10px};
 .key-figures ul {
 	margin: 0;
@@ -84,24 +99,28 @@ ul#slides li div div {
 .figure-label {
 	color: #666;
 }
-
-.mouse-figures {
-        font-weight: bold;
-        font-size: 1.0em;
-        margin: 0;
-        padding: 0;
+.figure-date {
+	color: #333;
+	font-size: 0.8em;
 }
 
+.mouse-figures {
+	font-weight: bold;
+	font-size: 1.0em;
+	margin: 0;
+	padding: 0;
+}       
+
 .mfigure {
-        font-weight: bold;
-        font-size: 1.2em;
-        color:#d26115;
+	font-weight: bold;
+	font-size: 1.2em;
+	color:#d26115;
 }
 
 .mfigure small {
-        font-weight: bold;
-        font-size: 0.6em;
-        color:#ffffff;
+	font-weight: bold;
+	font-size: 0.6em;
+	color:#ffffff;
 }
 
 /*
@@ -145,3 +164,4 @@ ul#slides li div div {
     width: 50%; /* 6 columns */
   }
 }
+
