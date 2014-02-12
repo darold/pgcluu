@@ -82,11 +82,13 @@ my %METRICS_COMMANDS = (
 	},
 	'all_tables_stats' => {
 		'output' => 'pg_stat_all_tables.csv',
-		'command' => 'dump_pgstattables'
+		'command' => 'dump_pgstattables',
+		'repeat'  => 1,
 	},
 	'user_tables_stats' => {
 		'output' => 'pg_stat_user_tables.csv',
-		'command' => 'dump_pgstattables_user'
+		'command' => 'dump_pgstattables_user',
+		'repeat'  => 1,
 	},
 	'all_tables_io_stats' => {
 		'output' => 'pg_statio_all_tables.csv',
