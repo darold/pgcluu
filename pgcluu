@@ -240,7 +240,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'table-indexes',
 			'title' => 'Sequencial vs Index scan on %s',
-			'description' => 'Sequencial scan versus index scan per table',
+			'description' => 'Number of Sequencial scan versus index scan per table during the audit period',
 			'ylabel' => 'Number per second',
 			'legends' => ['sequencial scan','index scan','% index scan ratio'],
 			'y2label' => 'Percent',
@@ -250,7 +250,7 @@ my %DB_GRAPH_INFOS = (
 		'2' => {
 			'name' =>  'table-vacuums-analyzes',
 			'title' => 'Analyze/vacuums count on %s',
-			'description' => 'Number of analyze, autoanalyze, vacuum and autovacuum count per table',
+			'description' => 'Number of analyze, autoanalyze, vacuum and autovacuum count per table during the audit period',
 			'ylabel' => 'Number',
 			'legends' => ['Analyze','Autoanalyze','Vacuum','Autovacuum'],
 			'active' => 1,
@@ -259,7 +259,7 @@ my %DB_GRAPH_INFOS = (
 		'3' => {
 			'name' =>  'table-query-tuples',
 			'title' => 'Insert/update/delete and hot update tuples on %s',
-			'description' => 'Number of Insert/update/delete and hot update tuples count per table',
+			'description' => 'Number of Insert/update/delete and hot update tuples count per table during the audit period',
 			'ylabel' => 'Number per seconde',
 			'legends' => ['Insert','Update','Delete','Hot update'],
 			'active' => 1,
@@ -268,7 +268,7 @@ my %DB_GRAPH_INFOS = (
 		'4' => {
 			'name' =>  'table-kind-tuples',
 			'title' => 'Live vs dead tuples on %s',
-			'description' => 'Number of live and dead tuples per table',
+			'description' => 'Number of live and dead tuples per table at end of the audit period',
 			'ylabel' => 'Number',
 			'legends' => ['Live','Dead','% Bloat ratio'],
 			'y2label' => 'Percent',
@@ -331,7 +331,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'table-size',
 			'title' => 'Size of object %s',
-			'description' => 'Disk space used by the table or index with number of rows if the object is a table.',
+			'description' => 'Disk space used by the table or index with number of rows if the object is a table at end of the audit.',
 			'ylabel' => 'Size',
 			'legends' => ['Object size', 'Number of tuples' ],
 			'y2label' => 'Number',
@@ -1374,10 +1374,7 @@ sub compute_dbstat_graph
 
 	# Compute graphs of database size statistics
 	if (!$NO_TB_STAT && ($file =~ /pg_stat_(all|user)_tables.csv/)) {
-		my %database_stat = ();
-		my %all_database_stat = ();
 		my %cumul_database_stat = ();
-		my %last_all_database_stat = ();
 		my %start_vals = ();
 		my $tmp_val = 0;
 		my $do_vacuum = 0;
@@ -1386,112 +1383,41 @@ sub compute_dbstat_graph
 			my @data = split(/;/);
 			next if (!&normalyze_line(\@data));
 
-#Top ten tables with the worst ratio sequential versus index scan
-#Top ten tables with the most autovacuum and autoanalyze
-
 			# timestamp | dbname | relid | schemaname | relname | seq_scan | seq_tup_read | idx_scan | idx_tup_fetch | n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | last_vacuum | last_autovacuum | last_analyze | last_autoanalyze | vacuum_count | autovacuum_count | analyze_count | autoanalyze_count
 			$data[4] = "$data[3].$data[4]";
 			push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
 
 			# Get database statistics
 			(($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]);
-			$database_stat{$data[1]}{$data[4]}{seq_scan} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-			$all_database_stat{$data[1]}{$data[0]}{seq_scan} += $tmp_val;
 			$cumul_database_stat{$data[1]}{$data[4]}{seq_scan} += $tmp_val;
-			my $save_seq_scan = $tmp_val;
 			(($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]);
-			$database_stat{$data[1]}{$data[4]}{idx_scan} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-			$all_database_stat{$data[1]}{$data[0]}{idx_scan} += $tmp_val;
 			$cumul_database_stat{$data[1]}{$data[4]}{idx_scan} += $tmp_val;
-			my $save_idx_scan = $tmp_val;
-			$database_stat{$data[1]}{$data[4]}{idx_scan_vs_seq_scan} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($save_idx_scan*100)/(($save_idx_scan+$save_seq_scan) || 1) ) . '],';
 			(($data[9] - $start_vals{$data[1]}{$data[4]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[4]}[9]);
-			$database_stat{$data[1]}{$data[4]}{n_tup_ins} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
 			$cumul_database_stat{$data[1]}{$data[4]}{n_tup_ins} += $tmp_val;
-			$all_database_stat{$data[1]}{$data[0]}{n_tup_ins} += $tmp_val;
 			(($data[10] - $start_vals{$data[1]}{$data[4]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[1]}{$data[4]}[10]);
-			$database_stat{$data[1]}{$data[4]}{n_tup_upd} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
 			$cumul_database_stat{$data[1]}{$data[4]}{n_tup_upd} += $tmp_val;
-			$all_database_stat{$data[1]}{$data[0]}{n_tup_upd} += $tmp_val;
 			(($data[11] - $start_vals{$data[1]}{$data[4]}[11]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[11] - $start_vals{$data[1]}{$data[4]}[11]);
 			$cumul_database_stat{$data[1]}{$data[4]}{n_tup_del} += $tmp_val;
-			$database_stat{$data[1]}{$data[4]}{n_tup_del} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-			$all_database_stat{$data[1]}{$data[0]}{n_tup_del} += $tmp_val;
 			(($data[12] - $start_vals{$data[1]}{$data[4]}[12]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[12] - $start_vals{$data[1]}{$data[4]}[12]);
-			$database_stat{$data[1]}{$data[4]}{n_tup_hot_upd} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-			$all_database_stat{$data[1]}{$data[0]}{n_tup_hot_upd} += $tmp_val;
 			$cumul_database_stat{$data[1]}{$data[4]}{n_tup_hot_upd} += $tmp_val;
-			$database_stat{$data[1]}{$data[4]}{n_live_tup} .= '[' . $data[0] . ',' . $data[13] . '],';
-			$all_database_stat{$data[1]}{$data[0]}{n_live_tup} += $data[13];
-			$cumul_database_stat{$data[1]}{$data[4]}{n_live_tup} = $data[13];
-			$database_stat{$data[1]}{$data[4]}{n_dead_tup} .= '[' . $data[0] . ',' . $data[14] . '],';
-			$all_database_stat{$data[1]}{$data[0]}{n_dead_tup} += $data[14];
 			$cumul_database_stat{$data[1]}{$data[4]}{n_dead_tup} = $data[14];
-			$database_stat{$data[1]}{$data[4]}{live_vs_dead} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($data[14]*100)/(($data[14]+$data[13]) || 1) ) . '],';
+			$cumul_database_stat{$data[1]}{$data[4]}{n_live_tup} = $data[13];
 			if ($#data > 19) {
 				(($data[19] - $start_vals{$data[1]}{$data[4]}[19]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[19] - $start_vals{$data[1]}{$data[4]}[19]);
-				$database_stat{$data[1]}{$data[4]}{vacuum_count} .= '[' . $data[0] . ',' . $tmp_val . '],';
-				$all_database_stat{$data[1]}{$data[0]}{vacuum_count} += $tmp_val;
+				$cumul_database_stat{$data[1]}{$data[4]}{vacuum_count} += $tmp_val;
 				(($data[20] - $start_vals{$data[1]}{$data[4]}[20]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[20] - $start_vals{$data[1]}{$data[4]}[20]);
-				$database_stat{$data[4]}{autovacuum_count} .= '[' . $data[0] . ',' . $tmp_val . '],';
-				$all_database_stat{$data[1]}{$data[0]}{autovacuum_count} += $tmp_val;
+				$cumul_database_stat{$data[1]}{$data[4]}{autovacuum_count} += $tmp_val;
 				(($data[21] - $start_vals{$data[1]}{$data[4]}[21]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[21] - $start_vals{$data[1]}{$data[4]}[21]);
-				$database_stat{$data[1]}{$data[4]}{analyze_count} .= '[' . $data[0] . ',' . $tmp_val . '],';
-				$all_database_stat{$data[1]}{$data[0]}{analyze_count} += $tmp_val;
+				$cumul_database_stat{$data[1]}{$data[4]}{analyze_count} += $tmp_val;
 				(($data[22] - $start_vals{$data[1]}{$data[4]}[22]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[22] - $start_vals{$data[1]}{$data[4]}[22]);
-				$database_stat{$data[1]}{$data[4]}{autoanalyze_count} .= '[' . $data[0] . ',' . $tmp_val . '],';
-				$all_database_stat{$data[1]}{$data[0]}{autoanalyze_count} += $tmp_val;
+				$cumul_database_stat{$data[1]}{$data[4]}{autoanalyze_count} += $tmp_val;
 				$do_vacuum = 1;
-			}
-			if ($old_time && ($old_time < $data[0])) {
-				$database_stat{$data[1]}{all}{seq_scan} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{seq_scan}/$interval)) . '],';
-				$database_stat{$data[1]}{all}{idx_scan} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{idx_scan}/$interval)) . '],';
-				$database_stat{$data[1]}{all}{idx_scan_vs_seq_scan} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{idx_scan}*100)/(($all_database_stat{$data[1]}{$old_time}{idx_scan}+$all_database_stat{$data[1]}{$old_time}{seq_scan}) || 1)) . '],';
-				$database_stat{$data[1]}{all}{n_tup_ins} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{n_tup_ins}/$interval)) . '],';
-				$database_stat{$data[1]}{all}{n_tup_upd} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{n_tup_upd}/$interval)) . '],';
-				$database_stat{$data[1]}{all}{n_tup_del} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{n_tup_del}/$interval)) . '],';
-				$database_stat{$data[1]}{all}{n_tup_hot_upd} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{n_tup_hot_upd}/$interval)) . '],';
-				$database_stat{$data[1]}{all}{n_live_tup} .= '[' . $old_time . ',' . $all_database_stat{$data[1]}{$old_time}{n_live_tup} . '],';
-				$database_stat{$data[1]}{all}{n_dead_tup} .= '[' . $old_time . ',' . $all_database_stat{$data[1]}{$old_time}{n_dead_tup} . '],';
-				$database_stat{$data[1]}{all}{live_vs_dead} .= '[' . $old_time . ',' . sprintf("%0.2f", ($all_database_stat{$data[1]}{$old_time}{n_dead_tup}*100)/(($all_database_stat{$data[1]}{$old_time}{n_dead_tup}+$all_database_stat{$data[1]}{$old_time}{n_live_tup}) || 1)) . '],';
-				if ($#data > 19) {
-					$database_stat{$data[1]}{all}{vacuum_count} .= '[' . $old_time . ',' . $all_database_stat{$data[1]}{$old_time}{vacuum_count} . '],';
-					$database_stat{$data[1]}{all}{autovacuum_count} .= '[' . $old_time . ',' . $all_database_stat{$data[1]}{$old_time}{autovacuum_count} . '],';
-					$database_stat{$data[1]}{all}{analyze_count} .= '[' . $old_time . ',' . $all_database_stat{$data[1]}{$old_time}{analyze_count} . '],';
-					$database_stat{$data[1]}{all}{autoanalyze_count} .= '[' . $old_time . ',' . $all_database_stat{$data[1]}{$old_time}{autoanalyze_count} . '],';
-				}
-				delete $all_database_stat{$data[1]}{$old_time};
-				$old_time = $data[0];
-			} elsif (!$old_time) {
-				$old_time = $data[0];
 			}
                         @{$start_vals{$data[1]}{$data[4]}} = ();
                         push(@{$start_vals{$data[1]}{$data[4]}}, @data);
 		}
 
-		foreach my $db (keys %all_database_stat) {
-			foreach my $t (sort {$a <=> $b} keys %{$all_database_stat{$db}}) {
-				foreach (qw/seq_scan idx_scan n_tup_ins n_tup_upd n_tup_del n_tup_hot_upd n_live_tup n_dead_tup vacuum_count autovacuum_count analyze_count autoanalyze_count/) {
-					$all_database_stat{$db}{$t}{$_} ||= 0;
-				}
-				$database_stat{$db}{all}{seq_scan} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{seq_scan}/$interval)) . '],';
-				$database_stat{$db}{all}{idx_scan} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{idx_scan}/$interval)) . '],';
-				$database_stat{$db}{all}{idx_scan_vs_seq_scan} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{idx_scan}*100)/(($all_database_stat{$db}{$t}{idx_scan}+$all_database_stat{$db}{$t}{seq_scan}) || 1)) . '],';
-				$database_stat{$db}{all}{n_tup_ins} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{n_tup_ins}/$interval)) . '],';
-				$database_stat{$db}{all}{n_tup_upd} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{n_tup_upd}/$interval)) . '],';
-				$database_stat{$db}{all}{n_tup_del} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{n_tup_del}/$interval)) . '],';
-				$database_stat{$db}{all}{n_tup_hot_upd} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{n_tup_hot_upd}/$interval)) . '],';
-				$database_stat{$db}{all}{n_live_tup} .= '[' . $t . ',' . $all_database_stat{$db}{$t}{n_live_tup} . '],';
-				$database_stat{$db}{all}{n_dead_tup} .= '[' . $t . ',' . $all_database_stat{$db}{$t}{n_dead_tup} . '],';
-				$database_stat{$db}{all}{live_vs_dead} .= '[' . $t . ',' . sprintf("%0.2f", ($all_database_stat{$db}{$t}{n_dead_tup}*100)/(($all_database_stat{$db}{$t}{n_dead_tup}+$all_database_stat{$db}{$t}{n_live_tup}) || 1)) . '],';
-				foreach (qw/vacuum_count autovacuum_count analyze_count autoanalyze_count/) {
-					if (exists $all_database_stat{$db}{$t}{$_}) {
-						$database_stat{$db}{all}{$_} .= '[' . $t . ',' . $all_database_stat{$db}{$t}{$_} . '],';
-					}
-				}
-			}
-			delete $all_database_stat{$db};
-
+		foreach my $db (keys %cumul_database_stat) {
 			foreach my $id (sort {$a <=> $b} keys %data_info) {
 				next if ($data_info{$id}{name} !~ /^table-/);
 				# Open filehandle to cluster file
@@ -1535,8 +1461,15 @@ sub compute_dbstat_graph
 					$colspan = ' colspan="6"';
 				}
 				print $fhtable qq{
-		<ul id="slides">
+	<ul id="slides">
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
 		<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database tables</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
 		<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
 			<div class="span11">
 				<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
@@ -1544,13 +1477,12 @@ sub compute_dbstat_graph
 						<tr>
 							<th>Table</th>
 							$table_header
-							<th>Graph</th>
 						</tr>
 					</thead>
 					<tbody>
 };
 				my $found_table_stat = 0;
-				foreach my $tb (sort keys %{$database_stat{$db}}) {
+				foreach my $tb (sort keys %{$cumul_database_stat{$db}}) {
 					next if ($tb eq 'all');
 					next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
 					my $table_data = '';
@@ -1559,64 +1491,40 @@ sub compute_dbstat_graph
 							next;
 						}
 						$found_table_stat = 1;
-						$database_stat{$db}{$tb}{seq_scan} =~ s/,$//;
-						$database_stat{$db}{$tb}{idx_scan} =~ s/,$//;
-						$database_stat{$db}{$tb}{idx_scan_vs_seq_scan} =~ s/,$//;
-                                                my $table_graph = &flotr2_linegraph_array($IDX++, 'table-indexes', \%{$data_info{$id}}, $tb, $database_stat{$db}{$tb}{seq_scan}, $database_stat{$db}{$tb}{idx_scan},$database_stat{$db}{all}{idx_scan_vs_seq_scan});
-						$table_graph ||= 'No graph';
-						foreach ('idx_scan','seq_scan','idx_scan_vs_seq_scan') {
-							delete $database_stat{$db}{$tb}{$_};
+						foreach ('idx_scan','seq_scan') {
+							#delete $database_stat{$db}{$tb}{$_};
 							$cumul_database_stat{$db}{$tb}{$_} ||= 0;
 						}
-						$table_data = qq{<tr><th>$tb</th><td>$cumul_database_stat{$db}{$tb}{seq_scan}</td><td>$cumul_database_stat{$db}{$tb}{idx_scan}</td><td>$cumul_database_stat{$db}{$tb}{idx_scan_vs_seq_scan}%</td><td>$table_graph</td></tr>};
-						$table_graph ||= 'No graph';
+						$cumul_database_stat{$db}{$tb}{idx_scan_vs_seq_scan} = sprintf("%0.2f", ($cumul_database_stat{$db}{$tb}{idx_scan}*100)/(($cumul_database_stat{$db}{$tb}{seq_scan}+$cumul_database_stat{$db}{$tb}{idx_scan})||1));
+						$table_data = qq{<tr><th>$tb</th><td>$cumul_database_stat{$db}{$tb}{seq_scan}</td><td>$cumul_database_stat{$db}{$tb}{idx_scan}</td><td>$cumul_database_stat{$db}{$tb}{idx_scan_vs_seq_scan}%</td></tr>};
 					} elsif ($data_info{$id}{name} eq 'table-query-tuples') {
 						if (!$cumul_database_stat{$db}{$tb}{n_tup_ins} && !$cumul_database_stat{$db}{$tb}{n_tup_upd} && !$cumul_database_stat{$db}{$tb}{n_tup_del} && !$cumul_database_stat{$db}{$tb}{n_tup_hot_upd}) {
 							next;
 						}
 						$found_table_stat = 1;
-						$database_stat{$db}{$tb}{n_tup_ins} =~ s/,$//;
-						$database_stat{$db}{$tb}{n_tup_upd} =~ s/,$//;
-						$database_stat{$db}{$tb}{n_tup_del} =~ s/,$//;
-						$database_stat{$db}{$tb}{n_tup_hot_upd} =~ s/,$//;
-						my $table_graph = &flotr2_linegraph_array($IDX++, 'table-query-tuples', \%{$data_info{$id}}, $tb, $database_stat{$db}{$tb}{n_tup_ins}, $database_stat{$db}{$tb}{n_tup_upd}, $database_stat{$db}{$tb}{n_tup_del}, $database_stat{$db}{$tb}{n_tup_hot_upd});
-						$table_graph ||= 'No graph';
 						foreach ('n_tup_ins','n_tup_upd','n_tup_del','n_tup_hot_upd') {
-							delete $database_stat{$db}{$tb}{$_};
 							$cumul_database_stat{$db}{$tb}{$_} ||= 0;
 						}
-						$table_data = qq{<tr><th>$tb</th><td>$cumul_database_stat{$db}{$tb}{n_tup_ins}</td><td>$cumul_database_stat{$db}{$tb}{n_tup_upd}</td><td>$cumul_database_stat{$db}{$tb}{n_tup_del}</td><td>$cumul_database_stat{$db}{$tb}{n_tup_hot_upd}</td><td>$table_graph</td></tr>};
+						$table_data = qq{<tr><th>$tb</th><td>$cumul_database_stat{$db}{$tb}{n_tup_ins}</td><td>$cumul_database_stat{$db}{$tb}{n_tup_upd}</td><td>$cumul_database_stat{$db}{$tb}{n_tup_del}</td><td>$cumul_database_stat{$db}{$tb}{n_tup_hot_upd}</td></tr>};
 					} elsif ($data_info{$id}{name} eq 'table-kind-tuples') {
 						if (!$cumul_database_stat{$db}{$tb}{n_live_tup} && !$cumul_database_stat{$db}{$tb}{n_dead_tup}) {
 							next;
 						}
 						$found_table_stat = 1;
-						$database_stat{$db}{$tb}{n_live_tup} =~ s/,$//;
-						$database_stat{$db}{$tb}{n_dead_tup} =~ s/,$//;
-						$database_stat{$db}{$tb}{live_vs_dead} =~ s/,$//;
-						my $table_graph = &flotr2_linegraph_array($IDX++, 'table-kind-tuples', \%{$data_info{$id}}, $tb, $database_stat{$db}{$tb}{n_live_tup}, $database_stat{$db}{$tb}{n_dead_tup}, $database_stat{$db}{$tb}{live_vs_dead});
-						$table_graph ||= 'No graph';
 						foreach ('n_live_tup','n_dead_tup','live_vs_dead') {
-							delete $database_stat{$db}{$tb}{$_};
 							$cumul_database_stat{$db}{$tb}{$_} ||= 0;
 						}
-						$table_data = qq{<tr><th>$tb</th><td>$cumul_database_stat{$db}{$tb}{n_live_tup}</td><td>$cumul_database_stat{$db}{$tb}{n_dead_tup}</td><td>$cumul_database_stat{$db}{$tb}{live_vs_dead}%</td><td>$table_graph</td></tr>};
+						$table_data = qq{<tr><th>$tb</th><td>$cumul_database_stat{$db}{$tb}{n_live_tup}</td><td>$cumul_database_stat{$db}{$tb}{n_dead_tup}</td><td>$cumul_database_stat{$db}{$tb}{live_vs_dead}%</td></tr>};
 					} elsif ( $do_vacuum && ($data_info{$id}{name} eq 'table-vacuums-analyzes') ) {
 						if (!$cumul_database_stat{$db}{$tb}{vacuum_count} && !$cumul_database_stat{$db}{$tb}{autovacuum_count} && !$cumul_database_stat{$db}{$tb}{analyze_count} && !$cumul_database_stat{$db}{$tb}{analyze_count}) {
 							next;
 						}
 						$found_table_stat = 1;
-						$database_stat{$db}{$tb}{vacuum_count} =~ s/,$// if (exists $database_stat{$db}{$tb}{vacuum_count});
-						$database_stat{$db}{$tb}{autovacuum_count} =~ s/,$// if (exists $database_stat{$db}{$tb}{autovacuum_count});
-						$database_stat{$db}{$tb}{analyze_count} =~ s/,$// if (exists $database_stat{$db}{$tb}{analyze_count});
-						$database_stat{$db}{$tb}{autoanalyze_count} =~ s/,$// if (exists $database_stat{$db}{$tb}{autoanalyze_count});
-						my $table_graph = &flotr2_linegraph_array($IDX++, 'table-vacuums-analyzes', \%{$data_info{$id}}, $tb, $database_stat{$db}{$tb}{analyze_count}, $database_stat{$db}{$tb}{autoanalyze_count}, $database_stat{$db}{$tb}{vacuum_count}, $database_stat{$db}{$tb}{autovacuum_count});
-						$table_graph ||= 'No graph';
 						foreach ('vacuum_count','autovacuum_count','analyze_count','autoanalyze_count') {
-							delete $database_stat{$db}{$tb}{$_};
+							#delete $database_stat{$db}{$tb}{$_};
 							$cumul_database_stat{$db}{$tb}{$_} ||= 0;
 						}
-						$table_data = qq{<tr><th>$tb</th><td>$cumul_database_stat{$db}{$tb}{vacuum_count}</td><td>$cumul_database_stat{$db}{$tb}{autovacuum_count}</td><td>$cumul_database_stat{$db}{$tb}{analyze_count}</td><td>$cumul_database_stat{$db}{$tb}{autoanalyze_count}</td><td>$table_graph</td></tr>};
+						$table_data = qq{<tr><th>$tb</th><td>$cumul_database_stat{$db}{$tb}{vacuum_count}</td><td>$cumul_database_stat{$db}{$tb}{autovacuum_count}</td><td>$cumul_database_stat{$db}{$tb}{analyze_count}</td><td>$cumul_database_stat{$db}{$tb}{autoanalyze_count}</td></tr>};
 					}
 					if ($table_data) {
 						print $fhtable qq{$table_data} if ($table_data);
@@ -1632,11 +1540,15 @@ sub compute_dbstat_graph
 		</div>
 };
 				# Terminate cluster statistics file
-				print $fhtable "</ul>\n";
+				print $fhtable qq{
+		</div>
+	    </div>
+	</div>
+	</ul>
+};
 				&html_footer($fhtable);
 				$fhtable->close;
 			}
-			delete $database_stat{$db};
 		}
 	}
 
@@ -1998,9 +1910,9 @@ sub compute_dbstat_graph
 	# Compute graphs of object size statistics
 	if ($file =~ /pg_class_size.csv/) {
 
-		my %class_stat = ();
-		my %cumul_class_stat = ();
+		my %end_class_stat = ();
 		my $total_val = 0;
+		my %table_changed = ();
 		while (<IN>) {
 			my @data = split(/;/);
 			next if (!&normalyze_line(\@data));
@@ -2012,20 +1924,21 @@ sub compute_dbstat_graph
 			# timestamp | dbname | nspname | relname | relkind | reltuples | relpages | relsize
 			my $size = $data[6]*8192;
 			$size = $data[7] if ($#data == 7);
-			# Get class size statistics
-			$class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{size} .= '[' . $data[0] . ',' . $size . '],';
-			$class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{tuples} .= '[' . $data[0] . ',' . $data[5] . '],';
-			$cumul_class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{size} = $size;
-			$cumul_class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{tuples} = $data[5];
-			$cumul_class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{width} = sprintf("%.2f", $size/($data[5]||1));
+			$end_class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{size} = $size;
+			$end_class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{tuples} = $data[5];
+			if ($data[5] > 0) {
+				$end_class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{width} = sprintf("%.2f", $size/$data[5]);
+			} else {
+				$end_class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{width} = '-';
+			}
 		}
 		my $id = &get_data_id('table-size', %data_info);
 		my %data = ();
-		foreach my $db (sort keys %class_stat) {
+		foreach my $db (sort keys %end_class_stat) {
 			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
-			foreach my $k (sort keys %{$class_stat{$db}}) {
+			foreach my $k (sort keys %{$end_class_stat{$db}}) {
 				# Count the number of object
-				$OVERALL_STATS{'class'}{$db}{$k} = scalar keys %{$class_stat{$db}{$k}};
+				$OVERALL_STATS{'class'}{$db}{$k} = scalar keys %{$end_class_stat{$db}{$k}};
 			}
 			foreach my $id (sort {$a <=> $b} keys %data_info) {
 				next if ($data_info{$id}{name} !~ /^table-/);
@@ -2040,6 +1953,7 @@ sub compute_dbstat_graph
 				my $colspan = '';
 				if ($data_info{$id}{name} eq 'table-size') {
 					$table_header = qq{
+						<th>Type</th>
 						<th>Size</th>
 						<th>Tuples</th>
 						<th>Avg width</th>
@@ -2047,8 +1961,15 @@ sub compute_dbstat_graph
 					$colspan = ' colspan="4"';
 				}
 				print $fhtable qq{
-		<ul id="slides">
+	<ul id="slides">
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
 		<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database tables</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
 		<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
 			<div class="span11">
 				<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
@@ -2056,32 +1977,23 @@ sub compute_dbstat_graph
 						<tr>
 							<th>Table</th>
 							$table_header
-							<th>Graph</th>
 						</tr>
 					</thead>
 					<tbody>
 };
 				my $found_table_stat = 0;
-				foreach my $k (sort keys %{$class_stat{$db}}) {
+				foreach my $k (sort keys %{$end_class_stat{$db}}) {
 					next if (($k ne 't') && ($k ne 'r') && ($data_info{$id}{name} eq 'table-size'));
-					foreach my $tb (sort {$cumul_class_stat{$db}{$k}{$b}{size} <=> $cumul_class_stat{$db}{$k}{$a}{size} } keys %{$cumul_class_stat{$db}{$k}}) {
+					foreach my $tb (sort {$end_class_stat{$db}{$k}{$b}{size} <=> $end_class_stat{$db}{$k}{$a}{size} } keys %{$end_class_stat{$db}{$k}}) {
+						next if (!$end_class_stat{$db}{$k}{$tb}{size} && !$end_class_stat{$db}{$k}{$tb}{tuples});
 						next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
 						my $table_data = '';
 						if ($data_info{$id}{name} eq 'table-size') {
-							if (!$cumul_class_stat{$db}{$k}{$tb}{size} && !$cumul_class_stat{$db}{$k}{$tb}{tuples}) {
-								next;
-							}
 							$found_table_stat = 1;
-							$class_stat{$db}{$k}{$tb}{size} =~ s/,$// if (exists $class_stat{$db}{$k}{$tb}{size});
-							$class_stat{$db}{$k}{$tb}{tuples} =~ s/,$// if (exists $class_stat{$db}{$k}{$tb}{tuples});
-							my $table_graph = &flotr2_linegraph_array($IDX++, 'table-size', \%{$data_info{$id}}, $tb, $class_stat{$db}{$k}{$tb}{size}, $class_stat{$db}{$k}{$tb}{tuples});
-							$table_graph ||= 'No graph';
 							foreach ('size','tuples','width') {
-								delete $class_stat{$db}{$k}{$tb}{$_};
-								$cumul_class_stat{$db}{$k}{$tb}{$_} ||= 0;
+								$end_class_stat{$db}{$k}{$tb}{$_} ||= 0;
 							}
-							$table_data = "<tr><th>$tb</th><td>" . &pretty_print_size($cumul_class_stat{$db}{$k}{$tb}{size}) . "</td><td>" . int($cumul_class_stat{$db}{$k}{$tb}{tuples}) . "</td><td>$cumul_class_stat{$db}{$k}{$tb}{width}</td><td>$table_graph</td></tr>\n";
-							$table_graph ||= 'No graph';
+							$table_data = "<tr><th>$tb</th><td>$RELKIND{$k}</td><td>" . &pretty_print_size($end_class_stat{$db}{$k}{$tb}{size}) . "</td><td>" . int($end_class_stat{$db}{$k}{$tb}{tuples}) . "</td><td>$end_class_stat{$db}{$k}{$tb}{width}</td></tr>\n";
 						}
 						if ($table_data) {
 							print $fhtable qq{$table_data} if ($table_data);
@@ -2098,7 +2010,13 @@ sub compute_dbstat_graph
 		</div>
 };
 				# Terminate cluster statistics file
-				print $fhtable "</ul>\n";
+				print $fhtable qq{
+		</div>
+		</div>
+	    </div>
+	</div>
+	</ul>
+};
 				&html_footer($fhtable);
 				$fhtable->close;
 			}
@@ -2106,7 +2024,7 @@ sub compute_dbstat_graph
 
 
 
-			delete $class_stat{$db};
+			delete $end_class_stat{$db};
 		}
 	}
 
@@ -2528,8 +2446,14 @@ EOF
 	      <li><span class="figure">$sysinfo{MEMORY}{'swaptotal'}</span> <span class="figure-label">Total swap</span></li>
 	      <li><span class="figure">$sysinfo{MEMORY}{'swapfree'}</span> <span class="figure-label">Free swap</span></li>
 	      <li><span class="figure">$sysinfo{MEMORY}{'shmem'}</span> <span class="figure-label">Shared memory</span></li>
+EOF
+		if (exists $sysinfo{MEMORY}{'commitlimit'}) {
+		print $fh <<EOF;
 	      <li><span class="figure">$sysinfo{MEMORY}{'commitlimit'}</span> <span class="figure-label">Commit limit</span></li>
 	      <li><span class="figure">$sysinfo{MEMORY}{'committed_as'}</span> <span class="figure-label">Committed</span></li>
+EOF
+		}
+		print $fh <<EOF;
 		</ul>
 		</div>
               </div>
