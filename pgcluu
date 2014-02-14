@@ -914,6 +914,8 @@ sub write_database_info
 	$schlist = ' (' . $schlist . ')' if ($schlist);
 	my $procount = $#{$sysinfo{PROCEDURE}{$db}} + 1;
 	my $trigcount = $sysinfo{TRIGGER}{$db} || 0;
+	my $last_vacuum = $OVERALL_STATS{$db}{last_vacuum} || '-';
+	my $last_analyze = $OVERALL_STATS{$db}{last_analyze} || '-';
 
 	my $objects_count = '';
 	foreach my $k (sort keys %RELKIND) {
@@ -938,6 +940,8 @@ sub write_database_info
 	        <li><span class="figure">$dbsize</span> <span class="figure-label">Total size</span></li>
 	        <li><span class="figure">$next</span> <span class="figure-label">Installed extensions$extlist</span></li>
 	        <li><span class="figure">$nsch</span> <span class="figure-label">Schemas$schlist</span></li>
+	        <li><span class="figure">$last_vacuum</span> <span class="figure-label">Last manual vacuum</span></li>
+	        <li><span class="figure">$last_analyze</span> <span class="figure-label">Last manual analyze</span></li>
 	        <li><span class="figure">$procount</span> <span class="figure-label">Stored procedures</span></li>
 	        <li><span class="figure">$trigcount</span> <span class="figure-label">Triggers</span></li>
 		$objects_count
@@ -1398,6 +1402,7 @@ sub compute_dbstat_graph
 	# Compute statistics about tables acces
 	if (!$NO_TB_STAT && ($file =~ /pg_stat_(all|user)_tables.csv/)) {
 		my %cumul_database_stat = ();
+		my %end_database_stat = ();
 		my %start_vals = ();
 		my $tmp_val = 0;
 		my $do_vacuum = 0;
@@ -1409,6 +1414,24 @@ sub compute_dbstat_graph
 			# timestamp | dbname | relid | schemaname | relname | seq_scan | seq_tup_read | idx_scan | idx_tup_fetch | n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | last_vacuum | last_autovacuum | last_analyze | last_autoanalyze | vacuum_count | autovacuum_count | analyze_count | autoanalyze_count
 			$data[4] = "$data[3].$data[4]";
 			push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
+
+			$end_database_stat{$data[1]}{$data[4]}{last_vacuum} = $data[15] if ($data[15]);
+			$end_database_stat{$data[1]}{$data[4]}{last_autovacuum} = $data[16] if ($data[16]);
+			$end_database_stat{$data[1]}{$data[4]}{last_analyze} = $data[17] if ($data[17]);
+			$end_database_stat{$data[1]}{$data[4]}{last_autoanalyze} = $data[18] if ($data[18]);
+			# Stores last manual vacuum/analyze
+			if ($data[15]) {
+				$OVERALL_STATS{$data[1]}{last_vacuum} = '-' if (!exists $OVERALL_STATS{$data[1]}{last_vacuum});
+				if ($data[15] gt $OVERALL_STATS{$data[1]}{last_vacuum}) {
+					$OVERALL_STATS{$data[1]}{last_vacuum} = $data[15];
+				}
+			}
+			if ($data[17]) {
+				$OVERALL_STATS{$data[1]}{last_analyze} = '-' if (!exists $OVERALL_STATS{$data[1]}{last_analyze});
+				if ($data[17] gt $OVERALL_STATS{$data[1]}{last_analyze}) {
+					$OVERALL_STATS{$data[1]}{last_analyze} = $data[17];
+				}
+			}
 
 			# Get database statistics
 			(($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]);
@@ -1476,12 +1499,16 @@ sub compute_dbstat_graph
 					$colspan = ' colspan="5"';
 				} elsif ( $do_vacuum && ($data_info{$id}{name} eq 'table-vacuums-analyzes') ) {
 					$table_header = qq{
-						<th>vacuum</th>
-						<th>autovacuum</th>
-						<th>analyze</th>
-						<th>autoanalyze</th>
+						<th>Vacuum</th>
+						<th>Autovacuum</th>
+						<th>Analyze</th>
+						<th>Autoanalyze</th>
+						<th>Last vacuum</th>
+						<th>last autovacuum</th>
+						<th>Last analyze</th>
+						<th>Last autoanalyze</th>
 };
-					$colspan = ' colspan="6"';
+					$colspan = ' colspan="10"';
 				}
 				print $fhtable qq{
 	<ul id="slides">
@@ -1515,7 +1542,6 @@ sub compute_dbstat_graph
 						}
 						$found_table_stat = 1;
 						foreach ('idx_scan','seq_scan') {
-							#delete $database_stat{$db}{$tb}{$_};
 							$cumul_database_stat{$db}{$tb}{$_} ||= 0;
 						}
 						$cumul_database_stat{$db}{$tb}{idx_scan_vs_seq_scan} = sprintf("%0.2f", ($cumul_database_stat{$db}{$tb}{idx_scan}*100)/(($cumul_database_stat{$db}{$tb}{seq_scan}+$cumul_database_stat{$db}{$tb}{idx_scan})||1));
@@ -1544,10 +1570,12 @@ sub compute_dbstat_graph
 						}
 						$found_table_stat = 1;
 						foreach ('vacuum_count','autovacuum_count','analyze_count','autoanalyze_count') {
-							#delete $database_stat{$db}{$tb}{$_};
 							$cumul_database_stat{$db}{$tb}{$_} ||= 0;
 						}
-						$table_data = qq{<tr><th>$tb</th><td>$cumul_database_stat{$db}{$tb}{vacuum_count}</td><td>$cumul_database_stat{$db}{$tb}{autovacuum_count}</td><td>$cumul_database_stat{$db}{$tb}{analyze_count}</td><td>$cumul_database_stat{$db}{$tb}{autoanalyze_count}</td></tr>};
+						foreach ('last_vacuum','last_autovacuum','last_analyze','last_autoanalyze') {
+							$end_database_stat{$db}{$tb}{$_} ||= '-';
+						}
+						$table_data = qq{<tr><th>$tb</th><td>$cumul_database_stat{$db}{$tb}{vacuum_count}</td><td>$cumul_database_stat{$db}{$tb}{autovacuum_count}</td><td>$cumul_database_stat{$db}{$tb}{analyze_count}</td><td>$cumul_database_stat{$db}{$tb}{autoanalyze_count}</td><td>$end_database_stat{$db}{$tb}{last_vacuum}</td><td>$end_database_stat{$db}{$tb}{last_autovacuum}</td><td>$end_database_stat{$db}{$tb}{last_analyze}</td><td>$end_database_stat{$db}{$tb}{last_autoanalyze}</td></tr>};
 					}
 					if ($table_data) {
 						print $fhtable qq{$table_data} if ($table_data);
