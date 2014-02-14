@@ -66,6 +66,7 @@ my %RELKIND = (
 	't' => 'toast tables'
 );
 my %HAS_TABLE_STATS = ();
+my %HAS_INDEX_STATS = ();
 
 my ($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
 $o_year += 1900;
@@ -276,6 +277,18 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'Live vs dead tuples',
 		},
 	},
+	'pg_stat_all_indexes.csv' => {
+		'1' => {
+			'name' =>  'index-scan',
+			'title' => 'Statistics about accesses to index %s',
+			'description' => 'Number of index entries returned by index scans, and number of live table rows fetched by simple index scans using that index during the audit period',
+			'ylabel' => 'Number per second',
+			'legends' => ['index scans initiated','index entries read','live table rows fetched'],
+			'y2label' => 'Percent',
+			'active' => 1,
+			'menu' => 'Index read/fetch',
+		},
+	},
 	'pg_xlog_stat.csv' => {
 		'1' => {
 			'name' =>  'database-xlog_files',
@@ -330,8 +343,18 @@ my %DB_GRAPH_INFOS = (
 	'pg_class_size.csv' => {
 		'1' => {
 			'name' =>  'table-size',
-			'title' => 'Size of object %s',
-			'description' => 'Disk space used by the table or index with number of rows if the object is a table at end of the audit.',
+			'title' => 'Size of table %s',
+			'description' => 'Disk space used by the table with number of rows at end of the audit.',
+			'ylabel' => 'Size',
+			'legends' => ['Object size', 'Number of tuples' ],
+			'y2label' => 'Number',
+			'active' => 1,
+			'menu' => 'Size and tuples',
+		},
+		'2' => {
+			'name' =>  'index-size',
+			'title' => 'Size of index %s',
+			'description' => 'Disk space used by the index with number of rows at end of the audit.',
 			'ylabel' => 'Size',
 			'legends' => ['Object size', 'Number of tuples' ],
 			'y2label' => 'Number',
@@ -1372,7 +1395,7 @@ sub compute_dbstat_graph
 		print $FHCLUSTER "</li>\n";
 	}
 
-	# Compute graphs of database size statistics
+	# Compute statistics about tables acces
 	if (!$NO_TB_STAT && ($file =~ /pg_stat_(all|user)_tables.csv/)) {
 		my %cumul_database_stat = ();
 		my %start_vals = ();
@@ -1475,7 +1498,7 @@ sub compute_dbstat_graph
 				<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
 					<thead>
 						<tr>
-							<th>Table</th>
+							<th>Schema.Table</th>
 							$table_header
 						</tr>
 					</thead>
@@ -1551,6 +1574,119 @@ sub compute_dbstat_graph
 			}
 		}
 	}
+
+	# Compute statistics about index scan
+	if (!$NO_TB_STAT && ($file =~ /pg_stat_(all|user)_indexes.csv/)) {
+		my %cumul_database_stat = ();
+		my %start_vals = ();
+		my $tmp_val = 0;
+		my $do_vacuum = 0;
+		my $old_time = 0;
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | idx_tup_read | dx_tup_fetch
+			$data[6] = "$data[4].$data[5].$data[6]";
+			push(@{$start_vals{$data[1]}{$data[6]}}, @data) if ($#{$start_vals{$data[1]}{$data[6]}} < 0);
+
+			# Get database statistics
+			(($data[7] - $start_vals{$data[1]}{$data[6]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[6]}[7]);
+			$cumul_database_stat{$data[1]}{$data[6]}{idx_scan} += $tmp_val;
+
+			(($data[8] - $start_vals{$data[1]}{$data[6]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[6]}[8]);
+			$cumul_database_stat{$data[1]}{$data[6]}{idx_tup_read} += $tmp_val;
+
+			(($data[9] - $start_vals{$data[1]}{$data[6]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[6]}[9]);
+			$cumul_database_stat{$data[1]}{$data[6]}{idx_tup_fetch} += $tmp_val;
+
+                        @{$start_vals{$data[1]}{$data[6]}} = ();
+                        push(@{$start_vals{$data[1]}{$data[6]}}, @data);
+		}
+
+		foreach my $db (keys %cumul_database_stat) {
+			foreach my $id (sort {$a <=> $b} keys %data_info) {
+				next if ($data_info{$id}{name} !~ /^index-/);
+				# Open filehandle to cluster file
+				my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
+				if (not defined $fhtable) {
+					die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
+				}
+				&html_header($fhtable);
+				$HAS_INDEX_STATS{$db} = 1;
+				my $table_header = '';
+				my $colspan =  ' colspan="4"';
+				if ($data_info{$id}{name} eq 'index-scan') {
+					$table_header = qq{
+						<th>Index scan</th>
+						<th>Index entries returned</th>
+						<th>Live table rows fetched</th>
+};
+				}
+				print $fhtable qq{
+	<ul id="slides">
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database indexes</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+			<div class="span11">
+				<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
+					<thead>
+						<tr>
+							<th>Schema.Table.Index</th>
+							$table_header
+						</tr>
+					</thead>
+					<tbody>
+};
+				my $found_table_stat = 0;
+				foreach my $idx (sort keys %{$cumul_database_stat{$db}}) {
+					next if ($idx eq 'all');
+					next if (($#INCLUDE_TB >= 0) && !grep(/^$idx$/, @INCLUDE_TB));
+					my $table_data = '';
+					if ($data_info{$id}{name} eq 'index-scan') {
+						if (!$cumul_database_stat{$db}{$idx}{idx_scan} && !$cumul_database_stat{$db}{$idx}{idx_tup_read} && !$cumul_database_stat{$db}{$idx}{idx_tup_fetch}) {
+							next;
+						}
+						$found_table_stat = 1;
+						foreach ('idx_scan','idx_tup_read','idx_tup_fetch') {
+							#delete $database_stat{$db}{$idx}{$_};
+							$cumul_database_stat{$db}{$idx}{$_} ||= 0;
+						}
+						#$cumul_database_stat{$db}{$idx}{idx_scan_vs_seq_scan} = sprintf("%0.2f", ($cumul_database_stat{$db}{$idx}{idx_scan}*100)/(($cumul_database_stat{$db}{$idx}{seq_scan}+$cumul_database_stat{$db}{$idx}{idx_scan})||1));
+						$table_data = qq{<tr><th>$idx</th><td>$cumul_database_stat{$db}{$idx}{idx_scan}</td><td>$cumul_database_stat{$db}{$idx}{idx_tup_read}</td><td>$cumul_database_stat{$db}{$idx}{idx_tup_fetch}</td></tr>};
+					}
+					if ($table_data) {
+						print $fhtable qq{$table_data} if ($table_data);
+					}
+				}
+				if (!$found_table_stat) {
+					print $fhtable qq{<tr><td$colspan><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td></tr>};
+				}
+				print $fhtable qq{
+					</tbody>
+				</table>
+			</div>
+		</div>
+};
+				# Terminate cluster statistics file
+				print $fhtable qq{
+		</div>
+	    </div>
+	</div>
+	</ul>
+};
+				&html_footer($fhtable);
+				$fhtable->close;
+			}
+		}
+	}
+
 
 	# Compute graphs of bgwriter cluster statistics
 	if ($file  =~ /pg_stat_bgwriter.csv/) {
@@ -1932,7 +2068,6 @@ sub compute_dbstat_graph
 				$end_class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{width} = '-';
 			}
 		}
-		my $id = &get_data_id('table-size', %data_info);
 		my %data = ();
 		foreach my $db (sort keys %end_class_stat) {
 			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
@@ -1941,24 +2076,33 @@ sub compute_dbstat_graph
 				$OVERALL_STATS{'class'}{$db}{$k} = scalar keys %{$end_class_stat{$db}{$k}};
 			}
 			foreach my $id (sort {$a <=> $b} keys %data_info) {
-				next if ($data_info{$id}{name} !~ /^table-/);
+				next if ($data_info{$id}{name} !~ /^(table|index)-/);
 				# Open filehandle to cluster file
 				my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
 				if (not defined $fhtable) {
 					die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
 				}
 				&html_header($fhtable);
-				$HAS_TABLE_STATS{$db} = 1;
+				$HAS_TABLE_STATS{$db} = 1 if ($data_info{$id}{name} =~ /^table-/);
+				$HAS_INDEX_STATS{$db} = 1 if ($data_info{$id}{name} =~ /^index-/);
 				my $table_header = '';
-				my $colspan = '';
+				my $kind = '';
 				if ($data_info{$id}{name} eq 'table-size') {
+					$kind = 'tables';
 					$table_header = qq{
 						<th>Type</th>
 						<th>Size</th>
 						<th>Tuples</th>
 						<th>Avg width</th>
 };
-					$colspan = ' colspan="4"';
+				} elsif ($data_info{$id}{name} eq 'index-size') {
+					$kind = 'indexes';
+					$table_header = qq{
+						<th>Type</th>
+						<th>Size</th>
+						<th>Tuples</th>
+						<th>Avg width</th>
+};
 				}
 				print $fhtable qq{
 	<ul id="slides">
@@ -1966,7 +2110,7 @@ sub compute_dbstat_graph
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-		<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database tables</h2>
+		<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database $kind</h2>
 		<p>$data_info{$id}{description}</p>
               </div>
               <div class="panel-body">
@@ -1975,7 +2119,7 @@ sub compute_dbstat_graph
 				<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
 					<thead>
 						<tr>
-							<th>Table</th>
+							<th>Object name</th>
 							$table_header
 						</tr>
 					</thead>
@@ -1984,11 +2128,13 @@ sub compute_dbstat_graph
 				my $found_table_stat = 0;
 				foreach my $k (sort keys %{$end_class_stat{$db}}) {
 					next if (($k ne 't') && ($k ne 'r') && ($data_info{$id}{name} eq 'table-size'));
+					next if (($k ne 'i') && ($data_info{$id}{name} eq 'index-size'));
+					my $colspan = ' colspan="5"';
 					foreach my $tb (sort {$end_class_stat{$db}{$k}{$b}{size} <=> $end_class_stat{$db}{$k}{$a}{size} } keys %{$end_class_stat{$db}{$k}}) {
 						next if (!$end_class_stat{$db}{$k}{$tb}{size} && !$end_class_stat{$db}{$k}{$tb}{tuples});
 						next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
 						my $table_data = '';
-						if ($data_info{$id}{name} eq 'table-size') {
+						if ($data_info{$id}{name} =~ /^(table|index)-size$/) {
 							$found_table_stat = 1;
 							foreach ('size','tuples','width') {
 								$end_class_stat{$db}{$k}{$tb}{$_} ||= 0;
@@ -2020,11 +2166,6 @@ sub compute_dbstat_graph
 				&html_footer($fhtable);
 				$fhtable->close;
 			}
-
-
-
-
-			delete $end_class_stat{$db};
 		}
 	}
 
@@ -2663,6 +2804,7 @@ sub generate_html_menu
 		      <li id="menu-database-info"><a href="database-$db.html#database-info">Database info</a></li>
 };
 		}
+
 		if (exists $HAS_TABLE_STATS{$db}) {
 			print $fh qq{
 			<li id="menu-$db-table" class="dropdown-submenu">
@@ -2688,6 +2830,33 @@ sub generate_html_menu
 		      </li>
 };
 		}
+
+		if (exists $HAS_INDEX_STATS{$db}) {
+			print $fh qq{
+			<li id="menu-$db-table" class="dropdown-submenu">
+			   <a href="#" tabindex="-1">Indexes statistics </a>
+			      <ul class="dropdown-menu">
+};
+			my %data_info = %{$DB_GRAPH_INFOS{'pg_stat_all_indexes.csv'}};
+			foreach my $id (sort {$a <=> $b} keys %data_info) {
+				next if ($data_info{$id}{name} !~ /^index-/);
+				print $fh qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+			}
+			%data_info = %{$DB_GRAPH_INFOS{'pg_class_size.csv'}};
+			foreach my $id (sort {$a <=> $b} keys %data_info) {
+				next if ($data_info{$id}{name} !~ /^index-/);
+				print $fh qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+			}
+			print $fh qq{
+			  </ul>
+		      </li>
+};
+		}
+
 		print $fh qq{
 		      <li class="divider"></li>
 		      <li id="menu-database-size"><a href="database-$db.html#database-size">Database size</a></li>
