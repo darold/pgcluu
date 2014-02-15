@@ -66,7 +66,9 @@ my %RELKIND = (
 	't' => 'toast tables'
 );
 my %HAS_TABLE_STATS = ();
+my %HAS_TABLE_STATIO = ();
 my %HAS_INDEX_STATS = ();
+my $TOP_STATIO      = 10;
 
 my ($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
 $o_year += 1900;
@@ -275,6 +277,17 @@ my %DB_GRAPH_INFOS = (
 			'y2label' => 'Percent',
 			'active' => 1,
 			'menu' => 'Live vs dead tuples',
+		},
+	},
+	'pg_statio_all_tables.csv' => {
+		'1' => {
+			'name' =>  'statio-table',
+			'title' => 'Statistics about I/O on %s',
+			'description' => 'Number of disk blocks read from a table or all indexes on this table versus number of buffer hits in a table or all indexes on this table.',
+			'ylabel' => 'Number per second',
+			'legends' => ['heap_blks_read','heap_blks_hit','idx_blks_read','idx_blks_hit'],
+			'active' => 1,
+			'menu' => 'Tables I/O stats',
 		},
 	},
 	'pg_stat_all_indexes.csv' => {
@@ -1683,10 +1696,8 @@ sub compute_dbstat_graph
 						}
 						$found_table_stat = 1;
 						foreach ('idx_scan','idx_tup_read','idx_tup_fetch') {
-							#delete $database_stat{$db}{$idx}{$_};
 							$cumul_database_stat{$db}{$idx}{$_} ||= 0;
 						}
-						#$cumul_database_stat{$db}{$idx}{idx_scan_vs_seq_scan} = sprintf("%0.2f", ($cumul_database_stat{$db}{$idx}{idx_scan}*100)/(($cumul_database_stat{$db}{$idx}{seq_scan}+$cumul_database_stat{$db}{$idx}{idx_scan})||1));
 						$table_data = qq{<tr><th>$idx</th><td>$cumul_database_stat{$db}{$idx}{idx_scan}</td><td>$cumul_database_stat{$db}{$idx}{idx_tup_read}</td><td>$cumul_database_stat{$db}{$idx}{idx_tup_fetch}</td></tr>};
 					}
 					if ($table_data) {
@@ -1715,9 +1726,128 @@ sub compute_dbstat_graph
 		}
 	}
 
+	# Compute stats for table I/O
+	if (!$NO_TB_STAT && ($file =~ /pg_statio_(all|user)_tables.csv/)) {
+		my %statio_stat = ();
+		my %start_vals = ();
+		my $tmp_val = 0;
+		my %is_toast = ();
+		my %is_used = ();
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			# timestamp | dbname | relid | schemaname | relname | heap_blks_read | heap_blks_hit | idx_blks_read | idx_blks_hit | toast_blks_read | toast_blks_hit | tidx_blks_read | tidx_blks_hit
+			$data[4] = "$data[3].$data[4]";
+
+			push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
+
+			(($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]);
+			$tmp_val = int($tmp_val/$interval);
+			$statio_stat{$data[1]}{$data[4]}{heap_blks_read} .= '[' . $data[0] . ',' . $tmp_val . '],';
+			$is_used{$data[1]}{$data[4]} += $tmp_val if ($tmp_val > 0);
+
+			(($data[6] - $start_vals{$data[1]}{$data[4]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[1]}{$data[4]}[6]);
+			$tmp_val = int($tmp_val/$interval);
+			$statio_stat{$data[1]}{$data[4]}{heap_blks_hit} .= '[' . $data[0] . ',' . $tmp_val . '],';
+			$is_used{$data[1]}{$data[4]} += $tmp_val if ($tmp_val > 0);
+
+			(($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]);
+			$tmp_val = int($tmp_val/$interval);
+			$statio_stat{$data[1]}{$data[4]}{idx_blks_read} .= '[' . $data[0] . ',' . $tmp_val . '],';
+			$is_used{$data[1]}{$data[4]} += $tmp_val if ($tmp_val > 0);
+
+			(($data[8] - $start_vals{$data[1]}{$data[4]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[4]}[8]);
+			$tmp_val = int($tmp_val/$interval);
+			$statio_stat{$data[1]}{$data[4]}{idx_blks_hit} .= '[' . $data[0] . ',' . $tmp_val . '],';
+			$is_used{$data[1]}{$data[4]} += $tmp_val if ($tmp_val > 0);
+
+			(($data[9] - $start_vals{$data[1]}{$data[4]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[4]}[9]);
+			$tmp_val = int($tmp_val/$interval);
+			$statio_stat{$data[1]}{$data[4]}{toast_blks_read} .= '[' . $data[0] . ',' . $tmp_val . '],';
+			if ($tmp_val > 0) {
+				$is_used{$data[1]}{$data[4]} += $tmp_val;
+				$is_toast{$data[1]}{$data[4]} = 1;
+			}
+
+			(($data[10] - $start_vals{$data[1]}{$data[4]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[1]}{$data[4]}[10]);
+			$tmp_val = int($tmp_val/$interval);
+			$statio_stat{$data[1]}{$data[4]}{toast_blks_hit} .= '[' . $data[0] . ',' . $tmp_val . '],';
+			if ($tmp_val > 0) {
+				$is_used{$data[1]}{$data[4]} += $tmp_val;
+				$is_toast{$data[1]}{$data[4]} = 1;
+			}
+
+			(($data[11] - $start_vals{$data[1]}{$data[4]}[11]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[11] - $start_vals{$data[1]}{$data[4]}[11]);
+			$tmp_val = int($tmp_val/$interval);
+			$statio_stat{$data[1]}{$data[4]}{tidx_blks_read} .= '[' . $data[0] . ',' . $tmp_val . '],';
+			if ($tmp_val > 0) {
+				$is_used{$data[1]}{$data[4]} += $tmp_val;
+				$is_toast{$data[1]}{$data[4]} = 1;
+			}
+
+			(($data[12] - $start_vals{$data[1]}{$data[4]}[12]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[12] - $start_vals{$data[1]}{$data[4]}[12]);
+			$tmp_val = int($tmp_val/$interval);
+			$statio_stat{$data[1]}{$data[4]}{tidx_blks_hit} .= '[' . $data[0] . ',' . $tmp_val . '],';
+			if ($tmp_val > 0) {
+				$is_used{$data[1]}{$data[4]} += $tmp_val;
+				$is_toast{$data[1]}{$data[4]} = 1;
+			}
+
+			@{$start_vals{$data[1]}{$data[4]}} = ();
+			push(@{$start_vals{$data[1]}{$data[4]}}, @data);
+		}
+
+		foreach my $db (sort keys %statio_stat) {
+			foreach my $id (sort {$a <=> $b} keys %data_info) {
+				next if ($data_info{$id}{name} !~ /^statio-/);
+				next if (scalar keys %{$is_used{$db}} == 0);
+				# Open filehandle to cluster file
+				my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
+				if (not defined $fhtable) {
+					die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
+				}
+				&html_header($fhtable);
+				$HAS_TABLE_STATS{$db} = 1;
+				$HAS_TABLE_STATIO{$db} = 1;
+
+				my $rank = 1;
+				foreach my $tb (sort {$is_used{$db}{$b} <=> $is_used{$db}{$a} } keys %{$is_used{$db}}) {
+					next if ($tb eq 'all');
+					next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
+					last if ($rank > $TOP_STATIO);
+					my $graph_data = '';
+					if ($data_info{$id}{name} eq 'statio-table') {
+						foreach ('heap_blks_read','heap_blks_hit','idx_blks_read','idx_blks_hit','toast_blks_read','toast_blks_hit','tidx_blks_read','tidx_blks_hit') {
+							$statio_stat{$db}{$tb}{$_} =~ s/,$//;
+						}
+						# if this is a toast table override the normal table values for easy use
+						if ($is_toast{$db}{$tb}) {
+							$statio_stat{$db}{$tb}{heap_blks_read} = $statio_stat{$db}{$tb}{toast_blks_read};
+							$statio_stat{$db}{$tb}{heap_blks_hit} = $statio_stat{$db}{$tb}{toast_blks_hit};
+							$statio_stat{$db}{$tb}{idx_blks_read} = $statio_stat{$db}{$tb}{tidx_blks_read};
+							$statio_stat{$db}{$tb}{idx_blks_hit} = $statio_stat{$db}{$tb}{tidx_blks_hit};
+						}
+						print $fhtable &flotr2_linegraph_array($IDX++, 'statio-table', \%{$data_info{$id}}, $tb, $statio_stat{$db}{$tb}{heap_blks_read},$statio_stat{$db}{$tb}{heap_blks_hit},$statio_stat{$db}{$tb}{idx_blks_read},$statio_stat{$db}{$tb}{idx_blks_hit});
+						delete $statio_stat{$db}{$tb};
+						$rank++;
+					}
+				}
+
+				# Terminate cluster statistics file
+				print $fhtable qq{
+        </ul>
+};
+				&html_footer($fhtable);
+				$fhtable->close;
+			}
+		}
+
+	}
 
 	# Compute graphs of bgwriter cluster statistics
 	if ($file  =~ /pg_stat_bgwriter.csv/) {
+
 		my %bgwriter_stat = ();
 		my @start_vals = ();
 		my %total_count = ();
@@ -2198,7 +2328,6 @@ sub compute_dbstat_graph
 	}
 
 	close(IN);
-
 }
 
 sub normalyze_line
@@ -2853,6 +2982,15 @@ sub generate_html_menu
 			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
 } if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
 			}
+			if (exists $HAS_TABLE_STATIO{$db}) {
+				%data_info = %{$DB_GRAPH_INFOS{'pg_statio_all_tables.csv'}};
+				foreach my $id (sort {$a <=> $b} keys %data_info) {
+					next if ($data_info{$id}{name} !~ /^statio-/);
+					print $fh qq{
+				      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+	} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+				}
+			}
 			print $fh qq{
 			  </ul>
 		      </li>
@@ -2995,7 +3133,6 @@ sub generate_html_menu
 
 
 }
-
 
 sub device_in_report
 {
@@ -3913,7 +4050,7 @@ sub flotr2_linegraph
 
 	my $description = $infos->{description} || '';
 	my $str = '';
-	if (($divid !~ /\+$/) && ($divid !~ /^table-/)) {
+	if (($divid !~ /\+$/) && ($divid !~ /^statio-/)) {
 		$str = qq{
 <li class="slide$active" id="$divid-slide">
       <div id="$divid"><br/><br/><br/><br/></div>
@@ -3930,7 +4067,7 @@ sub flotr2_linegraph
 		<p>$description</p>
               </div>
               <div class="panel-body">
-} if ($divid !~ /^table-/);
+};
 	my $yaxis2 = '';
 	if ($infos->{y2label}) {
 		my $color = '';
@@ -4067,10 +4204,10 @@ EOF
               </div>
             </div><!--/span-->
       </div>
-} if ($divid !~ /^table-/);
+};
 	$str .= qq{
 </li>
-} if ($divid !~ /^(pgbouncer|tablespace|table-)/);
+} if ($divid !~ /^(pgbouncer|tablespace|statio)/);
 
 	return $str;
 
@@ -4452,6 +4589,10 @@ ul#slides li div div {
 	font-weight: bold;
 	font-size: 0.6em;
 	color:#ffffff;
+}
+
+.span11 {
+	font-size: 0.8em;
 }
 
 /*
