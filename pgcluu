@@ -65,10 +65,11 @@ my %RELKIND = (
 	'c' => 'composite types',
 	't' => 'toast tables'
 );
-my %HAS_TABLE_STATS = ();
+my %HAS_TABLE_STATS  = ();
 my %HAS_TABLE_STATIO = ();
-my %HAS_INDEX_STATS = ();
-my $TOP_STATIO      = 10;
+my %HAS_INDEX_STATS  = ();
+my %HAS_INDEX_STATIO = ();
+my $TOP_STATIO       = 10;
 
 my ($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
 $o_year += 1900;
@@ -283,7 +284,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'statio-table',
 			'title' => 'Statistics about I/O on %s',
-			'description' => 'Number of disk blocks read from a table or all indexes on this table versus number of buffer hits in a table or all indexes on this table.',
+			'description' => 'Number of disk blocks read from this table or all indexes on this table versus number of buffer hits in a table or all indexes of this table.',
 			'ylabel' => 'Number per second',
 			'legends' => ['heap_blks_read','heap_blks_hit','idx_blks_read','idx_blks_hit'],
 			'active' => 1,
@@ -300,6 +301,17 @@ my %DB_GRAPH_INFOS = (
 			'y2label' => 'Percent',
 			'active' => 1,
 			'menu' => 'Index read/fetch',
+		},
+	},
+	'pg_statio_all_indexes.csv' => {
+		'1' => {
+			'name' =>  'statio-index',
+			'title' => 'Statistics about I/O on %s',
+			'description' => 'Number of disk blocks read from this index versus number of buffer hits in this index.',
+			'ylabel' => 'Number per second',
+			'legends' => ['idx_blks_read','idx_blks_hit'],
+			'active' => 1,
+			'menu' => 'Indexes I/O stats',
 		},
 	},
 	'pg_xlog_stat.csv' => {
@@ -1813,7 +1825,6 @@ sub compute_dbstat_graph
 
 				my $rank = 1;
 				foreach my $tb (sort {$is_used{$db}{$b} <=> $is_used{$db}{$a} } keys %{$is_used{$db}}) {
-					next if ($tb eq 'all');
 					next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
 					last if ($rank > $TOP_STATIO);
 					my $graph_data = '';
@@ -1844,6 +1855,76 @@ sub compute_dbstat_graph
 		}
 
 	}
+
+	# Compute stats for index I/O
+	if (!$NO_TB_STAT && ($file =~ /pg_statio_(all|user)_indexes.csv/)) {
+		my %statio_stat = ();
+		my %start_vals = ();
+		my $tmp_val = 0;
+		my %is_toast = ();
+		my %is_used = ();
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_blks_read | idx_blks_hit
+			$data[6] = "$data[4].$data[5].$data[6]";
+
+			push(@{$start_vals{$data[1]}{$data[6]}}, @data) if ($#{$start_vals{$data[1]}{$data[6]}} < 0);
+
+			(($data[7] - $start_vals{$data[1]}{$data[6]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[6]}[7]);
+			$tmp_val = int($tmp_val/$interval);
+			$statio_stat{$data[1]}{$data[6]}{idx_blks_read} .= '[' . $data[0] . ',' . $tmp_val . '],';
+			$is_used{$data[1]}{$data[6]} += $tmp_val if ($tmp_val > 0);
+
+			(($data[8] - $start_vals{$data[1]}{$data[6]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[6]}[8]);
+			$tmp_val = int($tmp_val/$interval);
+			$statio_stat{$data[1]}{$data[6]}{idx_blks_hit} .= '[' . $data[0] . ',' . $tmp_val . '],';
+			$is_used{$data[1]}{$data[6]} += $tmp_val if ($tmp_val > 0);
+
+			@{$start_vals{$data[1]}{$data[6]}} = ();
+			push(@{$start_vals{$data[1]}{$data[6]}}, @data);
+		}
+
+		foreach my $db (sort keys %statio_stat) {
+			foreach my $id (sort {$a <=> $b} keys %data_info) {
+				next if ($data_info{$id}{name} !~ /^statio-/);
+				next if (scalar keys %{$is_used{$db}} == 0);
+				# Open filehandle to cluster file
+				my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
+				if (not defined $fhtable) {
+					die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
+				}
+				&html_header($fhtable);
+				$HAS_INDEX_STATS{$db} = 1;
+				$HAS_INDEX_STATIO{$db} = 1;
+
+				my $rank = 1;
+				foreach my $tb (sort {$is_used{$db}{$b} <=> $is_used{$db}{$a} } keys %{$is_used{$db}}) {
+					next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
+					last if ($rank > $TOP_STATIO);
+					my $graph_data = '';
+					if ($data_info{$id}{name} eq 'statio-table') {
+						foreach ('idx_blks_read','idx_blks_hit') {
+							$statio_stat{$db}{$tb}{$_} =~ s/,$//;
+						}
+						print $fhtable &flotr2_linegraph_array($IDX++, 'statio-index', \%{$data_info{$id}}, $tb, $statio_stat{$db}{$tb}{idx_blks_read},$statio_stat{$db}{$tb}{idx_blks_hit});
+						delete $statio_stat{$db}{$tb};
+						$rank++;
+					}
+				}
+
+				# Terminate cluster statistics file
+				print $fhtable qq{
+        </ul>
+};
+				&html_footer($fhtable);
+				$fhtable->close;
+			}
+		}
+
+	}
+
 
 	# Compute graphs of bgwriter cluster statistics
 	if ($file  =~ /pg_stat_bgwriter.csv/) {
@@ -3016,6 +3097,15 @@ sub generate_html_menu
 				print $fh qq{
 			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
 } if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+			}
+			if (exists $HAS_INDEX_STATIO{$db}) {
+				%data_info = %{$DB_GRAPH_INFOS{'pg_statio_all_indexes.csv'}};
+				foreach my $id (sort {$a <=> $b} keys %data_info) {
+					next if ($data_info{$id}{name} !~ /^statio-/);
+					print $fh qq{
+				      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+	} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+				}
 			}
 			print $fh qq{
 			  </ul>
