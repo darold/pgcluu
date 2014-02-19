@@ -154,6 +154,22 @@ my %METRICS_COMMANDS = (
 		'output'  => 'pg_class_size.csv',
 		'command' => 'dump_pgclass_size',
 		'repeat'  => 1,
+		'override' => 1,
+	},
+	'lock_types' => {
+		'output'  => 'pg_stat_locks.csv',
+		'command' => 'dump_pgstatlocktypes',
+		'repeat'  => 1,
+	},
+	'lock_modes' => {
+		'output'  => 'pg_stat_locks.csv',
+		'command' => 'dump_pgstatlockmodes',
+		'repeat'  => 1,
+	},
+	'lock_granted' => {
+		'output'  => 'pg_stat_locks.csv',
+		'command' => 'dump_pgstatlockgranted',
+		'repeat'  => 1,
 	},
 	'statements_stats' => {
 		'output'   => 'pg_stat_statements.csv',
@@ -565,9 +581,11 @@ sub create_sql_script
 			}
 			die "FATAL: no SQL with metric command $type ($sql).\n";
 		}
+		my $file_redirect = $FILE_REDIR;
+		$file_redirect = '>' if ($METRICS_COMMANDS{$type}->{override});
 		$sql_queries .= <<EOF
 -- $type
-\\o | cat $FILE_REDIR $OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}
+\\o | cat $file_redirect $OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}
 COPY ($sql) TO STDOUT CSV DELIMITER ';';
 
 EOF
@@ -1122,6 +1140,46 @@ sub dump_pgstatconnections
 
 	return $sql;
 }
+
+sub dump_pgstatlocktypes
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), current_database(), 'lock_type' as label, " .
+		"locktype, count(locktype) as count " .
+		"FROM pg_locks GROUP BY locktype"
+	);
+
+	return $sql;
+}
+
+sub dump_pgstatlockmodes
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), current_database(), 'lock_mode' as label, " .
+		"mode, count(mode) as count " .
+		"FROM pg_locks GROUP BY mode"
+	);
+
+	return $sql;
+}
+
+sub dump_pgstatlockgranted
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), current_database(), 'lock_wait' as label, " .
+		"granted, count(granted) as count " .
+		"FROM pg_locks GROUP BY granted"
+	);
+
+	return $sql;
+}
+
+
+
+
 
 sub dump_pgbouncerpoolstats
 {
