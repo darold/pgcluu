@@ -2691,6 +2691,12 @@ EOF
 			$OVERALL_STATS{'sar_start_date'} = localtime($OVERALL_STATS{'sar_start_date'}/1000);
 			$OVERALL_STATS{'sar_end_date'} = localtime($OVERALL_STATS{'sar_end_date'}/1000);
 		}
+		my $extnum = $#{$OVERALL_STATS{'cluster'}{'extentions'}} + 1;
+		my $extensions_info = '';
+		if ($extnum) {
+			my $extlist = join(', ', @{$OVERALL_STATS{'cluster'}{'extentions'}});
+			$extensions_info = qq{<li><span class="figure">$extnum</span> <span class="figure-label">Extensions ($extlist)</span></li>};
+		}
 		$sysinfo{PGVERSION}{'full_version'} ||= '';
 		my $database_number = scalar keys %{$OVERALL_STATS{'database'}};
 		print $fh <<EOF;
@@ -2712,6 +2718,7 @@ EOF
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'cache_ratio'}</span> <span class="figure-label">Hit cache ratio</span></li>
 		$temp_file_info
 		$deadlock_info
+		$extensions_info
 		</ul>
 		</div>
               </div>
@@ -4597,6 +4604,10 @@ sub read_sysinfo
 		if ($section eq 'EXTENSION') {
 			my ($db, @vals) = split(/[=,]+/, $l);
 			push(@{$sysinfo{$section}{$db}}, @vals);
+			foreach my $e (@vals) {
+				push(@{$OVERALL_STATS{'cluster'}{'extentions'}}, $e) if (!grep(/^$e$/, @{$OVERALL_STATS{'cluster'}{'extentions'}}));
+			}
+
 		}
 		if ($section eq 'SCHEMA') {
 			my ($db, @vals) = split(/[=,]+/, $l);
