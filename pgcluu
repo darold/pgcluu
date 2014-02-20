@@ -387,6 +387,32 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'Size and tuples',
 		},
 	},
+	'pg_stat_locks.csv' => {
+		'1' => {
+			'name' =>  'database-lock-types',
+			'title' => 'Types of locks on %s database',
+			'description' => 'Number of locks types in a database. Type of the lockable object: relation, extend, page, tuple, transactionid, virtualxid, object, userlock, or advisory',
+			'ylabel' => 'Number',
+			'legends' => [],
+			'active' => 1,
+		},
+		'2' => {
+			'name' =>  'database-lock-modes',
+			'title' => 'Modes of locks on %s database',
+			'description' => 'Number of locks per lock mode held or desired by this process',
+			'ylabel' => 'Number',
+			'legends' => [],
+			'active' => 1,
+		},
+		'3' => {
+			'name' =>  'database-lock-granted',
+			'title' => 'Granted locks on %s database',
+			'description' => 'Number of locks held (granted) or awaited (waiting)',
+			'ylabel' => 'Number',
+			'legends' => [],
+			'active' => 1,
+		},
+	},
 );
 
 my %SAR_GRAPH_INFOS = (
@@ -620,6 +646,7 @@ if (-d "$INPUT_DIR") {
 	print $FHCLUSTER "</ul>\n";
 	&html_footer($FHCLUSTER);
 	$FHCLUSTER->close;
+
 	# Terminate all database statistic file
 	foreach my $db (@DATABASE_LIST) {
 
@@ -2202,7 +2229,7 @@ sub compute_dbstat_graph
 		}
 
 		# Build graph dataset for all pgbouncer pool
-		foreach my $t (sort {$a <=> $b} keys %all_stat) {
+		foreach my $t (keys %all_stat) {
 			foreach my $k (keys %{$all_stat{$t}}) {
 				$pgbouncer_stat{'all'}{$k} .= '[' . $t . ',' . $all_stat{$t}{$k} . '],';
 			}
@@ -2237,6 +2264,7 @@ sub compute_dbstat_graph
 	}
 
 	if ($file  =~ /pgbouncer_req_stats.csv/) {
+
 		my %pgbouncer_stat = ();
 		my %all_stat = ();
 		my %total_count = ();
@@ -2263,7 +2291,7 @@ sub compute_dbstat_graph
 			$pgbouncer_stat{$data[1]}{avg_query} .= '[' . $data[0] . ',' . $data[9] . '],';
 			$all_stat{$data[0]}{avg_query} += $data[9];
 		}
-		foreach my $t (sort {$a <=> $b} keys %all_stat) {
+		foreach my $t (keys %all_stat) {
 			foreach my $k (keys %{$all_stat{$t}}) {
 				$pgbouncer_stat{'all'}{$k} .= '[' . $t . ',' . $all_stat{$t}{$k} . '],';
 			}
@@ -2404,6 +2432,68 @@ sub compute_dbstat_graph
 };
 				&html_footer($fhtable);
 				$fhtable->close;
+			}
+		}
+	}
+
+	# Compute graphs of locks statistics
+	if ($file =~ /pg_stat_locks.csv/) {
+
+		my %tmp_stat = ();
+		my %locks_stat = ();
+		my %all_stat = ();
+		my %total_count = ();
+		my %legends = ();
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			# timestamp|database|label|(type|mode|granted)|count
+			$data[3] = 'granted' if ($data[3] eq 't');
+			$data[3] = 'waiting' if ($data[3] eq 'f');
+			$tmp_stat{$data[1]}{$data[2]}{$data[0]}{$data[3]} = $data[4];
+			push(@{$legends{$data[1]}{$data[2]}}, $data[3]) if (!grep(/^$data[3]$/, @{$legends{$data[1]}{$data[2]}}));
+			$all_stat{$data[1]}{$data[2]}{$data[0]} += $data[4];
+		}
+		foreach my $db (keys %all_stat) {
+			foreach my $lbl (keys %{$all_stat{$db}}) {
+				foreach my $t (sort {$a <=> $b} keys %{$all_stat{$db}{$lbl}}) {
+					#$locks_stat{$db}{$lbl}{'all'} .= '[' . $t . ',' . $all_stat{$db}{$lbl}{$t} . '],';
+					push(@{$legends{$db}{$lbl}}, 'waiting') if (!grep(/^waiting$/, @{$legends{$db}{$lbl}}));
+					foreach my $k (@{$legends{$db}{$lbl}}) {
+						$locks_stat{$db}{$lbl}{$k} .= '[' . $t . ',' . ($tmp_stat{$db}{$lbl}{$t}{$k}||0) . '],';
+					}
+				}
+			}
+		}
+		%tmp_stat = ();
+		%legends = ();
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			foreach my $db (sort keys %locks_stat) {
+				next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+				my @graph_data = ();
+				if ($data_info{$id}{name} eq 'database-lock-types') {
+					foreach my $k (sort keys %{$locks_stat{$db}{lock_type}}) {
+						$locks_stat{$db}{lock_type}{$k} =~ s/,$//;
+						push(@{$data_info{$id}{legends}}, $k);
+						push(@graph_data, $locks_stat{$db}{lock_type}{$k});
+					}
+					$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-lock-types', \%{$data_info{$id}}, $db, @graph_data) );
+				} elsif ($data_info{$id}{name} eq 'database-lock-modes') {
+					foreach my $k (sort keys %{$locks_stat{$db}{lock_mode}}) {
+						$locks_stat{$db}{lock_mode}{$k} =~ s/,$//;
+						push(@{$data_info{$id}{legends}}, $k);
+						push(@graph_data, $locks_stat{$db}{lock_mode}{$k});
+					}
+					$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-lock-modes', \%{$data_info{$id}}, $db, @graph_data) );
+				} elsif ($data_info{$id}{name} eq 'database-lock-granted') {
+					foreach my $k (sort keys %{$locks_stat{$db}{lock_granted}}) {
+						$locks_stat{$db}{lock_granted}{$k} =~ s/,$//;
+						push(@{$data_info{$id}{legends}}, $k);
+						push(@graph_data, $locks_stat{$db}{lock_granted}{$k});
+					}
+					$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-lock-granted', \%{$data_info{$id}}, $db, @graph_data) );
+				}
 			}
 		}
 	}
@@ -3119,7 +3209,17 @@ sub generate_html_menu
 		      <li id="menu-database-backends"><a href="database-$db.html#database-backends">Connections</a></li>
 		      <li id="menu-database-connections"><a href="database-$db.html#database-connections">Connections by type</a></li>
 		      <li id="menu-database-cache_ratio"><a href="database-$db.html#database-cache_ratio">Cache utilization</a></li>
+		      <li class="divider"></li>
 		      <li id="menu-database-deadlocks"$disable_deadlock><a href="database-$db.html#database-deadlocks">Deadlocks</a></li>
+};
+		if (-e "$INPUT_DIR/pg_stat_locks.csv") {
+			print $fh qq{
+		      <li id="menu-database-lock-types"><a href="database-$db.html#database-lock-types">Locks per types</a></li>
+		      <li id="menu-database-lock-modes"><a href="database-$db.html#database-lock-modes">Locks per modes</a></li>
+		      <li id="menu-database-lock-granted"><a href="database-$db.html#database-lock-granted">Locks granted or not</a></li>
+};
+		}
+		print $fh qq{
 		      <li class="divider"></li>
 		      <li id="menu-database-temporary_file"$disable_tempfile><a href="database-$db.html#database-temporary_file">Temporary files</a></li>
 		      <li id="menu-database-temporary_file_bytes"$disable_tempfile><a href="database-$db.html#database-temporary_file_bytes">Temporary files size</a></li>
