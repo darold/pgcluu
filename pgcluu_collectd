@@ -1169,7 +1169,7 @@ sub dump_pgstatlockgranted
 {
 
 	my $sql = sprintf(
-		"SELECT date_trunc('seconds', now()), current_database(), 'lock_wait' as label, " .
+		"SELECT date_trunc('seconds', now()), current_database(), 'lock_granted' as label, " .
 		"granted, count(granted) as count " .
 		"FROM pg_locks GROUP BY granted"
 	);
@@ -1293,5 +1293,4 @@ sub get_triggers
 
 	return $db_trigger;
 }
-
 
