@@ -470,9 +470,18 @@ while (1) {
 	print PSQL $script_sql, "\n";
 	close(PSQL);
 
-	# Generating per database statistics collector SQL script 
+	# Get database list
 	my @dblist = &get_databases();
 	push(@dblist, $DBNAME) if (($#dblist == -1) && $DBNAME);
+
+	# Remove files that must be overriden
+	foreach my $type (sort {$a cmp $b} keys %METRICS_COMMANDS) {
+		if (($METRICS_COMMANDS{$type}->{override}) && -e "$OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}") {
+			unlink("$OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}");
+		}
+	}
+
+	# Generating per database statistics collector SQL script 
 	foreach my $db (@dblist) {
 		my $script_repeat_sql = &create_sql_script($db);
 		if (!$script_repeat_sql) {
@@ -581,11 +590,9 @@ sub create_sql_script
 			}
 			die "FATAL: no SQL with metric command $type ($sql).\n";
 		}
-		my $file_redirect = $FILE_REDIR;
-		$file_redirect = '>' if ($METRICS_COMMANDS{$type}->{override});
 		$sql_queries .= <<EOF
 -- $type
-\\o | cat $file_redirect $OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}
+\\o | cat $FILE_REDIR $OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}
 COPY ($sql) TO STDOUT CSV DELIMITER ';';
 
 EOF
