@@ -195,6 +195,18 @@ my %METRICS_COMMANDS = (
 		'output' => 'pgbouncer_req_stats.csv',
 		'command' => 'dump_pgbouncerquerystats'
 	},
+	'unused_indexes_stats' => {
+		'output' => 'pg_stat_unused_indexes.csv',
+		'command' => 'dump_unusedindexes',
+		'repeat'  => 1,
+		'override'  => 1,
+	},
+	'redundant_indexes_stats' => {
+		'output' => 'pg_stat_redundant_indexes.csv',
+		'command' => 'dump_redundantindexes',
+		'repeat'  => 1,
+		'override'  => 1,
+	},
 
 );
 
@@ -1300,4 +1312,53 @@ sub get_triggers
 
 	return $db_trigger;
 }
+
+####
+# Get unused indexes in a database
+####
+sub dump_unusedindexes
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), current_database(), " .
+		"schemaname, relname, indexrelname, pg_get_indexdef(pg_stat_user_indexes.indexrelid) " .
+		"FROM pg_stat_user_indexes " .
+		"INNER JOIN pg_index ON pg_index.indexrelid = pg_stat_user_indexes.indexrelid " .
+		"WHERE NOT indexrelname ILIKE 'fki%' " .
+		"AND NOT indexrelname ILIKE 'pk%' " .
+		"AND indisunique = FALSE AND idx_scan = 0 " .
+		"ORDER BY schemaname, relname, indexrelname"
+	);
+
+	return $sql;
+}
+
+####
+# Get redundant indexes in a database
+####
+sub dump_redundantindexes
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), current_database(), " .
+		"pg_get_indexdef(indexrelid) AS contained, " . 
+		"pg_get_indexdef(index_backward) AS container " . 
+		"FROM " . 
+		"( " . 
+		"  SELECT indexrelid, " . 
+		"    indrelid, " . 
+		"    array_to_string(indkey,'+') AS colindex, " . 
+		"    lag(array_to_string(indkey,'+')) OVER search_window AS colindexbackward, " . 
+		"    lag(indexrelid) OVER search_window AS index_backward " . 
+		"  FROM pg_index " . 
+		"    WINDOW search_window AS (PARTITION BY indrelid " . 
+		"    ORDER BY array_to_string(indkey,'+') DESC) " . 
+		") AS tmp " . 
+		"WHERE colindexbackward LIKE (colindex || '+%')" 
+
+	);
+
+	return $sql;
+}
+
 
