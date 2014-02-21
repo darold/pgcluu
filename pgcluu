@@ -314,6 +314,28 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'Indexes I/O stats',
 		},
 	},
+	'pg_stat_unused_indexes.csv' => {
+		'1' => {
+			'name' =>  'unused-index',
+			'title' => 'Unused indexes on %s',
+			'description' => 'List of indexes never used (idx_scan to 0)',
+			'ylabel' => 'Number',
+			'legends' => ['Unused index'],
+			'active' => 1,
+			'menu' => 'Unused Indexes',
+		},
+	},
+	'pg_stat_redundant_indexes.csv' => {
+		'1' => {
+			'name' =>  'redundant-index',
+			'title' => 'Redundant indexes on %s',
+			'description' => 'List of useless indexe because they are redundant.',
+			'ylabel' => 'Number',
+			'legends' => ['Redundant index'],
+			'active' => 1,
+			'menu' => 'Redundant indexes',
+		},
+	},
 	'pg_xlog_stat.csv' => {
 		'1' => {
 			'name' =>  'database-xlog_files',
@@ -971,7 +993,7 @@ sub write_database_info
 
 	my $objects_count = '';
 	foreach my $k (sort keys %RELKIND) {
-	        $objects_count .= qq{<li><span class="figure">$OVERALL_STATS{'class'}{$db}{$k}</span> <span class="figure-label">$RELKIND{$k}</span></li>} if (exists $OVERALL_STATS{'class'}{$db}{$k});
+	        $objects_count .= qq{<li><span class="figure">$OVERALL_STATS{'class'}{$db}{$k}</span> <span class="figure-label">} . lcfirst($RELKIND{$k}) . qq{</span></li>} if (exists $OVERALL_STATS{'class'}{$db}{$k});
 	}
 	my $dbsize = &pretty_print_size($OVERALL_STATS{'database'}{$db}{'size'});
 	$DBFH{$db}->print( qq{
@@ -2338,9 +2360,13 @@ sub compute_dbstat_graph
 		my %data = ();
 		foreach my $db (sort keys %end_class_stat) {
 			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
-			foreach my $k (sort keys %{$end_class_stat{$db}}) {
+			foreach my $k (sort keys %RELKIND) {
 				# Count the number of object
-				$OVERALL_STATS{'class'}{$db}{$k} = scalar keys %{$end_class_stat{$db}{$k}};
+				if (exists $end_class_stat{$db}{$k}) {
+					$OVERALL_STATS{'class'}{$db}{$k} = scalar keys %{$end_class_stat{$db}{$k}};
+				} else {
+					$OVERALL_STATS{'class'}{$db}{$k} = 0;
+				}
 			}
 			foreach my $id (sort {$a <=> $b} keys %data_info) {
 				next if ($data_info{$id}{name} !~ /^(table|index)-/);
@@ -2497,6 +2523,122 @@ sub compute_dbstat_graph
 			}
 		}
 	}
+
+	# Compute statistics about index scan
+	if (!$NO_TB_STAT && ($file eq 'pg_stat_unused_indexes.csv')) {
+
+		my %idx_stat = ();
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			# timestamp | dbname | schemaname | relname | indexrelname | index_code
+			$idx_stat{$data[1]} .= "<tr><td>$data[2]</td><td>$data[3]</td><td>$data[4]</td><td>$data[5]</td></tr>\n";
+		}
+
+		my $id = &get_data_id('unused-index', %data_info);
+		foreach my $db (sort keys %idx_stat) {
+			# Open filehandle to cluster file
+			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
+			if (not defined $fhtable) {
+				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
+			}
+			&html_header($fhtable);
+			$HAS_INDEX_STATS{$db} = 1;
+			print $fhtable qq{
+	<ul id="slides">
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+			<div class="span11">
+				<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
+					<thead>
+						<tr>
+						<th>Shema</th>
+						<th>Table</th>
+						<th>Index</th>
+						<th>Code</th>
+						</tr>
+					</thead>
+					<tbody>
+					$idx_stat{$db}
+					</tbody>
+				</table>
+			</div>
+		</div>
+		</div>
+	    </div>
+	</div>
+	</ul>
+};
+			&html_footer($fhtable);
+			$fhtable->close;
+		}
+	}
+
+	# Compute statistics about index scan
+	if (!$NO_TB_STAT && ($file eq 'pg_stat_redundant_indexes.csv')) {
+
+		my %idx_stat = ();
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			# timestamp | dbname | contained | containing
+			$idx_stat{$data[1]} .= "<tr><td>$data[2]</td><td>$data[3]</td></tr>\n";
+		}
+
+		my $id = &get_data_id('redundant-index', %data_info);
+		foreach my $db (sort keys %idx_stat) {
+			# Open filehandle to cluster file
+			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
+			if (not defined $fhtable) {
+				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
+			}
+			&html_header($fhtable);
+			$HAS_INDEX_STATS{$db} = 1;
+			print $fhtable qq{
+	<ul id="slides">
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+			<div class="span11">
+				<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
+					<thead>
+						<tr>
+						<th>Contained</th>
+						<th>Containing</th>
+						</tr>
+					</thead>
+					<tbody>
+					$idx_stat{$db}
+					</tbody>
+				</table>
+			</div>
+		</div>
+		</div>
+	    </div>
+	</div>
+	</ul>
+};
+			&html_footer($fhtable);
+			$fhtable->close;
+		}
+	}
+
+
 
 	close(IN);
 }
@@ -3203,6 +3345,18 @@ sub generate_html_menu
 				      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
 	} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
 				}
+			}
+			%data_info = %{$DB_GRAPH_INFOS{'pg_stat_unused_indexes.csv'}};
+			foreach my $id (sort {$a <=> $b} keys %data_info) {
+				print $fh qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+			}
+			%data_info = %{$DB_GRAPH_INFOS{'pg_stat_redundant_indexes.csv'}};
+			foreach my $id (sort {$a <=> $b} keys %data_info) {
+				print $fh qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
 			}
 			print $fh qq{
 			  </ul>
