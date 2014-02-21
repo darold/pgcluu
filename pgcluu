@@ -2992,9 +2992,9 @@ EOF
 
 	if (-e "$INPUT_DIR/sysinfo.txt") {
 		print $fh <<EOF;
-<li class="slide" id="sysinfo-slide">
+<li class="slide active-slide" id="systeminfo-slide">
 
-	<div id="sysinfo"><br/><br/><br/></div>
+	<div id="systeminfo"><br/><br/><br/></div>
 	<div class="row">
             <div class="col-md-4">
               <div class="panel panel-default">
@@ -3432,7 +3432,7 @@ sub generate_html_menu
 };
 	if (-e "$INPUT_DIR/sysinfo.txt") {
 		print $fh qq{
-		  <li id="menu-sysinfo"><a href="index.html#sysinfo">System info</a></li>
+		  <li id="menu-systeminfo"><a href="index.html#systeminfo">System info</a></li>
                   <li class="divider"></li>
 };
 	}
