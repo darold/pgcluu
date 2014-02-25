@@ -28,6 +28,7 @@ $PROGRAM = 'pgcluu_collectd';
 # They can be specified into command line options
 my $SAR_PROG    = '/usr/bin/sar';
 my $PSQL_PROG   = '/usr/bin/psql';
+my $CP_PROG     = '/bin/cp -f ';
 my $SAR_FILE    = 'sar_stats.dat';
 my $PIDFILE     = "/tmp/$PROGRAM.pid";
 my $SQL_PROBE   = '';
@@ -204,6 +205,12 @@ my %METRICS_COMMANDS = (
 	'redundant_indexes_stats' => {
 		'output' => 'pg_stat_redundant_indexes.csv',
 		'command' => 'dump_redundantindexes',
+		'repeat'  => 1,
+		'override'  => 1,
+	},
+	'pg_settings' => {
+		'output' => 'pg_settings.csv',
+		'command' => 'dump_pgsettings',
 		'repeat'  => 1,
 		'override'  => 1,
 	},
@@ -473,6 +480,12 @@ if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
 		print OUT "$t\n";
 	}
 	close(OUT);
+}
+
+# Copy configuration files into output directory
+my @conf_files = &get_configuration_files();
+foreach my $f (@conf_files) {
+	`$CP_PROG $f $OUTPUT_DIR/`;
 }
 
 while (1) {
@@ -1362,4 +1375,39 @@ sub dump_redundantindexes
 	return $sql;
 }
 
+####
+# Get PostgreSQL settings
+####
+sub dump_pgsettings
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), category, name, " .
+		" setting, unit, context, source " . 
+		"FROM pg_settings " . 
+		"ORDER BY category,name" 
+
+	);
+
+	return $sql;
+}
+
+####
+# Get path the PostgreSQL configuration files
+####
+sub get_configuration_files
+{
+	my @cfiles = `$PSQL_PROG -c "SELECT setting FROM pg_settings WHERE name IN ('config_file','hba_file','ident_file') ORDER BY name;"`;
+	if ($? != 0) {
+		&dprint("FATAL: psql error.\n");
+		# remove the pidfile
+		if (-f $PIDFILE) {
+			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
+		}
+		exit 0;
+	}
+	chomp(@cfiles);
+
+	return @cfiles;
+}
 
