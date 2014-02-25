@@ -568,6 +568,7 @@ sub verify_action
 	}
 	if (!&backend_minimum_version(8, 4)) {
 		delete $METRICS_COMMANDS{'functions_stats'};
+		delete $METRICS_COMMANDS{'redundant_indexes_stats'};
 	}
 	if (!&backend_minimum_version(8, 2)) {
 		delete $METRICS_COMMANDS{'xlog_stats'};
