@@ -21,7 +21,7 @@ use POSIX qw(locale_h sys_wait_h);
 setlocale(LC_ALL, 'C');
 use IO::Handle;
 
-$VERSION = '1.1';
+$VERSION = '2.0pre
 $PROGRAM = 'pgCluu';
 
 my $OUTPUT_DIR  = '';

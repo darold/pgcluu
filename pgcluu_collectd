@@ -21,7 +21,7 @@ setlocale(LC_ALL, 'C');
 
 $| = 1;
 
-$VERSION = '1.1';
+$VERSION = '2.0pre';
 $PROGRAM = 'pgcluu_collectd';
 
 # Default path to the external programs
