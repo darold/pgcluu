@@ -2795,14 +2795,9 @@ sub generate_html_index
 	}
 	print $fh <<EOF;
 <ul id="slides">
-<li class="slide active-slide" id="index-slide">
+<li class="slide active-slide" id="home-slide">
 
-    <div id="index"></div>
-
-    <!-- div class="jumbotron">
-       <h1>PostgreSQL Cluster utilization!</h1>
-	<p>A PostgreSQL performances monitoring and auditing tool.</p>
-    </div -->
+    <div id="home"></div>
 EOF
 	if (exists $OVERALL_STATS{'cluster'}) {
 		$OVERALL_STATS{'cluster'}{'size'} ||= 0;
@@ -2992,9 +2987,9 @@ EOF
 
 	if (-e "$INPUT_DIR/sysinfo.txt") {
 		print $fh <<EOF;
-<li class="slide active-slide" id="systeminfo-slide">
+<li class="slide" id="info-slide">
 
-	<div id="systeminfo"><br/><br/><br/></div>
+	<div id="info"><br/><br/><br/></div>
 	<div class="row">
             <div class="col-md-4">
               <div class="panel panel-default">
@@ -3093,8 +3088,8 @@ EOF
 		<table>
 		<tr><th>Filesystem</th><th>Size</th><th>Used</th><th>Free</th><th>Use%</th><th>Mount</th></tr>
 		@{$sysinfo{DF}}
+		</table>
 		</li>
-		</span>
 		<li>
 		<table>
 		<tr><th>Filesystem</th><th>Mount</th><th>type</th><th>Options</th></tr>
@@ -3209,8 +3204,13 @@ sub generate_html_menu
         </div>
         <div class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
-              <li id="menu-index" class="dropdown"><a href="index.html#">Home</a></li>
+              <li id="menu-home" class="dropdown"><a href="index.html#home">Home</a></li>
 };
+	if (-e "$INPUT_DIR/sysinfo.txt") {
+		print $fh qq{
+              <li id="menu-info" class="dropdown"><a href="index.html#info">SysInfo</a></li>
+};
+	}
 	my $disable_replication = '';
 	my $disable_xlog = '';
 	my $disable_tempfile = '';
@@ -3425,20 +3425,12 @@ sub generate_html_menu
               </li>
 };
 	}
-	print $fh qq{
-              <li id="menu-system" class="dropdown">
-                <a href="#" class="dropdown-toggle" data-toggle="dropdown">System <b class="caret"></b></a>
-                <ul class="dropdown-menu">
-};
-	if (-e "$INPUT_DIR/sysinfo.txt") {
-		print $fh qq{
-		  <li id="menu-systeminfo"><a href="index.html#systeminfo">System info</a></li>
-                  <li class="divider"></li>
-};
-	}
 
 	if (!$DISABLE_SAR) {
 		print $fh qq{
+              <li id="menu-system" class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown">System <b class="caret"></b></a>
+                <ul class="dropdown-menu">
 		  <li id="menu-cpu"><a href="system.html#system-cpu">Cpu</a></li>
                   <li class="divider"></li>
                   <li id="menu-system-memory"><a href="system.html#system-memory">Memory</a></li>
@@ -3469,11 +3461,11 @@ sub generate_html_menu
 		print $fh qq{
 		    </ul>
 		  </li>
+                </ul>
+              </li>
 };
 	}
 	print $fh qq{
-                </ul>
-              </li>
               <li id="menu-about" class="dropdown"><a href="index.html#about">About</a></li>
           </ul>
         </div><!--/.nav-collapse -->
@@ -5181,7 +5173,7 @@ jQuery(function (){
 	jQuery('.navbar li.dropdown').click(function() {
 		var id = jQuery(this).attr("id");
 		id = id.substring(5);
-		if ( (id == 'index') || (id == 'about') ) {
+		if ( (id == 'home') || (id == 'about') || (id == 'info')) {
 			var slideId = '#'+id+'-slide';
 			var currentSlide = jQuery('#main-container .active-slide').attr("id");
 			currentSlide = '#'+currentSlide;
