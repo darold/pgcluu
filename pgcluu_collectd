@@ -208,13 +208,18 @@ my %METRICS_COMMANDS = (
 		'repeat'  => 1,
 		'override'  => 1,
 	},
+	'missing_fkindexes_stats' => {
+		'output' => 'pg_stat_missing_fkindexes.csv',
+		'command' => 'dump_missingfkindexes',
+		'repeat'  => 1,
+		'override'  => 1,
+	},
 	'pg_settings' => {
 		'output' => 'pg_settings.csv',
 		'command' => 'dump_pgsettings',
 		'repeat'  => 1,
 		'override'  => 1,
 	},
-
 );
 
 # Process command line options and look for an action keyword. There
@@ -1410,4 +1415,41 @@ sub get_configuration_files
 
 	return @cfiles;
 }
+
+####
+# Get list of DDL to create indexes missing on foreign keys
+####
+sub dump_missingfkindexes
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), current_database(), relname, " .
+		"'CREATE INDEX idx_' || relname || '_' || " . 
+		"         array_to_string(column_name_list, '_') || ' ON ' || conrelid || " . 
+		"         ' (' || array_to_string(column_name_list, ',') || ')' AS ddl " . 
+		"FROM (SELECT DISTINCT conrelid, " . 
+		"       array_agg(attname) column_name_list, " . 
+		"       array_agg(attnum) AS column_list " . 
+		"     FROM pg_attribute " . 
+		"          JOIN (SELECT conrelid::regclass, conname, " . 
+		"                 unnest(conkey) AS column_index " . 
+		"                FROM (SELECT DISTINCT conrelid, conname, conkey " . 
+		"                      FROM pg_constraint " . 
+		"                        JOIN pg_class ON pg_class.oid = pg_constraint.conrelid " . 
+		"                        JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace " . 
+		"                      WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' " . 
+		"                      ) fkey " . 
+		"               ) fkey " . 
+		"               ON fkey.conrelid = pg_attribute.attrelid " . 
+		"                  AND fkey.column_index = pg_attribute.attnum " . 
+		"     GROUP BY conrelid, conname " . 
+		"     ) candidate_index " . 
+		"JOIN pg_class ON pg_class.oid = candidate_index.conrelid " . 
+		"LEFT JOIN pg_index ON pg_index.indrelid = conrelid " . 
+		"                      AND indkey::text = array_to_string(column_list, ' ') "
+	);
+
+	return $sql;
+}
+
 

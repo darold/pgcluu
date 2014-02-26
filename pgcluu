@@ -335,6 +335,17 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'Redundant indexes',
 		},
 	},
+	'pg_stat_missing_fkindexes.csv' => {
+		'1' => {
+			'name' =>  'missing-index',
+			'title' => 'Missing FK indexes on %s',
+			'description' => 'List of DDL to create missing indexes on foreign keys.',
+			'ylabel' => 'Number',
+			'legends' => ['Missing index'],
+			'active' => 1,
+			'menu' => 'Missing indexes',
+		},
+	},
 	'pg_xlog_stat.csv' => {
 		'1' => {
 			'name' =>  'database-xlog_files',
@@ -2575,7 +2586,7 @@ sub compute_dbstat_graph
 		}
 	}
 
-	# Compute statistics about index scan
+	# Compute statistics about unused index
 	if (!$NO_TB_STAT && ($file eq 'pg_stat_unused_indexes.csv')) {
 
 		my %idx_stat = ();
@@ -2633,7 +2644,7 @@ sub compute_dbstat_graph
 		}
 	}
 
-	# Compute statistics about index scan
+	# Compute statistics about redundant index
 	if (!$NO_TB_STAT && ($file eq 'pg_stat_redundant_indexes.csv')) {
 
 		my %idx_stat = ();
@@ -2689,7 +2700,61 @@ sub compute_dbstat_graph
 		}
 	}
 
+	# Compute statistics about missing index
+	if (!$NO_TB_STAT && ($file eq 'pg_stat_missing_fkindexes.csv')) {
 
+		my %idx_stat = ();
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			# timestamp | dbname | relname | ddl
+			$idx_stat{$data[1]} .= "<tr><td>$data[2]</td><td>$data[3]</td></tr>\n";
+		}
+
+		my $id = &get_data_id('missing-index', %data_info);
+		foreach my $db (sort keys %idx_stat) {
+			# Open filehandle to cluster file
+			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
+			if (not defined $fhtable) {
+				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
+			}
+			&html_header($fhtable);
+			$HAS_INDEX_STATS{$db} = 1;
+			print $fhtable qq{
+	<ul id="slides">
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+			<div class="span11">
+				<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
+					<thead>
+						<tr>
+						<th>Table</th>
+						<th>Missing index</th>
+						</tr>
+					</thead>
+					<tbody>
+					$idx_stat{$db}
+					</tbody>
+				</table>
+			</div>
+		</div>
+		</div>
+	    </div>
+	</div>
+	</ul>
+};
+			&html_footer($fhtable);
+			$fhtable->close;
+		}
+	}
 
 	close(IN);
 }
@@ -3397,6 +3462,12 @@ sub generate_html_menu
 } if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
 			}
 			%data_info = %{$DB_GRAPH_INFOS{'pg_stat_redundant_indexes.csv'}};
+			foreach my $id (sort {$a <=> $b} keys %data_info) {
+				$menu_str .= qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+			}
+			%data_info = %{$DB_GRAPH_INFOS{'pg_stat_missing_fkindexes.csv'}};
 			foreach my $id (sort {$a <=> $b} keys %data_info) {
 				$menu_str .= qq{
 			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
