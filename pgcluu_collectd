@@ -410,7 +410,7 @@ if ($DBPASS) {
 }
 
 # Generate the sar command
-my $sar_command = "LC_ALL=C $SAR_PROG -t -p -A $INTERVAL 1 >>$SAR_FILE";
+my $sar_command = "LC_ALL=C $SAR_PROG -t -p -A 1 1 >>$SAR_FILE";
 
 # Remove action that can't be run with the PostgreSQL version
 &verify_action();
