@@ -750,7 +750,31 @@ if (!$DISABLE_SAR) {
 
 if ($OUTPUT_DIR) {
 	&generate_html_index();
-	&generate_html_menu();
+	my $menu = &generate_html_menu();
+	print "DEBUG: Inserting menu into all html files.\n" if ($DEBUG);
+	opendir(ODIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
+	my @files = grep { /\.html$/ } readdir(ODIR);
+	closedir(ODIR);
+	foreach my $f (@files) {
+		my $tmp_content = '';
+		open(IN, "$OUTPUT_DIR/$f") or die "FATAL: can't read file $OUTPUT_DIR/$f, $!";
+		while (my $l = <IN>) {
+			chomp($l);
+			if ($l =~ /<div id="navigation"><\/div>/) {
+				$l = qq{
+<div id="navigation">
+$menu
+</div>
+};
+			}
+			$tmp_content .= "$l\n";
+		}
+		close(IN);
+		# override file
+		open(OUT, ">$OUTPUT_DIR/$f") or die "FATAL: can't write to file $OUTPUT_DIR/$f, $!";
+		print OUT $tmp_content;
+		close(OUT);
+	}
 }
 
 exit 0;
@@ -3180,9 +3204,6 @@ sub html_header
 
 <!-- Load navbar -->
 <div id="navigation"></div>
-<script>
-\$("#navigation").load("menu.html");
-</script>
 
 <div class="container" id="main-container">
 };
@@ -3214,12 +3235,7 @@ sub generate_html_menu
 {
         my $date = localtime(time);
 
-	my $fh = new IO::File ">$OUTPUT_DIR/menu.html";
-	if (not defined $fh) {
-		die "FATAL: can't write menu HTML file for reports.\n";
-	}
-        print $fh qq{
-<!-- Fixed navbar imported using jQuery in $PROGRAM html files-->
+        my $menu_str = qq{
     <div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
       <div class="container">
         <div class="navbar-header">
@@ -3235,7 +3251,7 @@ sub generate_html_menu
               <li id="menu-home" class="dropdown"><a href="index.html#home">Home</a></li>
 };
 	if (-e "$INPUT_DIR/sysinfo.txt") {
-		print $fh qq{
+		$menu_str .= qq{
               <li id="menu-info" class="dropdown"><a href="index.html#info">SysInfo</a></li>
 };
 	}
@@ -3263,7 +3279,7 @@ sub generate_html_menu
 	}
 
 	if ($#DATABASE_LIST >= 0) {
-		print $fh qq{
+		$menu_str .= qq{
               <li id="menu-cluster" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">Cluster <b class="caret"></b></a>
                 <ul class="dropdown-menu">
@@ -3299,19 +3315,19 @@ sub generate_html_menu
 	}
 
 	foreach my $db (@DATABASE_LIST) {
-		print $fh qq{
+		$menu_str .= qq{
 		<li id="menu-$db" class="dropdown-submenu">
 		   <a href="#" tabindex="-1">$db </a>
 		      <ul class="dropdown-menu">
 };
 		if (-e "$INPUT_DIR/sysinfo.txt") {
-			print $fh qq{
+			$menu_str .= qq{
 		      <li id="menu-database-info"><a href="database-$db.html#database-info">Database info</a></li>
 };
 		}
 
 		if (exists $HAS_TABLE_STATS{$db}) {
-			print $fh qq{
+			$menu_str .= qq{
 			<li id="menu-$db-table" class="dropdown-submenu">
 			   <a href="#" tabindex="-1">Tables statistics </a>
 			      <ul class="dropdown-menu">
@@ -3319,14 +3335,14 @@ sub generate_html_menu
 			my %data_info = %{$DB_GRAPH_INFOS{'pg_stat_all_tables.csv'}};
 			foreach my $id (sort {$a <=> $b} keys %data_info) {
 				next if ($data_info{$id}{name} !~ /^table-/);
-				print $fh qq{
+				$menu_str .= qq{
 			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
 } if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
 			}
 			%data_info = %{$DB_GRAPH_INFOS{'pg_class_size.csv'}};
 			foreach my $id (sort {$a <=> $b} keys %data_info) {
 				next if ($data_info{$id}{name} !~ /^table-/);
-				print $fh qq{
+				$menu_str .= qq{
 			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
 } if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
 			}
@@ -3334,19 +3350,19 @@ sub generate_html_menu
 				%data_info = %{$DB_GRAPH_INFOS{'pg_statio_all_tables.csv'}};
 				foreach my $id (sort {$a <=> $b} keys %data_info) {
 					next if ($data_info{$id}{name} !~ /^statio-/);
-					print $fh qq{
+					$menu_str .= qq{
 				      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
 	} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
 				}
 			}
-			print $fh qq{
+			$menu_str .= qq{
 			  </ul>
 		      </li>
 };
 		}
 
 		if (exists $HAS_INDEX_STATS{$db}) {
-			print $fh qq{
+			$menu_str .= qq{
 			<li id="menu-$db-table" class="dropdown-submenu">
 			   <a href="#" tabindex="-1">Indexes statistics </a>
 			      <ul class="dropdown-menu">
@@ -3354,14 +3370,14 @@ sub generate_html_menu
 			my %data_info = %{$DB_GRAPH_INFOS{'pg_stat_all_indexes.csv'}};
 			foreach my $id (sort {$a <=> $b} keys %data_info) {
 				next if ($data_info{$id}{name} !~ /^index-/);
-				print $fh qq{
+				$menu_str .= qq{
 			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
 } if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
 			}
 			%data_info = %{$DB_GRAPH_INFOS{'pg_class_size.csv'}};
 			foreach my $id (sort {$a <=> $b} keys %data_info) {
 				next if ($data_info{$id}{name} !~ /^index-/);
-				print $fh qq{
+				$menu_str .= qq{
 			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
 } if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
 			}
@@ -3369,30 +3385,30 @@ sub generate_html_menu
 				%data_info = %{$DB_GRAPH_INFOS{'pg_statio_all_indexes.csv'}};
 				foreach my $id (sort {$a <=> $b} keys %data_info) {
 					next if ($data_info{$id}{name} !~ /^statio-/);
-					print $fh qq{
+					$menu_str .= qq{
 				      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
 	} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
 				}
 			}
 			%data_info = %{$DB_GRAPH_INFOS{'pg_stat_unused_indexes.csv'}};
 			foreach my $id (sort {$a <=> $b} keys %data_info) {
-				print $fh qq{
+				$menu_str .= qq{
 			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
 } if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
 			}
 			%data_info = %{$DB_GRAPH_INFOS{'pg_stat_redundant_indexes.csv'}};
 			foreach my $id (sort {$a <=> $b} keys %data_info) {
-				print $fh qq{
+				$menu_str .= qq{
 			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
 } if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
 			}
-			print $fh qq{
+			$menu_str .= qq{
 			  </ul>
 		      </li>
 };
 		}
 
-		print $fh qq{
+		$menu_str .= qq{
 		      <li class="divider"></li>
 		      <li id="menu-database-size"><a href="database-$db.html#database-size">Database size</a></li>
 		      <li id="menu-database-backends"><a href="database-$db.html#database-backends">Connections</a></li>
@@ -3402,13 +3418,13 @@ sub generate_html_menu
 		      <li id="menu-database-deadlocks"$disable_deadlock><a href="database-$db.html#database-deadlocks">Deadlocks</a></li>
 };
 		if (-e "$INPUT_DIR/pg_stat_locks.csv") {
-			print $fh qq{
+			$menu_str .= qq{
 		      <li id="menu-database-lock-types"><a href="database-$db.html#database-lock-types">Locks per types</a></li>
 		      <li id="menu-database-lock-modes"><a href="database-$db.html#database-lock-modes">Locks per modes</a></li>
 		      <li id="menu-database-lock-granted"><a href="database-$db.html#database-lock-granted">Locks granted or not</a></li>
 };
 		}
-		print $fh qq{
+		$menu_str .= qq{
 		      <li class="divider"></li>
 		      <li id="menu-database-temporary_file"$disable_tempfile><a href="database-$db.html#database-temporary_file">Temporary files</a></li>
 		      <li id="menu-database-temporary_file_bytes"$disable_tempfile><a href="database-$db.html#database-temporary_file_bytes">Temporary files size</a></li>
@@ -3424,20 +3440,20 @@ sub generate_html_menu
 };
 	}
 	if ($#DATABASE_LIST >= 0) {
-		print $fh qq{
+		$menu_str .= qq{
                 </ul>
               </li>
 };
 	}
 
 	if ($#PGBOUNCER_LIST >= 0) {
-		print $fh qq{
+		$menu_str .= qq{
               <li id="menu-database" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">pgBouncer <b class="caret"></b></a>
                 <ul class="dropdown-menu">
 };
 		foreach my $db (@PGBOUNCER_LIST) {
-			print $fh qq{
+			$menu_str .= qq{
 			<li id="menu-$db" class="dropdown-submenu">
 			   <a href="#" tabindex="-1">$db </a>
 			      <ul class="dropdown-menu">
@@ -3448,14 +3464,14 @@ sub generate_html_menu
                         </li>
 };
 		}
-		print $fh qq{
+		$menu_str .= qq{
                 </ul>
               </li>
 };
 	}
 
 	if (!$DISABLE_SAR) {
-		print $fh qq{
+		$menu_str .= qq{
               <li id="menu-system" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">System <b class="caret"></b></a>
                 <ul class="dropdown-menu">
@@ -3475,7 +3491,7 @@ sub generate_html_menu
 		      <ul class="dropdown-menu">
 };
 		for (my $i = 0; $i <= $#DEVICE_LIST; $i++) {
-			print $fh qq{
+			$menu_str .= qq{
 			  <li id="menu-device$i" class="dropdown-submenu">
 			     <a href="#" tabindex="-1">$DEVICE_LIST[$i] </a>
 			      <ul class="dropdown-menu">
@@ -3486,14 +3502,14 @@ sub generate_html_menu
 			  </li>
 };
 		}
-		print $fh qq{
+		$menu_str .= qq{
 		    </ul>
 		  </li>
                 </ul>
               </li>
 };
 	}
-	print $fh qq{
+	$menu_str .= qq{
               <li id="menu-about" class="dropdown"><a href="index.html#about">About</a></li>
           </ul>
         </div><!--/.nav-collapse -->
@@ -3502,7 +3518,7 @@ sub generate_html_menu
 
 };
 
-
+	return $menu_str;
 }
 
 sub device_in_report
