@@ -445,6 +445,39 @@ my %DB_GRAPH_INFOS = (
 			'active' => 1,
 		},
 	},
+	'postgresql.conf' => {
+		'1' => {
+			'name' =>  'cluster-pgconf',
+			'title' => 'PostgreSQL configuration',
+			'description' => 'Configuration directives and values defined in file postgresql.conf.',
+			'ylabel' => 'Number',
+			'legends' => ['Settings'],
+			'active' => 1,
+			'menu' => 'PostgreSQL configuration',
+		},
+	},
+	'pg_hba.conf' => {
+		'1' => {
+			'name' =>  'cluster-pghba',
+			'title' => 'PostgreSQL authorization',
+			'description' => 'Client authentication controlled by pg_hba.conf configuration file.',
+			'ylabel' => 'Number',
+			'legends' => ['Setting','Value'],
+			'active' => 1,
+			'menu' => 'PostgreSQL authorization',
+		},
+	},
+	'pg_ident.conf' => {
+		'1' => {
+			'name' =>  'cluster-pgident',
+			'title' => 'PostgreSQL User Name Maps',
+			'description' => 'Different operating system user / database user mappings might be needed for different connections. They are defined in file pg_ident.conf.',
+			'ylabel' => 'Number',
+			'legends' => ['Setting','Value'],
+			'active' => 1,
+			'menu' => 'User Name Maps',
+		},
+	},
 );
 
 my %SAR_GRAPH_INFOS = (
@@ -2756,6 +2789,119 @@ sub compute_dbstat_graph
 		}
 	}
 
+	# Show relevant content of postgresql.conf
+	if ($file eq 'postgresql.conf') {
+
+		my $output = "<div style=\"white-space: pre\">\n";
+		while (my $l = <IN>) {
+			chomp($l);
+			next if ($l !~ /^[a-z]/);
+			$l =~ s/[\t\s]*#.*//;
+			$output .= "$l\n";
+		}
+		$output .= "</div>\n";
+
+		my $id = &get_data_id('cluster-pgconf', %data_info);
+		print $FHCLUSTER qq{
+<li style="display: none;" class="slide" id="cluster-pgconf-slide">
+      <div id="cluster-pgconf"><br><br><br><br></div>
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="cluster-pgconf-report">
+			<div class="span11">
+				$output
+			</div>
+		</div>
+	      </div>
+	      </div>
+	    </div>
+	</div>
+  </li>
+};
+	}
+
+	# Show relevant content of pg_hba.conf
+	if ($file eq 'pg_hba.conf') {
+
+		my $output = "<div style=\"white-space: pre\">\n";
+		while (my $l = <IN>) {
+			chomp($l);
+			next if ($l !~ /^[a-z]/);
+			$l =~ s/[\t\s]*#.*//;
+			$output .= "$l\n";
+		}
+		$output .= "</div>\n";
+
+		my $id = &get_data_id('cluster-pghba', %data_info);
+		print $FHCLUSTER qq{
+<li style="display: none;" class="slide" id="cluster-pghba-slide">
+      <div id="cluster-pghba"><br><br><br><br></div>
+
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="cluster-pghba-report">
+			<div class="span11">
+				$output
+			</div>
+		</div>
+	      </div>
+	      </div>
+	    </div>
+	</div>
+  </li>
+};
+	}
+
+	# Show relevant content of pg_ident.conf
+	if ($file eq 'pg_ident.conf') {
+
+		my $output = "<div style=\"white-space: pre\">\n";
+		while (my $l = <IN>) {
+			chomp($l);
+			next if ($l !~ /^[a-z]/);
+			$l =~ s/[\t\s]*#.*//;
+			$output .= "$l\n";
+		}
+		$output .= "</div>\n";
+
+		my $id = &get_data_id('cluster-pgident', %data_info);
+		print $FHCLUSTER qq{
+<li style="display: none;" class="slide" id="cluster-pgident-slide">
+      <div id="cluster-pgident"><br><br><br><br></div>
+
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="cluster-pgident-report">
+			<div class="span11">
+				$output
+			</div>
+		</div>
+	      </div>
+	      </div>
+	    </div>
+	</div>
+  </li>
+};
+	}
+
 	close(IN);
 }
 
@@ -3327,6 +3473,9 @@ sub generate_html_menu
 	my $disable_checkpointwrite = '';
 	my $disable_canceled = '';
 	my $disable_tablespace = '';
+	my $disable_pgconf = '';
+	my $disable_pghba = '';
+	my $disable_pgident = '';
 	if (!-e "$INPUT_DIR/pg_stat_replication.csv" || -z "$INPUT_DIR/pg_stat_replication.csv") {
 		$disable_replication = ' class="disabled"';
 		$disable_canceled = ' class="disabled"';
@@ -3342,6 +3491,15 @@ sub generate_html_menu
 	if (!-e "$INPUT_DIR/pg_tablespace_size.csv" || -z "$INPUT_DIR/pg_tablespace_size.csv") {
 		$disable_tablespace = ' class="disabled"';
 	}
+	if (!-e "$INPUT_DIR/postgresql.conf" || -z "$INPUT_DIR/postgresql.conf") {
+		$disable_pgconf = ' class="disabled"';
+	}
+	if (!-e "$INPUT_DIR/pg_hba.conf" || -z "$INPUT_DIR/pg_hba.conf") {
+		$disable_pghba = ' class="disabled"';
+	}
+	if (!-e "$INPUT_DIR/pg_ident.conf" || -z "$INPUT_DIR/pg_ident.conf") {
+		$disable_pgident = ' class="disabled"';
+	}
 
 	if ($#DATABASE_LIST >= 0) {
 		$menu_str .= qq{
@@ -3349,6 +3507,7 @@ sub generate_html_menu
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">Cluster <b class="caret"></b></a>
                 <ul class="dropdown-menu">
 		      <li id="menu-cluster-size"><a href="cluster.html#cluster-size">Databases sizes</a></li>
+		      <li id="menu-tablespace-cluster-size"$disable_tablespace><a href="cluster.html#tablespace-cluster-size">Tablespaces sizes</a></li>
 		      <li id="menu-cluster-backends"><a href="cluster.html#cluster-backends">Connections</a></li>
 		      <li id="menu-cluster-connections"><a href="cluster.html#cluster-connections">Connections by type</a></li>
 		      <li id="menu-cluster-cache_ratio"><a href="cluster.html#cluster-cache_ratio">Cache utilization</a></li>
@@ -3370,7 +3529,9 @@ sub generate_html_menu
 		      <li id="menu-cluster-canceled_queries"$disable_canceled><a href="cluster.html#cluster-canceled_queries">Canceled queries</a></li>
 		      <li id="menu-cluster-conflicts"><a href="cluster.html#cluster-conflicts">Conflicts</a></li>
 		      <li class="divider"></li>
-		      <li id="menu-tablespace-cluster-size"$disable_tablespace><a href="cluster.html#tablespace-cluster-size">Tablespaces sizes</a></li>
+		      <li id="menu-cluster-pgconf"$disable_pgconf><a href="cluster.html#cluster-pgconf">PostgreSQL configuration</a></li>
+		      <li id="menu-cluster-pghba"$disable_pghba><a href="cluster.html#cluster-pghba">PostgreSQL authorization</a></li>
+		      <li id="menu-cluster-pgident"$disable_pgident><a href="cluster.html#cluster-pgindent">User Name Maps</a></li>
                 </ul>
               </li>
               <li id="menu-database" class="dropdown">
