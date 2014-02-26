@@ -44,7 +44,6 @@ my $DEBUG       = 0;
 my $BEGIN       = '';
 my $END         = '';
 my $NUMBER_CPU  = 0;
-my $START_DATE  = '';
 my $TIMEZONE    = '00';
 my $REVERT_DATE = 0;
 my $SADC_INPUT_FILE    = '';
@@ -4113,22 +4112,14 @@ sub compute_sarfile_graph
 
 	my $type = '';
 	my @headers = ();
-	my $timestamp = '';
 	my %fulldata = ();
 	my $old_time = '';
-	my $old_value = '';
 
 	for (my $i = 0; $i <= $#content; $i++) {
 		# Empty line, maybe the end of a report
 		if ($content[$i] eq '') {
-			if ($FROM_SA_FILE) {
-				my $tz = ((0-$TIMEZONE)*3600);
-				$START_DATE = &timegm_nocheck(0, 0, 0, $sar_day, $sar_month - 1, $sar_year - 1900) + $tz;
-				$old_time = '';
-			}
 			$type = '';
 			@headers = ();
-			$timestamp = '';
 			next;
 		}
 		# look for kernel header to find the date
@@ -4144,37 +4135,26 @@ sub compute_sarfile_graph
 				$sar_day = $sar_month;
 				$sar_month = $tmp;
 			}
-			my $tz = ((0-$TIMEZONE)*3600);
-			$START_DATE = &timegm_nocheck(0, 0, 0, $sar_day, $sar_month - 1, $sar_year - 1900) + $tz;
 			$type = '';
 			@headers = ();
-			$timestamp = '';
-			$old_time = '';
 			next;
 		}
 		# Remove average header if any
 		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /^\D:\s+/) ) {
 			$type = '';
 			@headers = ();
-			$timestamp = '';
 			next;
 		}
 
 		if ($#headers == -1) {
 			push(@headers, split(m#\s+#, $content[$i]));
-			$timestamp = shift(@headers);
+			shift(@headers);
 			# Try to find the kind of report
 			$type = &find_report_type($content[$i]);
 			if (!$type) {
 				@headers = ();
-				$timestamp = '';
 			} else {
 				push(@{$fulldata{$type}}, "hostname;interval;timestamp;" . join(";", @headers));
-			}
-			if ($FROM_SA_FILE) {
-				my $tz = ((0-$TIMEZONE)*3600);
-				$START_DATE = &timegm_nocheck(0, 0, 0, $sar_day, $sar_month - 1, $sar_year - 1900) + $tz;
-				$old_time = '';
 			}
 			next;
 		}
@@ -4183,21 +4163,21 @@ sub compute_sarfile_graph
 		my @values = ();
 		push(@values, split(m#\s+#, $content[$i]));
 		# Extract the timestamp of the line
-		$timestamp = shift(@values);
+		my $timestamp = shift(@values);
 
 		if ($#values != $#headers) {
 			warn "ERROR: Parsing of sar output reports different values than headers allow. ($#values != $#headers)\n";
 			die "Header: " . join(';', @headers) . " | Values: " . join(';', @values) . "\n";
 		}
-		if ($timestamp =~ /\d+:\d+:\d+/) {
-			$timestamp = &convert_sar_time($timestamp, $old_time);
+		if ($timestamp =~ /(\d+:\d+:\d+)/) {
+			$timestamp = &convert_sar_time($1, $old_time);
+			$old_time = $timestamp;
 		}
 		if (!$timestamp) {
 			print STDERR "ERROR: unkown time information from sar file.\n";
 			print STDERR "HEADER: $timestamp ", join(" ", @headers), "\n";
 			die "DATA: $content[$i]\n";
 		}
-		$old_time = $timestamp;
 
 		# Change decimal character to perl
 		map { s/,/\./; } @values;
@@ -4329,22 +4309,30 @@ sub convert_time
 
 sub convert_sar_time
 {
-	my ($str, $old_time) = @_;
+	my ($str, $old_timestamp) = @_;
 
-	$old_time ||= 0;
+	my $curdate = '';
+
+	$old_timestamp ||= 0;
+	$sar_day ||= $o_day;
+	$sar_month ||= $o_month;
+	$sar_year ||= $o_year;
 
 	if ($str =~ /(\d+):(\d+):(\d+)/) {
 
 		my $time = ($1*3600)+($2*60)+$3;
 
-		if (!$START_DATE) {
-			my $tz = ((0-$TIMEZONE)*3600);
-			$START_DATE = &timegm_nocheck(0, 0, 0, ($sar_day || $o_day), ($sar_month || $o_month) - 1, ($sar_year || $o_year) - 1900) + $tz;
+		my $tz = ((0-$TIMEZONE)*3600);
+		$curdate = &timegm_nocheck(0, 0, 0, $sar_day, $sar_month - 1, $sar_year - 1900) + $tz;
+		while ($old_timestamp > (($curdate+$time) * 1000)) {
+			$curdate += 86399;
+			my @tinf = gmtime($curdate - $tz);
+			$sar_month = $tinf[4]+1;
+			$sar_day = $tinf[3];
+			$sar_year = $tinf[5]+1900;
 		}
-		while ($old_time > (($START_DATE+$time) * 1000)) {
-			$START_DATE += 86399;
-		}
-		return ($START_DATE + $time) * 1000;
+
+		return ($curdate + $time) * 1000;
 	}
 
 	return 0;
