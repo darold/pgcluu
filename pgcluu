@@ -563,6 +563,7 @@ GetOptions(
 	"h|help!"        => \$HELP,
 	"i|sar-file=s"   => \$SAR_INPUT_FILE,
 	"I|sadc-file=s"  => \$SADC_INPUT_FILE,
+	"n|top-number=d" => \$TOP_STATIO,
 	"o|output=s"     => \$OUTPUT_DIR,
 	"p|dev-only=s"   => \@INCLUDE_DEV,
 	"s|sadf=s"       => \$SADF_PROG,
@@ -841,8 +842,10 @@ options:
 			   system reports. Default to input_dir/sar_stats.dat.
   -I, --sadc-file=FILE     sadc binary data file to read to generate system
 			   reports. Default to input_dir/sadc_stats.dat.
+  -n, --top-number         Top number of tables or indexes I/O stats to show.
+			   Default is set to top 10.
   -o, --output=DIR         output directory
-  -p, --dev-only device    Onnly report I/O stats for a particular device
+  -p, --dev-only device    Only report I/O stats for a particular device
 			   You can use it multiple time.
   -r, --reverse-date       By default pgcluu look at mm/dd/yy format in sar file.
                            When enabled pgcluu will look at dd/mm/yy format.
