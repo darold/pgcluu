@@ -489,6 +489,17 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'PostgreSQL settings',
 		},
 	},
+	'pgbouncer.ini' => {
+		'1' => {
+			'name' =>  'cluster-pgbouncer',
+			'title' => 'Pgbouncer configuration',
+			'description' => 'Configuration directives and values defined in file pgbouncer.ini.',
+			'ylabel' => 'Number',
+			'legends' => ['Setting','Value'],
+			'active' => 1,
+			'menu' => 'Pgbouncer settings',
+		},
+	},
 );
 
 my %SAR_GRAPH_INFOS = (
@@ -2326,30 +2337,30 @@ sub compute_dbstat_graph
 			next if ($data[1] eq 'pgbouncer');
 
 			# timestamp|database|user|cl_active|cl_waiting|sv_active|sv_idle|sv_used|sv_tested|sv_login|maxwait
-			$pgbouncer_stat{"$data[1]/$data[2]"}{cl_active} .= '[' . $data[0] . ',' . $data[3] . '],';
-			$all_pool{$data[1]}{$data[0]}{cl_active} += $data[3];
-			$all_stat{$data[0]}{cl_active} += $data[3];
-			$pgbouncer_stat{"$data[1]/$data[2]"}{cl_waiting} .= '[' . $data[0] . ',' . $data[4] . '],';
-			$all_pool{$data[1]}{$data[0]}{cl_waiting} += $data[4];
-			$all_stat{$data[0]}{cl_waiting} += $data[4];
-			$pgbouncer_stat{"$data[1]/$data[2]"}{sv_active} .= '[' . $data[0] . ',' . $data[5] . '],';
-			$all_pool{$data[1]}{$data[0]}{sv_active} += $data[5];
-			$all_stat{$data[0]}{sv_active} += $data[5];
-			$pgbouncer_stat{"$data[1]/$data[2]"}{sv_idle} .= '[' . $data[0] . ',' . $data[6] . '],';
-			$all_pool{$data[1]}{$data[0]}{sv_idle} += $data[6];
-			$all_stat{$data[0]}{sv_idle} += $data[6];
-			$pgbouncer_stat{"$data[1]/$data[2]"}{sv_used} .= '[' . $data[0] . ',' . $data[7] . '],';
-			$all_pool{$data[1]}{$data[0]}{sv_used} += $data[7];
-			$all_stat{$data[0]}{sv_used} += $data[7];
-			$pgbouncer_stat{"$data[1]/$data[2]"}{sv_tested} .= '[' . $data[0] . ',' . $data[8] . '],';
-			$all_pool{$data[1]}{$data[0]}{sv_tested} += $data[8];
-			$all_stat{$data[0]}{sv_tested} += $data[8];
-			$pgbouncer_stat{"$data[1]/$data[2]"}{sv_login} .= '[' . $data[0] . ',' . $data[9] . '],';
-			$all_pool{$data[1]}{$data[0]}{sv_login} += $data[9];
-			$all_stat{$data[0]}{sv_login} += $data[9];
-			$pgbouncer_stat{"$data[1]/$data[2]"}{maxwait} .= '[' . $data[0] . ',' . $data[10] . '],';
-			$all_pool{$data[1]}{$data[0]}{maxwait} += $data[10];
-			$all_stat{$data[0]}{maxwait} += $data[10];
+			$pgbouncer_stat{"$data[1]/$data[2]"}{cl_active} .= '[' . $data[0] . ',' . ($data[3] || 0) . '],';
+			$all_pool{$data[1]}{$data[0]}{cl_active} += ($data[3] || 0);
+			$all_stat{$data[0]}{cl_active} += ($data[3] || 0);
+			$pgbouncer_stat{"$data[1]/$data[2]"}{cl_waiting} .= '[' . $data[0] . ',' . ($data[4] || 0) . '],';
+			$all_pool{$data[1]}{$data[0]}{cl_waiting} += ($data[4] || 0);
+			$all_stat{$data[0]}{cl_waiting} += ($data[4] || 0);
+			$pgbouncer_stat{"$data[1]/$data[2]"}{sv_active} .= '[' . $data[0] . ',' . ($data[5] || 0) . '],';
+			$all_pool{$data[1]}{$data[0]}{sv_active} += ($data[5] || 0);
+			$all_stat{$data[0]}{sv_active} += ($data[5] || 0);
+			$pgbouncer_stat{"$data[1]/$data[2]"}{sv_idle} .= '[' . $data[0] . ',' . ($data[6] || 0) . '],';
+			$all_pool{$data[1]}{$data[0]}{sv_idle} += ($data[6] || 0);
+			$all_stat{$data[0]}{sv_idle} += ($data[6] || 0);
+			$pgbouncer_stat{"$data[1]/$data[2]"}{sv_used} .= '[' . $data[0] . ',' . ($data[7] || 0) . '],';
+			$all_pool{$data[1]}{$data[0]}{sv_used} += ($data[7] || 0);
+			$all_stat{$data[0]}{sv_used} += ($data[7] || 0);
+			$pgbouncer_stat{"$data[1]/$data[2]"}{sv_tested} .= '[' . $data[0] . ',' . ($data[8] || 0) . '],';
+			$all_pool{$data[1]}{$data[0]}{sv_tested} += ($data[8] || 0);
+			$all_stat{$data[0]}{sv_tested} += ($data[8] || 0);
+			$pgbouncer_stat{"$data[1]/$data[2]"}{sv_login} .= '[' . $data[0] . ',' . ($data[9] || 0) . '],';
+			$all_pool{$data[1]}{$data[0]}{sv_login} += ($data[9] || 0);
+			$all_stat{$data[0]}{sv_login} += ($data[9] || 0);
+			$pgbouncer_stat{"$data[1]/$data[2]"}{maxwait} .= '[' . $data[0] . ',' . ($data[10] || 0 ). '],';
+			$all_pool{$data[1]}{$data[0]}{maxwait} += ($data[10] || 0);
+			$all_stat{$data[0]}{maxwait} += ($data[10] || 0);
 		}
 
 		# A pgbouncer db alias have a pool per db/user pair, summarize on pool name only
@@ -2394,6 +2405,43 @@ sub compute_dbstat_graph
 				}
 			}
 		}
+	}
+
+	# Show relevant content of pgbouncer.ini
+	if (($file eq 'pgbouncer.ini') && -e "$INPUT_DIR/pgbouncer_stats.csv") {
+
+		my $output = "<div style=\"white-space: pre\">\n";
+		while (my $l = <IN>) {
+			chomp($l);
+			next if ($l !~ /^[a-z]/);
+			$l =~ s/[\t\s]*#.*//;
+			$output .= "$l\n";
+		}
+		$output .= "</div>\n";
+
+		my $id = &get_data_id('cluster-pgbouncer', %data_info);
+		print $FHCLUSTER qq{
+<li style="display: none;" class="slide" id="cluster-pgbouncer-slide">
+      <div id="cluster-pgbouncer"><br><br><br><br></div>
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="cluster-pgbouncer-report">
+			<div class="span11">
+				$output
+			</div>
+		</div>
+	      </div>
+	      </div>
+	    </div>
+	</div>
+  </li>
+};
 	}
 
 	if ($file  =~ /pgbouncer_req_stats.csv/) {
@@ -3600,6 +3648,13 @@ sub generate_html_menu
 		      <li id="menu-cluster-settings"$disable_pgsettings><a href="cluster.html#cluster-settings">PostgreSQL settings</a></li>
 		      <li id="menu-cluster-pghba"$disable_pghba><a href="cluster.html#cluster-pghba">PostgreSQL authorization</a></li>
 		      <li id="menu-cluster-pgident"$disable_pgident><a href="cluster.html#cluster-pgindent">User Name Maps</a></li>
+};
+		if (-e "$INPUT_DIR/pgbouncer.ini" && -e "$INPUT_DIR/pgbouncer_stats.csv") {
+			$menu_str .= qq{
+		      <li id="menu-cluster-pgbouncer"><a href="cluster.html#cluster-pgbouncer">Pgbouncer settings</a></li>
+};
+		}
+		$menu_str .= qq{
                 </ul>
               </li>
               <li id="menu-database" class="dropdown">
