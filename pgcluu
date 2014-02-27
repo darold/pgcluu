@@ -669,6 +669,7 @@ if (-d "$INPUT_DIR") {
 
 	# Get the list of databases from the statistics collected
 	@DATABASE_LIST = &get_database_list();
+	die "FATAL: no database found in data files.\n" if ($#DATABASE_LIST < 0);
 
 	# Get the list of databases preported by pgbouncer 
 	@PGBOUNCER_LIST = &get_pgbouncer_list();
@@ -947,6 +948,7 @@ sub get_database_list
 		my @data = split(/;/);
 		next if (!&normalyze_line(\@data));
 		# Get database name
+		next if (($#INCLUDE_DB >= 0) && !grep(/^$data[2]$/, @INCLUDE_DB));
 		push(@db_list, $data[2]) if (!grep(/^$data[2]$/, @db_list));
 		# Estimate pg version
 		if (!$sysinfo{'PGVERSION'}{major}) {
@@ -2062,7 +2064,7 @@ sub compute_dbstat_graph
 					next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
 					last if ($rank > $TOP_STATIO);
 					my $graph_data = '';
-					if ($data_info{$id}{name} eq 'statio-table') {
+					if ($data_info{$id}{name} eq 'statio-index') {
 						foreach ('idx_blks_read','idx_blks_hit') {
 							$statio_stat{$db}{$tb}{$_} =~ s/,$//;
 						}
@@ -3773,7 +3775,7 @@ sub generate_html_menu
               <li id="menu-system" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">System <b class="caret"></b></a>
                 <ul class="dropdown-menu">
-		  <li id="menu-cpu"><a href="system.html#system-cpu">Cpu</a></li>
+		  <li id="menu-system-cpu"><a href="system.html#system-cpu">Cpu</a></li>
                   <li class="divider"></li>
                   <li id="menu-system-memory"><a href="system.html#system-memory">Memory</a></li>
                   <li id="menu-system-swap"><a href="system.html#system-swap">Swap</a></li>
