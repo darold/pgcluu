@@ -68,6 +68,7 @@ my %HAS_TABLE_STATS  = ();
 my %HAS_TABLE_STATIO = ();
 my %HAS_INDEX_STATS  = ();
 my %HAS_INDEX_STATIO = ();
+my %HAS_FUNCTION_STATS = ();
 my $TOP_STATIO       = 10;
 
 my ($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
@@ -225,18 +226,13 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_stat_user_functions.csv' => {
 		'1' => {
-			'name' =>  'database-functions_time',
-			'title' => 'Functions execution duration on database %s',
-			'description' => 'Statistics about executions time of functions. The track_functions parameter controls exactly which functions are tracked.',
+			'name' =>  'database-functions',
+			'title' => 'Functions statistics on database %s',
+			'description' => 'Statistics about executions times and duration of user functions.',
 			'ylabel' => 'Duration',
+			'active' => 1,
 			'legends' => ['total time','self time'],
-		},
-		'2' => {
-			'name' =>  'database-functions_count',
-			'title' => 'Number of functions call on database %s',
-			'description' => 'Statistics about executions of functions. The track_functions parameter controls exactly which functions are tracked.',
-			'ylabel' => 'Number of calls',
-			'legends' => ['calls'],
+			'menu' => 'Functions statistics',
 		},
 	},
 	'pg_stat_all_tables.csv' => {
@@ -2212,39 +2208,77 @@ sub compute_dbstat_graph
 			my @data = split(/;/);
 			next if (!&normalyze_line(\@data));
 
+			# timestamp | datname | funcid | schemaname | funcname | calls | total_time | self_time
 			push(@start_vals, @data) if ($#start_vals < 0);
-			(($data[4] - $start_vals[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals[4]);
-			$functions_stat{$data[3]}{calls} .= '[' . $data[0] . ',' . $tmp_val . '],';
-			$all_functions_stat{$data[0]}{calls} += $tmp_val;
+
+			$data[4] = "$data[3].$data[4]";
+
 			(($data[5] - $start_vals[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals[5]);
-			$functions_stat{$data[3]}{total_time} .= '[' . $data[0] . ',' . $tmp_val . '],';
-			$all_functions_stat{$data[0]}{total_time} += $tmp_val;
+			$functions_stat{$data[1]}{$data[4]}{calls} += $tmp_val;
 			(($data[6] - $start_vals[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals[6]);
-			$functions_stat{$data[3]}{self_time} .= '[' . $data[0] . ',' . $tmp_val . '],';
-			$all_functions_stat{$data[0]}{self_time} += $tmp_val;
+			$functions_stat{$data[1]}{$data[4]}{total_time} += $tmp_val;
+			(($data[7] - $start_vals[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals[7]);
+			$functions_stat{$data[1]}{$data[4]}{self_time} += $tmp_val;
+
 			@start_vals = ();
 			push(@start_vals, @data);
 		}
-		foreach my $time (sort {$a <=> $b} keys %all_functions_stat) {
-			$functions_stat{'all'}{calls} .= '[' . $time . ',' . $all_functions_stat{$time}{calls} . '],';
-			$functions_stat{'all'}{total_time} .= '[' . $time . ',' . $all_functions_stat{$time}{total_time} . '],';
-			$functions_stat{'all'}{self_time} .= '[' . $time . ',' . $all_functions_stat{$time}{self_time} . '],';
+
+		my $id = &get_data_id('database-functions', %data_info);
+		foreach my $db (keys %functions_stat) {
+			$HAS_FUNCTION_STATS{$db} = 1;
+			my $colspan =  ' colspan="4"';
+			$DBFH{$db}->print (qq{
+<li class="slide" id="database-functions-slide">
+      <div id="database-functions"><br/><br/><br/><br/></div>
+
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+			<div class="span11">
+				<table class="table table-striped sortable" id="$db-$data_info{$id}{name}-table">
+					<thead>
+						<tr>
+						<th>Schema.function</th>
+						<th>Calls</th>
+						<th>Total time</th>
+						<th>Self time</th>
+						</tr>
+					</thead>
+					<tbody>
+});
+				my $found_fct_stat = 0;
+				foreach my $fct (sort keys %{$functions_stat{$db}}) {
+					if (!$functions_stat{$db}{$fct}{calls} && !$functions_stat{$db}{$fct}{total_time} && !$functions_stat{$db}{$fct}{self_time}) {
+						next;
+					}
+					$found_fct_stat = 1;
+					foreach ('calls','total_time','self_time') {
+						$functions_stat{$db}{$fct}{$_} ||= 0;
+					}
+					$DBFH{$db}->print( qq{<tr><th>$fct</th><td>$functions_stat{$db}{$fct}{calls}</td><td>$functions_stat{$db}{$fct}{total_time}</td><td>$functions_stat{$db}{$fct}{self_time}</td></tr>});
+				}
+				if (!$found_fct_stat) {
+					$DBFH{$db}->print( qq{<tr><td$colspan><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td></tr>} );
+				}
+				$DBFH{$db}->print( qq{
+					</tbody>
+				</table>
+			</div>
+		</div>
+		</div>
+	    </div>
+	</div>
+    </div>
+  </li>
+});
 		}
-		my $id1 = &get_data_id('database-functions_time', %data_info);
-		my $id2 = &get_data_id('database-functions_count', %data_info);
-#		foreach my $db (sort keys %functions_stat) {
-#			next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
-#			$functions_stat{$db}{calls} =~ s/,$//;
-#			$functions_stat{$db}{total_time} =~ s/,$//;
-#			$functions_stat{$db}{self_time} =~ s/,$//;
-#			if ($db ne 'all') {
-#				$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-functions_time', \%{$data_info{$id1}}, $db, $functions_stat{$db}{total_time}, $functions_stat{$db}{self_time}) );
-#				$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-functions_count', \%{$data_info{$id2}}, $db, $functions_stat{$db}{calls}) );
-#			} else {
-#				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-functions_time', \%{$data_info{$id1}}, $db, $functions_stat{$db}{total_time}, $functions_stat{$db}{self_time});
-#				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-functions_count', \%{$data_info{$id2}}, $db, $functions_stat{$db}{calls});
-#			}
-#		}
 	}
 
 	# Compute graphs of xlog cluster statistics
@@ -3760,6 +3794,11 @@ sub generate_html_menu
 			$menu_str .= qq{
 			  </ul>
 		      </li>
+};
+		}
+		if (exists $HAS_FUNCTION_STATS{$db}) {
+			$menu_str .= qq{
+			<li id="menu-database-functions"><a href="database-$db.html#database-functions">Functions statistics</a></li>
 };
 		}
 
