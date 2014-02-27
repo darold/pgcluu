@@ -53,6 +53,7 @@ my $KILL        = 0;
 my $OS_INFO     = 0;
 my $NOTABLESPACE= 0;
 my $PGBOUNCER_ARGS = '';
+my $INCLUDED_DB = ();
 
 # Definition to collect metrics from the database
 my %METRICS_COMMANDS = (
@@ -247,6 +248,7 @@ my $result = GetOptions(
 	"list-metric!"   => \$LIST_METRIC,
 	"pgbouncer-args=s" => \$PGBOUNCER_ARGS,
 	"os-info!"       => \$OS_INFO,
+	"included-db=s"  => \$INCLUDED_DB,
 ) or die &usage();
 
 # The daemon should be stopped
@@ -493,6 +495,9 @@ foreach my $f (@conf_files) {
 	`$CP_PROG $f $OUTPUT_DIR/ >/dev/null 2>&1`;
 }
 
+# Look if we should limit statistic collect to some DB
+my @included_dbs = split(/,/, $INCLUDED_DB);
+
 while (1) {
 
 	# Collecting database statistics
@@ -513,6 +518,9 @@ while (1) {
 
 	# Generating per database statistics collector SQL script 
 	foreach my $db (@dblist) {
+
+		next if (($#included_dbs >= 0) && !grep(/^$db$/i, @included_dbs));
+
 		my $script_repeat_sql = &create_sql_script($db);
 		if (!$script_repeat_sql) {
 			# No action can be perform with this PostgreSQL version
@@ -793,7 +801,7 @@ sub grab_os_information
 	# Release informations
 	my @releaseinfo = `cat /etc/*release 2>/dev/null`;
 	# System kernel tuning parameters
-	my @system = `/sbin/sysctl -a 2>/dev/null| grep -E "vm.overcommit|dirty_.*ratio|swappiness|zone_reclaim_mode|shmmax|shmall"`;
+	my @system = `/sbin/sysctl -a 2>/dev/null| grep -E "vm.overcommit|vm.dirty_.*ratio|swappiness|zone_reclaim_mode|shmmax|shmall"`;
 	unless(open(OUT, ">$OUTPUT_DIR/sysinfo.txt")) {
 		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
 		exit 1;
@@ -844,6 +852,8 @@ options:
   -T, --notablespace       disable lookup at tablespace when the connect user
 			   is not superuser to avoid printing an error message.
   -U, --dbuser=USERNAME    database user to connect as. Default to current user.
+  --included-db=DATABASE   do not collect statistics for the comma separated list
+                           of database name. 
   --list-metric            list available metrics actions that can be performed.
   --os-info                grab operating system information and exit.
   --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
