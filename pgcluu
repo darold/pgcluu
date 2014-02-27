@@ -5313,8 +5313,8 @@ function write_buttons(idbutton)
 {
      document.writeln(
  	'<a class="btn btn-danger" href="#" role="button" id="toimage'+idbutton+'" onclick="return false;">To image</a>'+
+ 	'<a class="btn btn-danger" href="#" role="button" id="reset'+idbutton+'" onclick="return false;">To chart</a>'
  	'<a class="btn btn-danger" href="#" role="button" id="download'+idbutton+'" onclick="return false;">Download</a>' +
- 	'<a class="btn btn-danger" href="#" role="button" id="reset'+idbutton+'" onclick="return false;">Reset</a>'
      );
 }
  
