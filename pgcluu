@@ -563,7 +563,7 @@ GetOptions(
 	"h|help!"        => \$HELP,
 	"i|sar-file=s"   => \$SAR_INPUT_FILE,
 	"I|sadc-file=s"  => \$SADC_INPUT_FILE,
-	"n|top-number=d" => \$TOP_STATIO,
+	"n|top-number=i" => \$TOP_STATIO,
 	"o|output=s"     => \$OUTPUT_DIR,
 	"p|dev-only=s"   => \@INCLUDE_DEV,
 	"s|sadf=s"       => \$SADF_PROG,
