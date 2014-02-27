@@ -478,6 +478,17 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'User Name Maps',
 		},
 	},
+	'pg_settings.csv' => {
+		'1' => {
+			'name' =>  'cluster-settings',
+			'title' => 'PostgreSQL Settings',
+			'description' => 'Configuration directives and values defined in pg_settings.',
+			'ylabel' => 'Number',
+			'legends' => ['Settings'],
+			'active' => 1,
+			'menu' => 'PostgreSQL settings',
+		},
+	},
 );
 
 my %SAR_GRAPH_INFOS = (
@@ -2905,6 +2916,53 @@ sub compute_dbstat_graph
 };
 	}
 
+	# Show configuration from pg_settings
+	if ($file eq 'pg_settings.csv') {
+
+		my %conf_stat = ();
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			# timestamp | label | setting | value
+			$conf_stat{$data[1]}{$data[2]} = $data[3];
+		}
+
+		my $id = &get_data_id('cluster-settings', %data_info);
+		print $FHCLUSTER qq{
+<li style="display: none;" class="slide" id="cluster-settings-slide">
+      <div id="cluster-settings"><br><br><br><br></div>
+
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="$data_info{$id}{name}-report">
+			<div class="span11">
+				<table class="table table-striped" id="$data_info{$id}{name}-table">
+					<tbody>
+};
+		foreach my $lbl (sort keys %conf_stat) {
+			print $FHCLUSTER "<tr><th colspan=\"2\">$lbl</th></tr>\n";
+			foreach my $set (sort { lc($a) cmp lc($b) } keys %{$conf_stat{$lbl}}) {
+				print $FHCLUSTER "<tr><td>$set</td><td>$conf_stat{$lbl}{$set}</td></tr>\n";
+			}
+		}
+		print $FHCLUSTER qq{
+					</tbody>
+				</table>
+			</div>
+		</div>
+		</div>
+	    </div>
+	</div>
+};
+	}
+
 	close(IN);
 }
 
@@ -3477,6 +3535,7 @@ sub generate_html_menu
 	my $disable_canceled = '';
 	my $disable_tablespace = '';
 	my $disable_pgconf = '';
+	my $disable_pgsettings = '';
 	my $disable_pghba = '';
 	my $disable_pgident = '';
 	if (!-e "$INPUT_DIR/pg_stat_replication.csv" || -z "$INPUT_DIR/pg_stat_replication.csv") {
@@ -3502,6 +3561,9 @@ sub generate_html_menu
 	}
 	if (!-e "$INPUT_DIR/pg_ident.conf" || -z "$INPUT_DIR/pg_ident.conf") {
 		$disable_pgident = ' class="disabled"';
+	}
+	if (!-e "$INPUT_DIR/pg_settings.csv" || -z "$INPUT_DIR/pg_settings.csv") {
+		$disable_pgsettings = ' class="disabled"';
 	}
 
 	if ($#DATABASE_LIST >= 0) {
@@ -3533,6 +3595,7 @@ sub generate_html_menu
 		      <li id="menu-cluster-conflicts"><a href="cluster.html#cluster-conflicts">Conflicts</a></li>
 		      <li class="divider"></li>
 		      <li id="menu-cluster-pgconf"$disable_pgconf><a href="cluster.html#cluster-pgconf">PostgreSQL configuration</a></li>
+		      <li id="menu-cluster-settings"$disable_pgsettings><a href="cluster.html#cluster-settings">PostgreSQL settings</a></li>
 		      <li id="menu-cluster-pghba"$disable_pghba><a href="cluster.html#cluster-pghba">PostgreSQL authorization</a></li>
 		      <li id="menu-cluster-pgident"$disable_pgident><a href="cluster.html#cluster-pgindent">User Name Maps</a></li>
                 </ul>
