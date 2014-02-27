@@ -491,7 +491,7 @@ if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
 
 # Copy configuration files into output directory
 my @conf_files = &get_configuration_files();
-foreach my $f (@conf_files) {
+foreach my $f (@conf_files, '/etc/pgbouncer/pgbouncer.ini') {
 	`$CP_PROG $f $OUTPUT_DIR/ >/dev/null 2>&1`;
 }
 
