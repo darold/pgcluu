@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 #------------------------------------------------------------------------------
 #
-# PgUsage - PostgreSQL monitoring tool with statistics collector and grapher
+# PgCluu - PostgreSQL monitoring tool with statistics collector and grapher
 #
 # This program is open source, licensed under the PostgreSQL license.
 # For license terms, see the LICENSE file.
@@ -2262,7 +2262,7 @@ sub compute_dbstat_graph
 					foreach ('calls','total_time','self_time') {
 						$functions_stat{$db}{$fct}{$_} ||= 0;
 					}
-					$DBFH{$db}->print( qq{<tr><th>$fct</th><td>$functions_stat{$db}{$fct}{calls}</td><td>$functions_stat{$db}{$fct}{total_time}</td><td>$functions_stat{$db}{$fct}{self_time}</td></tr>});
+					$DBFH{$db}->print( "<tr><th>$fct</th><td>$functions_stat{$db}{$fct}{calls}</td><td>" . &format_duration($functions_stat{$db}{$fct}{total_time}) . "</td><td>" . &format_duration($functions_stat{$db}{$fct}{self_time}) . "</td></tr>\n");
 				}
 				if (!$found_fct_stat) {
 					$DBFH{$db}->print( qq{<tr><td$colspan><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td></tr>} );
@@ -2890,15 +2890,18 @@ sub compute_dbstat_graph
 	# Show relevant content of postgresql.conf
 	if ($file eq 'postgresql.conf') {
 
-		my $output = "<div style=\"white-space: pre\">\n";
+		my $output = '';
 		while (my $l = <IN>) {
 			chomp($l);
 			next if ($l !~ /^[a-z]/);
 			$l =~ s/[\t\s]*#.*//;
 			$output .= "$l\n";
 		}
-		$output .= "</div>\n";
-
+		if (!$output) {
+			$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
+		} else {
+			$output = "<div style=\"white-space: pre\">\n$output</div>\n";
+		}
 		my $id = &get_data_id('cluster-pgconf', %data_info);
 		print $FHCLUSTER qq{
 <li style="display: none;" class="slide" id="cluster-pgconf-slide">
@@ -2927,14 +2930,18 @@ sub compute_dbstat_graph
 	# Show relevant content of pg_hba.conf
 	if ($file eq 'pg_hba.conf') {
 
-		my $output = "<div style=\"white-space: pre\">\n";
+		my $output = '';
 		while (my $l = <IN>) {
 			chomp($l);
 			next if ($l !~ /^[a-z]/);
 			$l =~ s/[\t\s]*#.*//;
 			$output .= "$l\n";
 		}
-		$output .= "</div>\n";
+		if (!$output) {
+			$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
+		} else {
+			$output = "<div style=\"white-space: pre\">\n$output</div>\n";
+		}
 
 		my $id = &get_data_id('cluster-pghba', %data_info);
 		print $FHCLUSTER qq{
@@ -2965,15 +2972,18 @@ sub compute_dbstat_graph
 	# Show relevant content of pg_ident.conf
 	if ($file eq 'pg_ident.conf') {
 
-		my $output = "<div style=\"white-space: pre\">\n";
+		my $output = '';
 		while (my $l = <IN>) {
 			chomp($l);
 			next if ($l !~ /^[a-z]/);
 			$l =~ s/[\t\s]*#.*//;
 			$output .= "$l\n";
 		}
-		$output .= "</div>\n";
-
+		if (!$output) {
+			$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
+		} else {
+			$output = "<div style=\"white-space: pre\">\n$output</div>\n";
+		}
 		my $id = &get_data_id('cluster-pgident', %data_info);
 		print $FHCLUSTER qq{
 <li style="display: none;" class="slide" id="cluster-pgident-slide">
@@ -3120,6 +3130,7 @@ sub generate_html_index
 			$OVERALL_STATS{'database'}{$db}{'cache_ratio'} = sprintf("%3d", ($OVERALL_STATS{'database'}{$db}{'blks_hit'} * 100) / (($OVERALL_STATS{'database'}{$db}{'blks_read'} + $OVERALL_STATS{'database'}{$db}{'blks_hit'}) || 1));
 		}
 		foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
+			next if (($#INCLUDE_DB >= 0) && !grep(/^$db$/, @INCLUDE_DB));
 			if (exists $OVERALL_STATS{'database'}{$db}{'size'}) {
 				$OVERALL_STATS{'cluster'}{'size'} += $OVERALL_STATS{'database'}{$db}{'size'};
 				if (!exists $overall_database_stats{'size'} || $OVERALL_STATS{'database'}{$db}{'size'} > $overall_database_stats{'size'}[1]) {
@@ -3465,10 +3476,14 @@ EOF
 	      <li><span class="figure">$sysinfo{MEMORY}{'cached'}</span> <span class="figure-label">Cached</span></li>
 	      <li><span class="figure">$sysinfo{MEMORY}{'swaptotal'}</span> <span class="figure-label">Total swap</span></li>
 	      <li><span class="figure">$sysinfo{MEMORY}{'swapfree'}</span> <span class="figure-label">Free swap</span></li>
+EOF
+		if (exists $sysinfo{MEMORY}{'shmem'}) {
+			print $fh <<EOF;
 	      <li><span class="figure">$sysinfo{MEMORY}{'shmem'}</span> <span class="figure-label">Shared memory</span></li>
 EOF
+		}
 		if (exists $sysinfo{MEMORY}{'commitlimit'}) {
-		print $fh <<EOF;
+			print $fh <<EOF;
 	      <li><span class="figure">$sysinfo{MEMORY}{'commitlimit'}</span> <span class="figure-label">Commit limit</span></li>
 	      <li><span class="figure">$sysinfo{MEMORY}{'committed_as'}</span> <span class="figure-label">Committed</span></li>
 EOF
@@ -3681,7 +3696,7 @@ sub generate_html_menu
 		      <li id="menu-cluster-pgconf"$disable_pgconf><a href="cluster.html#cluster-pgconf">PostgreSQL configuration</a></li>
 		      <li id="menu-cluster-settings"$disable_pgsettings><a href="cluster.html#cluster-settings">PostgreSQL settings</a></li>
 		      <li id="menu-cluster-pghba"$disable_pghba><a href="cluster.html#cluster-pghba">PostgreSQL authorization</a></li>
-		      <li id="menu-cluster-pgident"$disable_pgident><a href="cluster.html#cluster-pgindent">User Name Maps</a></li>
+		      <li id="menu-cluster-pgident"$disable_pgident><a href="cluster.html#cluster-pgident">User Name Maps</a></li>
 };
 		if (-e "$INPUT_DIR/pgbouncer.ini" && -e "$INPUT_DIR/pgbouncer_stats.csv") {
 			$menu_str .= qq{
@@ -5217,6 +5232,31 @@ sub write_resources
 	}
 	$rscfh->close() if (defined $rscfh);
 }
+
+# Format duration
+sub format_duration
+{
+	my $time = shift;
+
+	return '0s' if (!$time);
+
+	my $days = int($time / 86400000);
+	$time -= ($days * 86400000);
+	my $hours = int($time / 3600000);
+	$time -= ($hours * 3600000);
+	my $minutes = int($time / 60000);
+	$time -= ($minutes * 60000);
+	my $seconds = sprintf("%0.3f", $time / 1000);
+
+	$days    = $days < 1    ? '' : $days . 'd';
+	$hours   = $hours < 1   ? '' : $hours . 'h';
+	$minutes = $minutes < 1 ? '' : $minutes . 'm';
+	$seconds =~ s/\.\d+$// if ($minutes);
+	$time    = $days . $hours . $minutes . $seconds . 's';
+
+	return $time;
+}
+
 
 
 __DATA__
