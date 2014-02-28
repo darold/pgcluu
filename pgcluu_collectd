@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 #------------------------------------------------------------------------------
 #
-# PgUsage - PostgreSQL monitoring tool with statistics collector and grapher
+# PgCluu - PostgreSQL monitoring tool with statistics collector and grapher
 #
 # This program is open source, licensed under the PostgreSQL license.
 # For license terms, see the LICENSE file.
@@ -26,9 +26,9 @@ $PROGRAM = 'pgcluu_collectd';
 
 # Default path to the external programs
 # They can be specified into command line options
-my $SAR_PROG    = '/usr/bin/sar';
-my $PSQL_PROG   = '/usr/bin/psql';
-my $CP_PROG     = '/bin/cp -f ';
+my $SAR_PROG    = 'sar';
+my $PSQL_PROG   = 'psql';
+my $CP_PROG     = 'cp -f ';
 my $SAR_FILE    = 'sar_stats.dat';
 my $PIDFILE     = "/tmp/$PROGRAM.pid";
 my $SQL_PROBE   = '';
