@@ -5185,9 +5185,19 @@ sub read_sysinfo
 		}
 		if ($section eq 'PGVERSION') {
 			$sysinfo{$section}{full_version} = $l;
-			$l =~ /^PostgreSQL (\d+)\.(\d+)\.(\d+)/;
-			$sysinfo{$section}{major} = "$1.$2";
-			$sysinfo{$section}{minor} = "$1.$2.$3";
+			if ($l =~ /^PostgreSQL (\d+)\.(\d+)\.(\d+)/) {
+				$sysinfo{$section}{major} = "$1.$2";
+				$sysinfo{$section}{minor} = "$1.$2.$3";
+			} elsif ($l =~ /^EnterpriseDB (\d+)\.(\d+)\.(\d+)/) {
+				$sysinfo{$section}{major} = "$1.$2";
+				$sysinfo{$section}{minor} = "$1.$2.$3";
+			} elsif ($l =~ /(\d+)\.(\d+)\.(\d+)/) {
+				$sysinfo{$section}{major} = "$1.$2";
+				$sysinfo{$section}{minor} = "$1.$2.$3";
+			} else {
+				$sysinfo{$section}{major} = '';
+				$sysinfo{$section}{minor} = '';
+			}
 		}
 		if ($section eq 'EXTENSION') {
 			my ($db, @vals) = split(/[=,]+/, $l);
