@@ -5188,6 +5188,9 @@ sub read_sysinfo
 			if ($l =~ /^PostgreSQL (\d+)\.(\d+)\.(\d+)/) {
 				$sysinfo{$section}{major} = "$1.$2";
 				$sysinfo{$section}{minor} = "$1.$2.$3";
+			} elsif ($l =~ /^PostgreSQL (\d+)\.(\d+)/) {
+				$sysinfo{$section}{major} = "$1.$2";
+				$sysinfo{$section}{minor} = "$1.$2.0";
 			} elsif ($l =~ /^EnterpriseDB (\d+)\.(\d+)\.(\d+)/) {
 				$sysinfo{$section}{major} = "$1.$2";
 				$sysinfo{$section}{minor} = "$1.$2.$3";
