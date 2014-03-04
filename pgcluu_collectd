@@ -460,6 +460,7 @@ if (!&has_pg_buffercache()) {
 	delete $METRICS_COMMANDS{'database_buffercache_stats'};
 	delete $METRICS_COMMANDS{'database_usagecount_stats'};
 	delete $METRICS_COMMANDS{'relation_buffercache_stats'};
+	delete $METRICS_COMMANDS{'database_isdirty_stats'};
 } 
 
 # Collect general information about each database
