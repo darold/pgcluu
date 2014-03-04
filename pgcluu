@@ -3178,7 +3178,7 @@ sub compute_dbstat_graph
 			next if (!&normalyze_line(\@data));
 
 			# date_trunc | datname | usagecount | isdirty | buffer | buffers %
-			$all_stat{$data[0]}{$data[2]} += $data[5] if ($data[3] eq 'f');
+			$all_stat{$data[0]}{$data[2]} += $data[5] if ($data[3] eq 't');
 		}
 		foreach my $t (sort keys %all_stat) {
 			foreach my $u (sort keys %{$all_stat{$t}}) {
