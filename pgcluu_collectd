@@ -233,10 +233,10 @@ my %METRICS_COMMANDS = (
 		'output' => 'pg_database_isdirty.csv',
 		'command' => 'dump_pgdatabase_isdirty'
 	},
-	'relation_buffercache_stats' => {
-		'output' => 'pg_relation_buffercache.csv',
-		'command' => 'dump_pgrelation_buffercache',
-	},
+#	'relation_buffercache_stats' => {
+#		'output' => 'pg_relation_buffercache.csv',
+#		'command' => 'dump_pgrelation_buffercache',
+#	},
 );
 
 # Process command line options and look for an action keyword. There
