@@ -59,11 +59,11 @@ my $INCLUDED_DB = ();
 my %METRICS_COMMANDS = (
 	'database_stats' => {
 		'output' => 'pg_stat_database.csv',
-		'command' => \&dump_pgstatdatabase
+		'command' => 'dump_pgstatdatabase'
 	},
 	'tablespace_size_stats' => {
 		'output' => 'pg_tablespace_size.csv',
-		'command' => \&dump_pgtablespace_size
+		'command' => 'dump_pgtablespace_size'
 	},
 	'bgwriter_stats' => {
 		'output' => 'pg_stat_bgwriter.csv',
@@ -220,6 +220,22 @@ my %METRICS_COMMANDS = (
 		'command' => 'dump_pgsettings',
 		'repeat'  => 1,
 		'override'  => 1,
+	},
+	'database_buffercache_stats' => {
+		'output' => 'pg_database_buffercache.csv',
+		'command' => 'dump_pgdatabase_buffercache'
+	},
+	'database_usagecount_stats' => {
+		'output' => 'pg_database_usagecount.csv',
+		'command' => 'dump_pgdatabase_usercount'
+	},
+	'database_isdirty_stats' => {
+		'output' => 'pg_database_isdirty.csv',
+		'command' => 'dump_pgdatabase_isdirty'
+	},
+	'relation_buffercache_stats' => {
+		'output' => 'pg_relation_buffercache.csv',
+		'command' => 'dump_pgrelation_buffercache',
 	},
 );
 
@@ -439,6 +455,12 @@ if ($#dbnames >= 0) {
 	# or by querying the database list
 	@alldbs = &get_databases();
 }
+# Check if the connection database has pg_buffercache installed
+if (!&has_pg_buffercache()) {
+	delete $METRICS_COMMANDS{'database_buffercache_stats'};
+	delete $METRICS_COMMANDS{'database_usagecount_stats'};
+	delete $METRICS_COMMANDS{'relation_buffercache_stats'};
+} 
 
 # Collect general information about each database
 if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
@@ -581,6 +603,7 @@ sub verify_action
 
 	if (!&backend_minimum_version(8, 3)) {
 		delete $METRICS_COMMANDS{'bgwriter_stats'};
+		delete $METRICS_COMMANDS{'pg_buffercache_stats'};
 	}
 	if (!&backend_minimum_version(9, 1)) {
 		delete $METRICS_COMMANDS{'conflict_stats'};
@@ -746,6 +769,27 @@ sub get_schemas
 
 	return @db_schema;
 }
+
+####
+# Check if the database have the pg_buffercache extension
+####
+sub has_pg_buffercache
+{
+
+	my $hasit = `$PSQL_PROG -c "SELECT proname FROM pg_proc WHERE proname = 'pg_buffercache_pages';"`;
+	if ($? != 0) {
+		&dprint("FATAL: psql error.\n");
+		# remove the pidfile
+		if (-f $PIDFILE) {
+			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
+		}
+		exit 0;
+	}
+	chomp($hasit);
+
+	return $hasit;
+}
+
 
 
 sub backend_has_pgstatstatements
@@ -1462,4 +1506,84 @@ sub dump_missingfkindexes
 	return $sql;
 }
 
+####
+# Get per database shared buffers statistics with pg_buffercache
+####
+sub dump_pgdatabase_buffercache
+{
+
+	# date_trunc | datname | buffers | buffered | buffers % | database %
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), d.datname, " .
+		"count(*) AS buffers, count(*)*8192 as buffered, " .
+		"round(100.0 * count(*) / (SELECT setting FROM pg_settings " .
+		"  WHERE name='shared_buffers')::integer,1) AS \"buffers %\", " .
+		"round(100.0 * count(*) * 8192 / pg_database_size(d.datname),1) AS \"database %\" " .
+		"FROM pg_database d INNER JOIN pg_buffercache b ON b.reldatabase=d.oid " . 
+		"GROUP BY d.datname " .
+		"ORDER BY 2,3 DESC"
+	);
+
+	return $sql;
+}
+
+####
+# Get per relation shared buffers statistics with pg_buffercache
+####
+sub dump_pgrelation_buffercache
+{
+
+	# date_trunc | datname | relname | buffers | relpages | buffered | buffers % | relation %
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), d.datname, c.relname, " .
+		"count(*) AS buffers, c.relpages, count(*)*8192 as buffered, " .
+		"round(100.0 * count(*) / (SELECT setting FROM pg_settings " .
+		"  WHERE name='shared_buffers')::integer,1) AS \"buffers %\", " .
+		"round(100.0 * count(*) * 8192 / pg_relation_size(c.oid),1) AS \"relation %\" " .
+		"FROM pg_class c INNER JOIN pg_buffercache b ON b.relfilenode=c.relfilenode " . 
+		"INNER JOIN pg_database d ON ( b.reldatabase=d.oid ) " .
+		"WHERE pg_relation_size(c.oid) > 0 " .
+#		"AND c.relname !~ '^pg_' " .
+		"GROUP BY d.datname, c.relname, c.relpages, c.oid " .
+		"ORDER BY 2,4 DESC"
+	);
+
+	return $sql;
+}
+
+####
+# Get usagecount distribution in shared buffers statistics with pg_buffercache
+####
+sub dump_pgdatabase_usercount
+{
+
+	# date_trunc | datname | usagecount | buffer | buffers %
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), d.datname, usagecount, " .
+		"count(*) AS buffers, round(100.0 * count(*) / (SELECT setting FROM pg_settings " .
+		"  WHERE name='shared_buffers')::integer,1) AS \"buffers %\" " .
+		"FROM pg_database d INNER JOIN pg_buffercache b ON b.reldatabase=d.oid " . 
+		"GROUP BY d.datname, usagecount " .
+		"ORDER BY 2,3 DESC"
+	);
+	return $sql;
+}
+
+####
+# Get dirty usagecount distribution in shared buffers statistics with pg_buffercache
+####
+sub dump_pgdatabase_isdirty
+{
+
+	# date_trunc | datname | usagecount | isdirty | buffer | buffers %
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), d.datname, usagecount, isdirty, " .
+		"count(*) AS buffers, round(100.0 * count(*) / (SELECT setting FROM pg_settings " .
+		"  WHERE name='shared_buffers')::integer,1) AS \"buffers %\" " .
+		"FROM pg_database d INNER JOIN pg_buffercache b ON b.reldatabase=d.oid " . 
+		"GROUP BY d.datname, usagecount, isdirty " .
+		"ORDER BY 2,3,4 DESC"
+	);
+	return $sql;
+}
 

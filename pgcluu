@@ -496,6 +496,44 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'Pgbouncer settings',
 		},
 	},
+	'pg_database_buffercache.csv' => {
+		'1' => {
+			'name' =>  'cluster-buffersused',
+			'title' => 'Shared buffers utilisation per database',
+			'description' => 'Show statistics about percentage of shared buffer used per database.',
+			'ylabel' => 'Percent',
+			'legends' => [],
+			'menu' => 'Shared buffers utilisation',
+		},
+		'2' => {
+			'name' =>  'cluster-databaseloaded',
+			'title' => 'Percentage of each databases loaded in shared buffers',
+			'description' => 'Show statistics about percentage of each databases loaded in shared buffer.',
+			'ylabel' => 'Percent',
+			'legends' => [],
+			'menu' => 'Databases in shared buffers',
+		},
+	},
+	'pg_database_usagecount.csv' => {
+		'1' => {
+			'name' =>  'cluster-usagecount',
+			'title' => 'Shared buffers usagecount distribution',
+			'description' => 'Show statistics about usagecount distribution in shared buffer.',
+			'ylabel' => 'Percent',
+			'legends' => [],
+			'menu' => 'Usagecount utilisation',
+		},
+	},
+	'pg_database_isdirty.csv' => {
+		'1' => {
+			'name' =>  'cluster-isdirty',
+			'title' => 'Dirty shared buffers usagecount distribution',
+			'description' => 'Show statistics about usagecount distribution in dirty shared buffer.',
+			'ylabel' => 'Percent',
+			'legends' => [],
+			'menu' => 'Dirty Usagecount',
+		},
+	},
 );
 
 my %SAR_GRAPH_INFOS = (
@@ -3057,6 +3095,111 @@ sub compute_dbstat_graph
 };
 	}
 
+	# Compute graphs of buffercache database statistics
+	if ($file =~ /pg_database_buffercache.csv/) {
+
+		my %shared_stat = ();
+		my %all_stat = ();
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			# date_trunc | datname | buffers | buffers % | database %
+			$shared_stat{$data[1]}{shared_buffers_used} .= '[' . $data[0] . ',' . ($data[3]||0) . '],';
+			$shared_stat{$data[1]}{database_loaded} .= '[' . $data[0] . ',' . ($data[4]||0) . '],';
+			$all_stat{$data[0]}{shared_buffers_used} += ($data[3]||0);
+		}
+		foreach my $t (sort keys %all_stat) {
+			$shared_stat{'all'}{shared_buffers_used} .= '[' . $t . ',' . $all_stat{$t}{shared_buffers_used} . '],';
+		}
+		%all_stat = ();
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			if ($data_info{$id}{name} eq 'cluster-buffersused') {
+				my @graph_data = ();
+				foreach my $db (sort keys %shared_stat) {
+					next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+					push(@{$data_info{$id}{legends}}, "% used by $db");
+					$shared_stat{$db}{shared_buffers_used} =~ s/,$//;
+					push(@graph_data, $shared_stat{$db}{shared_buffers_used});
+				}
+				$FHCLUSTER->print( &flotr2_linegraph_array($IDX++, 'cluster-buffersused', \%{$data_info{$id}}, '', @graph_data) );
+			} elsif ($data_info{$id}{name} eq 'cluster-databaseloaded') {
+				my @graph_data = ();
+				foreach my $db (sort keys %shared_stat) {
+					next if ($db eq 'all');
+					next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
+					push(@{$data_info{$id}{legends}}, "% of $db");
+					$shared_stat{$db}{database_loaded} =~ s/,$//;
+					push(@graph_data, $shared_stat{$db}{database_loaded});
+				}
+				$FHCLUSTER->print( &flotr2_linegraph_array($IDX++, 'cluster-databaseloaded', \%{$data_info{$id}}, '', @graph_data) );
+			}
+		}
+	}
+
+	# Compute graphs of locks statistics
+	if ($file =~ /pg_database_usagecount.csv/) {
+
+		my %shared_stat = ();
+		my %all_stat = ();
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			# date_trunc | datname | usagecount | buffer | buffers %
+			$all_stat{$data[0]}{$data[2]} += ($data[4]||0);
+		}
+		foreach my $t (sort keys %all_stat) {
+			foreach my $u (sort keys %{$all_stat{$t}}) {
+				$shared_stat{$u}{usagecount} .= '[' . $t . ',' . $all_stat{$t}{$u} . '],';
+			}
+		}
+		%all_stat = ();
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			if ($data_info{$id}{name} eq 'cluster-usagecount') {
+				my @graph_data = ();
+				foreach my $u (sort keys %shared_stat) {
+					push(@{$data_info{$id}{legends}}, "% of usagecount $u");
+					$shared_stat{$u}{usagecount} =~ s/,$//;
+					push(@graph_data, $shared_stat{$u}{usagecount});
+				}
+				$FHCLUSTER->print( &flotr2_linegraph_array($IDX++, 'cluster-usagecount', \%{$data_info{$id}}, '', @graph_data) );
+			}
+		}
+	}
+
+	# Compute graphs of locks statistics
+	if ($file =~ /pg_database_isdirty.csv/) {
+
+		my %shared_stat = ();
+		my %all_stat = ();
+		while (<IN>) {
+			my @data = split(/;/);
+			next if (!&normalyze_line(\@data));
+
+			# date_trunc | datname | usagecount | isdirty | buffer | buffers %
+			$all_stat{$data[0]}{$data[2]} += $data[5] if ($data[3] eq 'f');
+		}
+		foreach my $t (sort keys %all_stat) {
+			foreach my $u (sort keys %{$all_stat{$t}}) {
+				$shared_stat{$u}{usagecount} .= '[' . $t . ',' . $all_stat{$t}{$u} . '],';
+			}
+		}
+		%all_stat = ();
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			if ($data_info{$id}{name} eq 'cluster-isdirty') {
+				my @graph_data = ();
+				foreach my $u (sort keys %shared_stat) {
+					push(@{$data_info{$id}{legends}}, "% of usagecount $u");
+					$shared_stat{$u}{usagecount} =~ s/,$//;
+					push(@graph_data, $shared_stat{$u}{usagecount});
+				}
+				$FHCLUSTER->print( &flotr2_linegraph_array($IDX++, 'cluster-isdirty', \%{$data_info{$id}}, '', @graph_data) );
+			}
+		}
+	}
+
+
 	close(IN);
 }
 
@@ -3637,6 +3780,7 @@ sub generate_html_menu
 	my $disable_pgsettings = '';
 	my $disable_pghba = '';
 	my $disable_pgident = '';
+	my $disable_buffercache = '';
 	if (!-e "$INPUT_DIR/pg_stat_replication.csv" || -z "$INPUT_DIR/pg_stat_replication.csv") {
 		$disable_replication = ' class="disabled"';
 		$disable_canceled = ' class="disabled"';
@@ -3664,7 +3808,9 @@ sub generate_html_menu
 	if (!-e "$INPUT_DIR/pg_settings.csv" || -z "$INPUT_DIR/pg_settings.csv") {
 		$disable_pgsettings = ' class="disabled"';
 	}
-
+	if (!-e "$INPUT_DIR/pg_database_buffercache.csv" || -z "$INPUT_DIR/pg_database_buffercache.csv") {
+		$disable_buffercache = ' class="disabled"';
+	}
 	if ($#DATABASE_LIST >= 0) {
 		$menu_str .= qq{
               <li id="menu-cluster" class="dropdown">
@@ -3676,6 +3822,16 @@ sub generate_html_menu
 		      <li id="menu-cluster-connections"><a href="cluster.html#cluster-connections">Connections by type</a></li>
 		      <li id="menu-cluster-cache_ratio"><a href="cluster.html#cluster-cache_ratio">Cache utilization</a></li>
 		      <li id="menu-cluster-deadlocks"$disable_deadlock><a href="cluster.html#cluster-deadlocks">Deadlocks</a></li>
+		      <li class="divider"></li>
+			<li id="menu-pgbuffercache" class="dropdown-submenu">
+			   <a href="#" tabindex="-1">Shared buffers statistics </a>
+			      <ul class="dropdown-menu">
+			      <li id="menu-cluster-buffersused"$disable_buffercache><a href="cluster.html#cluster-buffersused">Shared buffers utilisation</a></li>
+			      <li id="menu-cluster-databaseloaded"$disable_buffercache><a href="cluster.html#cluster-databaseloaded">Database in shared buffers</a></li>
+			      <li id="menu-cluster-usagecount"$disable_buffercache><a href="cluster.html#cluster-usagecount">Usagecount in shared buffers</a></li>
+			      <li id="menu-cluster-isdirty"$disable_buffercache><a href="cluster.html#cluster-isdirty">Usagecount in dirty buffers</a></li>
+			      </ul>
+			</li>
 		      <li class="divider"></li>
 		      <li id="menu-cluster-bgwriter"><a href="cluster.html#cluster-bgwriter">Background writer buffers</a></li>
 		      <li id="menu-cluster-bgwriter_count"><a href="cluster.html#cluster-bgwriter_count">Background writer counters</a></li>
@@ -3693,10 +3849,15 @@ sub generate_html_menu
 		      <li id="menu-cluster-canceled_queries"$disable_canceled><a href="cluster.html#cluster-canceled_queries">Canceled queries</a></li>
 		      <li id="menu-cluster-conflicts"><a href="cluster.html#cluster-conflicts">Conflicts</a></li>
 		      <li class="divider"></li>
-		      <li id="menu-cluster-pgconf"$disable_pgconf><a href="cluster.html#cluster-pgconf">PostgreSQL configuration</a></li>
-		      <li id="menu-cluster-settings"$disable_pgsettings><a href="cluster.html#cluster-settings">PostgreSQL settings</a></li>
-		      <li id="menu-cluster-pghba"$disable_pghba><a href="cluster.html#cluster-pghba">PostgreSQL authorization</a></li>
-		      <li id="menu-cluster-pgident"$disable_pgident><a href="cluster.html#cluster-pgident">User Name Maps</a></li>
+			<li iœd="menu-configuration" class="dropdown-submenu">
+			   <a href="#" tabindex="-1">Configurations </a>
+			      <ul class="dropdown-menu">
+			      <li id="menu-cluster-pgconf"$disable_pgconf><a href="cluster.html#cluster-pgconf">PostgreSQL configuration</a></li>
+			      <li id="menu-cluster-settings"$disable_pgsettings><a href="cluster.html#cluster-settings">PostgreSQL settings</a></li>
+			      <li id="menu-cluster-pghba"$disable_pghba><a href="cluster.html#cluster-pghba">PostgreSQL authorization</a></li>
+			      <li id="menu-cluster-pgident"$disable_pgident><a href="cluster.html#cluster-pgident">User Name Maps</a></li>
+			     </ul>
+			</li>
 };
 		if (-e "$INPUT_DIR/pgbouncer.ini" && -e "$INPUT_DIR/pgbouncer_stats.csv") {
 			$menu_str .= qq{
