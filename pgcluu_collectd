@@ -54,6 +54,9 @@ my $OS_INFO     = 0;
 my $NOTABLESPACE= 0;
 my $PGBOUNCER_ARGS = '';
 my $INCLUDED_DB = ();
+my $SKIP_HOURS  = '';
+my @SKIP_BEGIN  = ();
+my @SKIP_END    = ();
 
 # Definition to collect metrics from the database
 my %METRICS_COMMANDS = (
@@ -265,6 +268,7 @@ my $result = GetOptions(
 	"pgbouncer-args=s" => \$PGBOUNCER_ARGS,
 	"os-info!"       => \$OS_INFO,
 	"included-db=s"  => \$INCLUDED_DB,
+	"exclude-time=s" => \$SKIP_HOURS,
 ) or die &usage();
 
 # The daemon should be stopped
@@ -315,6 +319,22 @@ if (-f $PIDFILE) {
 	&dprint("FATAL: an other process is already started, see pid in $PIDFILE\n");
 	exit 1;
 }
+
+# Check excluded times
+if ($SKIP_HOURS) {
+	my $tmp = $SKIP_HOURS;
+	my @timerange = split(/[\s\t]+/, $tmp);
+	foreach $tmp (@timerange) {
+		next if (!$tmp);
+		if ($tmp =~ m#(\d{2}):(\d{2})-(\d{2}):(\d{2})#) {
+			push(@SKIP_BEGIN, "$1$2");
+			push(@SKIP_END, "$3$4");
+		} else {
+			&dprint("FATAL: Bad time range: $tmp. Format of exclusion time must be: HH:MM-HH:MM\n");
+		}
+	}
+}
+
 
 # Validate action(s) to execute
 if ($#METRICS >= 0) {
@@ -522,6 +542,27 @@ foreach my $f (@conf_files, '/etc/pgbouncer/pgbouncer.ini') {
 my @included_dbs = split(/,/, $INCLUDED_DB);
 
 while (1) {
+
+	# Some time range may not collect data
+	my ($sec , $min, $hour, @other) = localtime(time);
+	$min = "0$min" if ($min < 10);
+	$hour = "0$hour" if ($hour < 10);
+	for (my $i = 0; $i <= $#SKIP_BEGIN; $i++) {
+		if ( $SKIP_BEGIN[$i] <= $SKIP_END[$i] ) {
+			if ( ("$hour$min" >= $SKIP_BEGIN[$i]) && ("$hour$min" <= $SKIP_END[$i]) ) {
+				# Wait next run
+				sleep($INTERVAL);
+				next;
+			}
+		} elsif ( $SKIP_BEGIN[$i] > $SKIP_END[$i] ) {
+			if ( ("$hour$min" >= $SKIP_BEGIN[$i]) && ("$hour$min" < 2400) ||
+					("$hour$min" <= $SKIP_END[$i]) && ("$hour$min" > 0)) {
+				# Wait for next run
+				sleep($INTERVAL);
+				next;
+			}
+		}
+	}
 
 	# Collecting database statistics
 	open(PSQL, "| $PSQL_PROG");
