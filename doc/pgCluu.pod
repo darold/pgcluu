@@ -129,6 +129,8 @@ options:
 			   look at pg_stat_(all|user) tables. Default: user.
   --pgversion X.Y          force the PostgreSQL version to the given value.
   --pgservice NAME         Name of service inside of the pg_service.conf file.
+  --exclude-time RANGE     exclude a laps of time by giving the start and end
+                           hours.
   --help                   print usage
 
 For example, as postgres user:
@@ -140,6 +142,10 @@ to collect statistics from pgbouncer too:
 
         pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb \
                 --pgbouncer-args='-p 5342'
+
+to disable statistics collect between 22:30 and 06:30 the next day:
+
+        pgcluu_collectd -D -i 60 /tmp/stat_db1/ --exclude-time "22:30-06:30"
 
 
 then after some long time and activities on the database, stop the daemon:
