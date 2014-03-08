@@ -458,6 +458,14 @@ my $sar_command = "LC_ALL=C $SAR_PROG -t -p -A 1 1 >>$SAR_FILE";
 # Remove action that can't be run with the PostgreSQL version
 &verify_action();
 
+# Check if the connection database has pg_buffercache installed
+if (!&has_pg_buffercache()) {
+	delete $METRICS_COMMANDS{'database_buffercache_stats'};
+	delete $METRICS_COMMANDS{'database_usagecount_stats'};
+	delete $METRICS_COMMANDS{'relation_buffercache_stats'};
+	delete $METRICS_COMMANDS{'database_isdirty_stats'};
+} 
+
 # Generating global statistics collector SQL script 
 my $script_sql = &create_sql_script();
 if (!$script_sql) {
@@ -475,13 +483,6 @@ if ($#dbnames >= 0) {
 	# or by querying the database list
 	@alldbs = &get_databases();
 }
-# Check if the connection database has pg_buffercache installed
-if (!&has_pg_buffercache()) {
-	delete $METRICS_COMMANDS{'database_buffercache_stats'};
-	delete $METRICS_COMMANDS{'database_usagecount_stats'};
-	delete $METRICS_COMMANDS{'relation_buffercache_stats'};
-	delete $METRICS_COMMANDS{'database_isdirty_stats'};
-} 
 
 # Collect general information about each database
 if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
