@@ -1201,43 +1201,47 @@ sub pg_stat_database
 		my @data = split(/;/);
 		next if (!&normalyze_line(\@data));
 
-		# Gather select statement
+		# timestamp | datid | datname | numbackends | xact_commit | xact_rollback | blks_read | blks_hit | tup_returned | tup_fetched | tup_inserted | tup_updated | tup_deleted | conflicts | stats_reset | temp_files | temp_bytes | deadlocks | blk_read_time | blk_write_time
 		push(@{$start_vals{$data[2]}}, @data) if ($#{$start_vals{$data[2]}} < 0);
 
-		(($data[8] - $start_vals{$data[2]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[2]}[8]);
-		$database_stat{$data[2]}{returned} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-		$all_database_stat{$data[0]}{returned} += $tmp_val;
+		if ($#data >= 8) {
 
-		(($data[9] - $start_vals{$data[2]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[2]}[9]);
-		$database_stat{$data[2]}{fetched} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-		$all_database_stat{$data[0]}{fetched} += $tmp_val;
-		$total_qtype{$data[2]} += $tmp_val;
-		$total_query_type{$data[2]}{'select'} += $tmp_val;
-		$OVERALL_STATS{'cluster'}{'read_tuples'} += $tmp_val;
-		$OVERALL_STATS{'database'}{$data[2]}{'read_tuples'} += $tmp_val;
-		$OVERALL_STATS{'start_date'} = $data[0] if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} > $data[0]));
-		$OVERALL_STATS{'end_date'} = $data[0] if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} < $data[0]));
+			(($data[8] - $start_vals{$data[2]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[2]}[8]);
+			$database_stat{$data[2]}{returned} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[0]}{returned} += $tmp_val;
+			$total_query_type{$data[2]}{'select'} += $tmp_val;
+			$total_qtype{$data[2]} += $tmp_val;
+			$OVERALL_STATS{'cluster'}{'read_tuples'} += $tmp_val;
+			$OVERALL_STATS{'database'}{$data[2]}{'read_tuples'} += $tmp_val;
 
-		# Gather insert statement
-		(($data[10] - $start_vals{$data[2]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[2]}[10]);
-		$database_stat{$data[2]}{insert} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-		$all_database_stat{$data[0]}{insert} += $tmp_val;
-		$total_qtype{$data[2]} += $tmp_val;
-		$total_query_type{$data[2]}{'insert'} += $tmp_val;
+			(($data[9] - $start_vals{$data[2]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[2]}[9]);
+			$database_stat{$data[2]}{fetched} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[0]}{fetched} += $tmp_val;
 
-		# Gather update statement
-		(($data[11] - $start_vals{$data[2]}[11]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[11] - $start_vals{$data[2]}[11]);
-		$database_stat{$data[2]}{update} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-		$all_database_stat{$data[0]}{update} += $tmp_val;
-		$total_qtype{$data[2]} += $tmp_val;
-		$total_query_type{$data[2]}{'update'} += $tmp_val;
+			$OVERALL_STATS{'start_date'} = $data[0] if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} > $data[0]));
+			$OVERALL_STATS{'end_date'} = $data[0] if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} < $data[0]));
 
-		# Gather delete statement
-		(($data[12] - $start_vals{$data[2]}[12]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[12] - $start_vals{$data[2]}[12]);
-		$database_stat{$data[2]}{delete} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-		$all_database_stat{$data[0]}{delete} += $tmp_val;
-		$total_qtype{$data[2]} += $tmp_val;
-		$total_query_type{$data[2]}{'delete'} += $tmp_val;
+			# Gather insert statement
+			(($data[10] - $start_vals{$data[2]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[2]}[10]);
+			$database_stat{$data[2]}{insert} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[0]}{insert} += $tmp_val;
+			$total_qtype{$data[2]} += $tmp_val;
+			$total_query_type{$data[2]}{'insert'} += $tmp_val;
+
+			# Gather update statement
+			(($data[11] - $start_vals{$data[2]}[11]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[11] - $start_vals{$data[2]}[11]);
+			$database_stat{$data[2]}{update} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[0]}{update} += $tmp_val;
+			$total_qtype{$data[2]} += $tmp_val;
+			$total_query_type{$data[2]}{'update'} += $tmp_val;
+
+			# Gather delete statement
+			(($data[12] - $start_vals{$data[2]}[12]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[12] - $start_vals{$data[2]}[12]);
+			$database_stat{$data[2]}{delete} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[0]}{delete} += $tmp_val;
+			$total_qtype{$data[2]} += $tmp_val;
+			$total_query_type{$data[2]}{'delete'} += $tmp_val;
+		}
 
 		# Gather blks_read
 		my $tmp_read = '';
@@ -1319,7 +1323,7 @@ sub pg_stat_database
 		$database_stat{'all'}{fetched} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{fetched}/$interval)) . '],';
 		$database_stat{'all'}{update} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{update}/$interval)) . '],';
 		$database_stat{'all'}{delete} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{delete}/$interval)) . '],';
-		$total_qtype{'all'} +=  $all_database_stat{$time}{insert} + $all_database_stat{$time}{fetched} + $all_database_stat{$time}{update} + $all_database_stat{$time}{delete};
+		$total_qtype{'all'} +=  $all_database_stat{$time}{insert} + $all_database_stat{$time}{returned} + $all_database_stat{$time}{update} + $all_database_stat{$time}{delete};
 		$all_database_stat{$time}{blks_read} ||= 0;
 		$all_database_stat{$time}{blks_hit} ||= 0;
 		$database_stat{'all'}{blks_read} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{blks_read}/$interval)) . '],';
@@ -1327,7 +1331,7 @@ sub pg_stat_database
 		$total_query_type{'all'}{'insert'} += $all_database_stat{$time}{insert};
 		$total_query_type{'all'}{'delete'} += $all_database_stat{$time}{delete};
 		$total_query_type{'all'}{'update'} += $all_database_stat{$time}{update};
-		$total_query_type{'all'}{'select'} += $all_database_stat{$time}{fetched};
+		$total_query_type{'all'}{'select'} += $all_database_stat{$time}{returned};
 
 		if (($all_database_stat{$time}{blks_read} + $all_database_stat{$time}{blks_hit}) > 0) {
 			$database_stat{'all'}{ratio_hit_miss} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{blks_hit}*100)/($all_database_stat{$time}{blks_read} + $all_database_stat{$time}{blks_hit})) . '],';
@@ -1889,7 +1893,7 @@ sub pg_stat_user_indexes
 		my @data = split(/;/);
 		next if (!&normalyze_line(\@data));
 
-		# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | idx_tup_read | dx_tup_fetch
+		# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | idx_tup_read | idx_tup_fetch
 		$data[6] = "$data[4].$data[5].$data[6]";
 		push(@{$start_vals{$data[1]}{$data[6]}}, @data) if ($#{$start_vals{$data[1]}{$data[6]}} < 0);
 
@@ -3601,7 +3605,7 @@ EOF
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'size'}</span> <span class="figure-label">Cluster size</span></li>
 		<li><span class="figure">$database_number</span> <span class="figure-label">Databases</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'nbackend'}</span> <span class="figure-label">Connections</span></li>
-		<li><span class="figure">$OVERALL_STATS{'cluster'}{'read_tuples'}</span> <span class="figure-label">Tuples fetched</span></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'read_tuples'}</span> <span class="figure-label">Tuples returned</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'cache_ratio'}</span> <span class="figure-label">Hit cache ratio</span></li>
 		$temp_file_info
 		$deadlock_info
