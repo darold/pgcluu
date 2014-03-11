@@ -414,12 +414,15 @@ if (!$DAEMONIZE) {
 	print "\n*** $PROGRAM v$VERSION (pid:$$) started at " . localtime(time) . "\n";
 	print "Type Ctrl+c to quit.\n\n";
 } else {
-        # detach from terminal
-        my $pid = fork;
-        exit 0 if ($pid);
-        die "FATAL: Couldn't fork: $!" unless defined($pid);
-        POSIX::setsid() or die "Can't detach: \$!";
-        &dprint("LOG: Detach from terminal with pid: $$\n");
+	# detach from terminal
+	my $pid = fork;
+	exit 0 if ($pid);
+	die "FATAL: Couldn't fork: $!" unless defined($pid);
+	POSIX::setsid() or die "Can't detach: \$!";
+	&dprint("LOG: Detach from terminal with pid: $$\n");
+	open(STDIN, "/dev/null");
+	open(STDOUT, ">/dev/null");
+	open(STDERR, ">/dev/null");
 }
 
 
