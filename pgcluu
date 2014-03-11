@@ -1190,6 +1190,7 @@ sub pg_stat_database
 	my %start_vals = ();
 	my %total_count = ();
 	my $tmp_val = 0;
+	my $has_tuples = 0;
 	my $has_conflict = 0;
 	my $has_temp = 0;
 	my %total_qtype = ();
@@ -1241,6 +1242,8 @@ sub pg_stat_database
 			$all_database_stat{$data[0]}{delete} += $tmp_val;
 			$total_qtype{$data[2]} += $tmp_val;
 			$total_query_type{$data[2]}{'delete'} += $tmp_val;
+
+			$has_tuples = 1;
 		}
 
 		# Gather blks_read
@@ -1318,20 +1321,23 @@ sub pg_stat_database
 	$curfh->close();
 
 	foreach my $time (sort {$a <=> $b} keys %all_database_stat) {
-		$database_stat{'all'}{insert} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{insert}/$interval)) . '],';
-		$database_stat{'all'}{returned} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{returned}/$interval)) . '],';
-		$database_stat{'all'}{fetched} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{fetched}/$interval)) . '],';
-		$database_stat{'all'}{update} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{update}/$interval)) . '],';
-		$database_stat{'all'}{delete} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{delete}/$interval)) . '],';
-		$total_qtype{'all'} +=  $all_database_stat{$time}{insert} + $all_database_stat{$time}{returned} + $all_database_stat{$time}{update} + $all_database_stat{$time}{delete};
+		if ($has_tuples) {
+			$database_stat{'all'}{insert} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{insert}/$interval)) . '],';
+			$database_stat{'all'}{returned} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{returned}/$interval)) . '],';
+			$database_stat{'all'}{fetched} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{fetched}/$interval)) . '],';
+			$database_stat{'all'}{update} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{update}/$interval)) . '],';
+			$database_stat{'all'}{delete} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{delete}/$interval)) . '],';
+			$total_qtype{'all'} +=  $all_database_stat{$time}{insert} + $all_database_stat{$time}{returned} + $all_database_stat{$time}{update} + $all_database_stat{$time}{delete};
+
+			$total_query_type{'all'}{'insert'} += $all_database_stat{$time}{insert};
+			$total_query_type{'all'}{'delete'} += $all_database_stat{$time}{delete};
+			$total_query_type{'all'}{'update'} += $all_database_stat{$time}{update};
+			$total_query_type{'all'}{'select'} += $all_database_stat{$time}{returned};
+		}
 		$all_database_stat{$time}{blks_read} ||= 0;
 		$all_database_stat{$time}{blks_hit} ||= 0;
 		$database_stat{'all'}{blks_read} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{blks_read}/$interval)) . '],';
 		$database_stat{'all'}{blks_hit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{blks_hit}/$interval)) . '],';
-		$total_query_type{'all'}{'insert'} += $all_database_stat{$time}{insert};
-		$total_query_type{'all'}{'delete'} += $all_database_stat{$time}{delete};
-		$total_query_type{'all'}{'update'} += $all_database_stat{$time}{update};
-		$total_query_type{'all'}{'select'} += $all_database_stat{$time}{returned};
 
 		if (($all_database_stat{$time}{blks_read} + $all_database_stat{$time}{blks_hit}) > 0) {
 			$database_stat{'all'}{ratio_hit_miss} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{blks_hit}*100)/($all_database_stat{$time}{blks_read} + $all_database_stat{$time}{blks_hit})) . '],';
@@ -1357,9 +1363,11 @@ sub pg_stat_database
 
 			if ($data_info{$id}{name} eq 'database-write_ratio') {
 
-				$database_stat{$db}{insert} =~ s/,$//;
-				$database_stat{$db}{update} =~ s/,$//;
-				$database_stat{$db}{delete} =~ s/,$//;
+				if ($has_tuples) {
+					$database_stat{$db}{insert} =~ s/,$//;
+					$database_stat{$db}{update} =~ s/,$//;
+					$database_stat{$db}{delete} =~ s/,$//;
+				}
 				if ($db ne 'all') {
 					$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-write_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{insert}, $database_stat{$db}{update}, $database_stat{$db}{delete}) );
 				} else {
@@ -1368,8 +1376,10 @@ sub pg_stat_database
 
 			} elsif ($data_info{$id}{name} eq 'database-read_ratio') {
 
-				$database_stat{$db}{returned} =~ s/,$//;
-				$database_stat{$db}{fetched} =~ s/,$//;
+				if ($has_tuples) {
+					$database_stat{$db}{returned} =~ s/,$//;
+					$database_stat{$db}{fetched} =~ s/,$//;
+				}
 				if ($db ne 'all') {
 					$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-read_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{returned}, $database_stat{$db}{fetched}) );
 				} else {
@@ -3629,7 +3639,12 @@ EOF
 		<li></li>
 		<li><span class="figure">$overall_database_stats{'size'}[1]</span> <span class="figure-label">Largest database</span><br/><span class="figure-date">($overall_database_stats{'size'}[0])</span></li>
 		<li><span class="figure">$overall_database_stats{'nbackend'}[1]</span> <span class="figure-label">Most connections</span><br/><span class="figure-date">($overall_database_stats{'nbackend'}[0])</span></li>
-		<li><span class="figure">$overall_database_stats{'read_tuples'}[1]</span> <span class="figure-label">Most tuples fetched</span><br/><span class="figure-date">($overall_database_stats{'read_tuples'}[0])</span></li>
+EOF
+		if (exists $overall_database_stats{'read_tuples'}) {
+			print $fh qq{<li><span class="figure">$overall_database_stats{'read_tuples'}[1]</span> <span class="figure-label">Most tuples fetched</span><br/><span class="figure-date">($overall_database_stats{'read_tuples'}[0])</span></li>
+};
+		}
+		print $fh <<EOF;
 		<li><span class="figure">$overall_database_stats{'cache_ratio'}[1]%</span> <span class="figure-label">Worst cache utilization</span><br/><span class="figure-date">($overall_database_stats{'cache_ratio'}[0])</span></li>
 EOF
 		if (exists $overall_database_stats{'temp_files'} && $overall_database_stats{'temp_files'}[1]) {
@@ -5125,6 +5140,7 @@ sub flotr2_linegraph_array
 	my $data2 = '';
 	my $id = 1;
 	for (my $i = 0; $i <= $#data; $i++) {
+		next if (!$data[$i]);
 		$data[$i] ||= '';
 		$data[$i] = "var d$id = [$data[$i]];\n";
 		my $color = '';
@@ -5218,14 +5234,28 @@ sub flotr2_linegraph
 	}
 
 	my $dateTracker_lblopts = '';
-	map { if (/label: "([^"]+)"/) { $dateTracker_lblopts .= "'$1',"; } } @$legend;
-	$dateTracker_lblopts =~ s/,$//;
-	$dateTracker_lblopts = "[$dateTracker_lblopts]";
-
 	my $dateTracker_dataopts = '';
-	map { if (/var (d\d+) =/) { $dateTracker_dataopts .= "$1,"; } } @$data;
-	$dateTracker_dataopts =~ s/,$//;
-	$dateTracker_dataopts = "[$dateTracker_dataopts]";
+	my $has_data = 0;
+	if ($#{$data} >= 0) {
+		for (my $i = 0; $i <= $#{$legend}; $i++) {
+			next if (!$legend->[$i]);
+			if ($legend->[$i] =~ /label: "([^"]+)"/) {
+				$dateTracker_lblopts .= "'$1',";
+			}
+		}
+		$dateTracker_lblopts =~ s/,$//;
+		$dateTracker_lblopts = "[$dateTracker_lblopts]";
+
+		for (my $i = 0; $i <= $#{$data}; $i++) {
+			next if (!$data->[$i]);
+			if ($data->[$i] =~ /var (d\d+) =/) {
+				$dateTracker_dataopts .= "$1,";
+				$has_data = 1;
+			}
+		}
+		$dateTracker_dataopts =~ s/,$//;
+		$dateTracker_dataopts = "[$dateTracker_dataopts]";
+	}
 
 	my $cssgraph = 'linegraph';
 	my $write_buttons = "write_buttons($buttonid);";
@@ -5238,7 +5268,7 @@ sub flotr2_linegraph
 		$vnoTicks = 4;
 	}
 
-	if ($#{$data} >= 0) {
+	if ($has_data) {
 		$str .= <<EOF;
 <div id="$divid$buttonid" class="$cssgraph"></div>
 <script type="text/javascript">
