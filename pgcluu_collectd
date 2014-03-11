@@ -455,13 +455,6 @@ if ($#dbnames >= 0) {
 	# or by querying the database list
 	@alldbs = &get_databases();
 }
-# Check if the connection database has pg_buffercache installed
-if (!&has_pg_buffercache()) {
-	delete $METRICS_COMMANDS{'database_buffercache_stats'};
-	delete $METRICS_COMMANDS{'database_usagecount_stats'};
-	delete $METRICS_COMMANDS{'relation_buffercache_stats'};
-	delete $METRICS_COMMANDS{'database_isdirty_stats'};
-} 
 
 # Collect general information about each database
 if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
@@ -524,7 +517,7 @@ my @included_dbs = split(/,/, $INCLUDED_DB);
 while (1) {
 
 	# Collecting database statistics
-	open(PSQL, "| $PSQL_PROG");
+	open(PSQL, "| $PSQL_PROG -q");
 	print PSQL $script_sql, "\n";
 	close(PSQL);
 
@@ -619,6 +612,7 @@ sub verify_action
 	if (!&backend_minimum_version(8, 4)) {
 		delete $METRICS_COMMANDS{'functions_stats'};
 		delete $METRICS_COMMANDS{'redundant_indexes_stats'};
+		delete $METRICS_COMMANDS{'missing_fkindexes_stats'};
 	}
 	if (!&backend_minimum_version(8, 2)) {
 		delete $METRICS_COMMANDS{'xlog_stats'};
@@ -626,6 +620,12 @@ sub verify_action
 	if (!$DB_INFO{has_stat_statement}) {
 		delete $METRICS_COMMANDS{'statements_stats'};
 	}
+	if (!&has_pg_buffercache()) {
+		delete $METRICS_COMMANDS{'database_buffercache_stats'};
+		delete $METRICS_COMMANDS{'database_usagecount_stats'};
+		delete $METRICS_COMMANDS{'relation_buffercache_stats'};
+		delete $METRICS_COMMANDS{'database_isdirty_stats'};
+	} 
 	if (!&is_superuser($DBUSER)) {
 		delete $METRICS_COMMANDS{'xlog_stats'};
 	}
@@ -656,7 +656,9 @@ sub create_sql_script
 		$sql_queries .= <<EOF
 -- $type
 \\o | cat $FILE_REDIR $OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}
-COPY ($sql) TO STDOUT CSV DELIMITER ';';
+CREATE TEMP TABLE __pgcluu as $sql;
+COPY __pgcluu TO STDOUT CSV DELIMITER ';';
+DROP TABLE __pgcluu;
 
 EOF
 	}
@@ -1223,10 +1225,11 @@ sub dump_pgstatconnections
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), COUNT(*) AS total, coalesce(SUM((%s)::integer), 0) AS active, " .
-		"coalesce(SUM(waiting::integer), 0) AS waiting, " .
+		"%s AS waiting, " .
 		"coalesce(SUM((%s)::integer), 0) AS idle_in_xact, datname " .
 		"FROM pg_stat_activity WHERE %s <> pg_backend_pid() GROUP BY datname" ,
 		&backend_minimum_version(9, 2) ? "state NOT LIKE 'idle%'" : "current_query NOT IN ('<IDLE>','<IDLE> in transaction')",
+		&backend_minimum_version(8, 2) ? "coalesce(SUM(waiting::integer), 0)" : "0::integer",
 		&backend_minimum_version(9, 2) ? "state = 'idle in transaction'" : "current_query = '<IDLE> in transaction'",
 		&backend_minimum_version(9, 2) ? "pid" : "procpid" ,
 	);
@@ -1238,7 +1241,7 @@ sub dump_pgstatlocktypes
 {
 
 	my $sql = sprintf(
-		"SELECT date_trunc('seconds', now()), current_database(), 'lock_type' as label, " .
+		"SELECT date_trunc('seconds', now()), current_database(), 'lock_type'::text as label, " .
 		"locktype, count(locktype) as count " .
 		"FROM pg_locks GROUP BY locktype"
 	);
@@ -1250,7 +1253,7 @@ sub dump_pgstatlockmodes
 {
 
 	my $sql = sprintf(
-		"SELECT date_trunc('seconds', now()), current_database(), 'lock_mode' as label, " .
+		"SELECT date_trunc('seconds', now()), current_database(), 'lock_mode'::text as label, " .
 		"mode, count(mode) as count " .
 		"FROM pg_locks GROUP BY mode"
 	);
@@ -1262,7 +1265,7 @@ sub dump_pgstatlockgranted
 {
 
 	my $sql = sprintf(
-		"SELECT date_trunc('seconds', now()), current_database(), 'lock_granted' as label, " .
+		"SELECT date_trunc('seconds', now()), current_database(), 'lock_granted'::text as label, " .
 		"granted, count(granted) as count " .
 		"FROM pg_locks GROUP BY granted"
 	);
@@ -1443,10 +1446,10 @@ sub dump_pgsettings
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), category, name, " .
-		" setting, unit, context, source " . 
+		" setting, %s, context, source " . 
 		"FROM pg_settings " . 
-		"ORDER BY category,name" 
-
+		"ORDER BY category,name",
+		&backend_minimum_version(8, 4) ? "unit" : "''::text as unit",
 	);
 
 	return $sql;
@@ -1483,7 +1486,7 @@ sub dump_missingfkindexes
 		"         array_to_string(column_name_list, '_') || ' ON ' || conrelid || " . 
 		"         ' (' || array_to_string(column_name_list, ',') || ')' AS ddl " . 
 		"FROM (SELECT DISTINCT conrelid, " . 
-		"       array_agg(attname) column_name_list, " . 
+		"       array_agg(attname) AS column_name_list, " . 
 		"       array_agg(attnum) AS column_list " . 
 		"     FROM pg_attribute " . 
 		"          JOIN (SELECT conrelid::regclass, conname, " . 
