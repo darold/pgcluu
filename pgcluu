@@ -1190,6 +1190,8 @@ sub compute_dbstat_graph
 		my %total_qtype = ();
 		my %total_query_type = ();
 		while (<IN>) {
+			no warnings;
+
 			my @data = split(/;/);
 			next if (!&normalyze_line(\@data));
 
