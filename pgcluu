@@ -360,7 +360,7 @@ my %DB_GRAPH_INFOS = (
 		},
 		'2' => {
 			'name' =>  'database-replication',
-			'title' => 'Replication lag on',
+			'title' => 'Replication lag with %s',
 			'description' => 'Lag of replication between the master and the slave in KiloBytes',
 			'ylabel' => 'Lag sizes',
 			'legends' => ['Sent','Write','Replay'],
@@ -2461,14 +2461,15 @@ sub pg_stat_replication
 		my @data = split(/;/);
 		next if (!&normalyze_line(\@data));
 
+		# timestamp | pid | usesysid | usename | application_name | client_addr | client_hostname | client_port | backend_start | state | master_location | sent_location | write_location | flush_location | replay_location | sync_priority | sync_state
 		push(@start_vals, @data) if ($#start_vals < 0);
 		my $tmp_val = 0;
 		# Do not care about BACKUP connection
 		if (uc($data[9]) eq 'STREAMING') {
-			$tmp_xlog_stat{$data[0]}{master_location} = &getNumericalOffset($data[10]) - &getNumericalOffset($start_vals[10]) if (!$tmp_xlog_stat{$data[0]}{master_location});
 			my $name = $data[5];
 			$data[6] =~ s/"//g;
 			$name .= " - $data[6]" if ($data[6]);
+			$tmp_xlog_stat{$data[0]}{master_location} = &getNumericalOffset($data[10]) - &getNumericalOffset($start_vals[10]) if (!$tmp_xlog_stat{$data[0]}{master_location});
 			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[14])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[14]));
 			$xlog_stat{$name}{replay_location} .= '[' . $data[0] . ',' . sprintf("%.2f", ($tmp_val/$interval)) . '],';
 			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[11])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[11]));
@@ -2494,11 +2495,12 @@ sub pg_stat_replication
 
 		} elsif ($data_info{$id}{name} eq 'database-replication') {
 			foreach my $host (sort {$a cmp $b} keys %xlog_stat) {
+				next if ($host eq 'master_location');
 				$xlog_stat{$host}{sent_location} =~ s/,$//;
 				$xlog_stat{$host}{write_location} =~ s/,$//;
 				$xlog_stat{$host}{flush_location} =~ s/,$//;
 				$xlog_stat{$host}{replay_location} =~ s/,$//;
-				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-replication', \%{$data_info{$id}}, $data_info{$id}{title} . " $host", $xlog_stat{$host}{sent_location}, $xlog_stat{$host}{write_location}, $xlog_stat{$host}{replay_location});
+				print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-replication', \%{$data_info{$id}}, $host, $xlog_stat{$host}{sent_location}, $xlog_stat{$host}{write_location}, $xlog_stat{$host}{replay_location});
 			}
 		}
 	}
@@ -3280,6 +3282,7 @@ sub pg_settings
 		</div>
 	    </div>
 	</div>
+    </li>
 };
 }
 
@@ -4026,11 +4029,16 @@ sub generate_html_menu
                 <ul class="dropdown-menu">
 		      <li id="menu-cluster-size"><a href="cluster.html#cluster-size">Databases sizes</a></li>
 		      <li id="menu-tablespace-cluster-size"$disable_tablespace><a href="cluster.html#tablespace-cluster-size">Tablespaces sizes</a></li>
-		      <li id="menu-cluster-backends"><a href="cluster.html#cluster-backends">Connections</a></li>
-		      <li id="menu-cluster-connections"><a href="cluster.html#cluster-connections">Connections by type</a></li>
-		      <li id="menu-cluster-cache_ratio"><a href="cluster.html#cluster-cache_ratio">Cache utilization</a></li>
+			<li id="menu-connectionbackend" class="dropdown-submenu">
+			   <a href="#" tabindex="-1">Connections </a>
+			      <ul class="dropdown-menu">
+			      <li id="menu-cluster-backends"><a href="cluster.html#cluster-backends">Connections</a></li>
+			      <li id="menu-cluster-connections"><a href="cluster.html#cluster-connections">Connections by type</a></li>
+			      </ul>
+			</li>
 		      <li id="menu-cluster-deadlocks"$disable_deadlock><a href="cluster.html#cluster-deadlocks">Deadlocks</a></li>
 		      <li class="divider"></li>
+		       <li id="menu-cluster-cache_ratio"><a href="cluster.html#cluster-cache_ratio">Cache utilization</a></li>
 			<li id="menu-pgbuffercache" class="dropdown-submenu">
 			   <a href="#" tabindex="-1">Shared buffers statistics </a>
 			      <ul class="dropdown-menu">
@@ -4041,31 +4049,54 @@ sub generate_html_menu
 			      </ul>
 			</li>
 		      <li class="divider"></li>
-		      <li id="menu-cluster-bgwriter"><a href="cluster.html#cluster-bgwriter">Background writer buffers</a></li>
-		      <li id="menu-cluster-bgwriter_count"><a href="cluster.html#cluster-bgwriter_count">Background writer counters</a></li>
-		      <li id="menu-cluster-xlog_files"$disable_xlog><a href="cluster.html#cluster-xlog_files">Wal files</a></li>
-		      <li id="menu-cluster-replication"$disable_replication><a href="cluster.html#cluster-replication">Replication</a></li>
-		      <li id="menu-cluster-temporary_file"$disable_tempfile><a href="cluster.html#cluster-temporary_file">Temporary files</a></li>
-		      <li id="menu-cluster-temporary_file_bytes"$disable_tempfile><a href="cluster.html#cluster-temporary_file_bytes">Temporary files size</a></li>
-		      <li id="menu-cluster-checkpoints"><a href="cluster.html#cluster-checkpoints">Checkpoints counter</a></li>
-		      <li id="menu-cluster-checkpoints_time"$disable_checkpointwrite><a href="cluster.html#cluster-checkpoints">Checkpoints write time</a></li>
-		      <li id="menu-cluster-read_ratio"><a href="cluster.html#cluster-read_ratio">Read tuples</a></li>
-		      <li id="menu-cluster-commits_rollbacks"><a href="cluster.html#cluster-commits_rollbacks">Commits vs Rollbacks</a></li>
+			<li id="menu-backgroundwriter" class="dropdown-submenu">
+			   <a href="#" tabindex="-1">Background writer </a>
+			      <ul class="dropdown-menu">
+			      <li id="menu-cluster-bgwriter"><a href="cluster.html#cluster-bgwriter">Background writer buffers</a></li>
+			      <li id="menu-cluster-bgwriter_count"><a href="cluster.html#cluster-bgwriter_count">Background writer counters</a></li>
+			      </ul>
+		        </li>
+			<li id="menu-temporaryfiles" class="dropdown-submenu">
+			   <a href="#" tabindex="-1">Temporary files </a>
+			      <ul class="dropdown-menu">
+			      <li id="menu-cluster-temporary_file"$disable_tempfile><a href="cluster.html#cluster-temporary_file">Temporary files</a></li>
+			      <li id="menu-cluster-temporary_file_bytes"$disable_tempfile><a href="cluster.html#cluster-temporary_file_bytes">Temporary files size</a></li>
+			      </ul>
+		        </li>
+			<li id="menu-walcheckpoint" class="dropdown-submenu">
+			   <a href="#" tabindex="-1">Wal / Checkpoint </a>
+			      <ul class="dropdown-menu">
+			      <li id="menu-cluster-xlog_files"$disable_xlog><a href="cluster.html#cluster-xlog_files">Wal files</a></li>
+			      <li id="menu-cluster-checkpoints"><a href="cluster.html#cluster-checkpoints">Checkpoints counter</a></li>
+			      <li id="menu-cluster-checkpoints_time"$disable_checkpointwrite><a href="cluster.html#cluster-checkpoints">Checkpoints write time</a></li>
+			      </ul>
+		        </li>
+			<li id="menu-rw" class="dropdown-submenu">
+			   <a href="#" tabindex="-1">Queries Reads / Writes </a>
+			      <ul class="dropdown-menu">
+			      <li id="menu-cluster-read_ratio"><a href="cluster.html#cluster-read_ratio">Read tuples</a></li>
+			      <li id="menu-cluster-write_ratio"><a href="cluster.html#cluster-write_ratio">Write ratio</a></li>
+			      <li id="menu-cluster-read_write_query"><a href="cluster.html#cluster-read_write_query">Read vs Write queries</a></li>
+			      <li id="menu-cluster-commits_rollbacks"><a href="cluster.html#cluster-commits_rollbacks">Commits vs Rollbacks</a></li>
+			      </ul>
+		        </li>
 		      <li class="divider"></li>
-		      <li id="menu-cluster-write_ratio"><a href="cluster.html#cluster-write_ratio">Write ratio</a></li>
-		      <li id="menu-cluster-read_write_query"><a href="cluster.html#cluster-read_write_query">Read vs Write queries</a></li>
-		      <li id="menu-cluster-canceled_queries"$disable_canceled><a href="cluster.html#cluster-canceled_queries">Canceled queries</a></li>
-		      <li id="menu-cluster-conflicts"><a href="cluster.html#cluster-conflicts">Conflicts</a></li>
+			<li id="menu-replication" class="dropdown-submenu">
+			   <a href="#" tabindex="-1">Replication statistics </a>
+			      <ul class="dropdown-menu">
+			      <li id="menu-cluster-replication"$disable_replication><a href="cluster.html#cluster-replication">Replication lag</a></li>
+			      <li id="menu-cluster-canceled_queries"$disable_canceled><a href="cluster.html#cluster-canceled_queries">Canceled queries</a></li>
+			      <li id="menu-cluster-conflicts"><a href="cluster.html#cluster-conflicts">Conflicts</a></li>
+			      </ul>
+		        </li>
 		      <li class="divider"></li>
-			<li iœd="menu-configuration" class="dropdown-submenu">
+			<li id="menu-configuration" class="dropdown-submenu">
 			   <a href="#" tabindex="-1">Configurations </a>
 			      <ul class="dropdown-menu">
 			      <li id="menu-cluster-pgconf"$disable_pgconf><a href="cluster.html#cluster-pgconf">PostgreSQL configuration</a></li>
 			      <li id="menu-cluster-settings"$disable_pgsettings><a href="cluster.html#cluster-settings">PostgreSQL settings</a></li>
 			      <li id="menu-cluster-pghba"$disable_pghba><a href="cluster.html#cluster-pghba">PostgreSQL authorization</a></li>
 			      <li id="menu-cluster-pgident"$disable_pgident><a href="cluster.html#cluster-pgident">User Name Maps</a></li>
-			     </ul>
-			</li>
 };
 		if (-e "$INPUT_DIR/pgbouncer.ini" && -e "$INPUT_DIR/pgbouncer_stats.csv") {
 			$menu_str .= qq{
@@ -4073,6 +4104,8 @@ sub generate_html_menu
 };
 		}
 		$menu_str .= qq{
+			     </ul>
+			</li>
                 </ul>
               </li>
               <li id="menu-database" class="dropdown">
@@ -5482,7 +5515,6 @@ EOF
 		$str .= '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
 	}
 	$str .= qq{
-	      </p>
               </div>
               </div>
             </div><!--/span-->
