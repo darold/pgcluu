@@ -68,6 +68,7 @@ my %HAS_TABLE_STATIO = ();
 my %HAS_INDEX_STATS  = ();
 my %HAS_INDEX_STATIO = ();
 my %HAS_FUNCTION_STATS = ();
+my %HAS_DB_INFO = ();
 my $TOP_STATIO       = 10;
 
 my ($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
@@ -1444,6 +1445,7 @@ sub pg_stat_database
 					$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{nbackend}) );
 				}
 				delete $database_stat{$db}{nbackend};
+				$HAS_DB_INFO{$db}{'database-backends'} = 1;
 				$found++;
 
 			} elsif ($has_conflict && ($data_info{$id}{name} eq 'database-canceled_queries')) {
@@ -1454,6 +1456,7 @@ sub pg_stat_database
 					$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{canceled_queries}) );
 				}
 				delete $database_stat{$db}{canceled_queries};
+				$HAS_DB_INFO{$db}{'database-canceled_queries'} = 1;
 				$found++;
 
 			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-deadlocks')) {
@@ -1464,20 +1467,29 @@ sub pg_stat_database
 					$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{deadlocks}) );
 				}
 				delete $database_stat{$db}{deadlocks};
+				$HAS_DB_INFO{$db}{'database-deadlocks'} = 1;
 				$found++;
 
 			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-temporary_file')) {
 
 				$database_stat{$db}{temp_files} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{temp_files};
+				if ($db ne 'all') {
+					$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{temp_files}) );
+				}
+				delete $database_stat{$db}{temp_files};
+				$HAS_DB_INFO{$db}{'database-temporary_file'} = 1;
+				$found++;
+
+			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-temporary_count')) {
+
 				$database_stat{$db}{temp_bytes} =~ s/,$//;
 				$data2{$db} = $database_stat{$db}{temp_bytes};
 				if ($db ne 'all') {
-					$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{temp_files}) );
 					$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}.'_bytes', \%{$data_info{$id}}, $db, $database_stat{$db}{temp_bytes}) );
 				}
-				delete $database_stat{$db}{temp_files};
 				delete $database_stat{$db}{temp_bytes};
+				$HAS_DB_INFO{$db}{'database-temporary_count'} = 1;
 				$found++;
 
 			}
@@ -2878,6 +2890,7 @@ sub pg_stat_locks
 					push(@graph_data, $locks_stat{$db}{lock_type}{$k});
 				}
 				$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-lock-types', \%{$data_info{$id}}, $db, @graph_data) );
+				$HAS_DB_INFO{$db}{'database-lock-types'} = 1;
 			} elsif ($data_info{$id}{name} eq 'database-lock-modes') {
 				foreach my $k (sort keys %{$locks_stat{$db}{lock_mode}}) {
 					$locks_stat{$db}{lock_mode}{$k} =~ s/,$//;
@@ -2885,6 +2898,7 @@ sub pg_stat_locks
 					push(@graph_data, $locks_stat{$db}{lock_mode}{$k});
 				}
 				$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-lock-modes', \%{$data_info{$id}}, $db, @graph_data) );
+				$HAS_DB_INFO{$db}{'database-lock-modes'} = 1;
 			} elsif ($data_info{$id}{name} eq 'database-lock-granted') {
 				foreach my $k (sort keys %{$locks_stat{$db}{lock_granted}}) {
 					$locks_stat{$db}{lock_granted}{$k} =~ s/,$//;
@@ -2892,6 +2906,7 @@ sub pg_stat_locks
 					push(@graph_data, $locks_stat{$db}{lock_granted}{$k});
 				}
 				$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-lock-granted', \%{$data_info{$id}}, $db, @graph_data) );
+				$HAS_DB_INFO{$db}{'database-lock-granted'} = 1;
 			}
 		}
 	}
@@ -4219,31 +4234,64 @@ sub generate_html_menu
 };
 		}
 
-		$menu_str .= qq{
-		      <li class="divider"></li>
-		      <li id="menu-database-size"><a href="database-$db.html#database-size">Database size</a></li>
-		      <li id="menu-database-backends"><a href="database-$db.html#database-backends">Connections</a></li>
-		      <li id="menu-database-connections"><a href="database-$db.html#database-connections">Connections by type</a></li>
-		      <li id="menu-database-cache_ratio"><a href="database-$db.html#database-cache_ratio">Cache utilization</a></li>
-		      <li class="divider"></li>
-		      <li id="menu-database-deadlocks"$disable_deadlock><a href="database-$db.html#database-deadlocks">Deadlocks</a></li>
-};
-		if (-e "$INPUT_DIR/pg_stat_locks.csv") {
-			$menu_str .= qq{
-		      <li id="menu-database-lock-types"><a href="database-$db.html#database-lock-types">Locks per types</a></li>
-		      <li id="menu-database-lock-modes"><a href="database-$db.html#database-lock-modes">Locks per modes</a></li>
-		      <li id="menu-database-lock-granted"><a href="database-$db.html#database-lock-granted">Locks granted or not</a></li>
-};
+		my $disable_conntype = '';
+		if (!exists $HAS_DB_INFO{$db}{'database-connections'}) {
+			$disable_conntype = ' class="disabled"';
 		}
 		$menu_str .= qq{
 		      <li class="divider"></li>
-		      <li id="menu-database-temporary_file"$disable_tempfile><a href="database-$db.html#database-temporary_file">Temporary files</a></li>
-		      <li id="menu-database-temporary_file_bytes"$disable_tempfile><a href="database-$db.html#database-temporary_file_bytes">Temporary files size</a></li>
-		      <li id="menu-database-read_ratio"><a href="database-$db.html#database-read_ratio">Read tuples</a></li>
-		      <li id="menu-database-commits_rollbacks"><a href="database-$db.html#database-commits_rollbacks">Commits vs Rollbacks</a></li>
+		      <li id="menu-database-size"><a href="database-$db.html#database-size">Database size</a></li>
+		      <li id="menu-${db}_connections" class="dropdown-submenu">
+			<a href="#" tabindex="-1">Connections </a>
+			  <ul class="dropdown-menu">
+			      <li id="menu-database-backends"><a href="database-$db.html#database-backends">Connections</a></li>
+			      <li id="menu-database-connections"$disable_conntype><a href="database-$db.html#database-connections">Connections by type</a></li>
+			  </ul>
+		      </li>
+		      <li id="menu-database-cache_ratio"><a href="database-$db.html#database-cache_ratio">Cache utilization</a></li>
 		      <li class="divider"></li>
-		      <li id="menu-database-write_ratio"><a href="database-$db.html#database-write_ratio">Write ratio</a></li>
-		      <li id="menu-database-read_write_query"><a href="database-$db.html#database-read_write_query">Read vs Write queries</a></li>
+		      <li id="menu-${db}_locks" class="dropdown-submenu">
+			<a href="#" tabindex="-1">Locks </a>
+			  <ul class="dropdown-menu">
+			      <li id="menu-database-deadlocks"$disable_deadlock><a href="database-$db.html#database-deadlocks">Deadlocks</a></li>
+};
+		if (-e "$INPUT_DIR/pg_stat_locks.csv") {
+			my $disable_lock = '';
+			if (!exists $HAS_DB_INFO{$db}{'database-lock-types'}) {
+				$disable_lock = ' class="disabled"';
+			}
+			$menu_str .= qq{
+			      <li id="menu-database-lock-types"$disable_lock><a href="database-$db.html#database-lock-types">Locks per types</a></li>
+			      <li id="menu-database-lock-modes"$disable_lock><a href="database-$db.html#database-lock-modes">Locks per modes</a></li>
+			      <li id="menu-database-lock-granted"$disable_lock><a href="database-$db.html#database-lock-granted">Locks granted or not</a></li>
+};
+		}
+		if (!$disable_tempfile) {
+			if (!exists $HAS_DB_INFO{$db}{'database-temporary_files'}) {
+				$disable_tempfile = ' class="disabled"';
+			}
+		}
+		$menu_str .= qq{
+			  </ul>
+		      </li>
+		      <li class="divider"></li>
+		      <li id="menu-${db}_temporaryfiles" class="dropdown-submenu">
+			<a href="#" tabindex="-1">Temporary files </a>
+			  <ul class="dropdown-menu">
+			      <li id="menu-database-temporary_files"$disable_tempfile><a href="database-$db.html#database-temporary_files">Temporary files</a></li>
+			      <li id="menu-database-temporary_file_bytes"$disable_tempfile><a href="database-$db.html#database-temporary_file_bytes">Temporary files size</a></li>
+			  </ul>
+		      </li>
+		      <li id="menu-${db}_rw" class="dropdown-submenu">
+			<a href="#" tabindex="-1">Queries Reads / Writes </a>
+			  <ul class="dropdown-menu">
+			      <li id="menu-database-read_ratio"><a href="database-$db.html#database-read_ratio">Read tuples</a></li>
+			      <li id="menu-database-write_ratio"><a href="database-$db.html#database-write_ratio">Write ratio</a></li>
+			      <li id="menu-database-read_write_query"><a href="database-$db.html#database-read_write_query">Read vs Write queries</a></li>
+			      <li id="menu-database-commits_rollbacks"><a href="database-$db.html#database-commits_rollbacks">Commits vs Rollbacks</a></li>
+			  </ul>
+		      </li>
+		      <li class="divider"></li>
 		      <li id="menu-database-canceled_queries"$disable_canceled><a href="database-$db.html#database-canceled_queries">Canceled queries</a></li>
 		      <li id="menu-database-conflicts"><a href="database-$db.html#database-conflicts">Conflicts</a></li>
                       </ul>
@@ -6085,9 +6133,12 @@ jQuery(function (){
 		var liId = jQuery(this).attr("id");
 		var id = liId.substring(5);
 		if (id.lastIndexOf("-") > 0) {
-			var slideId = '#'+id+'-slide';
-			jQuery('#main-container li.slide').removeClass('active-slide').hide();
-			jQuery(slideId).addClass("active-slide").fadeIn();
+			var lookobj = document.getElementById(id+'-slide');
+			if (lookobj != undefined) {
+				var slideId = '#'+id+'-slide';
+				jQuery('#main-container li.slide').removeClass('active-slide').hide();
+				jQuery(slideId).addClass("active-slide").fadeIn();
+			}
 		}
 	});
 });
