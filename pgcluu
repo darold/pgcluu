@@ -69,7 +69,8 @@ my %HAS_INDEX_STATS  = ();
 my %HAS_INDEX_STATIO = ();
 my %HAS_FUNCTION_STATS = ();
 my %HAS_DB_INFO = ();
-my $TOP_STATIO       = 10;
+my %HAS_BUF_STATS = ();
+my $TOP_STAT       = 10;
 
 my ($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
 $o_year += 1900;
@@ -534,6 +535,27 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'Dirty Usagecount',
 		},
 	},
+	'pg_relation_buffercache.csv' => {
+		'1' => {
+			'name' =>  'buffercache-relation',
+			'title' => 'Statistics about cache utilisation for %s database',
+			'description' => 'Number of shared buffer/pages used by a relation',
+			'ylabel' => 'Number',
+			'legends' => ['buffers'],
+			'active' => 1,
+			'menu' => 'Buffercache per relation',
+		},
+		'2' => {
+			'name' =>  'statio-buffercache',
+			'title' => 'Statistics about cache utilisation %s relation',
+			'description' => 'Number of buffers loaded in cache for a relation relation and the percentage of the relation loaded.',
+			'ylabel' => 'Number',
+			'y2label' => 'percent',
+			'legends' => ['buffered','relation %'],
+			'active' => 1,
+			'menu' => 'Buffer I/O per relation',
+		},
+	},
 );
 
 my %SAR_GRAPH_INFOS = (
@@ -619,7 +641,7 @@ GetOptions(
 	"h|help!"        => \$HELP,
 	"i|sar-file=s"   => \$SAR_INPUT_FILE,
 	"I|sadc-file=s"  => \$SADC_INPUT_FILE,
-	"n|top-number=i" => \$TOP_STATIO,
+	"n|top-number=i" => \$TOP_STAT,
 	"o|output=s"     => \$OUTPUT_DIR,
 	"p|dev-only=s"   => \@INCLUDE_DEV,
 	"s|sadf=s"       => \$SADF_PROG,
@@ -900,7 +922,7 @@ options:
   -I, --sadc-file=FILE     sadc binary data file to read to generate system
 			   reports. Default to input_dir/sadc_stats.dat.
   -n, --top-number         Top number of tables or indexes I/O stats to show.
-			   Default is set to top 10.
+			   Default is set to top 10. Set it to 0 to show all.
   -o, --output=DIR         output directory
   -p, --dev-only device    Only report I/O stats for a particular device
 			   You can use it multiple time.
@@ -1661,7 +1683,7 @@ sub pg_stat_user_tables
 {
 	my ($interval, $file, %data_info) = @_;
 
-	return if (!$NO_TB_STAT);
+	return if ($NO_TB_STAT);
 
 	my %cumul_database_stat = ();
 	my %end_database_stat = ();
@@ -1902,7 +1924,8 @@ sub pg_stat_user_indexes
 {
 	my ($interval, $file, %data_info) = @_;
 
-	return if (!$NO_TB_STAT);
+	return if ($NO_TB_STAT);
+
 	my %cumul_database_stat = ();
 	my %start_vals = ();
 	my $tmp_val = 0;
@@ -2020,7 +2043,7 @@ sub pg_statio_user_tables
 {
 	my ($interval, $file, %data_info) = @_;
 
-	return if (!$NO_TB_STAT);
+	return if ($NO_TB_STAT);
 
 	my %statio_stat = ();
 	my %start_vals = ();
@@ -2112,7 +2135,7 @@ sub pg_statio_user_tables
 			my $rank = 1;
 			foreach my $tb (sort {$is_used{$db}{$b} <=> $is_used{$db}{$a} } keys %{$is_used{$db}}) {
 				next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
-				last if ($rank > $TOP_STATIO);
+				last if ($TOP_STAT && ($rank > $TOP_STAT));
 				my $graph_data = '';
 				if ($data_info{$id}{name} eq 'statio-table') {
 					foreach ('heap_blks_read','heap_blks_hit','idx_blks_read','idx_blks_hit','toast_blks_read','toast_blks_hit','tidx_blks_read','tidx_blks_hit') {
@@ -2141,12 +2164,166 @@ sub pg_statio_user_tables
 	}
 }
 
+# Compute stats for relation buffer cache
+sub pg_relation_buffercache
+{
+	my ($interval, $file, %data_info) = @_;
+
+	return if ($NO_TB_STAT);
+
+	my %rel_stat = ();
+	my %shm_use = ();
+	my %start_vals = ();
+	my $tmp_val = 0;
+	my %to_show = ();
+	# Load data from file
+	my $curfh = new IO::File;
+	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	while (<$curfh>) {
+		my @data = split(/;/);
+		next if (!&normalyze_line(\@data));
+
+		$data[7] = 100 if ($data[7] > 100);
+		# date_trunc | datname | relname | buffers | relpages | buffered | buffers % | relation %
+		$rel_stat{$data[1]}{$data[2]}{buffers}      .= '[' . $data[0] . ',' . ($data[3] || 0) . '],';
+		$rel_stat{$data[1]}{$data[2]}{pages}        .= '[' . $data[0] . ',' . ($data[4] || 0) . '],';
+		$rel_stat{$data[1]}{$data[2]}{buffered}     .= '[' . $data[0] . ',' . ($data[5] || 0) . '],';
+		$rel_stat{$data[1]}{$data[2]}{'buffers %'}  .= '[' . $data[0] . ',' . ($data[6] || 0) . '],';
+		$rel_stat{$data[1]}{$data[2]}{'relation %'} .= '[' . $data[0] . ',' . ($data[7] || 0) . '],';
+
+		$shm_use{$data[1]}{$data[2]}{buffers}      = ($data[3] || 0);
+		$shm_use{$data[1]}{$data[2]}{pages}        = ($data[4] || 0);
+		$shm_use{$data[1]}{$data[2]}{buffered}     = ($data[5] || 0);
+		$shm_use{$data[1]}{$data[2]}{'buffers %'}  = ($data[6] || 0);
+		$shm_use{$data[1]}{$data[2]}{'relation %'} = ($data[7] || 0);
+
+	}
+	$curfh->close();
+
+	foreach my $db (keys %shm_use) {
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			next if ($data_info{$id}{name} !~ /^buffercache-/);
+			# Open filehandle to cluster file
+			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
+			if (not defined $fhtable) {
+				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
+			}
+			&html_header($fhtable);
+			my $table_header = '';
+			my $colspan =  ' colspan="6"';
+			if ($data_info{$id}{name} eq 'buffercache-relation') {
+				$table_header = qq{
+					<th>Relation</th>
+					<th>Buffers</th>
+					<th>Pages</th>
+					<th>Buffered</th>
+					<th>Buffers %</th>
+					<th>Relation %</th>
+};
+			}
+			print $fhtable qq{
+<ul id="slides">
+
+<div class="row">
+    <div class="col-md-12">
+      <div class="panel panel-default">
+      <div class="panel-heading">
+	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+	<p>$data_info{$id}{description}</p>
+      </div>
+      <div class="panel-body">
+	<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+		<div class="span11">
+			<table class="table table-striped sortable" id="$db-$data_info{$id}{name}-table">
+				<thead>
+					<tr>
+						$table_header
+					</tr>
+				</thead>
+				<tbody>
+};
+			my $found_stat = 0;
+			my $rank = 1;
+			foreach my $rel (sort {$shm_use{$db}{$b}{buffers} <=> $shm_use{$db}{$a}{buffers}} keys %{$shm_use{$db}}) {
+				next if (($#INCLUDE_TB >= 0) && !grep(/^$rel$/, @INCLUDE_TB));
+				last if ($TOP_STAT && ($rank > $TOP_STAT));
+				my $table_data = '';
+				if ($data_info{$id}{name} eq 'buffercache-relation') {
+					if (!$shm_use{$db}{$rel}{buffers} && !$shm_use{$db}{$rel}{pages} && !$shm_use{$db}{$rel}{buffered}) {
+						next;
+					}
+					$found_stat = 1;
+					$to_show{$db}{$rel} = $rank;
+					$HAS_BUF_STATS{$db} = 1;
+					$table_data = "<tr><th>$rel</th><td>$shm_use{$db}{$rel}{buffers}</td><td>$shm_use{$db}{$rel}{pages}</td><td>" . &pretty_print_size($shm_use{$db}{$rel}{buffered}) . "</td><td>$shm_use{$db}{$rel}{'buffers %'}</td><td>$shm_use{$db}{$rel}{'relation %'}</td></tr>\n";
+				}
+				$rank++;
+				if ($table_data) {
+					print $fhtable qq{$table_data} if ($table_data);
+				}
+			}
+			if (!$found_stat) {
+				print $fhtable qq{<tr><td$colspan><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td></tr>};
+			}
+			print $fhtable qq{
+				</tbody>
+			</table>
+		</div>
+	</div>
+};
+			# Terminate cluster statistics file
+			print $fhtable qq{
+	</div>
+    </div>
+</div>
+</ul>
+};
+			&html_footer($fhtable);
+			$fhtable->close;
+		}
+	}
+	%shm_use = ();
+
+	foreach my $db (sort keys %rel_stat) {
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			next if ($data_info{$id}{name} !~ /^statio-buffercache/);
+			# Open filehandle to cluster file
+			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
+			if (not defined $fhtable) {
+				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
+			}
+			&html_header($fhtable);
+			$HAS_INDEX_STATS{$db} = 1;
+			$HAS_INDEX_STATIO{$db} = 1;
+
+			foreach my $rel (sort {$to_show{$db}{$a} <=> $to_show{$db}{$b} } keys %{$to_show{$db}}) {
+				my $graph_data = '';
+				if ($data_info{$id}{name} eq 'statio-buffercache') {
+					foreach ('buffers','pages','buffered','buffers %','relation %') {
+						$rel_stat{$db}{$rel}{$_} =~ s/,$//;
+					}
+					print $fhtable &flotr2_linegraph_array($IDX++, 'statio-buffercache', \%{$data_info{$id}}, $rel, $rel_stat{$db}{$rel}{buffered},$rel_stat{$db}{$rel}{'relation %'});
+					delete $rel_stat{$db}{$rel};
+				}
+			}
+			
+			# Terminate cluster statistics file
+			print $fhtable qq{
+</ul>
+};
+			&html_footer($fhtable);
+			$fhtable->close;
+		}
+	}
+
+}
+
 # Compute stats for index I/O
 sub pg_statio_user_indexes
 {
 	my ($interval, $file, %data_info) = @_;
 
-	return if (!$NO_TB_STAT);
+	return if ($NO_TB_STAT);
 
 	my %statio_stat = ();
 	my %start_vals = ();
@@ -2196,7 +2373,7 @@ sub pg_statio_user_indexes
 			my $rank = 1;
 			foreach my $tb (sort {$is_used{$db}{$b} <=> $is_used{$db}{$a} } keys %{$is_used{$db}}) {
 				next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
-				last if ($rank > $TOP_STATIO);
+				last if ($TOP_STAT && ($rank > $TOP_STAT));
 				my $graph_data = '';
 				if ($data_info{$id}{name} eq 'statio-index') {
 					foreach ('idx_blks_read','idx_blks_hit') {
@@ -2216,6 +2393,7 @@ sub pg_statio_user_indexes
 			$fhtable->close;
 		}
 	}
+
 }
 
 # Compute graphs of xlog cluster statistics
@@ -2917,7 +3095,7 @@ sub pg_stat_unused_indexes
 {
 	my ($interval, $file, %data_info) = @_;
 
-	return if (!$NO_TB_STAT);
+	return if ($NO_TB_STAT);
 
 	my %idx_stat = ();
 	# Load data from file
@@ -2983,7 +3161,7 @@ sub pg_stat_redundant_indexes
 {
 	my ($interval, $file, %data_info) = @_;
 
-	return if (!$NO_TB_STAT);
+	return if ($NO_TB_STAT);
 
 	my %idx_stat = ();
 	# Load data from file
@@ -3047,7 +3225,7 @@ sub pg_stat_missing_fkindexes
 {
 	my ($interval, $file, %data_info) = @_;
 
-	return if (!$NO_TB_STAT);
+	return if ($NO_TB_STAT);
 
 	my %idx_stat = ();
 	# Load data from file
@@ -4234,6 +4412,24 @@ sub generate_html_menu
 };
 		}
 
+		if (exists $HAS_BUF_STATS{$db}) {
+			$menu_str .= qq{
+			<li id="menu-$db-buffercache-relation" class="dropdown-submenu">
+			   <a href="#" tabindex="-1">Buffercache Statistics </a>
+			      <ul class="dropdown-menu">
+};
+			my %data_info = %{$DB_GRAPH_INFOS{'pg_relation_buffercache.csv'}};
+			foreach my $id (sort {$a <=> $b} keys %data_info) {
+				next if ($data_info{$id}{name} !~ /buffercache/);
+				$menu_str .= qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+			}
+			$menu_str .= qq{
+			  </ul>
+		      </li>
+};
+		}
 		my $disable_conntype = '';
 		if (!exists $HAS_DB_INFO{$db}{'database-connections'}) {
 			$disable_conntype = ' class="disabled"';
