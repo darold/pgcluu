@@ -282,7 +282,7 @@ if ($KILL) {
 		} elsif ($? & 127) {
 			printf "ERROR: child died with signal %d, %s coredump\n", ($? & 127),  ($? & 128) ? 'with' : 'without';
 		} else {
-			printf "pgcluu_collectd exited with value %d\n", $? >> 8;
+			printf "OK: pgcluu_collectd exited with value %d\n", $? >> 8;
 		}
 		exit 0;
 	} else {
