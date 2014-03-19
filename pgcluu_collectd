@@ -277,6 +277,13 @@ my $result = GetOptions(
 if ($KILL) {
 	if (-e "$PIDFILE") {
 		system("kill -15 `cat $PIDFILE`");
+		if ($? == -1) {
+			print "FATAL: failed to execute: $!\n";
+		} elsif ($? & 127) {
+			printf "ERROR: child died with signal %d, %s coredump\n", ($? & 127),  ($? & 128) ? 'with' : 'without';
+		} else {
+			printf "pgcluu_collectd exited with value %d\n", $? >> 8;
+		}
 		exit 0;
 	} else {
 		die "ERROR: can't find $PIDFILE, is $PROGRAM running?\n";
