@@ -57,6 +57,7 @@ my $INCLUDED_DB = ();
 my $SKIP_HOURS  = '';
 my @SKIP_BEGIN  = ();
 my @SKIP_END    = ();
+my $USE_BUFFERCACHE = 0;
 
 # Definition to collect metrics from the database
 my %METRICS_COMMANDS = (
@@ -245,6 +246,7 @@ my %METRICS_COMMANDS = (
 # Process command line options and look for an action keyword. There
 # are no mandatory options.
 my $result = GetOptions(
+	"B|enable-buffercache!" => \$USE_BUFFERCACHE,
 	"d|dbname=s"     => \$DBNAME,
 	"D|daemonize!"   => \$DAEMONIZE,
 	"f|pid-file=s"   => \$PIDFILE,
@@ -350,6 +352,7 @@ if ($#METRICS >= 0) {
 			push(@METRICS, "${a}_stats");
 		}
 	}
+
 }
 
 # Set the default actions outside Nagios mode
@@ -672,7 +675,7 @@ sub verify_action
 	}
 
 	# Check if the connection database has pg_buffercache installed
-	if (!&has_pg_buffercache()) {
+	if (!$USE_BUFFERCACHE || !&has_pg_buffercache()) {
 		delete $METRICS_COMMANDS{'database_buffercache_stats'};
 		delete $METRICS_COMMANDS{'database_usagecount_stats'};
 		delete $METRICS_COMMANDS{'relation_buffercache_stats'};
@@ -944,6 +947,8 @@ usage: $PROGRAM [options] output_dir
 
 options:
 
+  -B, --enable-buffercache enable buffercache statistics if pg_buffercache
+			   extension is installed.
   -d, --dbname=DATABASE    database name to connect to. Default to current user.
   -D, --daemonize          detach from console and enter in daemon mode.
   -f, --pid-file=FILE      path to pid file. Default: $PIDFILE.
