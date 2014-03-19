@@ -1367,15 +1367,15 @@ sub pg_stat_database
 				$database_stat{$db}{ratio_hit_miss} .= '[' . $time . ',0],';
 			}
 			$database_stat{$db}{nbackend} .= '[' . $time . ',' . $all_database_stat{$time}{$db}{nbackend} . '],';
-			$database_stat{$db}{xact_commit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{xact_commit}/$interval)) . '],';
-			$database_stat{$db}{xact_rollback} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{xact_rollback}/$interval)) . '],';
+			$database_stat{$db}{xact_commit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{xact_commit}||0)/$interval) . '],';
+			$database_stat{$db}{xact_rollback} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{xact_rollback}||0)/$interval) . '],';
 			if ($has_conflict) {
-				$database_stat{$db}{canceled_queries} .= '[' . $time . ',' . $all_database_stat{$time}{$db}{canceled_queries} . '],';
+				$database_stat{$db}{canceled_queries} .= '[' . $time . ',' . ($all_database_stat{$time}{$db}{canceled_queries}||0) . '],';
 			}
 			if ($has_temp) {
-				$database_stat{$db}{deadlocks} .= '[' . $time . ',' . $all_database_stat{$time}{$db}{deadlocks} . '],';
-				$database_stat{$db}{temp_files} .= '[' . $time . ',' . $all_database_stat{$time}{$db}{temp_files} . '],';
-				$database_stat{$db}{temp_bytes} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{temp_bytes}/$interval)) . '],';
+				$database_stat{$db}{deadlocks} .= '[' . $time . ',' . ($all_database_stat{$time}{$db}{deadlocks}||0) . '],';
+				$database_stat{$db}{temp_files} .= '[' . $time . ',' . ($all_database_stat{$time}{$db}{temp_files}||0) . '],';
+				$database_stat{$db}{temp_bytes} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{temp_bytes}||0)/$interval) . '],';
 			}
 		}
 		delete $all_database_stat{$time};
