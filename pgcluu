@@ -930,7 +930,7 @@ options:
                            When enabled pgcluu will look at dd/mm/yy format.
   -s, --sadf=BIN           path to the sadf sysstat command used to read the
                            sadc binary data file. Default: $SADF_PROG.
-  -S, --disable-sar        dhisable collect of system statistics with sar.
+  -S, --disable-sar        disable collect of system statistics with sar.
   -t, --all-table          report per table statistics, default is report
                            for the whole database.
   -T, --with-table table   Only report for the whole tables and the given
@@ -1208,7 +1208,6 @@ sub pg_stat_database
 {
 	my ($interval, $file, %data_info) = @_;
 
-	my %database_stat = ();
 	my %all_database_stat = ();
 	my %start_vals = ();
 	my %total_count = ();
@@ -1218,6 +1217,7 @@ sub pg_stat_database
 	my $has_temp = 0;
 	my %total_qtype = ();
 	my %total_query_type = ();
+	my @databases = ();
 	# Load data from file
 	my $curfh = new IO::File;
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
@@ -1228,41 +1228,43 @@ sub pg_stat_database
 		# timestamp | datid | datname | numbackends | xact_commit | xact_rollback | blks_read | blks_hit | tup_returned | tup_fetched | tup_inserted | tup_updated | tup_deleted | conflicts | stats_reset | temp_files | temp_bytes | deadlocks | blk_read_time | blk_write_time
 		push(@{$start_vals{$data[2]}}, @data) if ($#{$start_vals{$data[2]}} < 0);
 
+		push(@databases, $data[2]) if (!grep(/^$data[2]$/, @databases));
+
 		if ($#data >= 8) {
 
 			(($data[8] - $start_vals{$data[2]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[2]}[8]);
-			$database_stat{$data[2]}{returned} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-			$all_database_stat{$data[0]}{returned} += $tmp_val;
+			$all_database_stat{$data[0]}{$data[2]}{returned} = $tmp_val;
+			$all_database_stat{$data[0]}{all}{returned} += $tmp_val;
 			$total_query_type{$data[2]}{'select'} += $tmp_val;
 			$total_qtype{$data[2]} += $tmp_val;
 			$OVERALL_STATS{'cluster'}{'read_tuples'} += $tmp_val;
 			$OVERALL_STATS{'database'}{$data[2]}{'read_tuples'} += $tmp_val;
 
 			(($data[9] - $start_vals{$data[2]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[2]}[9]);
-			$database_stat{$data[2]}{fetched} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-			$all_database_stat{$data[0]}{fetched} += $tmp_val;
+			$all_database_stat{$data[0]}{$data[2]}{fetched} = $tmp_val;
+			$all_database_stat{$data[0]}{all}{fetched} += $tmp_val;
 
 			$OVERALL_STATS{'start_date'} = $data[0] if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} > $data[0]));
 			$OVERALL_STATS{'end_date'} = $data[0] if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} < $data[0]));
 
 			# Gather insert statement
 			(($data[10] - $start_vals{$data[2]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[2]}[10]);
-			$database_stat{$data[2]}{insert} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-			$all_database_stat{$data[0]}{insert} += $tmp_val;
+			$all_database_stat{$data[0]}{$data[2]}{insert} = $tmp_val;
+			$all_database_stat{$data[0]}{all}{insert} += $tmp_val;
 			$total_qtype{$data[2]} += $tmp_val;
 			$total_query_type{$data[2]}{'insert'} += $tmp_val;
 
 			# Gather update statement
 			(($data[11] - $start_vals{$data[2]}[11]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[11] - $start_vals{$data[2]}[11]);
-			$database_stat{$data[2]}{update} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-			$all_database_stat{$data[0]}{update} += $tmp_val;
+			$all_database_stat{$data[0]}{$data[2]}{update} = $tmp_val;
+			$all_database_stat{$data[0]}{all}{update} += $tmp_val;
 			$total_qtype{$data[2]} += $tmp_val;
 			$total_query_type{$data[2]}{'update'} += $tmp_val;
 
 			# Gather delete statement
 			(($data[12] - $start_vals{$data[2]}[12]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[12] - $start_vals{$data[2]}[12]);
-			$database_stat{$data[2]}{delete} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-			$all_database_stat{$data[0]}{delete} += $tmp_val;
+			$all_database_stat{$data[0]}{$data[2]}{delete} = $tmp_val;
+			$all_database_stat{$data[0]}{all}{delete} += $tmp_val;
 			$total_qtype{$data[2]} += $tmp_val;
 			$total_query_type{$data[2]}{'delete'} += $tmp_val;
 
@@ -1270,69 +1272,60 @@ sub pg_stat_database
 		}
 
 		# Gather blks_read
-		my $tmp_read = '';
-		(($data[6] - $start_vals{$data[2]}[6]) < 0) ? $tmp_read = 0 : $tmp_read = ($data[6] - $start_vals{$data[2]}[6]);
-		$database_stat{$data[2]}{blks_read} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_read/$interval)) . '],';
-		$all_database_stat{$data[0]}{blks_read} += $tmp_read;
-		$OVERALL_STATS{'cluster'}{'blks_read'} += $tmp_read;
-		$OVERALL_STATS{'database'}{$data[2]}{'blks_read'} += $tmp_read;
+		(($data[6] - $start_vals{$data[2]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[2]}[6]);
+		$all_database_stat{$data[0]}{$data[2]}{blks_read} = $tmp_val;
+		$all_database_stat{$data[0]}{all}{blks_read} += $tmp_val;
+		$OVERALL_STATS{'cluster'}{'blks_read'} += $tmp_val;
+		$OVERALL_STATS{'database'}{$data[2]}{'blks_read'} += $tmp_val;
 
 		# Gather blks_hit
-		my $tmp_hit = '';
-		(($data[7] - $start_vals{$data[2]}[7]) < 0) ? $tmp_hit = 0 : $tmp_hit = ($data[7] - $start_vals{$data[2]}[7]);
-		$database_stat{$data[2]}{blks_hit} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_hit/$interval)) . '],';
-		$all_database_stat{$data[0]}{blks_hit} += $tmp_hit;
-		$OVERALL_STATS{'cluster'}{'blks_hit'} += $tmp_hit;
-		$OVERALL_STATS{'database'}{$data[2]}{'blks_hit'} += $tmp_hit;
-
-		# Compute hit/miss ratio
-		if ( ($tmp_read > 0) || ($tmp_hit > 0) ) {
-			$database_stat{$data[2]}{ratio_hit_miss} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_hit*100)/($tmp_read + $tmp_hit)) . '],';
-		} else {
-			$database_stat{$data[2]}{ratio_hit_miss} .= '[' . $data[0] . ',0],';
-		}
+		(($data[7] - $start_vals{$data[2]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[2]}[7]);
+		$all_database_stat{$data[0]}{$data[2]}{blks_hit} = $tmp_val;
+		$all_database_stat{$data[0]}{all}{blks_hit} += $tmp_val;
+		$OVERALL_STATS{'cluster'}{'blks_hit'} += $tmp_val;
+		$OVERALL_STATS{'database'}{$data[2]}{'blks_hit'} += $tmp_val;
 
 		# Gather number of running backend
-		$database_stat{$data[2]}{nbackend} .= '[' . $data[0] . ',' . ($data[3] || 0) . '],';
-		$all_database_stat{$data[0]}{nbackend} += $data[3];
+		$all_database_stat{$data[0]}{$data[2]}{nbackend} = $data[3];
+		$all_database_stat{$data[0]}{all}{nbackend} += $data[3];
 		$OVERALL_STATS{'cluster'}{'nbackend'} += $data[3];
 		$OVERALL_STATS{'database'}{$data[2]}{'nbackend'} += $data[3];
 
 		# Gather number of committed transaction
 		(($data[4] - $start_vals{$data[2]}[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals{$data[2]}[4]);
-		$database_stat{$data[2]}{xact_commit} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-		$all_database_stat{$data[0]}{xact_commit} += $tmp_val;
+		$all_database_stat{$data[0]}{$data[2]}{xact_commit} = $tmp_val;
+		$all_database_stat{$data[0]}{all}{xact_commit} += $tmp_val;
 
 		# Gather number of rollbacked transaction
 		(($data[5] - $start_vals{$data[2]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[2]}[5]);
-		$database_stat{$data[2]}{xact_rollback} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
-		$all_database_stat{$data[0]}{xact_rollback} += $tmp_val;
+		$all_database_stat{$data[0]}{$data[2]}{xact_rollback} = $tmp_val;
+		$all_database_stat{$data[0]}{all}{xact_rollback} += $tmp_val;
 
 		# Gather number of canceled queries
 		if ($#data >= 13) {
 			(($data[13] - $start_vals{$data[2]}[13]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[13] - $start_vals{$data[2]}[13]);
-			$database_stat{$data[2]}{canceled_queries} .= '[' . $data[0] . ',' . $tmp_val . '],';
-			$all_database_stat{$data[0]}{canceled_queries} += $tmp_val;
+			$all_database_stat{$data[0]}{$data[2]}{canceled_queries} = $tmp_val;
+			$all_database_stat{$data[0]}{all}{canceled_queries} += $tmp_val;
 			$has_conflict = 1;
 		}
 
 		# Gather number of temporary data and deadlock
 		if ($#data > 15) {
 			(($data[15] - $start_vals{$data[2]}[15]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[15] - $start_vals{$data[2]}[15]);
-			$database_stat{$data[2]}{temp_files} .= '[' . $data[0] . ',' . $tmp_val . '],';
-			$all_database_stat{$data[0]}{temp_files} += $tmp_val;
+			$all_database_stat{$data[0]}{$data[2]}{temp_files} = $tmp_val;
+			$all_database_stat{$data[0]}{all}{temp_files} += $tmp_val;
 			$OVERALL_STATS{'cluster'}{'temp_files'} += $tmp_val;
 			$OVERALL_STATS{'database'}{$data[2]}{'temp_files'} += $tmp_val;
 
 			(($data[16] - $start_vals{$data[2]}[16]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[16] - $start_vals{$data[2]}[16]);
-			$database_stat{$data[2]}{temp_bytes} .= '[' . $data[0] . ',' . sprintf("%0.2f", ($tmp_val/$interval)) . '],';
+			$all_database_stat{$data[0]}{$data[2]}{temp_bytes} = $tmp_val;
+			$all_database_stat{$data[0]}{all}{temp_bytes} += $tmp_val;
 			$OVERALL_STATS{'cluster'}{'temp_bytes'} += $tmp_val;
 			$OVERALL_STATS{'database'}{$data[2]}{'temp_bytes'} += $tmp_val;
 
-			$all_database_stat{$data[0]}{temp_bytes} += $tmp_val;
 			(($data[17] - $start_vals{$data[2]}[17]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[17] - $start_vals{$data[2]}[17]);
-			$database_stat{$data[2]}{deadlocks} .= '[' . $data[0] . ',' . $tmp_val . '],';
-			$all_database_stat{$data[0]}{deadlocks} += $tmp_val;
+			$all_database_stat{$data[0]}{$data[2]}{deadlocks} = $tmp_val;
+			$all_database_stat{$data[0]}{all}{deadlocks} += $tmp_val;
 			$OVERALL_STATS{'cluster'}{'deadlocks'} += $tmp_val;
 			$OVERALL_STATS{'database'}{$data[2]}{'deadlocks'} += $tmp_val;
 			$has_temp = 1;
@@ -1342,42 +1335,50 @@ sub pg_stat_database
 		push(@{$start_vals{$data[2]}}, @data);
 	}
 	$curfh->close();
+	push(@databases, 'all') if ($#databases > 0);
 
+	my %database_stat = ();
 	foreach my $time (sort {$a <=> $b} keys %all_database_stat) {
-		if ($has_tuples) {
-			$database_stat{'all'}{insert} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{insert}/$interval)) . '],';
-			$database_stat{'all'}{returned} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{returned}/$interval)) . '],';
-			$database_stat{'all'}{fetched} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{fetched}/$interval)) . '],';
-			$database_stat{'all'}{update} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{update}/$interval)) . '],';
-			$database_stat{'all'}{delete} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{delete}/$interval)) . '],';
-			$total_qtype{'all'} +=  $all_database_stat{$time}{insert} + $all_database_stat{$time}{returned} + $all_database_stat{$time}{update} + $all_database_stat{$time}{delete};
+		foreach my $db (@databases) {
+			foreach my $k (qw(insert returned fetched update delete blks_read blks_hit nbackend xact_commit xact_rollback canceled_queries deadlocks temp_files)) {
+				$all_database_stat{$time}{$db}{$k} ||= 0;
+			}
+			if ($has_tuples) {
+				$database_stat{$db}{insert} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{insert}/$interval)) . '],';
+				$database_stat{$db}{returned} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{returned}/$interval)) . '],';
+				$database_stat{$db}{fetched} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{fetched}/$interval)) . '],';
+				$database_stat{$db}{update} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{update}/$interval)) . '],';
+				$database_stat{$db}{delete} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{delete}/$interval)) . '],';
+				$total_qtype{$db} +=  $all_database_stat{$time}{$db}{insert} + $all_database_stat{$time}{$db}{returned} + $all_database_stat{$time}{$db}{update} + $all_database_stat{$time}{$db}{delete};
 
-			$total_query_type{'all'}{'insert'} += $all_database_stat{$time}{insert};
-			$total_query_type{'all'}{'delete'} += $all_database_stat{$time}{delete};
-			$total_query_type{'all'}{'update'} += $all_database_stat{$time}{update};
-			$total_query_type{'all'}{'select'} += $all_database_stat{$time}{returned};
-		}
-		$all_database_stat{$time}{blks_read} ||= 0;
-		$all_database_stat{$time}{blks_hit} ||= 0;
-		$database_stat{'all'}{blks_read} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{blks_read}/$interval)) . '],';
-		$database_stat{'all'}{blks_hit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{blks_hit}/$interval)) . '],';
+				$total_query_type{$db}{'insert'} += $all_database_stat{$time}{$db}{insert};
+				$total_query_type{$db}{'delete'} += $all_database_stat{$time}{$db}{delete};
+				$total_query_type{$db}{'update'} += $all_database_stat{$time}{$db}{update};
+				$total_query_type{$db}{'select'} += $all_database_stat{$time}{$db}{returned};
+			}
+			$all_database_stat{$time}{$db}{blks_read} ||= 0;
+			$all_database_stat{$time}{$db}{blks_hit} ||= 0;
+			$database_stat{$db}{blks_read} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{blks_read}/$interval)) . '],';
+			$database_stat{$db}{blks_hit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{blks_hit}/$interval)) . '],';
 
-		if (($all_database_stat{$time}{blks_read} + $all_database_stat{$time}{blks_hit}) > 0) {
-			$database_stat{'all'}{ratio_hit_miss} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{blks_hit}*100)/($all_database_stat{$time}{blks_read} + $all_database_stat{$time}{blks_hit})) . '],';
-		} else {
-			$database_stat{'all'}{ratio_hit_miss} .= '[' . $time . ',0],';
+			if (($all_database_stat{$time}{$db}{blks_read} + $all_database_stat{$time}{$db}{blks_hit}) > 0) {
+				$database_stat{$db}{ratio_hit_miss} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{blks_hit}*100)/($all_database_stat{$time}{$db}{blks_read} + $all_database_stat{$time}{$db}{blks_hit})) . '],';
+			} else {
+				$database_stat{$db}{ratio_hit_miss} .= '[' . $time . ',0],';
+			}
+			$database_stat{$db}{nbackend} .= '[' . $time . ',' . $all_database_stat{$time}{$db}{nbackend} . '],';
+			$database_stat{$db}{xact_commit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{xact_commit}/$interval)) . '],';
+			$database_stat{$db}{xact_rollback} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{xact_rollback}/$interval)) . '],';
+			if ($has_conflict) {
+				$database_stat{$db}{canceled_queries} .= '[' . $time . ',' . $all_database_stat{$time}{$db}{canceled_queries} . '],';
+			}
+			if ($has_temp) {
+				$database_stat{$db}{deadlocks} .= '[' . $time . ',' . $all_database_stat{$time}{$db}{deadlocks} . '],';
+				$database_stat{$db}{temp_files} .= '[' . $time . ',' . $all_database_stat{$time}{$db}{temp_files} . '],';
+				$database_stat{$db}{temp_bytes} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{temp_bytes}/$interval)) . '],';
+			}
 		}
-		$database_stat{'all'}{nbackend} .= '[' . $time . ',' . $all_database_stat{$time}{nbackend} . '],';
-		$database_stat{'all'}{xact_commit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{xact_commit}/$interval)) . '],';
-		$database_stat{'all'}{xact_rollback} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{xact_rollback}/$interval)) . '],';
-		if ($has_conflict) {
-			$database_stat{'all'}{canceled_queries} .= '[' . $time . ',' . $all_database_stat{$time}{canceled_queries} . '],';
-		}
-		if ($has_temp) {
-			$database_stat{'all'}{deadlocks} .= '[' . $time . ',' . $all_database_stat{$time}{deadlocks} . '],';
-			$database_stat{'all'}{temp_files} .= '[' . $time . ',' . $all_database_stat{$time}{temp_files} . '],';
-			$database_stat{'all'}{temp_bytes} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{temp_bytes}/$interval)) . '],';
-		}
+		delete $all_database_stat{$time};
 	}
 	%all_database_stat = ();
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
@@ -1543,6 +1544,7 @@ sub pg_stat_database_conflicts
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalyze_line(\@data));
+		# timestamp | datid | datname | confl_tablespace | confl_lock | confl_snapshot | confl_bufferpin | confl_deadlock
 
 		# Get database size statistics
 		push(@{$start_vals{$data[2]}}, @data) if ($#{$start_vals{$data[2]}} < 0);
@@ -1604,23 +1606,30 @@ sub pg_database_size
 	my %database_stat = ();
 	my %all_database_stat = ();
 	my $total_val = 0;
+	my @databases = ();
+
 	# Load data from file
 	my $curfh = new IO::File;
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalyze_line(\@data));
+		push(@databases, $data[2]) if (!grep(/^$data[2]$/, @databases));
 		# Get database size statistics
-		$database_stat{$data[2]}{size} .= '[' . $data[0] . ',' . $data[3] . '],';
-		$all_database_stat{$data[0]} += $data[3];
+		$all_database_stat{$data[0]}{$data[2]} = $data[3];
+		$all_database_stat{$data[0]}{'all'} += $data[3];
 		$OVERALL_STATS{'database'}{$data[2]}{'size'} = $data[3];
 		$OVERALL_STATS{'start_date'} = $data[0] if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} > $data[0]));
 		$OVERALL_STATS{'end_date'} = $data[0] if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} < $data[0]));
 	}
 	$curfh->close();
 	foreach my $t (sort {$a <=> $b} keys %all_database_stat) {
-		$database_stat{'all'}{size} .= '[' . $t . ',' . $all_database_stat{$t} . '],';
+		foreach my $db (@databases) {
+			$database_stat{$db}{size} .= '[' . $t . ',' . ($all_database_stat{$t}{$db} || 0) . '],';
+		}
 	}
+	push(@databases, 'all') if ($#databases > 0);
+	%all_database_stat = ();
 	my $id = &get_data_id('database-size', %data_info);
 	my %data = ();
 	foreach my $db (sort keys %database_stat) {
@@ -1646,24 +1655,33 @@ sub pg_tablespace_size
 	my $curfh = new IO::File;
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	my $total_val = 0;
+	my @tbspnames = ();
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalyze_line(\@data));
+
+		# timestamp | tbspname | size | path
+
+		push(@tbspnames, $data[1]) if (!grep(/^$data[1]$/, @tbspnames));
+
 		# Get tablespace size statistics
-		$tablespace_stat{$data[1]}{size} .= '[' . $data[0] . ',' . $data[2] . '],';
-		$all_tablespace_stat{$data[0]} += $data[2];
+		$all_tablespace_stat{$data[0]}{$data[1]} = $data[2];
+		$all_tablespace_stat{$data[0]}{'all'} += $data[2];
 		$OVERALL_STATS{'tablespace'}{$data[1]}{'size'} = $data[2];
 		$OVERALL_STATS{'tablespace'}{$data[1]}{'location'} = $data[3];
 	}
 	$curfh->close();
+	push(@tbspnames, 'all') if ($#tbspnames > 0);
 	foreach my $t (sort {$a <=> $b} keys %all_tablespace_stat) {
-		$tablespace_stat{'all'}{size} .= '[' . $t . ',' . $all_tablespace_stat{$t} . '],';
+		foreach my $tbsp (@tbspnames) {
+			$tablespace_stat{$tbsp}{size} .= '[' . $t . ',' . ($all_tablespace_stat{$t}{$tbsp}||0) . '],';
+		}
 	}
+	%all_tablespace_stat = ();
 	my $id = &get_data_id('tablespace-size', %data_info);
 	my %data = ();
 	my $print_after = '';
 	foreach my $tbsp (sort keys %tablespace_stat) {
-		next if (($#INCLUDE_DB >= 0) && ($tbsp ne 'all') && (!grep(/^$tbsp$/, @INCLUDE_DB)));
 		$tablespace_stat{$tbsp}{size} =~ s/,$//;
 		$data{$tbsp} = $tablespace_stat{$tbsp}{size};
 		if ($tbsp ne 'all') {
@@ -2505,31 +2523,39 @@ sub pg_stat_connections
 	my @start_vals = ();
 	my %total_count = ();
 	my $tmp_val = 0;
+	my @databases = ();
 	# Load data from file
 	my $curfh = new IO::File;
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalyze_line(\@data, 5));
-		my $db = 'all';
-		$db = $data[5] if ($#data == 5);
-		$all_connections_stat{$data[0]}{total} += $data[1];
-		$all_connections_stat{$data[0]}{active} += $data[2];
-		$all_connections_stat{$data[0]}{waiting} += $data[3];
-		$all_connections_stat{$data[0]}{idle_in_xact} += $data[4];
-		next if ($db eq 'all');
-		$connections_stat{$db}{total} .= '[' . $data[0] . ',' . ($data[1] || 0) . '],';
-		$connections_stat{$db}{active} .= '[' . $data[0] . ',' . ($data[2] || 0) . '],';
-		$connections_stat{$db}{waiting} .= '[' . $data[0] . ',' . ($data[3] || 0) . '],';
-		$connections_stat{$db}{idle_in_xact} .= '[' . $data[0] . ',' . ($data[4] || 0) . '],';
+
+		# timestamp | total | active | waiting | idle_in_xact | datname
+
+		push(@databases, $data[5]) if (!grep(/^$data[5]$/, @databases));
+
+		$all_connections_stat{$data[0]}{$data[5]}{total} = $data[1];
+		$all_connections_stat{$data[0]}{$data[5]}{active} = $data[2];
+		$all_connections_stat{$data[0]}{$data[5]}{waiting} = $data[3];
+		$all_connections_stat{$data[0]}{$data[5]}{idle_in_xact} = $data[4];
+
+		$all_connections_stat{$data[0]}{'all'}{total} += $data[1];
+		$all_connections_stat{$data[0]}{'all'}{active} += $data[2];
+		$all_connections_stat{$data[0]}{'all'}{waiting} += $data[3];
+		$all_connections_stat{$data[0]}{'all'}{idle_in_xact} += $data[4];
 	}
 	$curfh->close();
+	push(@databases, 'all') if ($#databases > 0);
 	foreach my $time (sort {$a <=> $b} keys %all_connections_stat) {
-		$connections_stat{'all'}{total} .= '[' . $time . ',' . $all_connections_stat{$time}{total} . '],';
-		$connections_stat{'all'}{active} .= '[' . $time . ',' . $all_connections_stat{$time}{active} . '],';
-		$connections_stat{'all'}{waiting} .= '[' . $time . ',' . $all_connections_stat{$time}{waiting} . '],';
-		$connections_stat{'all'}{idle_in_xact} .= '[' . $time . ',' . $all_connections_stat{$time}{idle_in_xact} . '],';
+		foreach my $db (@databases) {
+			$connections_stat{$db}{total} .= '[' . $time . ',' . ($all_connections_stat{$time}{$db}{total}||0) . '],';
+			$connections_stat{$db}{active} .= '[' . $time . ',' . ($all_connections_stat{$time}{$db}{active}||0) . '],';
+			$connections_stat{$db}{waiting} .= '[' . $time . ',' . ($all_connections_stat{$time}{$db}{waiting}||0) . '],';
+			$connections_stat{$db}{idle_in_xact} .= '[' . $time . ',' . ($all_connections_stat{$time}{$db}{idle_in_xact}||0) . '],';
+		}
 	}
+	%all_connections_stat = ();
 	my $id = &get_data_id('database-connections', %data_info);
 	foreach my $db (sort keys %connections_stat) {
 		next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
@@ -2581,6 +2607,7 @@ sub pg_stat_user_functions
 
 	my $id = &get_data_id('database-functions', %data_info);
 	foreach my $db (keys %functions_stat) {
+		next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		$HAS_FUNCTION_STATS{$db} = 1;
 		my $colspan =  ' colspan="4"';
 		$DBFH{$db}->print (qq{
@@ -2642,8 +2669,10 @@ sub pg_stat_replication
 	my ($interval, $file, %data_info) = @_;
 
 	my %tmp_xlog_stat = ();
+	my %all_xlog_stat = ();
 	my @start_vals = ();
 	my %xlog_stat = ();
+	my @clients = ();
 	# Load data from file
 	my $curfh = new IO::File;
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
@@ -2659,15 +2688,16 @@ sub pg_stat_replication
 			my $name = $data[5];
 			$data[6] =~ s/"//g;
 			$name .= " - $data[6]" if ($data[6]);
+			push(@clients, $name) if (grep(/^$name$/, @clients));
 			$tmp_xlog_stat{$data[0]}{master_location} = &getNumericalOffset($data[10]) - &getNumericalOffset($start_vals[10]) if (!$tmp_xlog_stat{$data[0]}{master_location});
 			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[14])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[14]));
-			$xlog_stat{$name}{replay_location} .= '[' . $data[0] . ',' . sprintf("%.2f", ($tmp_val/$interval)) . '],';
+			$all_xlog_stat{$data[0]}{$name}{replay_location} = sprintf("%.2f", ($tmp_val/$interval));
 			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[11])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[11]));
-			$xlog_stat{$name}{sent_location} .= '[' . $data[0] . ',' . sprintf("%.2f", ($tmp_val/$interval)) . '],';
+			$all_xlog_stat{$data[0]}{$name}{sent_location} = sprintf("%.2f", ($tmp_val/$interval));
 			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[12])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[12]));
-			$xlog_stat{$name}{write_location} .= '[' . $data[0] . ',' . sprintf("%.2f", ($tmp_val/$interval)) . '],';
+			$all_xlog_stat{$data[0]}{$name}{write_location} = sprintf("%.2f", ($tmp_val/$interval));
 			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[13])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[13]));
-			$xlog_stat{$name}{flush_location} .= '[' . $data[0] . ',' . sprintf("%.2f", ($tmp_val/$interval)) . '],';
+			$all_xlog_stat{$data[0]}{$name}{flush_location} = sprintf("%.2f", ($tmp_val/$interval));
 		}
 		@start_vals = ();
 		push(@start_vals, @data);
@@ -2677,6 +2707,15 @@ sub pg_stat_replication
 		$xlog_stat{master_location} .= '[' . $t . ',' . (sprintf("%.2f", $tmp_xlog_stat{$t}{master_location}/$interval) || 0) . '],';
 	}
 	%tmp_xlog_stat = ();
+	foreach my $t (sort {$a <=> $b} keys %all_xlog_stat) {
+		foreach my $name (sort {$a cmp $b} keys %{$all_xlog_stat{$t}}) {
+			$xlog_stat{$name}{replay_location} .= '[' . $t . ',' . ($all_xlog_stat{$t}{$name}{replay_location} || 0) . '],';
+			$xlog_stat{$name}{sent_location} .= '[' . $t . ',' . ($all_xlog_stat{$t}{$name}{sent_location} || 0) . '],';
+			$xlog_stat{$name}{write_location} .= '[' . $t . ',' . ($all_xlog_stat{$t}{$name}{write_location} || 0) . '],';
+			$xlog_stat{$name}{flush_location} .= '[' . $t . ',' . ($all_xlog_stat{$t}{$name}{flush_location} || 0) . '],';
+		}
+	}
+	%all_xlog_stat = ();
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		if (exists $xlog_stat{master_location} && ($data_info{$id}{name} eq 'database-xlog')) {
 			$xlog_stat{master_location} =~ s/,$//;
