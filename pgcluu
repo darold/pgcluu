@@ -5865,7 +5865,11 @@ sub read_sysinfo
 		}
 		if ($section eq 'MEMORY') {
 			my ($key, $val) = split(/:\s+/, $l);
-			$sysinfo{$section}{lc($key)} = $val;
+			if ($val =~ s/ kB//) {
+				$sysinfo{$section}{lc($key)} = &pretty_print_size($val*1000);
+			} else {
+				$sysinfo{$section}{lc($key)} = $val;
+			}
 		}
 		if ($section eq 'DF') {
 			next if ($l !~ /^\//);
