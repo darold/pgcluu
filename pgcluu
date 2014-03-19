@@ -31,6 +31,7 @@ my $NO_TB_STAT  = 0;
 my @INCLUDE_DB  = ();
 my @INCLUDE_TB  = ();
 my @INCLUDE_DEV = ();
+my @INCLUDE_IFACE = ();
 my $IMG_FORMAT  = 'png';
 my $FH          = undef;
 my $FHCLUSTER   = undef;
@@ -50,6 +51,7 @@ my $SAR_INPUT_FILE     = '';
 my @DATABASE_LIST      = ();
 my @PGBOUNCER_LIST     = ();
 my @DEVICE_LIST        = ();
+my @IFACE_LIST         = ();
 my $FIST_DATABASE_LINK = '#';
 my $FIST_PGBOUNCER_LINK = '#';
 my %OVERALL_STATS      = ();
@@ -583,7 +585,7 @@ my %SAR_GRAPH_INFOS = (
 	},
 	'4' => {
 		'name' =>  'system-memory',
-		'title' => 'System memory usage',
+		'title' => 'System memory utilization',
 		'description' => 'Amount of memory used to cache data or as buffers by the kernel and free memory available in kilobytes.',
 		'ylabel' => 'Memory size',
 		'legends' => ['cached','buffers','memfree'],
@@ -637,7 +639,21 @@ my %SAR_GRAPH_INFOS = (
 		'ylabel' => 'Size paged',
 		'y2label' => 'Number of faults',
 		'legends' => [ 'pgpgin/s', 'pgpgout/s', 'page faults/s' ],
-	}
+	},
+	'12' => {
+		'name' => 'network-utilization',
+		'title' => 'Network utilization on interface %s',
+		'description' => 'Report statistics from the network devices utilization.',
+		'ylabel' => 'Size per second',
+		'legends' => ['received (rx)', 'transmitted (tx)' ],
+	},
+	'13' => {
+		'name' => 'network-error',
+		'title' => 'Network errors on interface %s',
+		'description' => 'Report statistics on failures from the network device. Number of bad packets received,  number of errors that happened while transmitting packets, and number of collisions that happened per second while transmitting packets..',
+		'ylabel' => 'Number per second',
+		'legends' => ['rx errors', 'tx errors', 'collisions' ],
+	},
 
 );
 
@@ -646,13 +662,14 @@ my %SAR_GRAPH_INFOS = (
 GetOptions(
 	"b|begin=s"      => \$BEGIN,
 	"d|db-only=s"    => \@INCLUDE_DB,
+	"D|device-only=s"=> \@INCLUDE_DEV,
 	"e|end=s"        => \$END,
 	"h|help!"        => \$HELP,
 	"i|sar-file=s"   => \$SAR_INPUT_FILE,
 	"I|sadc-file=s"  => \$SADC_INPUT_FILE,
 	"n|top-number=i" => \$TOP_STAT,
+	"N|network-only=s" => \@INCLUDE_IFACE,
 	"o|output=s"     => \$OUTPUT_DIR,
-	"p|dev-only=s"   => \@INCLUDE_DEV,
 	"s|sadf=s"       => \$SADF_PROG,
 	"r|reverse-date" => \$REVERT_DATE,
 	"S|disable-sar!" => \$DISABLE_SAR,
@@ -735,6 +752,7 @@ if (-e "$INPUT_DIR/sysinfo.txt") {
 # Extract the device list first
 if (!$DISABLE_SAR) {
 	@DEVICE_LIST = &get_device_list();
+	@IFACE_LIST = &get_interface_list();
 }
 
 # Write resources files from __DATA__ section if they have not been already copied
@@ -857,6 +875,15 @@ if (!$DISABLE_SAR) {
 		&html_header($DEVFH{$DEVICE_LIST[$i]});
 		$DEVFH{$DEVICE_LIST[$i]}->print("<ul id=\"slides\">\n");
 	}
+	for (my $i = 0; $i <= $#IFACE_LIST; $i++) {
+		# Open a filehandle for each database
+		$DEVFH{$IFACE_LIST[$i]} = new IO::File ">$OUTPUT_DIR/network-device$i.html";
+		if (not defined $DEVFH{$IFACE_LIST[$i]}) {
+			die "FATAL: can't write to $OUTPUT_DIR/network-device$i.html, $!\n";
+		}
+		&html_header($DEVFH{$IFACE_LIST[$i]});
+		$DEVFH{$IFACE_LIST[$i]}->print("<ul id=\"slides\">\n");
+	}
 	if (-f "$SADC_INPUT_FILE") {
 		print "DEBUG: looking for sadc binary data file $SADC_INPUT_FILE\n" if ($DEBUG);
 		foreach my $id (sort keys %SAR_GRAPH_INFOS) {
@@ -873,6 +900,12 @@ if (!$DISABLE_SAR) {
 	print $FH "</ul>\n";
 	&html_footer($FH);
 	$FH->close;
+	# Terminate all database statistic file
+	foreach my $dev (@IFACE_LIST) {
+		$DEVFH{$dev}->print("</ul>\n");
+		&html_footer($DEVFH{$dev});
+		$DEVFH{$dev}->close;
+	}
 	# Terminate all database statistic file
 	foreach my $dev (@DEVICE_LIST) {
 		$DEVFH{$dev}->print("</ul>\n");
@@ -925,6 +958,8 @@ options:
   -b, --begin  datetime    start date/time for the data to be parsed.
   -d, --db-only dbname     Only report for the whole cluster and the given
 			   database name. You can use it multiple time.
+  -D, --device-only dev    only report I/O stats for a particular device
+			   You can use it multiple time.
   -e, --end    datetime    end date/time for the data to be parsed.
   -i, --sar-file=FILE      path to the sar text data file to read to generate
 			   system reports. Default to input_dir/sar_stats.dat.
@@ -932,9 +967,9 @@ options:
 			   reports. Default to input_dir/sadc_stats.dat.
   -n, --top-number         Top number of tables or indexes I/O stats to show.
 			   Default is set to top 10. Set it to 0 to show all.
-  -o, --output=DIR         output directory
-  -p, --dev-only device    Only report I/O stats for a particular device
+  -N, --network-only iface only report stats for a particular network interface.
 			   You can use it multiple time.
+  -o, --output=DIR         output directory
   -r, --reverse-date       By default pgcluu look at mm/dd/yy format in sar file.
                            When enabled pgcluu will look at dd/mm/yy format.
   -s, --sadf=BIN           path to the sadf sysstat command used to read the
@@ -1082,7 +1117,6 @@ sub get_device_list
 			# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
 			my @data = split(/;/, $l);
 			next if ($data[2] !~ /^\d+/);
-			next if (!&device_in_report($data[3]));
 			if (!grep(m#^$data[3]$#, @dev_list)) {
 				push(@dev_list, $data[3]);
 			} else {
@@ -1134,6 +1168,76 @@ sub get_device_list
 
 	return @dev_list;
 }
+
+sub get_interface_list
+{
+	my @dev_list = ();
+
+	if ($SADC_INPUT_FILE && -f "$SADC_INPUT_FILE") {
+
+		my $command = "$SADF_PROG -t -P ALL -D $SADC_INPUT_FILE -- -n DEV";
+		print "DEBUG: looking for device list using command $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		while (my $l = <IN>) {
+			chomp($l);
+			# hostname;interval;timestamp;IFACE;rxpck/s;txpck/s;rxkB/s;txkB/s;rxcmp/s;txcmp/s;rxmcst/s
+			my @data = split(/;/, $l);
+			next if ($data[2] !~ /^\d+/);
+			if (!grep(m#^$data[3]$#, @dev_list)) {
+				push(@dev_list, $data[3]);
+			} else {
+				last;
+			}
+		}
+		close(IN);
+
+	} elsif ($SAR_INPUT_FILE && -f "$SAR_INPUT_FILE") {
+
+		# Load data from file
+		if (!open(IN, "$SAR_INPUT_FILE")) {
+			die "FATAL: can't read input file $SAR_INPUT_FILE: $!\n";
+		}
+		my $type = '';
+		my @headers = ();
+		while (my $l = <IN>) {
+			chomp($l);
+			$l =~ s///;
+			# Skip kernel header part
+			if ($l !~ /^\d+:\d+:\d+/) {
+				next;
+			}
+			if ($l =~ m#IFACE\s+#) {
+				if ($#headers == -1) {
+					push(@headers, split(m#\s+#, $l));
+					next;
+				} else {
+					last;
+				}
+			}
+			# Empty line, maybe the end of a report
+			if (($l eq '') && ($#headers >= 0)) {
+				last;
+			}
+			# Get all values reported
+			if ($#headers >= 0) {
+				my @values = ();
+				push(@values, split(m#\s+#, $l));
+				last if ($#values != $#headers);
+				if (!grep(m#^$values[1]$#, @dev_list)) {
+					push(@dev_list, $values[1]);
+				}
+			}
+		}
+		close(IN);
+
+	}
+
+	return @dev_list;
+}
+
 
 sub write_database_info
 {
@@ -4609,6 +4713,24 @@ sub generate_html_menu
 		$menu_str .= qq{
 		    </ul>
 		  </li>
+		  <li id="menu-network" class="dropdown-submenu">
+		     <a href="#" tabindex="-1">Network </a>
+		      <ul class="dropdown-menu">
+};
+		for (my $i = 0; $i <= $#IFACE_LIST; $i++) {
+			$menu_str .= qq{
+			  <li id="menu-device$i" class="dropdown-submenu">
+			     <a href="#" tabindex="-1">$IFACE_LIST[$i] </a>
+			      <ul class="dropdown-menu">
+			      <li id="menu-network-utilisation"><a href="network-device$i.html#network-utilization">Network utilization</a></li>
+			      <li id="menu-network-error"><a href="network-device$i.html#network-error">Network errors</a></li>
+			      </ul>
+			  </li>
+};
+		}
+		$menu_str .= qq{
+		    </ul>
+		  </li>
                 </ul>
               </li>
 };
@@ -4636,6 +4758,19 @@ sub device_in_report
 	}
 	return 0;
 }
+
+sub interface_in_report
+{
+	my $device = shift;
+
+	return 1 if ($#INCLUDE_IFACE == -1);
+
+	foreach my $g (@INCLUDE_IFACE) {
+		return 1 if (grep(/^$g$/, $device));
+	}
+	return 0;
+}
+
 
 sub compute_cpu_report
 {
@@ -5008,12 +5143,70 @@ sub compute_util_device_report
 	}
 }
 
+sub compute_network_report
+{
+	my $data_info = shift();
+
+	my %devices_stat = ();
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;IFACE;rxpck/s;txpck/s;rxkB/s;txkB/s;rxcmp/s;txcmp/s;rxmcst/s
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+		next if (!&interface_in_report($data[3]));
+
+		map { s/,/\./ } @data ;
+		$devices_stat{$data[3]}{'rxkB/s'} .= '[' . $data[2] . ',' . ($data[6]*1024) . '],';
+		$devices_stat{$data[3]}{'txkB/s'} .= '[' . $data[2] . ',' . ($data[7]*1024) . '],';
+	}
+	if (scalar keys %devices_stat > 0) {
+		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
+			$devices_stat{$n}{'rxkB/s'} =~ s/,$//;
+			$devices_stat{$n}{'txkB/s'} =~ s/,$//;
+			$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'network-utilization', $data_info, $n, $devices_stat{$n}{'rxkB/s'}, $devices_stat{$n}{'txkB/s'}) );
+		}
+	}
+}
+
+sub compute_network_error_report
+{
+	my $data_info = shift();
+
+	my %devices_stat = ();
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;IFACE;rxerr/s;txerr/s;coll/s;rxdrop/s;txdrop/s;txcarr/s;rxfram/s;rxfifo/s;txfifo/s
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+		next if (!&interface_in_report($data[3]));
+
+		map { s/,/\./ } @data ;
+		$devices_stat{$data[3]}{'rxerr/s'} .= '[' . $data[2] . ',' . $data[4] . '],';
+		$devices_stat{$data[3]}{'txerr/s'} .= '[' . $data[2] . ',' . $data[5] . '],';
+		$devices_stat{$data[3]}{'coll/s'}  .= '[' . $data[2] . ',' . $data[6] . '],';
+	}
+	if (scalar keys %devices_stat > 0) {
+		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
+			$devices_stat{$n}{'rxerr/s'} =~ s/,$//;
+			$devices_stat{$n}{'txerr/s'} =~ s/,$//;
+			$devices_stat{$n}{'coll/s'} =~ s/,$//;
+			$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'network-error', $data_info, $n, $devices_stat{$n}{'rxerr/s'}, $devices_stat{$n}{'txerr/s'}, $devices_stat{$n}{'coll/s'}) );
+		}
+	}
+}
+
 sub compute_sarstat_graph
 {
 	my ($file, %data_info) = @_;
 
 	####
-	# Show CPU usage
+	# Show CPU utilization
 	####
 	if ($data_info{name} eq 'system-cpu') {
 		my $command = "$SADF_PROG -t -P ALL -D $file";
@@ -5085,7 +5278,7 @@ sub compute_sarstat_graph
 	}
 
 	####
-	# Show memory usage
+	# Show memory utilization
 	####
 	if ($data_info{name} eq 'system-memory') {
 		my $command = "$SADF_PROG -t -D $file -- -r";
@@ -5103,7 +5296,7 @@ sub compute_sarstat_graph
 	}
 
 	####
-	# Show swap usage
+	# Show swap utilization
 	####
 	if ($data_info{name} eq 'system-swap') {
 		my $command = "$SADF_PROG -t -D $file -- -W";
@@ -5118,6 +5311,24 @@ sub compute_sarstat_graph
 
 		# Compute graphs for block statistics
 		&compute_swap_report(\%data_info, @content);
+	}
+
+	####
+	# Show page utilization
+	####
+	if ($data_info{name} eq 'system-page') {
+		my $command = "$SADF_PROG -t -D $file -- -B";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for block statistics
+		&compute_page_report(\%data_info, @content);
 	}
 
 	####
@@ -5158,7 +5369,7 @@ sub compute_sarstat_graph
 
 
 	####
-	# Show Device block read/write usage
+	# Show Device block read/write utilization
 	####
 	if ($data_info{name} eq 'system-device') {
 		my $command = "$SADF_PROG -t -P ALL -D $file -- -d -p";
@@ -5176,7 +5387,7 @@ sub compute_sarstat_graph
 	}
 
 	####
-	# Show Device usage
+	# Show Device utilization
 	####
 	if ($data_info{name} eq 'system-cpudevice') {
 		my $command = "$SADF_PROG -t -P ALL -D $file -- -d -p";
@@ -5192,6 +5403,45 @@ sub compute_sarstat_graph
 		# Compute graphs for devices statistics
 		&compute_util_device_report(\%data_info, @content);
 	}
+
+
+	####
+	# Show network interface utilization
+	####
+	if ($data_info{name} eq 'network-utilization') {
+		my $command = "$SADF_PROG -t -P ALL -D $file -- -n DEV";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for devices statistics
+		&compute_network_report(\%data_info, @content);
+	}
+
+	####
+	# Show network errors utilization
+	####
+	if ($data_info{name} eq 'network-error') {
+		my $command = "$SADF_PROG -t -P ALL -D $file -- -n EDEV";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for devices statistics
+		&compute_network_error_report(\%data_info, @content);
+	}
+
+
 }
 
 sub find_report_type
@@ -5346,7 +5596,7 @@ sub compute_sarfile_graph
 	@content = ();
 
 	####
-	# Show CPU usage
+	# Show CPU utilization
 	####
 	if ($data_info{name} eq 'system-cpu') {
 
@@ -5387,7 +5637,7 @@ sub compute_sarfile_graph
 
 
 	####
-	# Show memory usage
+	# Show memory utilization
 	####
 	if ($data_info{name} eq 'system-memory') {
 
@@ -5397,7 +5647,7 @@ sub compute_sarfile_graph
 	}
 
 	####
-	# Show swap usage
+	# Show swap utilization
 	####
 	if ($data_info{name} eq 'system-swap') {
 
@@ -5407,7 +5657,7 @@ sub compute_sarfile_graph
 	}
 
 	####
-	# Show page usage
+	# Show page utilization
 	####
 	if ($data_info{name} eq 'system-page') {
 
@@ -5415,7 +5665,6 @@ sub compute_sarfile_graph
 		&compute_page_report(\%data_info, @{$fulldata{page}});
 
 	}
-
 
 	####
 	# Show block in/out
@@ -5437,9 +5686,8 @@ sub compute_sarfile_graph
 
 	}
 
-
 	####
-	# Show Device read/write usage
+	# Show Device read/write utilization
 	####
 	if ($data_info{name} eq 'system-device') {
 
@@ -5449,12 +5697,32 @@ sub compute_sarfile_graph
 	}
 
 	####
-	# Show Device usage
+	# Show Device utilization
 	####
 	if ($data_info{name} eq 'system-cpudevice') {
 
 		# Compute graphs for devices statistics
 		&compute_util_device_report(\%data_info, @{$fulldata{dev}});
+
+	}
+
+	####
+	# Show network utilization
+	####
+	if ($data_info{name} eq 'network-utilization') {
+
+		# Compute graphs for block statistics
+		&compute_network_report(\%data_info, @{$fulldata{net}});
+
+	}
+
+	####
+	# Show network error utilization
+	####
+	if ($data_info{name} eq 'network-error') {
+
+		# Compute graphs for block statistics
+		&compute_network_error_report(\%data_info, @{$fulldata{err}});
 
 	}
 
