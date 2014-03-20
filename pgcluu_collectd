@@ -237,10 +237,15 @@ my %METRICS_COMMANDS = (
 		'output' => 'pg_database_isdirty.csv',
 		'command' => 'dump_pgdatabase_isdirty'
 	},
-#	'relation_buffercache_stats' => {
-#		'output' => 'pg_relation_buffercache.csv',
-#		'command' => 'dump_pgrelation_buffercache',
-#	},
+	'relation_buffercache_stats' => {
+		'output' => 'pg_relation_buffercache.csv',
+		'command' => 'dump_pgrelation_buffercache',
+	},
+	'archiver_stats' => {
+		'output' => 'pg_stat_archiver.csv',
+		'command' => 'dump_pgstatarchiver',
+	},
+dump_pgstatarchiving
 );
 
 # Process command line options and look for an action keyword. There
@@ -649,6 +654,9 @@ sub verify_action
 	# Has pg_stat_statements ?
 	&backend_has_pgstatstatements();
 
+	if (!&backend_minimum_version(9, 4)) {
+		delete $METRICS_COMMANDS{'archiver_stats'};
+	}
 	if (!&backend_minimum_version(8, 3)) {
 		delete $METRICS_COMMANDS{'bgwriter_stats'};
 		delete $METRICS_COMMANDS{'pg_buffercache_stats'};
@@ -1672,4 +1680,20 @@ sub dump_pgdatabase_isdirty
 	);
 	return $sql;
 }
+
+####
+# Get information about archive
+####
+sub dump_pgstatarchiver
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), archived_count, last_archived_wal, " .
+		"last_archived_time, failed_count, last_failed_wal, last_failed_time, stats_reset " . 
+		"FROM pg_settings "
+	);
+
+	return $sql;
+}
+
 
