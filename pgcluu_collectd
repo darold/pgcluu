@@ -553,6 +553,9 @@ my @included_dbs = split(/,/, $INCLUDED_DB);
 
 while (1) {
 
+	# Stores loop start time
+	my $t0 = time;
+
 	# Some time range may not collect data
 	my ($sec , $min, $hour, @other) = localtime(time);
 	$min = "0$min" if ($min < 10);
@@ -639,8 +642,15 @@ while (1) {
 		&dprint(`$sar_command`);
 	}
 
-	# Wait next run and allow signal
-	sleep($INTERVAL);
+	my $t1 = time - $t0;
+	if ($t1 >= $INTERVAL) {
+		print "WARNING: loop took: $t1, you may consider increase the interval ($INTERVAL sec) using -i option.\n";
+		# Wait next run following the interval value
+		sleep($INTERVAL);
+	} else {
+		# Wait next run following the interval value minus the loop time
+		sleep($INTERVAL - $t1);
+	}
 }
 
 exit 0;
