@@ -1,3 +1,108 @@
+2014-03-22 - Version 2.0 released
+
+New or enhenced reports/features:
+
+	- Add reports for unused and redundant indexes per database.
+	- Add report about archiver statistics with PostgreSQL 9.4 new
+	  pg_stat_archiver view.
+	- Add report about wal files created vs recycled and the max number
+	  of wal files.
+	- Add reports about network interfaces utilization and network errors.
+	- Add reports about system cache page in/out from/to disk.
+	- Add report of isdirty statistics.
+	- Add --exclude-time to pgcluu_collectd options to stop collecting
+	  statistics during a period of time. Ex: --exclude-time "22:00-06:00"
+	  to stop collecting data from 22:00 to 06:00 am the next day.
+	- Add report about percentage of shared buffer used per database
+	- Add report about percentage of each databases loaded in shared buffer
+	- Add report about usagecount distribution in shared buffer
+	- Add report about usagecount distribution in dirty shared buffer
+	- Add report of fumber of shared buffer/pages used by a relation
+	- Add report number of buffers loaded in cache for a relation relation
+	  and the percentage of the relation loaded.
+	[Shared buffers statistics are collected automatically when pg_buffercache
+	extension is installed and the -B | --enable-buffercache option is used.]
+	- Add reports about configuration files (postgresql.conf, pg_hba.conf and
+	  pg_ident.conf), pgcluu_collectd must be run as postgresql user.
+	- Add report of user functions statistics.
+	- Add report about the pgbouncer settings in Configuration submenu.
+	- Add copy of pgbouncer.ini file in Configuration submenu.
+	- Add report of pg_settings in Configuration submenu..
+	- Add report with SQL orders to create missing indexes on foreign keys.
+	- Allow HTML table sort with a modified version of the javascript libraryi
+	  sorttable.js
+	- Moved System info report from sar sytem menu to a dedicated main SysInfo
+	  menu.
+	- Add the number and list of extensions used inside the PG cluster.
+	- Add reports about Locks per types, Locks per modes and Locks granted or not.
+	- Add report about I/O statistics per index.
+	- Add report about I/O statistics per table.
+	- Add last manual vacuum/analyze datatime on database info report.
+	- Add per database index statistics.
+	- Add report of size and number of tuples per table of a database.
+	- Add statistics reports per table (idx_scan/seq_scan, vacuums/analyzes,
+	  Insert/update/delete/hot update and live/dead tuples).
+	- Add count of user triggers in database information slide.
+	- Add Database info submenu per database to display the general information
+	  about a database (installed extension, schemas, number of Stored procedures
+	  and of all kind of object.
+	- Add last know size of the database in the Database info slide.
+	- Add total number of databases on cluster key values.
+	- Add cluster report on tablespaces that are not pg_default and pg_global.
+	- Add report of pgbouncer statistics per dbname and per pool (dbname/username).
+
+
+Other changes/fixes:
+
+        - Waiting interval is now calculated with the interval value minus the
+	  execution time of each loop.
+	- Add output information when a kill signal is sent to pgcluu_collectd.
+	- Option -p | --dev-only have change to -D | --device-only and add new
+	  option -N | --network-only to limit report on some network interfaces.
+	- Pretty print system memory information.
+	- Fix graphs when a new database is created or dropped during an audit.
+	- Add -B | --enable-buffercache to activate pg_buffercache statistics.
+	  It is disable by default.
+	- Reorder Database menu with submenu and prevent moving to non existant
+	  reports by disabling the submenu.
+	- Reorder cluster menu, using submenu and fix title of replication lag
+	  report.
+	- Add vm.dirty_background_bytes and vm.dirty_bytes to sysctl collect.
+	- Add support to PostgreSQL 8.1 by using temporary table not COPY (sql).
+	  Thanks to kenstir for the patch.
+	- Reopen stdin/out/err so that daemon mode works correctly. Thanks to
+	  kenstir for the patch.
+	- Fix affected tuples per operation per database where tuples fetched
+	  was used as select instead of tuples returned.
+	- Review code and use one method per report.
+	- Update documentation and usage about --exclude-time
+	- Fiw detection of non official release, like devel or EnterpriseDB
+	  major version detection.
+	- Change icon of CPU in SysInfo report.
+	- Remove full path from sar and psql command to allow definition by
+	  environment variables.
+	- Fix CPU report refresh when comming from a report in the same
+	  system.html page.
+	- Change label of the 'Reset' button to 'To chart' to be less confusing.
+	  This button allow to switch from image to chart (opposite as 'To image')
+	  and not to reset a zoom in the graph.
+	- Add -n, --top-number command line option to redefine the default top
+	  10 tables or indexes I/O statistics.
+	- Fix interval given to the sar command, should be one second and not
+	  the value of $INTERVAL.
+	- Fix sar report with overlapped time.
+	- Fix empty file pg_stat_user_tables.csv.
+	- Add database name inside pg_class_size.csv output and add function
+	  get_proc_count(dbname) to retrieve function from a given database.
+	- Add -T | --notablespace option to avoid printing an error message
+	  when the connection user is not superuser.
+	- Remove pg_default and pg_global from tablespace report.
+	- Change link on program name to pgcluu www site.
+	- Move print of Postgresql full version at bottom of the home page.
+	- Reduce font size of key value on home and information slides.
+	- Update Flotr2 javascript library to fix redraw of crosshair.
+
+
 2014-01-28 - Version 1.1 released
 
 This release adds lot of report improvements and bug fixes. There is also
