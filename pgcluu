@@ -506,6 +506,7 @@ my %DB_GRAPH_INFOS = (
 			'description' => 'Show statistics about percentage of shared buffer used per database.',
 			'ylabel' => 'Percent',
 			'legends' => [],
+			'active' => 1,
 			'menu' => 'Shared buffers utilisation',
 		},
 		'2' => {
@@ -525,6 +526,7 @@ my %DB_GRAPH_INFOS = (
 			'ylabel' => 'Percent',
 			'legends' => [],
 			'menu' => 'Usagecount utilisation',
+			'active' => 1,
 		},
 	},
 	'pg_database_isdirty.csv' => {
@@ -535,6 +537,7 @@ my %DB_GRAPH_INFOS = (
 			'ylabel' => 'Percent',
 			'legends' => [],
 			'menu' => 'Dirty Usagecount',
+			'active' => 1,
 		},
 	},
 	'pg_relation_buffercache.csv' => {
@@ -554,9 +557,19 @@ my %DB_GRAPH_INFOS = (
 			'ylabel' => 'Number',
 			'y2label' => 'percent',
 			'legends' => ['buffered','relation %'],
-			'active' => 1,
 			'menu' => 'Buffer I/O per relation',
 		},
+	},
+	'pg_stat_archiver.csv' => {
+		'1' => {
+			'name' =>  'cluster-archive',
+			'title' => 'Statistics about archiver',
+			'description' => 'Number of WAL files archived with number of failure',
+			'ylabel' => 'Number',
+			'legends' => ['archived count', 'failed count'],
+			'active' => 1,
+			'menu' => 'Archiving',
+		}
 	},
 );
 
@@ -3765,6 +3778,50 @@ sub pg_database_isdirty
 	}
 }
 
+# Compute graphs of archiver statistics
+sub pg_stat_archiver
+{
+	my ($interval, $file, %data_info) = @_;
+
+	my %archiver_stat = ();
+	my $total_val = 0;
+	my @start_vals = ();
+
+	# Load data from file
+	my $curfh = new IO::File;
+	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	while (<$curfh>) {
+		my @data = split(/;/);
+		next if (!&normalyze_line(\@data));
+
+		# timestamp | archived_count | last_archived_wal | last_archived_time | failed_count | last_failed_wal | last_failed_time | stats_reset
+                push(@start_vals, @data) if ($#start_vals < 0);
+
+		# Get archiver size statistics
+		my $tmp_val = '';
+                (($data[1] - $start_vals[1]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[1] - $start_vals[1]);
+		$archiver_stat{archived_count} = '[' . $data[0] . ',' . ($data[1] || 0). '],';
+                (($data[4] - $start_vals[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals[4]);
+		$archiver_stat{failed_count} = '[' . $data[0] . ',' . ($data[4] || 0). '],';
+
+		$OVERALL_STATS{'archiver'}{last_archived_wal} = $data[2];
+		$data[3] =~ s/\..*//;
+		$OVERALL_STATS{'archiver'}{last_archived_time} = $data[3];
+		$OVERALL_STATS{'archiver'}{last_failed_wal} = $data[5];
+		$data[6] =~ s/\..*//;
+		$OVERALL_STATS{'archiver'}{last_failed_time} = $data[6];
+		$data[7] =~ s/\..*//;
+		$OVERALL_STATS{'archiver'}{stats_reset} = $data[7];
+
+		@start_vals = ();
+		push(@start_vals, @data);
+	}
+	$curfh->close();
+	my $id = &get_data_id('cluster-archive', %data_info);
+	print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-archive', \%{$data_info{$id}}, '', $archiver_stat{archived_count}, $archiver_stat{failed_count});
+}
+
+
 sub normalyze_line
 {
 	my $data = shift;
@@ -4028,6 +4085,7 @@ EOF
               </div>
             </div><!--/span-->
 EOF
+
 	}
 	if (!$DISABLE_SAR) {
 		print $fh <<EOF;
@@ -4058,6 +4116,44 @@ EOF
 	}
 	print $fh <<EOF;
       </div>
+EOF
+	if (exists $OVERALL_STATS{'archiver'}) {
+		my $archiver_infos = '';
+		if (exists $OVERALL_STATS{'archiver'}{last_archived_wal}) {
+			$archiver_infos = qq{<li><span class="figure">$OVERALL_STATS{'archiver'}{last_archived_wal}</span> <span class="figure-label">Last archived wal</span></li>};
+			$archiver_infos .= qq{<li><span class="figure">$OVERALL_STATS{'archiver'}{last_archived_time}</span> <span class="figure-label">Last archived time</span></li>};
+		}
+		if (exists $OVERALL_STATS{'archiver'}{last_failed_wal}) {
+			$archiver_infos .= qq{<li><span class="figure">$OVERALL_STATS{'archiver'}{last_failed_wal}</span> <span class="figure-label">Last failed wal</span></li>};
+			$archiver_infos .= qq{<li><span class="figure">$OVERALL_STATS{'archiver'}{last_failed_time}</span> <span class="figure-label">Last failed time</span></li>};
+		}
+		if (exists $OVERALL_STATS{'archiver'}{stats_reset}) {
+			$archiver_infos .= qq{<li><span class="figure">$OVERALL_STATS{'archiver'}{stats_reset}</span> <span class="figure-label">Last stats reset</span></li>};
+		}
+
+		# Perform some initialization in case
+		print $fh <<EOF;
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="fa fa-th fa-2x pull-left fa-archive"></i><h2>Archiver</h2>
+              </div>
+              <div class="panel-body">
+		<div class="key-figures">
+		<ul>
+		<li></li>
+		$archiver_infos
+		</ul>
+		</div>
+              </div>
+              </div>
+            </div><!--/span-->
+EOF
+
+
+	}
+	print $fh <<EOF;
+
 <span class="figure-label">$sysinfo{PGVERSION}{'full_version'}</span>
 </li>
 
@@ -4425,6 +4521,7 @@ sub generate_html_menu
 			      <li id="menu-cluster-xlog_files"$disable_xlog><a href="cluster.html#cluster-xlog_files">Wal files</a></li>
 			      <li id="menu-cluster-checkpoints"><a href="cluster.html#cluster-checkpoints">Checkpoints counter</a></li>
 			      <li id="menu-cluster-checkpoints_time"$disable_checkpointwrite><a href="cluster.html#cluster-checkpoints">Checkpoints write time</a></li>
+			      <li id="menu-cluster-archive"$disable_xlog><a href="cluster.html#cluster-archive">Archiver stats</a></li>
 			      </ul>
 		        </li>
 			<li id="menu-rw" class="dropdown-submenu">
@@ -6427,21 +6524,21 @@ ul#slides li div div {
 }
 .key-figures li {
 	list-style-type: none;
-	margin-bottom: 1em;
+	margin-bottom: 0.5em;
 }
 .figure {
 	font-weight: bold;
-	font-size: 1.1em;
+	font-size: 1.0em;
 	color:#c43c35;
 }
 .figure-label {
 	color: #666;
+	font-size: 0.9em;
 }
 .figure-date {
 	color: #333;
 	font-size: 0.8em;
 }
-
 .mouse-figures {
 	font-weight: bold;
 	font-size: 1.0em;
