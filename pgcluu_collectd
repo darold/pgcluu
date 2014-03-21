@@ -245,7 +245,6 @@ my %METRICS_COMMANDS = (
 		'output' => 'pg_stat_archiver.csv',
 		'command' => 'dump_pgstatarchiver',
 	},
-dump_pgstatarchiving
 );
 
 # Process command line options and look for an action keyword. There
@@ -676,7 +675,7 @@ sub verify_action
 		delete $METRICS_COMMANDS{'redundant_indexes_stats'};
 		delete $METRICS_COMMANDS{'missing_fkindexes_stats'};
 	}
-	if (!&backend_minimum_version(8, 2)) {
+	if (!&backend_minimum_version(8, 1)) {
 		delete $METRICS_COMMANDS{'xlog_stats'};
 	}
 	if (!$DB_INFO{has_stat_statement}) {
@@ -886,6 +885,9 @@ sub is_superuser
 	return 1 if (!$usr);
 
 	$DB_INFO{is_superuser} = `$PSQL_PROG -c "SELECT 1 FROM pg_user WHERE usename='$usr' AND usesuper"`;
+	chomp($DB_INFO{is_superuser});
+
+	return $DB_INFO{is_superuser};
 
 }
 
@@ -1031,8 +1033,8 @@ sub backend_minimum_version
 {
 	my ($major, $minor) = @_;
 
-	return if (!$major);
-	return if (!$minor);
+	return if ($major eq '');
+	return if ($minor eq '');
 
 	return ($DB_INFO{major} > $major) || (($DB_INFO{major} == $major) && ($DB_INFO{minor} >= $minor));
 }
@@ -1286,13 +1288,50 @@ sub dump_pgstatstatements
 sub dump_xlog_stat
 {
 
-	my $sql = sprintf(
-		"SELECT date_trunc('seconds', now()), count(*), " .
-		"pg_xlogfile_name(pg_current_xlog_location()) AS current " .
-		"FROM pg_ls_dir('pg_xlog') " .
-		"WHERE pg_ls_dir ~ E'^[0-9A-F]{24}\$' "
-	);
+	my $sql = '';
 
+	if (&backend_minimum_version(8, 4)) {
+		$sql = sprintf(
+			"SELECT date_trunc('seconds', now()), count(*) AS num_file, " .
+			"pg_xlogfile_name(pg_current_xlog_location()) AS current, " .
+			"sum(is_recycled::int) AS is_recycled, " .
+			"sum((NOT is_recycled)::int) AS written, " .
+			"%s " .
+			"FROM ( " .
+			"SELECT file > first_value(file) OVER w AS is_recycled " .
+			"%s " .
+			"FROM pg_ls_dir('pg_xlog') as file " .
+			"WHERE file ~ '^[0-9A-F]{24}\$' " .
+			"WINDOW w AS ( " .
+			"ORDER BY (pg_stat_file('pg_xlog/'||file)).modification " .
+			"DESC " .
+			") " .
+			") AS t " .
+			"GROUP BY 6 ",
+			&backend_minimum_version(9, 0) ? "CASE WHEN max_wal1 > max_wal2 THEN max_wal1 ELSE max_wal2 END AS max_wal" : "1 + ( current_setting('checkpoint_segments')::float4 * ( 2 + current_setting('checkpoint_completion_target')::float4 )) AS max_wal",
+			&backend_minimum_version(9, 0) ? ",1 + ( current_setting('checkpoint_segments')::float4 * ( 2 + current_setting('checkpoint_completion_target')::float4 )) AS max_wal1, 1 + current_setting('wal_keep_segments')::float4 + current_setting('checkpoint_segments')::float4 AS max_wal2" : ""
+		);
+	} else {
+		$sql = sprintf(
+			"SELECT date_trunc('seconds', now()), count(*) AS num_file, " .
+			"%s AS current, " .
+			"sum(recycled::int) AS is_recycled, " .
+			"sum((NOT recycled)::int) AS written, " .
+			"%s " .
+			"FROM ( " .
+			"SELECT file, file > ( " .
+			"SELECT s.f " .
+			"FROM pg_ls_dir('pg_xlog') AS s(f) " .
+			"ORDER BY (pg_stat_file('pg_xlog/'||s.f)).modification DESC " .
+			"LIMIT 1 " .
+			") AS recycled " .
+			"FROM pg_ls_dir('pg_xlog') AS file " .
+			"WHERE file ~ '^[0-9A-F]{24}\$' " .
+			") AS t  ",
+			&backend_minimum_version(8, 2) ? "pg_xlogfile_name(pg_current_xlog_location())" : "'-'::text",
+			&backend_minimum_version(8, 3) ? "1 + ( current_setting('checkpoint_segments')::float4 * ( 2 + current_setting('checkpoint_completion_target')::float4 ))" : "1 + (current_setting('checkpoint_segments')::integer * 2)"
+		);
+	}
 
 	return $sql;
 }
