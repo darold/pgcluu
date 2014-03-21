@@ -17,7 +17,7 @@ use warnings;
 use IO::File;
 use Getopt::Long qw(:config bundling no_ignore_case_always);
 use Time::Local 'timegm_nocheck';
-use POSIX qw(locale_h sys_wait_h);
+use POSIX qw(locale_h sys_wait_h ceil);
 setlocale(LC_ALL, 'C');
 
 $VERSION = '2.0pre';
@@ -351,7 +351,7 @@ my %DB_GRAPH_INFOS = (
 			'title' => 'WAL files',
 			'description' => 'Number of WAL file in the xlog directory',
 			'ylabel' => 'Number of files',
-			'legends' => ['xlog'],
+			'legends' => ['total xlog'],
 		},
 	},
 	'pg_stat_replication.csv' => {
@@ -2541,12 +2541,18 @@ sub pg_xlog_stat
 		my @data = split(/;/);
 		next if (!&normalyze_line(\@data));
 
+		# timestamp | total_file | last_wal_name | wal_recycled | wal_written | max_wal
+
 		# case of pgstats file content
 		if ($#data == 3) {
 			$tmp_xlog_stat{$data[0]}{total}++;
 		} else {
-			# Case of pgusage_collector.pl file content
 			$xlog_stat{total} .= '[' . $data[0] . ',' . ($data[1] || 0) . '],';
+			if ($#data == 5) {
+				$xlog_stat{recycled} .= '[' . $data[0] . ',' . ($data[3] || 0) . '],';
+				$xlog_stat{written}  .= '[' . $data[0] . ',' . ($data[4] || 0) . '],';
+				$xlog_stat{max_wal}  .= '[' . $data[0] . ',' . (POSIX::ceil($data[5]) || 0) . '],';
+			}
 		}
 	}
 	$curfh->close();
@@ -2556,7 +2562,12 @@ sub pg_xlog_stat
 	%tmp_xlog_stat = ();
 	my $id = &get_data_id('database-xlog_files', %data_info);
 	$xlog_stat{total} =~ s/,$//;
-	print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-xlog_files', \%{$data_info{$id}}, '', $xlog_stat{total});
+	if (exists $xlog_stat{recycled}) {
+		push(@{$data_info{$id}{legends}}, 'recycled', 'written', 'max_wal');
+		print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-xlog_files', \%{$data_info{$id}}, '', $xlog_stat{total}, $xlog_stat{recycled}, $xlog_stat{written}, $xlog_stat{max_wal});
+	} else {
+		print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-xlog_files', \%{$data_info{$id}}, '', $xlog_stat{total});
+	}
 }
 
 # Compute graphs of bgwriter cluster statistics
