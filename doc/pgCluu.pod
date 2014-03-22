@@ -10,15 +10,14 @@ It is a Perl program used to perform a full audit of a PostgreSQL Cluster
 and System performances. It is divided in two parts:
 
 - A collector used to grab statistics on the PostgreSQL cluster using
-the psql command line utility and sar.
+the psql command line utility and sar from the sysstat package.
 
 - A pur Perl grapher that will generate all HTML and charts output without
 any requirements.
 
 If you don't want system utilization reports, you can disable it at command
-line. If you just want to graph a sar data file, it's also possible and finally,
-if you just want to generate report from the pgstats utility, that's possible.
-Note that pgcluu_collectd is mostly a Perl replacement of pgstats.
+line. If you just want to graph a sar data file, it's also possible.
+
 
 =head1 SYNOPSIS
 
@@ -43,8 +42,8 @@ Your browser will do all the work.
 
 Download the tarball from Source Forge and unpack the archive:
 
-        tar xzf pgcluu-1.x.tar.gz
-        cd pgcluu-1.x/
+        tar xzf pgcluu-2.x.tar.gz
+        cd pgcluu-2.x/
         perl Makefile.PL
         make && sudo make install
 
@@ -184,40 +183,58 @@ sadc_stats.dat for binary sadc data file, it will be taken to build report
 about system utilisation. If you just want to make a report from a sar file
 use the -i or -I options.
 
-usage: ./pgcluu [options] [-i sar_file | -I sadc_file] [input_dir]
+usage: pgcluu [options] [-i sar_file | -I sadc_file] [input_dir]
 
 	input_dir: directory where pgcluu_collectd or pgstats and sar data
+		   files are stored.
 
 options:
-
   -b, --begin  datetime    start date/time for the data to be parsed.
   -d, --db-only dbname     Only report for the whole cluster and the given
-			   database name. You can use it multiple time.
+			   database name. You can use it multiple time or
+			   give a comma separated list of database name.
+  -D, --device-only dev    only report I/O stats for a particular device
+			   You can use it multiple time or give a comma
+			   separated list of device name, ex: sda,sdc.
   -e, --end    datetime    end date/time for the data to be parsed.
   -i, --sar-file=FILE      path to the sar text data file to read to generate
 			   system reports. Default to input_dir/sar_stats.dat.
   -I, --sadc-file=FILE     sadc binary data file to read to generate system
 			   reports. Default to input_dir/sadc_stats.dat.
+  -n, --top-number         Top number of tables or indexes I/O stats to show.
+			   Default is set to top 10. Set it to 0 to show all.
+  -N, --network-only iface only report stats for a particular network interface.
+			   You can use it multiple time or give a comma separated
+			   list of network ingterface, ex: eth0,eth1.
   -o, --output=DIR         output directory
-  -p, --dev-only device    Only report I/O stats for a particular device
-			   You can use it multiple time.
+  -r, --reverse-date       By default pgcluu look at mm/dd/yy format in sar file.
+                           When enabled pgcluu will look at dd/mm/yy format.
   -s, --sadf=BIN           path to the sadf sysstat command used to read the
-			   sadc binary data file. Default: /usr/bin/sadf.
+                           sadc binary data file. Default: /usr/bin/sadf.
   -S, --disable-sar        disable collect of system statistics with sar.
-  -t, --all-table          report per table statistics, default is report
-			   for the whole database.
-  -T, --with-table table   Only report for the whole tables and the given
-			   table name. You can use it multiple time.
+  -t, --with-table table   Only report for the whole tables and the given
+			   table name. You can use it multiple time or
+			   give a comma separated list of database name.
+  -T, --no-table           Do not report statistics related to tables.
   -z, --timezone +/-XX     Set the number of hour(s) from GMT of the timezone.
-                           Use this to adjust date/time from the sar output as
+                           Use this to adjust date/time from the sar output,
                            pgcluu use GMT time to draw charts.
-
   --help                   print usage
 
-Using the example above, you can generate all reports with the following command:
+For example, you can generate all HTML reports from data files stored into
+/tmp/stat_db1/ with the following commands:
 
-	mkdir /tmp/report_db1/
-	pgcluu -o /tmp/report_db1/ /tmp/stat_db1/
+        mkdir /tmp/report_db1/
+        pgcluu -o /tmp/report_db1/ /tmp/stat_db1/
+
+If you just want reports of some databases, use the following:
+
+        pgcluu -o /tmp/report_db1/ /tmp/stat_db1/ --db-only "db1,db2,db3"
+
+If you just want to create a report from a sar output file:
+
+        sar -p -A 10 60 > /root/my_sar_file.txt
+        pgcluu -o /tmp/report_sar/ -i /root/my_sar_file.txt
 
 =head1 LICENSE
 

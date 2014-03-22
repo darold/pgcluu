@@ -672,21 +672,25 @@ my %SAR_GRAPH_INFOS = (
 
 # Process command line options and look for an action keyword. There
 # are no mandatory options.
+my @dbs_opts = ();
+my @dev_opts = ();
+my @tbs_opts = ();
+my @net_opts = ();
 GetOptions(
 	"b|begin=s"      => \$BEGIN,
-	"d|db-only=s"    => \@INCLUDE_DB,
-	"D|device-only=s"=> \@INCLUDE_DEV,
+	"d|db-only=s"    => \@dbs_opts,
+	"D|device-only=s"=> \@dev_opts,
 	"e|end=s"        => \$END,
 	"h|help!"        => \$HELP,
 	"i|sar-file=s"   => \$SAR_INPUT_FILE,
 	"I|sadc-file=s"  => \$SADC_INPUT_FILE,
 	"n|top-number=i" => \$TOP_STAT,
-	"N|network-only=s" => \@INCLUDE_IFACE,
+	"N|network-only=s" => \@net_opts,
 	"o|output=s"     => \$OUTPUT_DIR,
 	"s|sadf=s"       => \$SADF_PROG,
 	"r|reverse-date" => \$REVERT_DATE,
 	"S|disable-sar!" => \$DISABLE_SAR,
-	"t|with-table=s" => \@INCLUDE_TB,
+	"t|with-table=s" => \@tbs_opts,
 	"T|no-table!"    => \$NO_TB_STAT,
 	"v|verbose!"     => \$DEBUG,
 	"z|timezone=s"   => \$TIMEZONE,
@@ -696,6 +700,22 @@ GetOptions(
 my $INPUT_DIR   = $ARGV[0] || '';
 $INPUT_DIR =~ s/\/$//;
 $OUTPUT_DIR =~ s/\/$//;
+
+# Set list of ojbects to monitor from command line options
+# options cna be used multiple time but also as a comma
+# separated list of object name.
+foreach (@dbs_opts) {
+	push(@INCLUDE_DB, split(/[,]+/, @dbs_opts));
+}
+foreach (@dev_opts) {
+	push(@INCLUDE_DEV, split(/[,]+/, @dev_opts));
+}
+foreach (@tbs_opts) {
+	push(@INCLUDE_TB, split(/[,]+/, @tbs_opts));
+}
+foreach (@net_opts) {
+	push(@INCLUDE_IFACE, split(/[,]+/, @net_opts));
+}
 
 # Set default sysstat file to read (binary or text format)
 if (!$DISABLE_SAR) {
@@ -970,9 +990,11 @@ usage: $0 [options] [-i sar_file | -I sadc_file] [input_dir]
 options:
   -b, --begin  datetime    start date/time for the data to be parsed.
   -d, --db-only dbname     Only report for the whole cluster and the given
-			   database name. You can use it multiple time.
+			   database name. You can use it multiple time or
+			   give a comma separated list of database name.
   -D, --device-only dev    only report I/O stats for a particular device
-			   You can use it multiple time.
+			   You can use it multiple time or give a comma
+			   separated list of device name, ex: sda,sdc.
   -e, --end    datetime    end date/time for the data to be parsed.
   -i, --sar-file=FILE      path to the sar text data file to read to generate
 			   system reports. Default to input_dir/sar_stats.dat.
@@ -981,21 +1003,21 @@ options:
   -n, --top-number         Top number of tables or indexes I/O stats to show.
 			   Default is set to top 10. Set it to 0 to show all.
   -N, --network-only iface only report stats for a particular network interface.
-			   You can use it multiple time.
+			   You can use it multiple time or give a comma separated
+			   list of network ingterface, ex: eth0,eth1.
   -o, --output=DIR         output directory
   -r, --reverse-date       By default pgcluu look at mm/dd/yy format in sar file.
                            When enabled pgcluu will look at dd/mm/yy format.
   -s, --sadf=BIN           path to the sadf sysstat command used to read the
                            sadc binary data file. Default: $SADF_PROG.
   -S, --disable-sar        disable collect of system statistics with sar.
-  -t, --all-table          report per table statistics, default is report
-                           for the whole database.
-  -T, --with-table table   Only report for the whole tables and the given
-			   table name. You can use it multiple time.
+  -t, --with-table table   Only report for the whole tables and the given
+			   table name. You can use it multiple time or
+			   give a comma separated list of database name.
+  -T, --no-table           Do not report statistics related to tables.
   -z, --timezone +/-XX     Set the number of hour(s) from GMT of the timezone.
-                           Use this to adjust date/time from the sar output as
+                           Use this to adjust date/time from the sar output,
                            pgcluu use GMT time to draw charts.
-
   --help                   print usage
 
 For example, you can generate all HTML reports from data files stored into
@@ -1003,6 +1025,15 @@ For example, you can generate all HTML reports from data files stored into
 
         mkdir /tmp/report_db1/
         pgcluu -o /tmp/report_db1/ /tmp/stat_db1/
+
+If you just want reports of some databases, use the following:
+
+        pgcluu -o /tmp/report_db1/ /tmp/stat_db1/ --db-only "db1,db2,db3"
+
+If you just want to create a report from a sar output file:
+
+	sar -p -A 10 60 > /root/my_sar_file.txt
+        pgcluu -o /tmp/report_sar/ -i /root/my_sar_file.txt
 
 };
     exit 0;

@@ -22,6 +22,7 @@ New or enhenced reports/features:
 	  and the percentage of the relation loaded.
 	[Shared buffers statistics are collected automatically when pg_buffercache
 	extension is installed and the -B | --enable-buffercache option is used.]
+
 	- Add reports about configuration files (postgresql.conf, pg_hba.conf and
 	  pg_ident.conf), pgcluu_collectd must be run as postgresql user.
 	- Add report of user functions statistics.
@@ -101,7 +102,8 @@ Other changes/fixes:
 	- Move print of Postgresql full version at bottom of the home page.
 	- Reduce font size of key value on home and information slides.
 	- Update Flotr2 javascript library to fix redraw of crosshair.
-
+	- Command line options that can be used multiple time can now also
+	  be used one time using a comma separated list of object names.
 
 2014-01-28 - Version 1.1 released
 
