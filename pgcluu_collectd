@@ -1112,10 +1112,11 @@ sub dump_pgtablespace_size
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), spcname, " .
-		"pg_tablespace_size(spcname), %s " .
+		"pg_tablespace_size(spcname), " .
+		"CASE WHEN %s = '' THEN CASE WHEN spcname = 'pg_default' THEN (select setting from pg_settings where name='data_directory')||'/base' ELSE (select setting from pg_settings where name='data_directory')||'/global' END ELSE %s END as tablespace_location " .
 		"FROM pg_tablespace " .
-		"WHERE spcname NOT IN ('pg_default', 'pg_global') " .
 		"ORDER BY spcname",
+		&backend_minimum_version(9, 2) ? "pg_tablespace_location(oid)" : "spclocation",
 		&backend_minimum_version(9, 2) ? "pg_tablespace_location(oid)" : "spclocation"
 	);
 

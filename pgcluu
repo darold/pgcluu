@@ -1842,9 +1842,9 @@ sub pg_tablespace_size
 		$tablespace_stat{$tbsp}{size} =~ s/,$//;
 		$data{$tbsp} = $tablespace_stat{$tbsp}{size};
 		if ($tbsp ne 'all') {
-			my $location = '';
-			$location = " ($tablespace_stat{$tbsp}{location})" if ($tablespace_stat{$tbsp}{location});
-			$print_after .= &flotr2_linegraph_array($IDX++, 'tablespace-size+', \%{$data_info{$id}}, $tbsp . $location, $tablespace_stat{$tbsp}{size});
+			my $location = "$tbsp";
+			$location .= " ($OVERALL_STATS{'tablespace'}{$tbsp}{location})" if ($OVERALL_STATS{'tablespace'}{$tbsp}{location});
+			$print_after .= &flotr2_linegraph_array($IDX++, 'tablespace-size+', \%{$data_info{$id}}, $location, $tablespace_stat{$tbsp}{size});
 		}
 		delete $tablespace_stat{$tbsp}{size};
 	}
