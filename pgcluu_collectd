@@ -58,6 +58,7 @@ my $SKIP_HOURS  = '';
 my @SKIP_BEGIN  = ();
 my @SKIP_END    = ();
 my $USE_BUFFERCACHE = 0;
+my $NO_STATEMENTS  = 0;
 
 # Definition to collect metrics from the database
 my %METRICS_COMMANDS = (
@@ -260,6 +261,7 @@ my $result = GetOptions(
 	"m|metric=s"     => \@METRICS,
 	"p|port=i"       => \$DBPORT,
 	"P|psql=s"       => \$PSQL_PROG,
+	"Q|no-statement!"=> \$NO_STATEMENTS,
 	"s|sar=s"        => \$SAR_PROG,
 	"S|disable-sar!" => \$DISABLE_SAR,
 	"T|notablespace!"=> \$NOTABLESPACE,
@@ -688,7 +690,7 @@ sub verify_action
 	if (!&backend_minimum_version(8, 1)) {
 		delete $METRICS_COMMANDS{'xlog_stats'};
 	}
-	if (!$DB_INFO{has_stat_statement}) {
+	if ($NO_STATEMENTS || !&backend_has_pgstatstatements()) {
 		delete $METRICS_COMMANDS{'statements_stats'};
 	}
 	if (!&is_superuser($DBUSER)) {
@@ -883,7 +885,19 @@ sub has_pg_buffercache
 
 sub backend_has_pgstatstatements
 {
-	$DB_INFO{has_stat_statement} = `$PSQL_PROG -c "SELECT 1 FROM pg_proc p, pg_namespace n WHERE p.proname='pg_stat_statements' AND p.pronamespace=n.oid"`;
+
+	my $hasit = `$PSQL_PROG -c "SELECT 1 FROM pg_proc p, pg_namespace n WHERE p.proname='pg_stat_statements' AND p.pronamespace=n.oid;"`;
+	if ($? != 0) {
+		&dprint("FATAL: psql error.\n");
+		# remove the pidfile
+		if (-f $PIDFILE) {
+			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
+		}
+		exit 0;
+	}
+	chomp($hasit);
+
+	return $hasit;
 
 }
 
@@ -985,6 +999,7 @@ options:
   -m, --metric=METRIC      set a coma separated list of metrics to perform.
   -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
   -P, --psql=BIN           path to the psql command. Default: $PSQL_PROG.
+  -Q, --no-statement       do not collect queries statistics from pg_stat_statements.
   -s, --sar=BIN            path to sar sysstat command. Default: $SAR_PROG.
   -S, --disable-sar        disable collect of system statistics with sar.
   -T, --notablespace       disable lookup at tablespace when the connect user
@@ -1284,7 +1299,7 @@ sub dump_pgstatstatements
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), r.rolname, d.datname, " .
-		"regexp_replace(query, E'\\n', ' ', 'g') as query, calls, total_time, rows, " .
+		"regexp_replace(regexp_replace(query, E'\\n', ' ', 'g'), E';', 'SEMICOLON', 'g'), calls, total_time, rows, " .
 		"shared_blks_hit, shared_blks_read, shared_blks_written, " .
 		"local_blks_hit, local_blks_read, local_blks_written, " .
 		"temp_blks_read, temp_blks_written " .
@@ -1745,5 +1760,4 @@ sub dump_pgstatarchiver
 
 	return $sql;
 }
-
 
