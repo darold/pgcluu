@@ -74,11 +74,6 @@ my %METRICS_COMMANDS = (
 		'output' => 'pg_stat_bgwriter.csv',
 		'command' => 'dump_pgstatbgwriter'
 	},
-# Too much data, may be repalced by pg_stat_statement information
-#	'activity_stats' => {
-#		'output' => 'pg_stat_activity.csv',
-#		'command' => 'dump_pgstatactivity'
-#	},
 	'conflict_stats' => {
 		'output' => 'pg_stat_database_conflicts.csv',
 		'command' => 'dump_pgstatdatabaseconflicts'
@@ -180,7 +175,8 @@ my %METRICS_COMMANDS = (
 	},
 	'statements_stats' => {
 		'output'   => 'pg_stat_statements.csv',
-		'command'  => 'dump_pgstatstatements'
+		'command'  => 'dump_pgstatstatements',
+		'override'  => 1,
 	},
 	'xlog_stats' => {
 		'output' => 'pg_xlog_stat.csv',
