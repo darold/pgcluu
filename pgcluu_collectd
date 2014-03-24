@@ -1299,7 +1299,7 @@ sub dump_pgstatstatements
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), r.rolname, d.datname, " .
-		"regexp_replace(regexp_replace(query, E'\\n', ' ', 'g'), E';', 'SEMICOLON', 'g'), calls, total_time, rows, " .
+		"regexp_replace(regexp_replace(query, E'[\\s\\n]+', ' ', 'g'), E';', 'SEMICOLON', 'g'), calls, total_time, rows, " .
 		"shared_blks_hit, shared_blks_read, shared_blks_written, " .
 		"local_blks_hit, local_blks_read, local_blks_written, " .
 		"temp_blks_read, temp_blks_written " .
