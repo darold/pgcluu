@@ -72,6 +72,7 @@ my %HAS_INDEX_STATIO = ();
 my %HAS_FUNCTION_STATS = ();
 my %HAS_DB_INFO = ();
 my %HAS_BUF_STATS = ();
+my %HAS_QUERY_STATS = ();
 my $TOP_STAT       = 10;
 
 my ($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
@@ -569,6 +570,17 @@ my %DB_GRAPH_INFOS = (
 			'legends' => ['archived count', 'failed count'],
 			'active' => 1,
 			'menu' => 'Archiving',
+		}
+	},
+	'pg_stat_statements.csv' => {
+		'1' => {
+			'name' =>  'database-queries',
+			'title' => 'Statistics about statements',
+			'description' => 'Top N statistics about slowest or most used queries',
+			'ylabel' => 'Number',
+			'legends' => ['queries'],
+			'active' => 1,
+			'menu' => 'Statements statistics',
 		}
 	},
 );
@@ -3852,6 +3864,130 @@ sub pg_stat_archiver
 	print $FHCLUSTER &flotr2_linegraph_array($IDX++, 'cluster-archive', \%{$data_info{$id}}, '', $archiver_stat{archived_count}, $archiver_stat{failed_count});
 }
 
+# Compute graphs of statements statistics
+sub pg_stat_statements
+{
+	my ($interval, $file, %data_info) = @_;
+
+	my %queries_stats = ();
+	my $total_val = 0;
+	my @start_vals = ();
+	my $has_temp = 0;
+
+	# Load data from file
+	my $curfh = new IO::File;
+	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	while (<$curfh>) {
+		my @data = split(/;/);
+		next if (!&normalyze_line(\@data));
+
+		next if (($#INCLUDE_DB >= 0) && (!grep(/^$data[2]$/, @INCLUDE_DB)));
+
+		# pg 8.4
+		# timestamp | userid | datname | query | calls | total_time | rows
+		# pg 9.0-9.1
+		# timestamp | userid | datname | query | calls | total_time | rows | shared_blks_hit | shared_blks_read | shared_blks_written | local_blks_hit | local_blks_read | local_blks_written | temp_blks_read | temp_blks_written
+		# pg 9.2+
+		# timestamp | userid | datname | query | calls | total_time | rows | shared_blks_hit | shared_blks_read | shared_blks_dirtied | shared_blks_written | local_blks_hit | local_blks_read | local_blks_dirtied | local_blks_written | temp_blks_read | temp_blks_written | blk_read_time | blk_write_time |
+
+		my $id = 3;
+		$id++ if ($#data == 20);
+		next if (!$data[$id]);
+
+		$queries_stats{$data[2]}{$data[$id]}{calls} += ($data[$id+1] || 0);
+		$queries_stats{$data[2]}{$data[$id]}{total_time} += ($data[$id+2] || 0);
+		$queries_stats{$data[2]}{$data[$id]}{rows} += ($data[$id+3] || 0);
+		if ($#data > 6) {
+			$queries_stats{$data[2]}{$data[$id]}{shared_blks_hit} += $data[$id+4];
+			$queries_stats{$data[2]}{$data[$id]}{shared_blks_read} += $data[$id+5];
+			if ($#data < 18) {
+				$queries_stats{$data[2]}{$data[$id]}{shared_blks_written} += $data[$id+6];
+				$queries_stats{$data[2]}{$data[$id]}{local_blks_hit} += $data[$id+7];
+				$queries_stats{$data[2]}{$data[$id]}{local_blks_read} += $data[$id+8];
+				$queries_stats{$data[2]}{$data[$id]}{local_blks_written} += $data[$id+9];
+				$queries_stats{$data[2]}{$data[$id]}{temp_blks_read} += $data[$id+10];
+				$queries_stats{$data[2]}{$data[$id]}{temp_blks_written} += $data[$id+11];
+				$has_temp = 1;
+			} else {
+				$queries_stats{$data[2]}{$data[$id]}{shared_blks_dirtied} += ($data[$id+6]*8192);
+				$queries_stats{$data[2]}{$data[$id]}{shared_blks_written} += $data[$id+7];
+				$queries_stats{$data[2]}{$data[$id]}{local_blks_hit} += $data[$id+8];
+				$queries_stats{$data[2]}{$data[$id]}{local_blks_read} += $data[$id+9];
+				$queries_stats{$data[2]}{$data[$id]}{local_blks_dirtied} += $data[$id+10];
+				$queries_stats{$data[2]}{$data[$id]}{local_blks_written} += $data[$id+11];
+				$queries_stats{$data[2]}{$data[$id]}{temp_blks_read} += ($data[$id+12]*8192);
+				$queries_stats{$data[2]}{$data[$id]}{temp_blks_written} += ($data[$id+13]*8192);
+				$queries_stats{$data[2]}{$data[$id]}{blk_read_time} += $data[$id+14];
+				$queries_stats{$data[2]}{$data[$id]}{blk_write_time} += $data[$id+15];
+				$has_temp = 2;
+			}
+		}
+
+	}
+	$curfh->close();
+
+	my $id = &get_data_id('database-queries', %data_info);
+	foreach my $db (keys %queries_stats) {
+		$HAS_QUERY_STATS{$db} = 1;
+		my $header = '';
+		if ($has_temp) {
+			$header = qq{<th>Temp read</th><th>Temp write</th>};
+		}
+		if ($has_temp == 2) {
+			$header .= qq{<th>Shared dirtied</th>};
+		}
+		$DBFH{$db}->print (qq{
+<li class="slide" id="database-queries-slide">
+<div id="database-queries"><br/><br/><br/><br/></div>
+
+<div class="row">
+    <div class="col-md-12">
+      <div class="panel panel-default">
+      <div class="panel-heading">
+	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+	<p>$data_info{$id}{description}</p>
+      </div>
+      <div class="panel-body">
+	<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+		<div class="span11">
+			<table class="table table-striped sortable" id="$db-$data_info{$id}{name}-table">
+				<thead>
+					<tr>
+					<th>Query</th>
+					<th>Calls</th>
+					<th>Total time</th>
+					<th>Rows</th>
+					$header
+					</tr>
+				</thead>
+				<tbody>
+});
+			foreach my $q (sort {$queries_stats{$db}{$b}{total_time} <=> $queries_stats{$db}{$a}{total_time}} keys %{$queries_stats{$db}}) {
+				my $additional_cols = '';
+				if ($has_temp) {
+					$additional_cols = "<td>" . &pretty_print_size($queries_stats{$db}{$q}{temp_blks_read}) . "</td><td>" .  &pretty_print_size($queries_stats{$db}{$q}{temp_blks_written}) . "</td>";
+				}
+				if ($has_temp == 2) {
+					$additional_cols .= "<td>" . &pretty_print_size($queries_stats{$db}{$q}{shared_blks_dirtied}) . "</td>";
+				}
+				my $query = $q;
+				$query =~ s/#SMCLN#/;/g;
+				$DBFH{$db}->print( "<tr><th width=\"50%\">$query</th><td>$queries_stats{$db}{$q}{calls}</td><td>" . &format_duration($queries_stats{$db}{$q}{total_time}) . "</td><td>$queries_stats{$db}{$q}{rows}</td>$additional_cols</tr>\n");
+			}
+			$DBFH{$db}->print( qq{
+				</tbody>
+			</table>
+		</div>
+	</div>
+	</div>
+    </div>
+</div>
+</div>
+</li>
+});
+	}
+
+}
 
 sub normalyze_line
 {
@@ -4719,6 +4855,11 @@ sub generate_html_menu
 			$menu_str .= qq{
 			  </ul>
 		      </li>
+};
+		}
+		if (exists $HAS_QUERY_STATS{$db}) {
+			$menu_str .= qq{
+		      <li id="menu-database-queries"><a href="database-$db.html#database-queries">Statements statistics</a></li>
 };
 		}
 		my $disable_conntype = '';

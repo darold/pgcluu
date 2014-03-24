@@ -575,6 +575,13 @@ while (1) {
 		}
 	}
 
+	# Remove files that must be overriden
+	foreach my $type (sort {$a cmp $b} keys %METRICS_COMMANDS) {
+		if (($METRICS_COMMANDS{$type}->{override}) && -e "$OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}") {
+			unlink("$OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}");
+		}
+	}
+
 	# Collecting database statistics
 	open(PSQL, "| $PSQL_PROG");
 	print PSQL $script_sql, "\n";
@@ -583,13 +590,6 @@ while (1) {
 	# Get database list
 	my @dblist = &get_databases();
 	push(@dblist, $DBNAME) if (($#dblist == -1) && $DBNAME);
-
-	# Remove files that must be overriden
-	foreach my $type (sort {$a cmp $b} keys %METRICS_COMMANDS) {
-		if (($METRICS_COMMANDS{$type}->{override}) && -e "$OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}") {
-			unlink("$OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}");
-		}
-	}
 
 	# Generating per database statistics collector SQL script 
 	foreach my $db (@dblist) {
@@ -658,9 +658,6 @@ sub verify_action
 	# Detect PostgreSQL version
 	&fetch_version();
 
-	# Has pg_stat_statements ?
-	&backend_has_pgstatstatements();
-
 	if (!&backend_minimum_version(9, 4)) {
 		delete $METRICS_COMMANDS{'archiver_stats'};
 	}
@@ -686,7 +683,7 @@ sub verify_action
 	if (!&backend_minimum_version(8, 1)) {
 		delete $METRICS_COMMANDS{'xlog_stats'};
 	}
-	if ($NO_STATEMENTS || !&backend_has_pgstatstatements()) {
+	if ($NO_STATEMENTS || !&has_pgstatstatements()) {
 		delete $METRICS_COMMANDS{'statements_stats'};
 	}
 	if (!&is_superuser($DBUSER)) {
@@ -878,8 +875,10 @@ sub has_pg_buffercache
 }
 
 
-
-sub backend_has_pgstatstatements
+####
+# Check if the database have the pg_stat_statements extension
+####
+sub has_pgstatstatements
 {
 
 	my $hasit = `$PSQL_PROG -c "SELECT 1 FROM pg_proc p, pg_namespace n WHERE p.proname='pg_stat_statements' AND p.pronamespace=n.oid;"`;
@@ -1295,7 +1294,7 @@ sub dump_pgstatstatements
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), r.rolname, d.datname, " .
-		"regexp_replace(regexp_replace(query, E'[\\s\\n]+', ' ', 'g'), E';', 'SEMICOLON', 'g'), calls, total_time, rows, " .
+		"regexp_replace(regexp_replace(query, E'[ \\n]+', ' ', 'g'), E';', '#SMCLN#', 'g'), calls, total_time, rows, " .
 		"shared_blks_hit, shared_blks_read, shared_blks_written, " .
 		"local_blks_hit, local_blks_read, local_blks_written, " .
 		"temp_blks_read, temp_blks_written " .
