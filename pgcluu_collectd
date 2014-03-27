@@ -60,6 +60,14 @@ my @SKIP_END    = ();
 my $USE_BUFFERCACHE = 0;
 my $NO_STATEMENTS  = 0;
 
+my $USE_SSH = '';
+my $SSH_COMMAND = '';
+my $SSH_BIN = 'ssh';
+my $SSH_IDENTITY = '';
+my $SSH_USER = '';
+my $SSH_TIMEOUT = 10;
+my $SSH_OPTIONS = "-o ConnectTimeout=$SSH_TIMEOUT -o PreferredAuthentications=hostbased,publickey";
+
 # Definition to collect metrics from the database
 my %METRICS_COMMANDS = (
 	'database_stats' => {
@@ -273,6 +281,13 @@ my $result = GetOptions(
 	"os-info!"       => \$OS_INFO,
 	"included-db=s"  => \$INCLUDED_DB,
 	"exclude-time=s" => \$SKIP_HOURS,
+	'enable-ssh!'    => \$USE_SSH,
+	'ssh-command=s'  => \$SSH_COMMAND,
+	'ssh-program=s'  => \$SSH_BIN,
+	'ssh-identity=s' => \$SSH_IDENTITY,
+	'ssh-option=s'   => \$SSH_OPTIONS,
+	'ssh-user=s'     => \$SSH_USER,
+	'ssh-timeout=i'  => \$SSH_TIMEOUT,
 ) or die &usage();
 
 # The daemon should be stopped
@@ -308,6 +323,10 @@ for (my $i = 0; $i <= $#dbhosts; $i++) {
 
 # Get the output dir from command line
 my $OUTPUT_DIR = $ARGV[0] || '';
+
+if ($USE_SSH && !$DBHOST) {
+	die "FATAL: you must give an ipaddress for the remote host with -h | --host option to use sar remotely\n";
+}
 
 # List metrics and associated SQL commands
 if ($LIST_METRIC) {
@@ -346,7 +365,6 @@ if ($SKIP_HOURS) {
 	}
 }
 
-
 # Validate action(s) to execute
 if ($#METRICS >= 0) {
 
@@ -371,7 +389,7 @@ push(@METRICS, sort {$a cmp $b} keys %METRICS_COMMANDS);
 # Create output directory if not exists
 if (!$OUTPUT_DIR) {
 	&dprint("FATAL: no output directory\n");
-	&usage();
+	exit 1;
 } else {
 	# Ensure this is not a relative path
 	if (dirname($OUTPUT_DIR) eq '.') {
@@ -444,16 +462,13 @@ $0 = $PROGRAM;
 
 # Create pid file
 unless(open(OUT, ">$PIDFILE")) {
-	&dprint("FATAL: can't create pid file $PIDFILE, $!\n");
-	exit 1;
+	die "FATAL: can't create pid file $PIDFILE, $!\n";
 }
 print OUT $$;
 close(OUT);
 
 # Get Os information
 &grab_os_information();
-
-my $sysstat_version = &sysstat_version() || '';
 
 # Generate the psql command
 $PSQL_PROG .= " -Atq -F';' -f - ";
@@ -468,7 +483,41 @@ if ($DBPASS) {
 }
 
 # Generate the sar command
-my $sar_command = "LC_ALL=C $SAR_PROG -t -p -A 1 1 >>$SAR_FILE";
+my $sar_command = "LC_ALL=C $SAR_PROG -t -p -A 1 1";
+my $sshcmd = '';
+# Set command to execute sar remotely using ssh if necessary 
+if (!$DISABLE_SAR) {
+
+	if ($USE_SSH) {
+		# Force using the user defined ssh command
+		if ($SSH_COMMAND) {
+			$sshcmd = $SSH_COMMAND;
+		# else compute command following the configuration parameters
+		} else {
+			$sshcmd = $SSH_BIN || 'ssh';
+			my $identity_file = $SSH_IDENTITY || '';
+			$sshcmd .= " -i $identity_file" if ($identity_file);
+			my $sshoptions = $SSH_OPTIONS || '';
+			$sshcmd .= " $sshoptions" if ($sshoptions);
+			my $sshuser = $SSH_USER || '';
+			if ($sshuser) {
+				$sshcmd .= " $sshuser\@";
+			} else {
+				$sshcmd .= " ";
+			}
+		}
+		$sshcmd .= " $DBHOST";
+		$sar_command = $sshcmd . ' "' . $sar_command . "\"";
+
+	}
+
+	$sar_command .= " >>$SAR_FILE";
+} else {
+	$sar_command = '';
+}
+
+# Try to grab the sysstat version
+my $sysstat_version = &sysstat_version() || '';
 
 # Remove action that can't be run with the PostgreSQL version
 &verify_action();
@@ -636,7 +685,7 @@ while (1) {
 	}
 
 	# Collecting system statistics
-	if (!$DISABLE_SAR && ($sysstat_version > -1)) {
+	if (!$DISABLE_SAR && $sar_command && ($sysstat_version > -1)) {
 		&dprint(`$sar_command`);
 	}
 
@@ -913,8 +962,10 @@ sub is_superuser
 sub sysstat_version
 {
 	if (!$DISABLE_SAR) {
+		my $ver_command = "LC_ALL=C $SAR_PROG -V 2>&1";
+		$ver_command = $sshcmd . ' "' . $ver_command . '"' if ($sshcmd) ;
 		my $ver = 0;
-		$ver = `LC_ALL=C $SAR_PROG -V 2>&1 | grep "sysstat version"`;
+		$ver = `$ver_command | grep "sysstat version"`;
 		if ($?) {
 			&dprint("ERROR: $SAR_PROG execution failure: $!\n");
 			return -1;
@@ -1018,12 +1069,26 @@ options:
 			   hours.
   --help                   print usage
 
-For example, as postgres user:
+Use those options to execute sar on the remote host defined by the -h option,
+otherwise it will be executed locally:
+
+  --enable-ssh             activate the use of ssh to run sysstat remotely.
+  --ssh-program ssh        path to the ssh program to use. Default: ssh.
+  --ssh_user username      connection login name. Default to running user.
+  --ssh-identity file      path to the identity file to use.
+  --ssh_timeout second     timeout to ssh connection failure. Default 10 seconds.
+  --ssh-options  options   list of -o options to use for the ssh connection. Options
+			   always used:
+				 -o ConnectTimeout=ssh_timeout
+				 -o PreferredAuthentications=hostbased,publickey
+
+For example, as postgres user to monitor locally a full PostgreSQL cluster:
 
 	mkdir /tmp/stat_db1/
-	pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb
+	pgcluu_collectd -D -i 60 /tmp/stat_db1/
 
-to collect statistics from pgbouncer too:
+to collect statistics from pgbouncer too, and limit database statistics to a single
+database:
 
 	pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb \
 		--pgbouncer-args='-p 5342'
@@ -1032,10 +1097,23 @@ to disable statistics collect between 22:30 and 06:30 the next day:
 
 	pgcluu_collectd -D -i 60 /tmp/stat_db1/ --exclude-time "22:30-06:30"
 
-then after some time and activities on the database, stop the daemon:
+to collect statistics from a remote server:
+
+	pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.0.0.1 -U postgres --disable-sar
+
+the same but with collecting system statistics using remote sar calls:
+
+	pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.0.0.1 -U postgres --enable-ssh \
+		--ssh-user postgres --ssh-identity /var/lib/postgresql/.ssh/id_rsa.pub
+
+You may need a .pgpass and be able to establish passwordless ssh connections to be
+able to collect statistics from remote hosts.
+
+Then after some time and activities on the database, stop the daemon as follow:
 
         pgcluu_collectd -k
 
+or by sending sigterm to the pgcluu_collectd's pid.
 };
     exit 1
 }

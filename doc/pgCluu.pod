@@ -15,8 +15,14 @@ the psql command line utility and sar from the sysstat package.
 - A pur Perl grapher that will generate all HTML and charts output without
 any requirements.
 
-If you don't want system utilization reports, you can disable it at command
-line. If you just want to graph a sar data file, it's also possible.
+If you don't need system utilization reports or don't want to install the
+sysstat package, you can disable it at command line. You will only have
+reports about your PostgreSQL Cluster. If you are running pgCluu from a
+central server using option -h to monitor remotely a PostgreSQL Cluster,
+the call to sar is automatically disabled.
+
+If you just want to have system utilization reports or generate graphs from
+a sar data file, it's also possible.
 
 
 =head1 SYNOPSIS
@@ -33,7 +39,9 @@ Reports generator.
 =head1 REQUIREMENT
 
 pgCluu comes with two Perl scripts. You need a modern Perl distribution, the
-psql PostgreSQL client and the sar command line utility (from sysstat).
+psql PostgreSQL client and the sar command line utility (from sysstat). The
+sysstat package is optional, you can still use pgCluu to generate reports
+about your PostgreSQL Cluster without it.
 
 Charts are rendered using a Javascript library so you don't need anything else.
 Your browser will do all the work.
@@ -105,6 +113,8 @@ usage: pgcluu_collectd [options] output_dir
 
 options:
 
+  -B, --enable-buffercache enable buffercache statistics if pg_buffercache
+			   extension is installed.
   -d, --dbname=DATABASE    database name to connect to. Default to current user.
   -D, --daemonize          detach from console and enter in daemon mode.
   -f, --pid-file=FILE      path to pid file. Default: /tmp/pgcluu_collectd.pid.
@@ -113,49 +123,92 @@ options:
   -k, --kill		   stop current pgcluu_collectd running daemon.
   -m, --metric=METRIC      set a coma separated list of metrics to perform.
   -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
-  -P, --psql=BIN           path to the psql command. Default: /usr/bin/psql.
-  -s, --sar=BIN            path to sar sysstat command. Default: /usr/bin/sar.
+  -P, --psql=BIN           path to the psql command. Default: psql.
+  -Q, --no-statement       do not collect queries statistics from pg_stat_statements.
+  -s, --sar=BIN            path to sar sysstat command. Default: sar.
   -S, --disable-sar        disable collect of system statistics with sar.
+  -T, --notablespace       disable lookup at tablespace when the connect user
+			   is not superuser to avoid printing an error message.
   -U, --dbuser=USERNAME    database user to connect as. Default to current user.
+  --included-db=DATABASE   do not collect statistics for the comma separated list
+                           of database name. 
   --list-metric            list available metrics actions that can be performed.
+  --os-info                grab operating system information and exit.
   --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
 			   database. Ex: -p 6432 -U postgres -h 192.168.1.100
                            You must at least give one parameter to enable
-                           pgbouncer monitoring, for example: '-p 5432'.
+                           pgbouncer monitoring.
   --sar-file=FILE          path to sar output data file for sysstat stats
-			   Default to output_dir/sar_stats.dat.
+                           Default to output_dir/sar_stats.dat.
   --stat-type all|user     Set stats tables to read. Values: 'all' or 'user' to
 			   look at pg_stat_(all|user) tables. Default: user.
   --pgversion X.Y          force the PostgreSQL version to the given value.
   --pgservice NAME         Name of service inside of the pg_service.conf file.
   --exclude-time RANGE     exclude a laps of time by giving the start and end
-                           hours.
+			   hours.
   --help                   print usage
 
-For example, as postgres user:
+Use those options to execute sar on the remote host defined by the -h option,
+otherwise it will be executed locally:
 
-        mkdir /tmp/stat_db1/
-        pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb
+  --enable-ssh             activate the use of ssh to run sysstat remotely.
+  --ssh-program ssh        path to the ssh program to use. Default: ssh.
+  --ssh_user username      connection login name. Default to running user.
+  --ssh-identity file      path to the identity file to use.
+  --ssh_timeout second     timeout to ssh connection failure. Default 10 seconds.
+  --ssh-options  options   list of -o options to use for the ssh connection. Options
+			   always used:
+				 -o ConnectTimeout=ssh_timeout
+				 -o PreferredAuthentications=hostbased,publickey
 
-to collect statistics from pgbouncer too:
+For example, as postgres user to monitor locally a full PostgreSQL cluster:
 
-        pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb \
-                --pgbouncer-args='-p 5342'
+	mkdir /tmp/stat_db1/
+	pgcluu_collectd -D -i 60 /tmp/stat_db1/
+
+to collect statistics from pgbouncer too, and limit database statistics to a single
+database:
+
+	pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb 
+		--pgbouncer-args='-p 5342'
 
 to disable statistics collect between 22:30 and 06:30 the next day:
 
-        pgcluu_collectd -D -i 60 /tmp/stat_db1/ --exclude-time "22:30-06:30"
+	pgcluu_collectd -D -i 60 /tmp/stat_db1/ --exclude-time "22:30-06:30"
 
+to collect statistics from a remote server:
 
-then after some long time and activities on the database, stop the daemon:
+	pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.0.0.1 -U postgres --disable-sar
 
-	pgcluu_collectd -k
+the same but with collecting system statistics using remote sar calls:
 
-The output directory should look likes:
+	pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.0.0.1 -U postgres --enable-ssh 
+		--ssh-user postgres --ssh-identity /var/lib/postgresql/.ssh/id_rsa.pub
+
+You may need a .pgpass and be able to establish passwordless ssh connections to be
+able to collect statistics from remote hosts.
+
+Then after some time and activities on the database, stop the daemon as follow:
+
+        pgcluu_collectd -k
+
+or by sending sigterm to the pgcluu_collectd's pid.
+
+The output directory with all statistics collected should look likes:
 
 	/tmp/stat_db1/
+	├── pgbouncer.ini
+	├── pgbouncer_req_stats.csv
+	├── pgbouncer_stats.csv
 	├── pg_class_size.csv
+	├── pg_database_buffercache.csv
+	├── pg_database_isdirty.csv
 	├── pg_database_size.csv
+	├── pg_database_usagecount.csv
+	├── pg_hba.conf
+	├── pg_ident.conf
+	├── pg_relation_buffercache.csv
+	├── pg_settings.csv
 	├── pg_stat_bgwriter.csv
 	├── pg_stat_connections.csv
 	├── pg_stat_database_conflicts.csv
@@ -163,14 +216,20 @@ The output directory should look likes:
 	├── pg_statio_user_indexes.csv
 	├── pg_statio_user_sequences.csv
 	├── pg_statio_user_tables.csv
+	├── pg_stat_locks.csv
+	├── pg_stat_missing_fkindexes.csv
+	├── pg_stat_redundant_indexes.csv
 	├── pg_stat_replication.csv
+	├── pg_stat_statements.csv
+	├── pg_stat_unused_indexes.csv
 	├── pg_stat_user_functions.csv
 	├── pg_stat_user_indexes.csv
 	├── pg_stat_user_tables.csv
-	├── pg_stat_xact_user_functions.csv
-	├── pg_stat_xact_user_tables.csv
+	├── pg_tablespace_size.csv
 	├── pg_xlog_stat.csv
-	└── sar_stats.dat
+	├── postgresql.conf
+	├── sar_stats.dat
+	└── sysinfo.txt
 
 Then now you can proceed with pgcluu to generate reports.
 
