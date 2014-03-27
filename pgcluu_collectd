@@ -28,7 +28,7 @@ $PROGRAM = 'pgcluu_collectd';
 # They can be specified into command line options
 my $SAR_PROG    = 'sar';
 my $PSQL_PROG   = 'psql';
-my $CP_PROG     = 'cp -f ';
+my $CAT_PROG    = 'cat ';
 my $SAR_FILE    = 'sar_stats.dat';
 my $PIDFILE     = "/tmp/$PROGRAM.pid";
 my $SQL_PROBE   = '';
@@ -495,18 +495,14 @@ if (!$DISABLE_SAR) {
 		# else compute command following the configuration parameters
 		} else {
 			$sshcmd = $SSH_BIN || 'ssh';
-			my $identity_file = $SSH_IDENTITY || '';
-			$sshcmd .= " -i $identity_file" if ($identity_file);
-			my $sshoptions = $SSH_OPTIONS || '';
-			$sshcmd .= " $sshoptions" if ($sshoptions);
-			my $sshuser = $SSH_USER || '';
-			if ($sshuser) {
-				$sshcmd .= " $sshuser\@";
+			$sshcmd .= " -i $SSH_IDENTITY" if ($SSH_IDENTITY);
+			$sshcmd .= " $SSH_OPTIONS" if ($SSH_OPTIONS);
+			if ($SSH_USER) {
+				$sshcmd .= " $SSH_USER\@$DBHOST";
 			} else {
-				$sshcmd .= " ";
+				$sshcmd .= " $DBHOST";
 			}
 		}
-		$sshcmd .= " $DBHOST";
 		$sar_command = $sshcmd . ' "' . $sar_command . "\"";
 
 	}
@@ -592,7 +588,12 @@ if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
 # Copy configuration files into output directory
 my @conf_files = &get_configuration_files();
 foreach my $f (@conf_files, '/etc/pgbouncer/pgbouncer.ini') {
-	`$CP_PROG $f $OUTPUT_DIR/ >/dev/null 2>&1`;
+	my $filename = basename($f);
+	if ($sshcmd) {
+		`$sshcmd "$CAT_PROG $f" >$OUTPUT_DIR/$filename 2>/dev/null`;
+	} else {
+		`$CAT_PROG $f >$OUTPUT_DIR/$filename 2>/dev/null`;
+	}
 }
 
 # Look if we should limit statistic collect to some DB
