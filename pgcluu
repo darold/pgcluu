@@ -3955,6 +3955,7 @@ sub pg_stat_statements
 					<tr>
 					<th>Query</th>
 					<th>Calls</th>
+					<th>Avg. time</th>
 					<th>Total time</th>
 					<th>Rows</th>
 					$header
@@ -3972,7 +3973,7 @@ sub pg_stat_statements
 				}
 				my $query = $q;
 				$query =~ s/#SMCLN#/;/g;
-				$DBFH{$db}->print( "<tr><th width=\"50%\">$query</th><td>$queries_stats{$db}{$q}{calls}</td><td>" . &format_duration($queries_stats{$db}{$q}{total_time}) . "</td><td>$queries_stats{$db}{$q}{rows}</td>$additional_cols</tr>\n");
+				$DBFH{$db}->print( "<tr><th width=\"50%\">$query</th><td>$queries_stats{$db}{$q}{calls}</td><td>" . &format_duration(int($queries_stats{$db}{$q}{total_time}/($queries_stats{$db}{$q}{calls}||1))) . "</td><td>" . &format_duration($queries_stats{$db}{$q}{total_time}) . "</td><td>$queries_stats{$db}{$q}{rows}</td>$additional_cols</tr>\n");
 			}
 			$DBFH{$db}->print( qq{
 				</tbody>
