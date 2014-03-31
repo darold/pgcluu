@@ -717,16 +717,16 @@ $OUTPUT_DIR =~ s/\/$//;
 # options cna be used multiple time but also as a comma
 # separated list of object name.
 foreach (@dbs_opts) {
-	push(@INCLUDE_DB, split(/[,]+/, @dbs_opts));
+	push(@INCLUDE_DB, split(/[,]+/, $_));
 }
 foreach (@dev_opts) {
-	push(@INCLUDE_DEV, split(/[,]+/, @dev_opts));
+	push(@INCLUDE_DEV, split(/[,]+/, $_));
 }
 foreach (@tbs_opts) {
-	push(@INCLUDE_TB, split(/[,]+/, @tbs_opts));
+	push(@INCLUDE_TB, split(/[,]+/, $_));
 }
 foreach (@net_opts) {
-	push(@INCLUDE_IFACE, split(/[,]+/, @net_opts));
+	push(@INCLUDE_IFACE, split(/[,]+/, $_));
 }
 
 # Set default sysstat file to read (binary or text format)
@@ -1114,6 +1114,7 @@ sub get_database_list
 	while (<DBSIZEFILE>) {
 		my @data = split(/;/);
 		next if (!&normalyze_line(\@data));
+
 		# Get database name
 		next if (($#INCLUDE_DB >= 0) && !grep(/^$data[2]$/, @INCLUDE_DB));
 		push(@db_list, $data[2]) if (!grep(/^$data[2]$/, @db_list));
