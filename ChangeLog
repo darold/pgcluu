@@ -1,7 +1,18 @@
 2014-03-22 - Version 2.0 released
 
-New or enhenced reports/features:
+This major release adds more than twenty new reports. pgCluu now reports everything
+you want to know about your PostgreSQL server from a cluster, database, or operating
+system point of view. It is also able to collect statistics about pgBouncer, shared
+buffer utilization using pg_buffercache, most frequent and time consuming queries
+with pg_stat_statements and really much more, see full list bellow. 
 
+New or enhanced reports/features:
+
+	- Allow pgcluu_collected to collect sar and configuration files
+	  remotely together with PostgreSQL statistics using a ssh connection.
+	  That mean that pgCluu is fully able to audit a remote server.
+	- Add pg_stat_statements report showing most frequent and time
+	  consuming queries.
 	- Add reports for unused and redundant indexes per database.
 	- Add report about archiver statistics with PostgreSQL 9.4 new
 	  pg_stat_archiver view.
@@ -17,12 +28,9 @@ New or enhenced reports/features:
 	- Add report about percentage of each databases loaded in shared buffer
 	- Add report about usagecount distribution in shared buffer
 	- Add report about usagecount distribution in dirty shared buffer
-	- Add report of fumber of shared buffer/pages used by a relation
+	- Add report of number of shared buffer/pages used by a relation
 	- Add report number of buffers loaded in cache for a relation relation
-	  and the percentage of the relation loaded.
-	[Shared buffers statistics are collected automatically when pg_buffercache
-	extension is installed and the -B | --enable-buffercache option is used.]
-
+	  and the percentage of the relation loaded (1).
 	- Add reports about configuration files (postgresql.conf, pg_hba.conf and
 	  pg_ident.conf), pgcluu_collectd must be run as postgresql user.
 	- Add report of user functions statistics.
@@ -30,7 +38,7 @@ New or enhenced reports/features:
 	- Add copy of pgbouncer.ini file in Configuration submenu.
 	- Add report of pg_settings in Configuration submenu..
 	- Add report with SQL orders to create missing indexes on foreign keys.
-	- Allow HTML table sort with a modified version of the javascript libraryi
+	- Allow HTML table sort with a modified version of the javascript library
 	  sorttable.js
 	- Moved System info report from sar sytem menu to a dedicated main SysInfo
 	  menu.
@@ -49,12 +57,20 @@ New or enhenced reports/features:
 	  and of all kind of object.
 	- Add last know size of the database in the Database info slide.
 	- Add total number of databases on cluster key values.
-	- Add cluster report on tablespaces that are not pg_default and pg_global.
+	- Add report of tablespaces utilization.
 	- Add report of pgbouncer statistics per dbname and per pool (dbname/username).
+
+
+(1) [Shared buffers statistics are collected automatically when pg_buffercache
+     extension is installed and the -B | --enable-buffercache option is used.]
 
 
 Other changes/fixes:
 
+	- Allow sar to be executed on a remote server using ssh connection.
+	  Add --enable-ssh to activate this feature, the remote host is defined
+	  using -h option. There is several new options --ssh-* to be able to
+	  take full control of the ssh connection.
         - Waiting interval is now calculated with the interval value minus the
 	  execution time of each loop.
 	- Add output information when a kill signal is sent to pgcluu_collectd.
@@ -64,7 +80,7 @@ Other changes/fixes:
 	- Fix graphs when a new database is created or dropped during an audit.
 	- Add -B | --enable-buffercache to activate pg_buffercache statistics.
 	  It is disable by default.
-	- Reorder Database menu with submenu and prevent moving to non existant
+	- Reorder Database menu with submenu and prevent moving to non existent
 	  reports by disabling the submenu.
 	- Reorder cluster menu, using submenu and fix title of replication lag
 	  report.
@@ -77,7 +93,7 @@ Other changes/fixes:
 	  was used as select instead of tuples returned.
 	- Review code and use one method per report.
 	- Update documentation and usage about --exclude-time
-	- Fiw detection of non official release, like devel or EnterpriseDB
+	- Fix detection of non official release, like devel or EnterpriseDB
 	  major version detection.
 	- Change icon of CPU in SysInfo report.
 	- Remove full path from sar and psql command to allow definition by
