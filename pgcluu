@@ -4146,7 +4146,7 @@ sub generate_html_index
 <ul id="slides">
 <li class="slide active-slide" id="home-slide">
 
-    <div id="home"></div>
+    <div id="home"><br/><br/><br/></div>
 EOF
 	if (exists $OVERALL_STATS{'cluster'}) {
 		$OVERALL_STATS{'cluster'}{'size'} ||= 0;
