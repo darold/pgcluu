@@ -366,7 +366,7 @@ my %DB_GRAPH_INFOS = (
 		'2' => {
 			'name' =>  'database-replication',
 			'title' => 'Replication lag with %s',
-			'description' => 'Lag of replication between the master and the slave in KiloBytes',
+			'description' => 'Lag of replication between primary and secondary servers',
 			'ylabel' => 'Lag sizes',
 			'legends' => ['Sent','Write','Replay'],
 		},
