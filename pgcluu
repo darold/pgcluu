@@ -611,7 +611,7 @@ my %SAR_GRAPH_INFOS = (
 	'4' => {
 		'name' =>  'system-memory',
 		'title' => 'System memory utilization',
-		'description' => 'Amount of memory used to cache data or as buffers by the kernel and free memory available in kilobytes.',
+		'description' => 'Amount of memory used to cache data or as buffers by the kernel and free memory available.',
 		'ylabel' => 'Memory size',
 		'legends' => ['cached','buffers','memfree'],
 	},
