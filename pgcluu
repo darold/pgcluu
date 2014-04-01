@@ -130,7 +130,7 @@ my %DB_GRAPH_INFOS = (
 		'6' => {
 			'name' =>  'database-read_ratio',
 			'title' => 'Read tuples on %s database',
-			'description' => 'Show entries returned from the index and live rows fetched from the table. The latter will be less if any dead or not-yet-committed rows are fetched using the index',
+			'description' => 'Show entries returned from the index and live rows fetched from the tables. The latter will be less if any dead or not-yet-committed rows are fetched using the index',
 			'ylabel' => 'Tuples per second',
 			'legends' => ['Returned','Fetched'],
 		},
