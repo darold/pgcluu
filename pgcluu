@@ -3282,6 +3282,7 @@ sub pg_stat_locks
 			next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
 			my @graph_data = ();
 			if ($data_info{$id}{name} eq 'database-lock-types') {
+				next if (!exists $locks_stat{$db}{lock_type});
 				foreach my $k (sort keys %{$locks_stat{$db}{lock_type}}) {
 					$locks_stat{$db}{lock_type}{$k} =~ s/,$//;
 					push(@{$data_info{$id}{legends}}, $k);
@@ -3290,6 +3291,7 @@ sub pg_stat_locks
 				$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-lock-types', \%{$data_info{$id}}, $db, @graph_data) );
 				$HAS_DB_INFO{$db}{'database-lock-types'} = 1;
 			} elsif ($data_info{$id}{name} eq 'database-lock-modes') {
+				next if (!exists $locks_stat{$db}{lock_mode});
 				foreach my $k (sort keys %{$locks_stat{$db}{lock_mode}}) {
 					$locks_stat{$db}{lock_mode}{$k} =~ s/,$//;
 					push(@{$data_info{$id}{legends}}, $k);
@@ -3298,6 +3300,7 @@ sub pg_stat_locks
 				$DBFH{$db}->print( &flotr2_linegraph_array($IDX++, 'database-lock-modes', \%{$data_info{$id}}, $db, @graph_data) );
 				$HAS_DB_INFO{$db}{'database-lock-modes'} = 1;
 			} elsif ($data_info{$id}{name} eq 'database-lock-granted') {
+				next if (!exists $locks_stat{$db}{lock_granted});
 				foreach my $k (sort keys %{$locks_stat{$db}{lock_granted}}) {
 					$locks_stat{$db}{lock_granted}{$k} =~ s/,$//;
 					push(@{$data_info{$id}{legends}}, $k);
