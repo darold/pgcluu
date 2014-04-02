@@ -1806,6 +1806,7 @@ sub pg_database_size
 	my $id = &get_data_id('database-size', %data_info);
 	my %data = ();
 	foreach my $db (sort keys %database_stat) {
+		next if (!exists $DBFH{$db});
 		next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
 		$database_stat{$db}{size} =~ s/,$//;
 		$data{$db} = $database_stat{$db}{size};
@@ -2742,6 +2743,7 @@ sub pg_stat_connections
 	%all_connections_stat = ();
 	my $id = &get_data_id('database-connections', %data_info);
 	foreach my $db (sort keys %connections_stat) {
+		next if (!exists $DBFH{$db});
 		next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
 		$connections_stat{$db}{total} =~ s/,$//;
 		$connections_stat{$db}{active} =~ s/,$//;
@@ -2791,6 +2793,7 @@ sub pg_stat_user_functions
 
 	my $id = &get_data_id('database-functions', %data_info);
 	foreach my $db (keys %functions_stat) {
+		next if (!exists $DBFH{$db});
 		next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		$HAS_FUNCTION_STATS{$db} = 1;
 		my $colspan =  ' colspan="4"';
@@ -3933,6 +3936,7 @@ sub pg_stat_statements
 
 	my $id = &get_data_id('database-queries', %data_info);
 	foreach my $db (keys %queries_stats) {
+		next if (!exists $DBFH{$db});
 		$HAS_QUERY_STATS{$db} = 1;
 		my $header = '';
 		if ($has_temp) {
