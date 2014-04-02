@@ -884,7 +884,7 @@ if (-d "$INPUT_DIR") {
 		}
 
 		$DBFH{$db}->print("</ul>\n");
-		&html_footer($DBFH{$db});
+		&html_footer($DBFH{$db}, $db);
 		$DBFH{$db}->close;
 	}
 	# Terminate all pgbouncer database statistic file
@@ -948,13 +948,13 @@ if (!$DISABLE_SAR) {
 	# Terminate all database statistic file
 	foreach my $dev (@IFACE_LIST) {
 		$DEVFH{$dev}->print("</ul>\n");
-		&html_footer($DEVFH{$dev});
+		&html_footer($DEVFH{$dev}, $dev);
 		$DEVFH{$dev}->close;
 	}
 	# Terminate all database statistic file
 	foreach my $dev (@DEVICE_LIST) {
 		$DEVFH{$dev}->print("</ul>\n");
-		&html_footer($DEVFH{$dev});
+		&html_footer($DEVFH{$dev}, $dev);
 		$DEVFH{$dev}->close;
 	}
 }
@@ -1204,6 +1204,8 @@ sub get_device_list
 				} else {
 					last;
 				}
+			} elsif ($l =~ m#IFACE\s+#) {
+				last;
 			}
 			# Empty line, maybe the end of a report
 			if (($l eq '') && ($#headers >= 0)) {
@@ -4568,6 +4570,7 @@ sub html_header
 sub html_footer
 {
 	my $fh = shift();
+	my $db = shift();
 
         print $fh qq{
 
