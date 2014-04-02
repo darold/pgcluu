@@ -250,6 +250,10 @@ my %METRICS_COMMANDS = (
 		'output' => 'pg_stat_archiver.csv',
 		'command' => 'dump_pgstatarchiver',
 	},
+	'configuration_stats' => {
+		'output' => '',
+		'command' => 'get_configuration_files',
+	},
 );
 
 # Process command line options and look for an action keyword. There
@@ -369,7 +373,7 @@ if ($SKIP_HOURS) {
 if ($#METRICS >= 0) {
 
 	my @list_metric = ();
-	push(@list_metric, $METRICS[0]);
+	push(@list_metric, split(/[,]+/, join(',', @METRICS)));
 	@METRICS = ();
 	foreach my $a (@list_metric) {
 		if (!grep(/^${a}_stats$/, keys %METRICS_COMMANDS)) {
@@ -380,11 +384,12 @@ if ($#METRICS >= 0) {
 		}
 	}
 
-}
+} else {
 
-# Set the default actions outside Nagios mode
-# Perform all metrics actions per default
-push(@METRICS, sort {$a cmp $b} keys %METRICS_COMMANDS);
+	# Perform all metrics actions per default
+	push(@METRICS, sort {$a cmp $b} keys %METRICS_COMMANDS);
+
+}
 
 # Create output directory if not exists
 if (!$OUTPUT_DIR) {
@@ -586,13 +591,16 @@ if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
 }
 
 # Copy configuration files into output directory
-my @conf_files = &get_configuration_files();
-foreach my $f (@conf_files, '/etc/pgbouncer/pgbouncer.ini') {
-	my $filename = basename($f);
-	if ($sshcmd) {
-		`$sshcmd "$CAT_PROG $f" >$OUTPUT_DIR/$filename 2>/dev/null`;
-	} else {
-		`$CAT_PROG $f >$OUTPUT_DIR/$filename 2>/dev/null`;
+if (($#METRICS >= 0) && !grep(/^configuration_stats$/, @METRICS)) {
+	my @conf_files = $METRICS_COMMANDS{'configuration_stats'}->{command}->();
+	foreach my $f (@conf_files, '/etc/pgbouncer/pgbouncer.ini') {
+		my $filename = basename($f);
+		next if (($#METRICS >= 0) && !grep(/^$filename/, @METRICS));
+		if ($sshcmd) {
+			`$sshcmd "$CAT_PROG $f" >$OUTPUT_DIR/$filename 2>/dev/null`;
+		} else {
+			`$CAT_PROG $f >$OUTPUT_DIR/$filename 2>/dev/null`;
+		}
 	}
 }
 
@@ -648,8 +656,6 @@ while (1) {
 
 		my $script_repeat_sql = &create_sql_script($db);
 		if (!$script_repeat_sql) {
-			# No action can be perform with this PostgreSQL version
-			&dprint("FATAL: no action will be run on this PostgreSQL version $DB_INFO{major}.$DB_INFO{minor}, $!\n");
 			last;
 		}
 		my $LOCAL_PSQL_PROG = $PSQL_PROG;
@@ -762,7 +768,7 @@ sub create_sql_script
 	foreach my $type (sort {$a cmp $b} keys %METRICS_COMMANDS) {
 		next if (!$db && $METRICS_COMMANDS{$type}->{repeat});
 		next if ($db && !$METRICS_COMMANDS{$type}->{repeat});
-		next if ($type =~ /^pgbouncer_/);
+		next if ($type =~ /^pgbouncer_|configuration_/);
 		next if (($type =~ /^(user|all)_/) && ($type !~ /^$STAT_TYPE/)); 
 		next if (($#METRICS >= 0) && !grep(/^$type$/, @METRICS));
 		my $sql = $METRICS_COMMANDS{$type}->{command}->();
