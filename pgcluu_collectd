@@ -59,6 +59,7 @@ my @SKIP_BEGIN  = ();
 my @SKIP_END    = ();
 my $USE_BUFFERCACHE = 0;
 my $NO_STATEMENTS  = 0;
+my $NO_SYSINFO  = 0;
 
 my $USE_SSH = '';
 my $SSH_COMMAND = '';
@@ -282,7 +283,8 @@ my $result = GetOptions(
 	"sar-file=s"     => \$SAR_FILE,
 	"list-metric!"   => \$LIST_METRIC,
 	"pgbouncer-args=s" => \$PGBOUNCER_ARGS,
-	"os-info!"       => \$OS_INFO,
+	"sysinfo!"       => \$OS_INFO,
+	"no-sysinfo!"    => \$NO_SYSINFO,
 	"included-db=s"  => \$INCLUDED_DB,
 	"exclude-time=s" => \$SKIP_HOURS,
 	'enable-ssh!'    => \$USE_SSH,
@@ -418,7 +420,7 @@ if (!-d $OUTPUT_DIR) {
 chdir($OUTPUT_DIR);
 
 # Get Os information and exit
-if ($OS_INFO) {
+if ($OS_INFO && !$NO_SYSINFO) {
 	&grab_os_information();
 	exit 0;
 }
@@ -473,7 +475,9 @@ print OUT $$;
 close(OUT);
 
 # Get Os information
-&grab_os_information();
+if (!$NO_SYSINFO) {
+	&grab_os_information();
+}
 
 # Generate the psql command
 $PSQL_PROG .= " -Atq -F';' -f - ";
@@ -542,7 +546,7 @@ if ($#dbnames >= 0) {
 }
 
 # Collect general information about each database
-if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
+if (!$NO_SYSINFO && &backend_minimum_version(9, 1) && ($#alldbs > -1)) {
 	my @extensions = ();
 	my @schemas = ();
 	my @procs = ();
@@ -588,6 +592,7 @@ if (&backend_minimum_version(9, 1) && ($#alldbs > -1)) {
 		print OUT "$t\n";
 	}
 	close(OUT);
+
 }
 
 # Copy configuration files into output directory
@@ -829,13 +834,15 @@ sub fetch_version
 		$DB_INFO{minor} = $2;
 	}
 
-	unless(open(OUT, ">>$OUTPUT_DIR/sysinfo.txt")) {
-		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
-		exit 1;
+	if (!$NO_SYSINFO) {
+		unless(open(OUT, ">>$OUTPUT_DIR/sysinfo.txt")) {
+			&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
+			exit 1;
+		}
+		print OUT "[PGVERSION]\n";
+		print OUT "$pg_ver\n";
+		close(OUT);
 	}
-	print OUT "[PGVERSION]\n";
-	print OUT "$pg_ver\n";
-	close(OUT);
 
 	return "$1.$2";
 }
@@ -1061,7 +1068,8 @@ options:
   --included-db=DATABASE   do not collect statistics for the comma separated list
                            of database name. 
   --list-metric            list available metrics actions that can be performed.
-  --os-info                grab operating system information and exit.
+  --sysinfo                get operating system information and exit (sysinfo.txt).
+  --no-sysinfo             do not collect operating system information at all. 
   --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
 			   database. Ex: -p 6432 -U postgres -h 192.168.1.100
                            You must at least give one parameter to enable
