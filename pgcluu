@@ -45,8 +45,6 @@ my $TIMEZONE    = '00';
 my $REVERT_DATE = 0;
 my $SADC_INPUT_FILE    = '';
 my $SAR_INPUT_FILE     = '';
-my @DATABASE_LIST      = ();
-my @PGBOUNCER_LIST     = ();
 my @DEVICE_LIST        = ();
 my @IFACE_LIST         = ();
 my %OVERALL_STATS      = ();
@@ -853,13 +851,6 @@ sub end_html_file
 # parse SQL stats files
 if (-d "$INPUT_DIR") {
 
-	# Get the list of databases from the statistics collected
-	@DATABASE_LIST = &get_database_list();
-	die "FATAL: no database found in data files.\n" if ($#DATABASE_LIST < 0);
-
-	# Get the list of databases preported by pgbouncer 
-	@PGBOUNCER_LIST = &get_pgbouncer_list();
-
 	# Check if there is csv file in the input directory
 	print "DEBUG: looking for CSV file into directory $INPUT_DIR/\n" if ($DEBUG);
 	opendir(IDIR, "$INPUT_DIR") || die "FATAL: can't opendir $INPUT_DIR: $!";
@@ -1104,61 +1095,6 @@ sub get_data_id
 	}
 	return -1;
 }
-
-sub get_database_list
-{
-	# Compute graphs of database size statistics
-	my @db_list = ();
-	my $file = "$INPUT_DIR/pg_database_size.csv";
-	if (!-e $file || -z $file) {
-		$file = "$INPUT_DIR/pg_stat_database.csv";
-	}
-	open(DBSIZEFILE, "$file") or die "FATAL: can't read $file\n";
-	while (<DBSIZEFILE>) {
-		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
-
-		# Get database name
-		next if (($#INCLUDE_DB >= 0) && !grep(/^$data[2]$/, @INCLUDE_DB));
-		push(@db_list, $data[2]) if (!grep(/^$data[2]$/, @db_list));
-		# Estimate pg version
-		if (!$sysinfo{'PGVERSION'}{major}) {
-			if ($#data < 8) {
-				$sysinfo{'PGVERSION'}{major} = '8.2';
-			} elsif ($#data < 13) {
-				$sysinfo{'PGVERSION'}{major} = '8.3';
-			} elsif ($#data < 15) {
-				$sysinfo{'PGVERSION'}{major} = '9.1';
-			} else {
-				$sysinfo{'PGVERSION'}{major} = '9.2';
-			}
-		}
-	}
-	close(DBSIZEFILE);
-
-	return @db_list;
-}
-
-sub get_pgbouncer_list
-{
-	# Compute graphs of database size statistics
-	my @db_list = ();
-	my $file = "$INPUT_DIR/pgbouncer_stats.csv";
-	if (!-e $file || -z $file) {
-		return ();
-	}
-	open(PGBFILE, "$file") or die "FATAL: can't read $file\n";
-	while (<PGBFILE>) {
-		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
-		# Get database name
-		push(@db_list, $data[1]) if (!grep(/^$data[1]$/, @db_list));
-	}
-	close(PGBFILE);
-
-	return @db_list;
-}
-
 
 sub get_device_list
 {
@@ -4679,7 +4615,11 @@ sub generate_html_menu
 	if (!-e "$INPUT_DIR/pg_database_buffercache.csv" || -z "$INPUT_DIR/pg_database_buffercache.csv") {
 		$disable_buffercache = ' class="disabled"';
 	}
-	if ($#DATABASE_LIST >= 0) {
+
+	opendir(ODIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
+	my @database_list = grep { !/^database-all.html$/ && s/^database-(.*).html$/$1/; } readdir(ODIR);
+	closedir(ODIR);
+	if ($#database_list >= 0) {
 		$menu_str .= qq{
               <li id="menu-cluster" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">Cluster <b class="caret"></b></a>
@@ -4772,7 +4712,7 @@ sub generate_html_menu
 };
 	}
 
-	foreach my $db (@DATABASE_LIST) {
+	foreach my $db (sort @database_list) {
 		$menu_str .= qq{
 		<li id="menu-$db" class="dropdown-submenu">
 		   <a href="#" tabindex="-1">$db </a>
@@ -4964,20 +4904,23 @@ sub generate_html_menu
                 </li>
 };
 	}
-	if ($#DATABASE_LIST >= 0) {
+	if ($#database_list >= 0) {
 		$menu_str .= qq{
                 </ul>
               </li>
 };
 	}
 
-	if ($#PGBOUNCER_LIST >= 0) {
+	opendir(ODIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
+	my @pgbouncer_list = grep { !/^pgbouncer-all.html$/ && s/^pgbouncer-(.*).html$/$1/; } readdir(ODIR);
+	closedir(ODIR);
+	if ($#pgbouncer_list >= 0) {
 		$menu_str .= qq{
               <li id="menu-database" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">pgBouncer <b class="caret"></b></a>
                 <ul class="dropdown-menu">
 };
-		foreach my $db (@PGBOUNCER_LIST) {
+		foreach my $db (sort @pgbouncer_list) {
 			$menu_str .= qq{
 			<li id="menu-$db" class="dropdown-submenu">
 			   <a href="#" tabindex="-1">$db </a>
