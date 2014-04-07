@@ -1447,7 +1447,7 @@ sub pg_stat_database
 		push(@{$start_vals{$data[2]}}, @data);
 	}
 	$curfh->close();
-	push(@databases, 'all') if ($#databases > 0);
+	push(@databases, 'all') if ($#databases >= 0);
 
 	my %database_stat = ();
 	foreach my $time (sort {$a <=> $b} keys %all_database_stat) {
@@ -1753,7 +1753,7 @@ sub pg_database_size
 			$database_stat{$db}{size} .= '[' . $t . ',' . ($all_database_stat{$t}{$db} || 0) . '],';
 		}
 	}
-	push(@databases, 'all') if ($#databases > 0);
+	push(@databases, 'all') if ($#databases >= 0);
 	%all_database_stat = ();
 	my $id = &get_data_id('database-size', %data_info);
 	my %data = ();
@@ -2668,7 +2668,7 @@ sub pg_stat_connections
 		$all_connections_stat{$data[0]}{'all'}{idle_in_xact} += $data[4];
 	}
 	$curfh->close();
-	push(@databases, 'all') if ($#databases > 0);
+	push(@databases, 'all') if ($#databases >= 0);
 	foreach my $time (sort {$a <=> $b} keys %all_connections_stat) {
 		foreach my $db (@databases) {
 			$connections_stat{$db}{total} .= '[' . $time . ',' . ($all_connections_stat{$time}{$db}{total}||0) . '],';
@@ -4119,6 +4119,14 @@ sub generate_html_index
 
     <div id="home"><br/><br/><br/></div>
 EOF
+	if (exists $OVERALL_STATS{'start_date'}) {
+		$OVERALL_STATS{'start_date'} = localtime($OVERALL_STATS{'start_date'}/1000);
+		$OVERALL_STATS{'end_date'} = localtime($OVERALL_STATS{'end_date'}/1000);
+	}
+	if (exists $OVERALL_STATS{'sar_start_date'}) {
+		$OVERALL_STATS{'sar_start_date'} = localtime($OVERALL_STATS{'sar_start_date'}/1000);
+		$OVERALL_STATS{'sar_end_date'} = localtime($OVERALL_STATS{'sar_end_date'}/1000);
+	}
 	if (exists $OVERALL_STATS{'cluster'}) {
 		$OVERALL_STATS{'cluster'}{'size'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'nbackend'} ||= 0;
@@ -4139,14 +4147,6 @@ EOF
 			$deadlock_info = qq{
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'deadlocks'}</span> <span class="figure-label">Deadlocks</span></li>
 };
-		}
-		if (exists $OVERALL_STATS{'start_date'}) {
-			$OVERALL_STATS{'start_date'} = localtime($OVERALL_STATS{'start_date'}/1000);
-			$OVERALL_STATS{'end_date'} = localtime($OVERALL_STATS{'end_date'}/1000);
-		}
-		if (exists $OVERALL_STATS{'sar_start_date'}) {
-			$OVERALL_STATS{'sar_start_date'} = localtime($OVERALL_STATS{'sar_start_date'}/1000);
-			$OVERALL_STATS{'sar_end_date'} = localtime($OVERALL_STATS{'sar_end_date'}/1000);
 		}
 		my $extnum = $#{$OVERALL_STATS{'cluster'}{'extentions'}} + 1;
 		my $extensions_info = '';
@@ -4292,9 +4292,13 @@ EOF
 
 
 	}
-	print $fh <<EOF;
+	if (exists $sysinfo{PGVERSION}) {
+		print $fh <<EOF;
 
 <span class="figure-label">$sysinfo{PGVERSION}{'full_version'}</span>
+EOF
+	}
+	print $fh <<EOF;
 </li>
 
 <li class="slide" id="about-slide">
@@ -4592,7 +4596,7 @@ sub generate_html_menu
 	if (!-e "$INPUT_DIR/pg_xlog_stat.csv" || -z "$INPUT_DIR/pg_xlog_stat.csv") {
 		$disable_xlog = ' class="disabled"';
 	}
-	if ($sysinfo{'PGVERSION'}{major} < 9.2) {
+	if (exists $sysinfo{PGVERSION} && ($sysinfo{'PGVERSION'}{major} < 9.2)) {
 		$disable_tempfile = ' class="disabled"';
 		$disable_deadlock = ' class="disabled"';
 		$disable_checkpointwrite = ' class="disabled"';
