@@ -58,14 +58,6 @@ my %RELKIND = (
 	'c' => 'composite types',
 	't' => 'toast tables'
 );
-my %HAS_TABLE_STATS  = ();
-my %HAS_TABLE_STATIO = ();
-my %HAS_INDEX_STATS  = ();
-my %HAS_INDEX_STATIO = ();
-my %HAS_FUNCTION_STATS = ();
-my %HAS_DB_INFO = ();
-my %HAS_BUF_STATS = ();
-my %HAS_QUERY_STATS = ();
 my $TOP_STAT       = 10;
 
 my ($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
@@ -1586,7 +1578,6 @@ sub pg_stat_database
 					$dbfh->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{nbackend}) );
 				}
 				delete $database_stat{$db}{nbackend};
-				$HAS_DB_INFO{$db}{'database-backends'} = 1;
 				$found++;
 
 			} elsif ($has_conflict && ($data_info{$id}{name} eq 'database-canceled_queries')) {
@@ -1597,7 +1588,6 @@ sub pg_stat_database
 					$dbfh->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{canceled_queries}) );
 				}
 				delete $database_stat{$db}{canceled_queries};
-				$HAS_DB_INFO{$db}{'database-canceled_queries'} = 1;
 				$found++;
 
 			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-deadlocks')) {
@@ -1608,7 +1598,6 @@ sub pg_stat_database
 					$dbfh->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{deadlocks}) );
 				}
 				delete $database_stat{$db}{deadlocks};
-				$HAS_DB_INFO{$db}{'database-deadlocks'} = 1;
 				$found++;
 
 			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-temporary_file')) {
@@ -1619,7 +1608,6 @@ sub pg_stat_database
 					$dbfh->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{temp_files}) );
 				}
 				delete $database_stat{$db}{temp_files};
-				$HAS_DB_INFO{$db}{'database-temporary_file'} = 1;
 				$found++;
 
 			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-temporary_count')) {
@@ -1630,7 +1618,6 @@ sub pg_stat_database
 					$dbfh->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}.'_bytes', \%{$data_info{$id}}, $db, $database_stat{$db}{temp_bytes}) );
 				}
 				delete $database_stat{$db}{temp_bytes};
-				$HAS_DB_INFO{$db}{'database-temporary_count'} = 1;
 				$found++;
 
 			}
@@ -1920,7 +1907,6 @@ sub pg_stat_user_tables
 				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
 			}
 			&html_header($fhtable);
-			$HAS_TABLE_STATS{$db} = 1;
 			my $table_header = '';
 			my $colspan = '';
 			if ($data_info{$id}{name} eq 'table-indexes') {
@@ -2113,7 +2099,6 @@ sub pg_stat_user_indexes
 				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
 			}
 			&html_header($fhtable);
-			$HAS_INDEX_STATS{$db} = 1;
 			my $table_header = '';
 			my $colspan =  ' colspan="4"';
 			if ($data_info{$id}{name} eq 'index-scan') {
@@ -2274,8 +2259,6 @@ sub pg_statio_user_tables
 				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
 			}
 			&html_header($fhtable);
-			$HAS_TABLE_STATS{$db} = 1;
-			$HAS_TABLE_STATIO{$db} = 1;
 
 			my $rank = 1;
 			foreach my $tb (sort {$is_used{$db}{$b} <=> $is_used{$db}{$a} } keys %{$is_used{$db}}) {
@@ -2393,7 +2376,6 @@ sub pg_relation_buffercache
 					}
 					$found_stat = 1;
 					$to_show{$db}{$rel} = $rank;
-					$HAS_BUF_STATS{$db} = 1;
 					$table_data = "<tr><th>$rel</th><td>$shm_use{$db}{$rel}{buffers}</td><td>$shm_use{$db}{$rel}{pages}</td><td>" . &pretty_print_size($shm_use{$db}{$rel}{buffered}) . "</td><td>$shm_use{$db}{$rel}{'buffers %'}</td><td>$shm_use{$db}{$rel}{'relation %'}</td></tr>\n";
 				}
 				$rank++;
@@ -2430,8 +2412,6 @@ sub pg_relation_buffercache
 				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
 			}
 			&html_header($fhtable);
-			$HAS_INDEX_STATS{$db} = 1;
-			$HAS_INDEX_STATIO{$db} = 1;
 
 			foreach my $rel (sort {$to_show{$db}{$a} <=> $to_show{$db}{$b} } keys %{$to_show{$db}}) {
 				my $graph_data = '';
@@ -2498,8 +2478,6 @@ sub pg_statio_user_indexes
 				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
 			}
 			&html_header($fhtable);
-			$HAS_INDEX_STATS{$db} = 1;
-			$HAS_INDEX_STATIO{$db} = 1;
 
 			my $rank = 1;
 			foreach my $tb (sort {$is_used{$db}{$b} <=> $is_used{$db}{$a} } keys %{$is_used{$db}}) {
@@ -2734,9 +2712,8 @@ sub pg_stat_user_functions
 	my $id = &get_data_id('database-functions', %data_info);
 	foreach my $db (keys %functions_stat) {
 		next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
-		$HAS_FUNCTION_STATS{$db} = 1;
 		my $colspan =  ' colspan="4"';
-		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html");
+		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-fct-$db.html");
 		$dbfh->print (qq{
 <li class="slide" id="database-functions-slide">
 <div id="database-functions"><br/><br/><br/><br/></div>
@@ -3108,8 +3085,6 @@ sub pg_class_size
 				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
 			}
 			&html_header($fhtable);
-			$HAS_TABLE_STATS{$db} = 1 if ($data_info{$id}{name} =~ /^table-/);
-			$HAS_INDEX_STATS{$db} = 1 if ($data_info{$id}{name} =~ /^index-/);
 			my $table_header = '';
 			my $kind = '';
 			if ($data_info{$id}{name} eq 'table-size') {
@@ -3242,7 +3217,6 @@ sub pg_stat_locks
 					push(@graph_data, $locks_stat{$db}{lock_type}{$k});
 				}
 				$dbfh->print( &flotr2_linegraph_array($IDX++, 'database-lock-types', \%{$data_info{$id}}, $db, @graph_data) );
-				$HAS_DB_INFO{$db}{'database-lock-types'} = 1;
 			} elsif ($data_info{$id}{name} eq 'database-lock-modes') {
 				foreach my $k (sort keys %{$locks_stat{$db}{lock_mode}}) {
 					$locks_stat{$db}{lock_mode}{$k} =~ s/,$//;
@@ -3250,7 +3224,6 @@ sub pg_stat_locks
 					push(@graph_data, $locks_stat{$db}{lock_mode}{$k});
 				}
 				$dbfh->print( &flotr2_linegraph_array($IDX++, 'database-lock-modes', \%{$data_info{$id}}, $db, @graph_data) );
-				$HAS_DB_INFO{$db}{'database-lock-modes'} = 1;
 			} elsif ($data_info{$id}{name} eq 'database-lock-granted') {
 				foreach my $k (sort keys %{$locks_stat{$db}{lock_granted}}) {
 					$locks_stat{$db}{lock_granted}{$k} =~ s/,$//;
@@ -3258,7 +3231,6 @@ sub pg_stat_locks
 					push(@graph_data, $locks_stat{$db}{lock_granted}{$k});
 				}
 				$dbfh->print( &flotr2_linegraph_array($IDX++, 'database-lock-granted', \%{$data_info{$id}}, $db, @graph_data) );
-				$HAS_DB_INFO{$db}{'database-lock-granted'} = 1;
 			}
 			$dbfh->close();
 		}
@@ -3293,7 +3265,6 @@ sub pg_stat_unused_indexes
 			die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
 		}
 		&html_header($fhtable);
-		$HAS_INDEX_STATS{$db} = 1;
 		print $fhtable qq{
 <ul id="slides">
 <div class="row">
@@ -3357,7 +3328,6 @@ sub pg_stat_redundant_indexes
 			die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
 		}
 		&html_header($fhtable);
-		$HAS_INDEX_STATS{$db} = 1;
 		print $fhtable qq{
 <ul id="slides">
 <div class="row">
@@ -3419,7 +3389,6 @@ sub pg_stat_missing_fkindexes
 			die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
 		}
 		&html_header($fhtable);
-		$HAS_INDEX_STATS{$db} = 1;
 		print $fhtable qq{
 <ul id="slides">
 <div class="row">
@@ -3895,7 +3864,6 @@ sub pg_stat_statements
 	my $id = &get_data_id('database-queries', %data_info);
 	foreach my $db (keys %queries_stats) {
 		next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
-		$HAS_QUERY_STATS{$db} = 1;
 		my $header = '';
 		if ($has_temp) {
 			$header = qq{<th>Temp read</th><th>Temp write</th>};
@@ -3903,7 +3871,7 @@ sub pg_stat_statements
 		if ($has_temp == 2) {
 			$header .= qq{<th>Shared dirtied</th>};
 		}
-		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html");
+		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-queries-$db.html");
 		$dbfh->print (qq{
 <li class="slide" id="database-queries-slide">
 <div id="database-queries"><br/><br/><br/><br/></div>
@@ -4577,70 +4545,157 @@ sub generate_html_menu
               <li id="menu-info" class="dropdown"><a href="index.html#info">SysInfo</a></li>
 };
 	}
-	my $disable_replication = '';
-	my $disable_xlog = '';
-	my $disable_tempfile = '';
-	my $disable_deadlock = '';
-	my $disable_checkpointwrite = '';
-	my $disable_canceled = '';
-	my $disable_tablespace = '';
 	my $disable_pgconf = '';
 	my $disable_pgsettings = '';
 	my $disable_pghba = '';
 	my $disable_pgident = '';
-	my $disable_buffercache = '';
-	if (!-e "$INPUT_DIR/pg_stat_replication.csv" || -z "$INPUT_DIR/pg_stat_replication.csv") {
-		$disable_replication = ' class="disabled"';
-		$disable_canceled = ' class="disabled"';
-	}
-	if (!-e "$INPUT_DIR/pg_xlog_stat.csv" || -z "$INPUT_DIR/pg_xlog_stat.csv") {
-		$disable_xlog = ' class="disabled"';
-	}
-	if (exists $sysinfo{PGVERSION} && ($sysinfo{'PGVERSION'}{major} < 9.2)) {
-		$disable_tempfile = ' class="disabled"';
-		$disable_deadlock = ' class="disabled"';
-		$disable_checkpointwrite = ' class="disabled"';
-	}
-	if (!-e "$INPUT_DIR/pg_tablespace_size.csv" || -z "$INPUT_DIR/pg_tablespace_size.csv") {
-		$disable_tablespace = ' class="disabled"';
-	}
+	my $disable_pgbouncer = '';
+	my $disable_conf = ' disabled';
 	if (!-e "$INPUT_DIR/postgresql.conf" || -z "$INPUT_DIR/postgresql.conf") {
 		$disable_pgconf = ' class="disabled"';
+	} else {
+		$disable_conf = '';
 	}
 	if (!-e "$INPUT_DIR/pg_hba.conf" || -z "$INPUT_DIR/pg_hba.conf") {
 		$disable_pghba = ' class="disabled"';
+	} else {
+		$disable_conf = '';
 	}
 	if (!-e "$INPUT_DIR/pg_ident.conf" || -z "$INPUT_DIR/pg_ident.conf") {
 		$disable_pgident = ' class="disabled"';
+	} else {
+		$disable_conf = '';
 	}
 	if (!-e "$INPUT_DIR/pg_settings.csv" || -z "$INPUT_DIR/pg_settings.csv") {
 		$disable_pgsettings = ' class="disabled"';
+	} else {
+		$disable_conf = '';
 	}
-	if (!-e "$INPUT_DIR/pg_database_buffercache.csv" || -z "$INPUT_DIR/pg_database_buffercache.csv") {
-		$disable_buffercache = ' class="disabled"';
+	if (!-e "$INPUT_DIR/pgbouncer.ini" || -z "$INPUT_DIR/pgbouncer.ini") {
+		$disable_pgbouncer = ' class="disabled"';
+	} else {
+		$disable_conf = '';
 	}
 
 	opendir(ODIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
 	my @database_list = grep { !/^database-all.html$/ && s/^database-(.*).html$/$1/; } readdir(ODIR);
 	closedir(ODIR);
 	if ($#database_list >= 0) {
+		my $disable_size = ' class="disabled"';
+		my $disable_tablespace = ' class="disabled"';
+		my $disable_backend = ' class="disabled"';
+		my $disable_conntype = ' class="disabled"';
+		my $disable_connection = ' disabled';
+		my $disable_cache = ' class="disabled"';
+		my $disable_deadlock = ' class="disabled"';
+		my $disable_buffercache = ' class="disabled"';
+		my $disable_buffer = ' disabled';
+		my $disable_bgwriter = ' class="disabled"';
+		my $disable_bgwriter_count = ' class="disabled"';
+		my $disable_writer = ' disabled';
+		my $disable_tempfile = ' class="disabled"';
+		my $disable_tempfile_bytes = ' class="disabled"';
+		my $disable_temporary = ' disabled';
+		my $disable_wal = ' disabled';
+		my $disable_xlog = ' class="disabled"';
+		my $disable_checkpoints = ' class="disabled"';
+		my $disable_checkpointwrite = ' class="disabled"';
+		my $disable_archive = ' class="disabled"';
+		my $disable_rw_ratio = ' disabled';
+		my $disable_read_ratio = ' class="disabled"';
+		my $disable_write_ratio = ' class="disabled"';
+		my $disable_write_query = ' class="disabled"';
+		my $disable_commit = ' class="disabled"';
+		my $disable_conflicts = ' class="disabled"';
+		my $disable_canceled = ' class="disabled"';
+		my $disable_replication = ' class="disabled"';
+		my $disable_allrepli = ' disabled';
+		if (open(IN, "$OUTPUT_DIR/cluster.html")) {
+			while (<IN>) {
+				if (/<div id="cluster-size">/) {
+					$disable_size = '';
+				} elsif (/<div id="tablespace-cluster-size">/) {
+					$disable_tablespace = '';
+				} elsif (/<div id="cluster-backends">/) {
+					$disable_backend = '';
+					$disable_connection = '';
+				} elsif (/<div id="cluster-connections">/) {
+					$disable_conntype = '';
+					$disable_connection = '';
+				} elsif (/<div id="cluster-cache_ratio">/) {
+					$disable_cache = '';
+				} elsif (/<div id="cluster-deadlocks">/) {
+					$disable_deadlock = '';
+				} elsif (/<div id="cluster-buffersused">/) {
+					$disable_buffercache = '';
+					$disable_buffer = '';
+				} elsif (/<div id="cluster-bgwriter">/) {
+					$disable_bgwriter = "";
+					$disable_writer = "";
+				} elsif (/<div id="cluster-bgwriter_count">/) {
+					$disable_bgwriter_count = "";
+					$disable_writer = "";
+				} elsif (/<div id="cluster-temporary_files">/) {
+					$disable_tempfile = "";
+					$disable_temporary = "";
+				} elsif (/<div id="cluster-temporary_file_bytes">/) {
+					$disable_tempfile_bytes = "";
+					$disable_temporary = "";
+				} elsif (/<div id="cluster-xlog_files">/) {
+					$disable_xlog = '';
+					$disable_wal = '';
+				} elsif (/<div id="cluster-checkpoints">/) {
+					$disable_checkpoints = '';
+					$disable_wal = '';
+				} elsif (/<div id="cluster-checkpoints">/) {
+					$disable_checkpointwrite = '';
+					$disable_wal = '';
+				} elsif (/<div id="cluster-archive">/) {
+					$disable_archive = '';
+					$disable_wal = '';
+				} elsif (/<div id="cluster-read_ratio">/) {
+					$disable_read_ratio = "";
+					$disable_rw_ratio = "";
+				} elsif (/<div id="cluster-write_ratio">/) {
+					$disable_write_ratio = "";
+					$disable_rw_ratio = "";
+				} elsif (/<div id="cluster-read_write_query">/) {
+					$disable_write_query = "";
+					$disable_rw_ratio = "";
+				} elsif (/<div id="cluster-commits_rollbacks">/) {
+					$disable_commit = "";
+					$disable_rw_ratio = "";
+				} elsif (/<div id="cluster-conflicts">/) {
+					$disable_conflicts = "";
+					$disable_allrepli = "";
+				} elsif (/<div id="cluster-canceled_queries">/) {
+					$disable_canceled = "";
+					$disable_allrepli = "";
+				} elsif (/<div id="cluster-replication">/) {
+					$disable_replication = "";
+					$disable_allrepli = "";
+				}
+			}
+			close(IN);
+		}
+
 		$menu_str .= qq{
               <li id="menu-cluster" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">Cluster <b class="caret"></b></a>
                 <ul class="dropdown-menu">
-		      <li id="menu-cluster-size"><a href="cluster.html#cluster-size">Databases sizes</a></li>
+		      <li id="menu-cluster-size"$disable_size><a href="cluster.html#cluster-size">Databases sizes</a></li>
 		      <li id="menu-tablespace-cluster-size"$disable_tablespace><a href="cluster.html#tablespace-cluster-size">Tablespaces sizes</a></li>
-			<li id="menu-connectionbackend" class="dropdown-submenu">
+			<li id="menu-connectionbackend" class="dropdown-submenu$disable_connection">
 			   <a href="#" tabindex="-1">Connections </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-cluster-backends"><a href="cluster.html#cluster-backends">Connections</a></li>
-			      <li id="menu-cluster-connections"><a href="cluster.html#cluster-connections">Connections by type</a></li>
+			      <li id="menu-cluster-backends"$disable_backend><a href="cluster.html#cluster-backends">Connections</a></li>
+			      <li id="menu-cluster-connections"$disable_conntype><a href="cluster.html#cluster-connections">Connections by type</a></li>
 			      </ul>
 			</li>
 		      <li id="menu-cluster-deadlocks"$disable_deadlock><a href="cluster.html#cluster-deadlocks">Deadlocks</a></li>
 		      <li class="divider"></li>
-		       <li id="menu-cluster-cache_ratio"><a href="cluster.html#cluster-cache_ratio">Cache utilization</a></li>
-			<li id="menu-pgbuffercache" class="dropdown-submenu">
+		       <li id="menu-cluster-cache_ratio"$disable_cache><a href="cluster.html#cluster-cache_ratio">Cache utilization</a></li>
+			<li id="menu-pgbuffercache" class="dropdown-submenu$disable_buffer">
 			   <a href="#" tabindex="-1">Shared buffers statistics </a>
 			      <ul class="dropdown-menu">
 			      <li id="menu-cluster-buffersused"$disable_buffercache><a href="cluster.html#cluster-buffersused">Shared buffers utilisation</a></li>
@@ -4650,62 +4705,56 @@ sub generate_html_menu
 			      </ul>
 			</li>
 		      <li class="divider"></li>
-			<li id="menu-backgroundwriter" class="dropdown-submenu">
+			<li id="menu-backgroundwriter" class="dropdown-submenu $disable_writer">
 			   <a href="#" tabindex="-1">Background writer </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-cluster-bgwriter"><a href="cluster.html#cluster-bgwriter">Background writer buffers</a></li>
-			      <li id="menu-cluster-bgwriter_count"><a href="cluster.html#cluster-bgwriter_count">Background writer counters</a></li>
+			      <li id="menu-cluster-bgwriter"$disable_bgwriter><a href="cluster.html#cluster-bgwriter">Background writer buffers</a></li>
+			      <li id="menu-cluster-bgwriter_count"$disable_bgwriter_count><a href="cluster.html#cluster-bgwriter_count">Background writer counters</a></li>
 			      </ul>
 		        </li>
-			<li id="menu-temporaryfiles" class="dropdown-submenu">
+			<li id="menu-temporaryfiles" class="dropdown-submenu$disable_temporary">
 			   <a href="#" tabindex="-1">Temporary files </a>
 			      <ul class="dropdown-menu">
 			      <li id="menu-cluster-temporary_file"$disable_tempfile><a href="cluster.html#cluster-temporary_file">Temporary files</a></li>
-			      <li id="menu-cluster-temporary_file_bytes"$disable_tempfile><a href="cluster.html#cluster-temporary_file_bytes">Temporary files size</a></li>
+			      <li id="menu-cluster-temporary_file_bytes"$disable_tempfile_bytes><a href="cluster.html#cluster-temporary_file_bytes">Temporary files size</a></li>
 			      </ul>
 		        </li>
-			<li id="menu-walcheckpoint" class="dropdown-submenu">
+			<li id="menu-walcheckpoint" class="dropdown-submenu$disable_wal">
 			   <a href="#" tabindex="-1">Wal / Checkpoint </a>
 			      <ul class="dropdown-menu">
 			      <li id="menu-cluster-xlog_files"$disable_xlog><a href="cluster.html#cluster-xlog_files">Wal files</a></li>
-			      <li id="menu-cluster-checkpoints"><a href="cluster.html#cluster-checkpoints">Checkpoints counter</a></li>
+			      <li id="menu-cluster-checkpoints"$disable_checkpoints><a href="cluster.html#cluster-checkpoints">Checkpoints counter</a></li>
 			      <li id="menu-cluster-checkpoints_time"$disable_checkpointwrite><a href="cluster.html#cluster-checkpoints">Checkpoints write time</a></li>
-			      <li id="menu-cluster-archive"$disable_xlog><a href="cluster.html#cluster-archive">Archiver stats</a></li>
+			      <li id="menu-cluster-archive"$disable_archive><a href="cluster.html#cluster-archive">Archiver stats</a></li>
 			      </ul>
 		        </li>
-			<li id="menu-rw" class="dropdown-submenu">
+			<li id="menu-rw" class="dropdown-submenu$disable_rw_ratio">
 			   <a href="#" tabindex="-1">Queries Reads / Writes </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-cluster-read_ratio"><a href="cluster.html#cluster-read_ratio">Read tuples</a></li>
-			      <li id="menu-cluster-write_ratio"><a href="cluster.html#cluster-write_ratio">Write ratio</a></li>
-			      <li id="menu-cluster-read_write_query"><a href="cluster.html#cluster-read_write_query">Read vs Write queries</a></li>
-			      <li id="menu-cluster-commits_rollbacks"><a href="cluster.html#cluster-commits_rollbacks">Commits vs Rollbacks</a></li>
+			      <li id="menu-cluster-read_ratio"$disable_read_ratio><a href="cluster.html#cluster-read_ratio">Read tuples</a></li>
+			      <li id="menu-cluster-write_ratio"$disable_write_ratio><a href="cluster.html#cluster-write_ratio">Write ratio</a></li>
+			      <li id="menu-cluster-read_write_query"$disable_write_query><a href="cluster.html#cluster-read_write_query">Read vs Write queries</a></li>
+			      <li id="menu-cluster-commits_rollbacks"$disable_commit><a href="cluster.html#cluster-commits_rollbacks">Commits vs Rollbacks</a></li>
 			      </ul>
 		        </li>
 		      <li class="divider"></li>
-			<li id="menu-replication" class="dropdown-submenu">
+			<li id="menu-replication" class="dropdown-submenu$disable_allrepli">
 			   <a href="#" tabindex="-1">Replication statistics </a>
 			      <ul class="dropdown-menu">
 			      <li id="menu-cluster-replication"$disable_replication><a href="cluster.html#cluster-replication">Replication lag</a></li>
 			      <li id="menu-cluster-canceled_queries"$disable_canceled><a href="cluster.html#cluster-canceled_queries">Canceled queries</a></li>
-			      <li id="menu-cluster-conflicts"><a href="cluster.html#cluster-conflicts">Conflicts</a></li>
+			      <li id="menu-cluster-conflicts"$disable_conflicts><a href="cluster.html#cluster-conflicts">Conflicts</a></li>
 			      </ul>
 		        </li>
 		      <li class="divider"></li>
-			<li id="menu-configuration" class="dropdown-submenu">
+			<li id="menu-configuration" class="dropdown-submenu$disable_conf">
 			   <a href="#" tabindex="-1">Configurations </a>
 			      <ul class="dropdown-menu">
 			      <li id="menu-cluster-pgconf"$disable_pgconf><a href="cluster.html#cluster-pgconf">PostgreSQL configuration</a></li>
 			      <li id="menu-cluster-settings"$disable_pgsettings><a href="cluster.html#cluster-settings">PostgreSQL settings</a></li>
 			      <li id="menu-cluster-pghba"$disable_pghba><a href="cluster.html#cluster-pghba">PostgreSQL authorization</a></li>
 			      <li id="menu-cluster-pgident"$disable_pgident><a href="cluster.html#cluster-pgident">User Name Maps</a></li>
-};
-		if (-e "$INPUT_DIR/pgbouncer.ini" && -e "$INPUT_DIR/pgbouncer_stats.csv") {
-			$menu_str .= qq{
-		      <li id="menu-cluster-pgbouncer"><a href="cluster.html#cluster-pgbouncer">Pgbouncer settings</a></li>
-};
-		}
-		$menu_str .= qq{
+			      <li id="menu-cluster-pgbouncer"$disable_pgbouncer><a href="cluster.html#cluster-pgbouncer">Pgbouncer settings</a></li>
 			     </ul>
 			</li>
                 </ul>
@@ -4728,182 +4777,229 @@ sub generate_html_menu
 };
 		}
 
-		if (exists $HAS_TABLE_STATS{$db}) {
-			$menu_str .= qq{
-			<li id="menu-$db-table" class="dropdown-submenu">
+		my %data_info = %{$DB_GRAPH_INFOS{'pg_stat_all_tables.csv'}};
+		my $table_str = '';
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			next if ($data_info{$id}{name} !~ /^table-/);
+			$table_str .= qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+		}
+		%data_info = %{$DB_GRAPH_INFOS{'pg_class_size.csv'}};
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			next if ($data_info{$id}{name} !~ /^table-/);
+			$table_str .= qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+		}
+		%data_info = %{$DB_GRAPH_INFOS{'pg_statio_all_tables.csv'}};
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			next if ($data_info{$id}{name} !~ /^statio-/);
+			$table_str .= qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+		}
+		my $disable_table = ' disabled';
+		$disable_table = '' if ($table_str);
+		$menu_str .= qq{
+			<li id="menu-$db-table" class="dropdown-submenu $disable_table">
 			   <a href="#" tabindex="-1">Tables statistics </a>
 			      <ul class="dropdown-menu">
-};
-			my %data_info = %{$DB_GRAPH_INFOS{'pg_stat_all_tables.csv'}};
-			foreach my $id (sort {$a <=> $b} keys %data_info) {
-				next if ($data_info{$id}{name} !~ /^table-/);
-				$menu_str .= qq{
-			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
-} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
-			}
-			%data_info = %{$DB_GRAPH_INFOS{'pg_class_size.csv'}};
-			foreach my $id (sort {$a <=> $b} keys %data_info) {
-				next if ($data_info{$id}{name} !~ /^table-/);
-				$menu_str .= qq{
-			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
-} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
-			}
-			if (exists $HAS_TABLE_STATIO{$db}) {
-				%data_info = %{$DB_GRAPH_INFOS{'pg_statio_all_tables.csv'}};
-				foreach my $id (sort {$a <=> $b} keys %data_info) {
-					next if ($data_info{$id}{name} !~ /^statio-/);
-					$menu_str .= qq{
-				      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
-	} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
-				}
-			}
-			$menu_str .= qq{
+				$table_str
 			  </ul>
 		      </li>
 };
-		}
+		$table_str = '';
 
-		if (exists $HAS_INDEX_STATS{$db}) {
-			$menu_str .= qq{
-			<li id="menu-$db-table" class="dropdown-submenu">
+		my $idx_str = '';
+		%data_info = %{$DB_GRAPH_INFOS{'pg_stat_all_indexes.csv'}};
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			next if ($data_info{$id}{name} !~ /^index-/);
+			$idx_str .= qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+		}
+		%data_info = %{$DB_GRAPH_INFOS{'pg_class_size.csv'}};
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			next if ($data_info{$id}{name} !~ /^index-/);
+			$idx_str .= qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+		}
+		%data_info = %{$DB_GRAPH_INFOS{'pg_statio_all_indexes.csv'}};
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			next if ($data_info{$id}{name} !~ /^statio-/);
+			$idx_str .= qq{
+				      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+	} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+		}
+		%data_info = %{$DB_GRAPH_INFOS{'pg_stat_unused_indexes.csv'}};
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			$idx_str .= qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+		}
+		%data_info = %{$DB_GRAPH_INFOS{'pg_stat_redundant_indexes.csv'}};
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			$idx_str .= qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+		}
+		%data_info = %{$DB_GRAPH_INFOS{'pg_stat_missing_fkindexes.csv'}};
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			$idx_str .= qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+		}
+		my $disable_idx = ' disabled';
+		$disable_idx = '' if ($idx_str);
+		$menu_str .= qq{
+			<li id="menu-$db-table" class="dropdown-submenu $disable_idx">
 			   <a href="#" tabindex="-1">Indexes statistics </a>
-			      <ul class="dropdown-menu">
+				<ul class="dropdown-menu">
+				$idx_str
+				</ul>
+			</li>
 };
-			my %data_info = %{$DB_GRAPH_INFOS{'pg_stat_all_indexes.csv'}};
-			foreach my $id (sort {$a <=> $b} keys %data_info) {
-				next if ($data_info{$id}{name} !~ /^index-/);
-				$menu_str .= qq{
-			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
-} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
-			}
-			%data_info = %{$DB_GRAPH_INFOS{'pg_class_size.csv'}};
-			foreach my $id (sort {$a <=> $b} keys %data_info) {
-				next if ($data_info{$id}{name} !~ /^index-/);
-				$menu_str .= qq{
-			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
-} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
-			}
-			if (exists $HAS_INDEX_STATIO{$db}) {
-				%data_info = %{$DB_GRAPH_INFOS{'pg_statio_all_indexes.csv'}};
-				foreach my $id (sort {$a <=> $b} keys %data_info) {
-					next if ($data_info{$id}{name} !~ /^statio-/);
-					$menu_str .= qq{
-				      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
-	} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
-				}
-			}
-			%data_info = %{$DB_GRAPH_INFOS{'pg_stat_unused_indexes.csv'}};
-			foreach my $id (sort {$a <=> $b} keys %data_info) {
-				$menu_str .= qq{
-			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
-} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
-			}
-			%data_info = %{$DB_GRAPH_INFOS{'pg_stat_redundant_indexes.csv'}};
-			foreach my $id (sort {$a <=> $b} keys %data_info) {
-				$menu_str .= qq{
-			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
-} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
-			}
-			%data_info = %{$DB_GRAPH_INFOS{'pg_stat_missing_fkindexes.csv'}};
-			foreach my $id (sort {$a <=> $b} keys %data_info) {
-				$menu_str .= qq{
-			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
-} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
-			}
+		$idx_str = '';
+
+		if (-e "$OUTPUT_DIR/database-fct-$db.html") {
 			$menu_str .= qq{
-			  </ul>
-		      </li>
-};
-		}
-		if (exists $HAS_FUNCTION_STATS{$db}) {
-			$menu_str .= qq{
-			<li id="menu-database-functions"><a href="database-$db.html#database-functions">Functions statistics</a></li>
+			<li id="menu-database-functions"><a href="database-fct-$db.html#database-functions">Functions statistics</a></li>
 };
 		}
 
-		if (exists $HAS_BUF_STATS{$db}) {
-			$menu_str .= qq{
-			<li id="menu-$db-buffercache-relation" class="dropdown-submenu">
+		%data_info = %{$DB_GRAPH_INFOS{'pg_relation_buffercache.csv'}};
+		my $buffer_str = '';
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			next if ($data_info{$id}{name} !~ /buffercache/);
+			$buffer_str .= qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+		}
+		my $disable_buffer = ' disabled';
+		$disable_buffer = '' if ($buffer_str);
+		$menu_str .= qq{
+			<li id="menu-$db-buffercache-relation" class="dropdown-submenu $disable_buffer">
 			   <a href="#" tabindex="-1">Buffercache Statistics </a>
 			      <ul class="dropdown-menu">
-};
-			my %data_info = %{$DB_GRAPH_INFOS{'pg_relation_buffercache.csv'}};
-			foreach my $id (sort {$a <=> $b} keys %data_info) {
-				next if ($data_info{$id}{name} !~ /buffercache/);
-				$menu_str .= qq{
-			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
-} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
-			}
-			$menu_str .= qq{
+				$buffer_str
 			  </ul>
 		      </li>
 };
-		}
-		if (exists $HAS_QUERY_STATS{$db}) {
+		$buffer_str = '';
+
+		if (-e "$OUTPUT_DIR/database-queries-$db.html") {
 			$menu_str .= qq{
-		      <li id="menu-database-queries"><a href="database-$db.html#database-queries">Statements statistics</a></li>
+		      <li id="menu-database-queries"><a href="database-queries-$db.html#database-queries">Statements statistics</a></li>
 };
 		}
-		my $disable_conntype = '';
-		if (!exists $HAS_DB_INFO{$db}{'database-connections'}) {
-			$disable_conntype = ' class="disabled"';
+
+		my $disable_size = ' class="disabled"';
+		my $disable_backend = ' class="disabled"';
+		my $disable_conntype = ' class="disabled"';
+		my $disable_connection = ' disabled';
+		my $disable_lock = ' class="disabled"';
+		my $disable_locks = ' disabled';
+		my $disable_cache = ' class="disabled"';
+		my $disable_rw_ratio = ' disabled';
+		my $disable_read_ratio = ' class="disabled"';
+		my $disable_write_ratio = ' class="disabled"';
+		my $disable_write_query = ' class="disabled"';
+		my $disable_commit = ' class="disabled"';
+		my $disable_canceled = ' class="disabled"';
+		my $disable_conflicts = ' class="disabled"';
+		my $disable_temporary = ' disabled';
+		my $disable_tempbytes = ' class="disabled"';
+		my $disable_tempfile = ' class="disabled"';
+		my $disable_deadlock = ' class="disabled"';
+		if (open(IN, "$OUTPUT_DIR/database-$db.html")) {
+			while (<IN>) {
+				if (/<div id="database-size">/) {
+					$disable_size = '';
+				} elsif (/<div id="database-backends">/) {
+					$disable_backend = '';
+					$disable_connection = '';
+				} elsif (/<div id="database-connections">/) {
+					$disable_conntype = '';
+					$disable_connection = '';
+				} elsif (/<div id="database-lock-types">/) {
+					$disable_lock = '';
+					$disable_locks = "";
+				} elsif (/<div id="database-temporary_files">/) {
+					$disable_tempfile = '';
+				} elsif (/<div id="database-cache_ratio">/) {
+					$disable_cache = '';
+				} elsif (/<div id="database-read_ratio">/) {
+					$disable_read_ratio = "";
+					$disable_rw_ratio = "";
+				} elsif (/<div id="database-write_ratio">/) {
+					$disable_write_ratio = "";
+					$disable_rw_ratio = "";
+				} elsif (/<div id="database-read_write_query">/) {
+					$disable_write_query = "";
+					$disable_rw_ratio = "";
+				} elsif (/<div id="database-commits_rollbacks">/) {
+					$disable_commit = "";
+					$disable_rw_ratio = "";
+				} elsif (/<div id="database-conflicts">/) {
+					$disable_conflicts = "";
+				} elsif (/<div id="database-canceled_queries">/) {
+					$disable_canceled = "";
+				} elsif (/<div id="database-deadlocks">/) {
+					$disable_deadlock = "";
+					$disable_locks = "";
+				} elsif (/<div id="database-temporary_files">/) {
+					$disable_tempfile = "";
+					$disable_temporary = "";
+				} elsif (/<div id="database-temporary_file_bytes">/) {
+					$disable_tempbytes = "";
+					$disable_temporary = "";
+				}
+			}
+			close(IN);
 		}
 		$menu_str .= qq{
 		      <li class="divider"></li>
-		      <li id="menu-database-size"><a href="database-$db.html#database-size">Database size</a></li>
-		      <li id="menu-${db}_connections" class="dropdown-submenu">
+		      <li id="menu-database-size"$disable_size><a href="database-$db.html#database-size">Database size</a></li>
+		      <li id="menu-${db}_connections" class="dropdown-submenu$disable_connection">
 			<a href="#" tabindex="-1">Connections </a>
 			  <ul class="dropdown-menu">
-			      <li id="menu-database-backends"><a href="database-$db.html#database-backends">Connections</a></li>
+			      <li id="menu-database-backends"$disable_backend><a href="database-$db.html#database-backends">Connections</a></li>
 			      <li id="menu-database-connections"$disable_conntype><a href="database-$db.html#database-connections">Connections by type</a></li>
 			  </ul>
 		      </li>
-		      <li id="menu-database-cache_ratio"><a href="database-$db.html#database-cache_ratio">Cache utilization</a></li>
+		      <li id="menu-database-cache_ratio"$disable_cache><a href="database-$db.html#database-cache_ratio">Cache utilization</a></li>
 		      <li class="divider"></li>
-		      <li id="menu-${db}_locks" class="dropdown-submenu">
+		      <li id="menu-${db}_locks" class="dropdown-submenu $disable_locks">
 			<a href="#" tabindex="-1">Locks </a>
 			  <ul class="dropdown-menu">
 			      <li id="menu-database-deadlocks"$disable_deadlock><a href="database-$db.html#database-deadlocks">Deadlocks</a></li>
-};
-		if (-e "$INPUT_DIR/pg_stat_locks.csv") {
-			my $disable_lock = '';
-			if (!exists $HAS_DB_INFO{$db}{'database-lock-types'}) {
-				$disable_lock = ' class="disabled"';
-			}
-			$menu_str .= qq{
 			      <li id="menu-database-lock-types"$disable_lock><a href="database-$db.html#database-lock-types">Locks per types</a></li>
 			      <li id="menu-database-lock-modes"$disable_lock><a href="database-$db.html#database-lock-modes">Locks per modes</a></li>
 			      <li id="menu-database-lock-granted"$disable_lock><a href="database-$db.html#database-lock-granted">Locks granted or not</a></li>
-};
-		}
-		if (!$disable_tempfile) {
-			if (!exists $HAS_DB_INFO{$db}{'database-temporary_files'}) {
-				$disable_tempfile = ' class="disabled"';
-			}
-		}
-		$menu_str .= qq{
 			  </ul>
 		      </li>
 		      <li class="divider"></li>
-		      <li id="menu-${db}_temporaryfiles" class="dropdown-submenu">
+		      <li id="menu-${db}_temporaryfiles" class="dropdown-submenu $disable_temporary">
 			<a href="#" tabindex="-1">Temporary files </a>
 			  <ul class="dropdown-menu">
 			      <li id="menu-database-temporary_files"$disable_tempfile><a href="database-$db.html#database-temporary_files">Temporary files</a></li>
-			      <li id="menu-database-temporary_file_bytes"$disable_tempfile><a href="database-$db.html#database-temporary_file_bytes">Temporary files size</a></li>
+			      <li id="menu-database-temporary_file_bytes"$disable_tempbytes><a href="database-$db.html#database-temporary_file_bytes">Temporary files size</a></li>
 			  </ul>
 		      </li>
-		      <li id="menu-${db}_rw" class="dropdown-submenu">
+		      <li id="menu-${db}_rw" class="dropdown-submenu $disable_rw_ratio">
 			<a href="#" tabindex="-1">Queries Reads / Writes </a>
 			  <ul class="dropdown-menu">
-			      <li id="menu-database-read_ratio"><a href="database-$db.html#database-read_ratio">Read tuples</a></li>
-			      <li id="menu-database-write_ratio"><a href="database-$db.html#database-write_ratio">Write ratio</a></li>
-			      <li id="menu-database-read_write_query"><a href="database-$db.html#database-read_write_query">Read vs Write queries</a></li>
-			      <li id="menu-database-commits_rollbacks"><a href="database-$db.html#database-commits_rollbacks">Commits vs Rollbacks</a></li>
+			      <li id="menu-database-read_ratio"$disable_read_ratio><a href="database-$db.html#database-read_ratio">Read tuples</a></li>
+			      <li id="menu-database-write_ratio"$disable_write_ratio><a href="database-$db.html#database-write_ratio">Write ratio</a></li>
+			      <li id="menu-database-read_write_query"$disable_write_query><a href="database-$db.html#database-read_write_query">Read vs Write queries</a></li>
+			      <li id="menu-database-commits_rollbacks"$disable_commit><a href="database-$db.html#database-commits_rollbacks">Commits vs Rollbacks</a></li>
 			  </ul>
 		      </li>
 		      <li class="divider"></li>
 		      <li id="menu-database-canceled_queries"$disable_canceled><a href="database-$db.html#database-canceled_queries">Canceled queries</a></li>
-		      <li id="menu-database-conflicts"><a href="database-$db.html#database-conflicts">Conflicts</a></li>
+		      <li id="menu-database-conflicts"$disable_conflicts><a href="database-$db.html#database-conflicts">Conflicts</a></li>
                       </ul>
                 </li>
 };
