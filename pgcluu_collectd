@@ -858,7 +858,7 @@ sub get_extensions
 	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
 		$LOCAL_PSQL_PROG .= " -d $database";
 	}
-	my @db_extension = `$LOCAL_PSQL_PROG -c "SELECT extname FROM pg_extension;"`;
+	my @db_extension = `$LOCAL_PSQL_PROG -c "SELECT extname||'-'||extversion FROM pg_extension;"`;
 	if ($? != 0) {
 		&dprint("FATAL: psql error.\n");
 		# remove the pidfile
