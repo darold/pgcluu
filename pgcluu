@@ -4354,6 +4354,7 @@ EOF
 EOF
 		}
 		print $fh "</li>\n";
+		my $nsockets = $sysinfo{CPU}{'processor'}/($sysinfo{CPU}{'cpu cores'}||1);
 		print $fh <<EOF;
 		</ul>
 		</div>
@@ -4372,7 +4373,8 @@ EOF
 	      <li><span class="figure">$sysinfo{CPU}{'model name'}</span></li>
 	      <li><span class="figure">$sysinfo{CPU}{'cpu MHz'}</span> <span class="figure-label">Speed</span></li>
 	      <li><span class="figure">$sysinfo{CPU}{'cache size'}</span> <span class="figure-label">Cache</span></li>
-	      <li><span class="figure">$sysinfo{CPU}{'cpu cores'}</span> <span class="figure-label">Sockets</span></li>
+	      <li><span class="figure">$nsockets</span> <span class="figure-label">Sockets</span></li>
+	      <li><span class="figure">$sysinfo{CPU}{'cpu cores'}</span> <span class="figure-label">Cores per CPU</span></li>
 	      <li><span class="figure">$sysinfo{CPU}{'processor'}</span> <span class="figure-label">Cores</span></li>
 		</ul>
 		</div>
