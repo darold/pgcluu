@@ -168,17 +168,17 @@ my %METRICS_COMMANDS = (
 		'repeat'  => 1,
 		'override' => 1,
 	},
-	'lock_types' => {
+	'lock_types_stats' => {
 		'output'  => 'pg_stat_locks.csv',
 		'command' => 'dump_pgstatlocktypes',
 		'repeat'  => 1,
 	},
-	'lock_modes' => {
+	'lock_modes_stats' => {
 		'output'  => 'pg_stat_locks.csv',
 		'command' => 'dump_pgstatlockmodes',
 		'repeat'  => 1,
 	},
-	'lock_granted' => {
+	'lock_granted_stats' => {
 		'output'  => 'pg_stat_locks.csv',
 		'command' => 'dump_pgstatlockgranted',
 		'repeat'  => 1,
@@ -226,7 +226,7 @@ my %METRICS_COMMANDS = (
 		'repeat'  => 1,
 		'override'  => 1,
 	},
-	'pg_settings' => {
+	'pg_settings_stats' => {
 		'output' => 'pg_settings.csv',
 		'command' => 'dump_pgsettings',
 		'repeat'  => 1,
@@ -538,8 +538,11 @@ my $sysstat_version = &sysstat_version() || '';
 
 # Generating global statistics collector SQL script 
 my $script_sql = &create_sql_script();
-if (!$script_sql) {
+if (!$script_sql && ($#METRICS < 0)) {
 	# No action can be perform with this PostgreSQL version
+	if (-f $PIDFILE) {
+		unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
+	}
 	&dprint("FATAL: no action will be run on this PostgreSQL version $DB_INFO{major}.$DB_INFO{minor}, $!\n");
 	exit 1;
 }
@@ -785,12 +788,10 @@ sub create_sql_script
 		next if ($type =~ /^pgbouncer_|configuration_/);
 		next if (($type =~ /^(user|all)_/) && ($type !~ /^$STAT_TYPE/)); 
 		next if (($#METRICS >= 0) && !grep(/^$type$/, @METRICS));
+
 		my $sql = $METRICS_COMMANDS{$type}->{command}->();
 		if (!$sql) {
-			if (-f $PIDFILE) {
-				unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
-			}
-			die "FATAL: no SQL with metric command $type ($sql).\n";
+			return;
 		}
 		if (&backend_minimum_version(8, 2)) {
 			$sql_queries .= <<EOF
