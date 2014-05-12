@@ -134,14 +134,14 @@ my %DB_GRAPH_INFOS = (
 			'legends' => ['conflicts'],
 		},
 		'9' => {
-			'name' =>  'database-temporary_file',
+			'name' =>  'database-temporary_files',
 			'title' => 'Number of temporary files on %s database',
 			'description' => 'Number of temporary files created by queries per database.',
 			'ylabel' => 'Number of files',
 			'legends' => ['temporary files'],
 		},
 		'10' => {
-			'name' =>  'database-temporary_count',
+			'name' =>  'database-temporary_bytes',
 			'title' => 'Size of temporary data on %s database',
 			'description' => 'Amount of data written to temporary files created by queries per database.',
 			'ylabel' => 'Size per seconde',
@@ -1564,7 +1564,6 @@ sub pg_stat_database
 	
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		my %data = ();
-		my %data2 = ();
 		my $found = 0;
 		foreach my $db (sort keys %database_stat) {
 			next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
@@ -1573,7 +1572,7 @@ sub pg_stat_database
 			if ($data_info{$id}{name} eq 'database-backends') {
 
 				$database_stat{$db}{nbackend} =~ s/,$//;
-				$data{$db} = $database_stat{$db}{nbackend};
+				#$data{$db} = $database_stat{$db}{nbackend};
 				if ($db ne 'all') {
 					$dbfh->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{nbackend}) );
 				}
@@ -1583,7 +1582,7 @@ sub pg_stat_database
 			} elsif ($has_conflict && ($data_info{$id}{name} eq 'database-canceled_queries')) {
 
 				$database_stat{$db}{canceled_queries} =~ s/,$//;
-				$data{$db} = $database_stat{$db}{canceled_queries};
+				#$data{$db} = $database_stat{$db}{canceled_queries};
 				if ($db ne 'all') {
 					$dbfh->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{canceled_queries}) );
 				}
@@ -1593,14 +1592,14 @@ sub pg_stat_database
 			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-deadlocks')) {
 
 				$database_stat{$db}{deadlocks} =~ s/,$//;
-				$data{$db} = $database_stat{$db}{deadlocks};
+				#$data{$db} = $database_stat{$db}{deadlocks};
 				if ($db ne 'all') {
 					$dbfh->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{deadlocks}) );
 				}
 				delete $database_stat{$db}{deadlocks};
 				$found++;
 
-			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-temporary_file')) {
+			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-temporary_files')) {
 
 				$database_stat{$db}{temp_files} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{temp_files};
@@ -1610,12 +1609,12 @@ sub pg_stat_database
 				delete $database_stat{$db}{temp_files};
 				$found++;
 
-			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-temporary_count')) {
+			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-temporary_bytes')) {
 
 				$database_stat{$db}{temp_bytes} =~ s/,$//;
-				$data2{$db} = $database_stat{$db}{temp_bytes};
+				$data{$db} = $database_stat{$db}{temp_bytes};
 				if ($db ne 'all') {
-					$dbfh->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}.'_bytes', \%{$data_info{$id}}, $db, $database_stat{$db}{temp_bytes}) );
+					$dbfh->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{temp_bytes}) );
 				}
 				delete $database_stat{$db}{temp_bytes};
 				$found++;
@@ -1624,14 +1623,20 @@ sub pg_stat_database
 			$dbfh->close();
 		}
 		if ($found) {
-			my $name = $data_info{$id}{name};
-			$name =~ s/^database/cluster/;
-			my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
-			print $fhcluster &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
-			if (scalar keys %data2 > 0) {
-				print $fhcluster &flotr2_linegraph_hash($IDX++, $name.'_bytes', \%{$data_info{$id}}, 'all', %data2);
+			if ($has_temp && ($data_info{$id}{name} eq 'database-temporary_files')) {
+				my $name = $data_info{$id}{name};
+				$name =~ s/^database/cluster/;
+				my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
+				print $fhcluster &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
+				$fhcluster->close();
 			}
-			$fhcluster->close();
+			if ($has_temp && ($data_info{$id}{name} eq 'database-temporary_bytes')) {
+				my $name = $data_info{$id}{name};
+				$name =~ s/^database/cluster/;
+				my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
+				print $fhcluster &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
+				$fhcluster->close();
+			}
 		}
 	}
 }
@@ -4354,7 +4359,14 @@ EOF
 EOF
 		}
 		print $fh "</li>\n";
-		my $nsockets = $sysinfo{CPU}{'processor'}/($sysinfo{CPU}{'cpu cores'}||1);
+		my $core_info = '';
+		if (exists $sysinfo{CPU}{'cpu cores'}) {
+			my $nsockets = $sysinfo{CPU}{'processor'}/($sysinfo{CPU}{'cpu cores'}||1);
+			$core_info = qq{
+	      <li><span class="figure">$nsockets</span> <span class="figure-label">Sockets</span></li>
+	      <li><span class="figure">$sysinfo{CPU}{'cpu cores'}</span> <span class="figure-label">Cores per CPU</span></li>
+};
+		}
 		print $fh <<EOF;
 		</ul>
 		</div>
@@ -4373,8 +4385,7 @@ EOF
 	      <li><span class="figure">$sysinfo{CPU}{'model name'}</span></li>
 	      <li><span class="figure">$sysinfo{CPU}{'cpu MHz'}</span> <span class="figure-label">Speed</span></li>
 	      <li><span class="figure">$sysinfo{CPU}{'cache size'}</span> <span class="figure-label">Cache</span></li>
-	      <li><span class="figure">$nsockets</span> <span class="figure-label">Sockets</span></li>
-	      <li><span class="figure">$sysinfo{CPU}{'cpu cores'}</span> <span class="figure-label">Cores per CPU</span></li>
+	      $core_info
 	      <li><span class="figure">$sysinfo{CPU}{'processor'}</span> <span class="figure-label">Cores</span></li>
 		</ul>
 		</div>
@@ -4640,7 +4651,7 @@ sub generate_html_menu
 				} elsif (/<div id="cluster-temporary_files">/) {
 					$disable_tempfile = "";
 					$disable_temporary = "";
-				} elsif (/<div id="cluster-temporary_file_bytes">/) {
+				} elsif (/<div id="cluster-temporary_bytes">/) {
 					$disable_tempfile_bytes = "";
 					$disable_temporary = "";
 				} elsif (/<div id="cluster-xlog_files">/) {
@@ -4717,8 +4728,8 @@ sub generate_html_menu
 			<li id="menu-temporaryfiles" class="dropdown-submenu$disable_temporary">
 			   <a href="#" tabindex="-1">Temporary files </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-cluster-temporary_file"$disable_tempfile><a href="cluster.html#cluster-temporary_file">Temporary files</a></li>
-			      <li id="menu-cluster-temporary_file_bytes"$disable_tempfile_bytes><a href="cluster.html#cluster-temporary_file_bytes">Temporary files size</a></li>
+			      <li id="menu-cluster-temporary_files"$disable_tempfile><a href="cluster.html#cluster-temporary_files">Temporary files</a></li>
+			      <li id="menu-cluster-temporary_bytes"$disable_tempfile_bytes><a href="cluster.html#cluster-temporary_bytes">Temporary files size</a></li>
 			      </ul>
 		        </li>
 			<li id="menu-walcheckpoint" class="dropdown-submenu$disable_wal">
@@ -4928,8 +4939,6 @@ sub generate_html_menu
 				} elsif (/<div id="database-lock-types">/) {
 					$disable_lock = '';
 					$disable_locks = "";
-				} elsif (/<div id="database-temporary_files">/) {
-					$disable_tempfile = '';
 				} elsif (/<div id="database-cache_ratio">/) {
 					$disable_cache = '';
 				} elsif (/<div id="database-read_ratio">/) {
@@ -4954,7 +4963,7 @@ sub generate_html_menu
 				} elsif (/<div id="database-temporary_files">/) {
 					$disable_tempfile = "";
 					$disable_temporary = "";
-				} elsif (/<div id="database-temporary_file_bytes">/) {
+				} elsif (/<div id="database-temporary_bytes">/) {
 					$disable_tempbytes = "";
 					$disable_temporary = "";
 				}
@@ -4987,7 +4996,7 @@ sub generate_html_menu
 			<a href="#" tabindex="-1">Temporary files </a>
 			  <ul class="dropdown-menu">
 			      <li id="menu-database-temporary_files"$disable_tempfile><a href="database-$db.html#database-temporary_files">Temporary files</a></li>
-			      <li id="menu-database-temporary_file_bytes"$disable_tempbytes><a href="database-$db.html#database-temporary_file_bytes">Temporary files size</a></li>
+			      <li id="menu-database-temporary_bytes"$disable_tempbytes><a href="database-$db.html#database-temporary_bytes">Temporary files size</a></li>
 			  </ul>
 		      </li>
 		      <li id="menu-${db}_rw" class="dropdown-submenu $disable_rw_ratio">
