@@ -1319,6 +1319,7 @@ sub pg_stat_database
 	my $has_tuples = 0;
 	my $has_conflict = 0;
 	my $has_temp = 0;
+	my $has_conn = 0;
 	my %total_qtype = ();
 	my %total_query_type = ();
 	my @databases = ();
@@ -1570,9 +1571,8 @@ sub pg_stat_database
 
 			my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html");
 			if ($data_info{$id}{name} eq 'database-backends') {
-
 				$database_stat{$db}{nbackend} =~ s/,$//;
-				#$data{$db} = $database_stat{$db}{nbackend};
+				$data{$db} = $database_stat{$db}{nbackend};
 				if ($db ne 'all') {
 					$dbfh->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{nbackend}) );
 				}
@@ -1582,7 +1582,7 @@ sub pg_stat_database
 			} elsif ($has_conflict && ($data_info{$id}{name} eq 'database-canceled_queries')) {
 
 				$database_stat{$db}{canceled_queries} =~ s/,$//;
-				#$data{$db} = $database_stat{$db}{canceled_queries};
+				$data{$db} = $database_stat{$db}{canceled_queries};
 				if ($db ne 'all') {
 					$dbfh->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{canceled_queries}) );
 				}
@@ -1590,9 +1590,8 @@ sub pg_stat_database
 				$found++;
 
 			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-deadlocks')) {
-
 				$database_stat{$db}{deadlocks} =~ s/,$//;
-				#$data{$db} = $database_stat{$db}{deadlocks};
+				$data{$db} = $database_stat{$db}{deadlocks};
 				if ($db ne 'all') {
 					$dbfh->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{deadlocks}) );
 				}
@@ -1623,20 +1622,25 @@ sub pg_stat_database
 			$dbfh->close();
 		}
 		if ($found) {
+			my $name = $data_info{$id}{name};
+			$name =~ s/^database/cluster/;
+			my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
 			if ($has_temp && ($data_info{$id}{name} eq 'database-temporary_files')) {
-				my $name = $data_info{$id}{name};
-				$name =~ s/^database/cluster/;
-				my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
 				print $fhcluster &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
-				$fhcluster->close();
 			}
 			if ($has_temp && ($data_info{$id}{name} eq 'database-temporary_bytes')) {
-				my $name = $data_info{$id}{name};
-				$name =~ s/^database/cluster/;
-				my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
 				print $fhcluster &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
-				$fhcluster->close();
 			}
+			if ($data_info{$id}{name} eq 'database-backends') {
+				print $fhcluster &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
+			}
+			if ($has_temp && ($data_info{$id}{name} eq 'database-deadlocks')) {
+				print $fhcluster &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
+			}
+			if ($has_conflict && ($data_info{$id}{name} eq 'custer-canceled_queries')) {
+				print $fhcluster &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
+			}
+			$fhcluster->close();
 		}
 	}
 }
