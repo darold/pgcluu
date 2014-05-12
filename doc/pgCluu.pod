@@ -130,6 +130,8 @@ options:
   -T, --notablespace       disable lookup at tablespace when the connect user
 			   is not superuser to avoid printing an error message.
   -U, --dbuser=USERNAME    database user to connect as. Default to current user.
+  -v, --verbose            Print out debug informations.
+  -V, --version            Show pgcluu_collectd version and exit.
   --included-db=DATABASE   do not collect statistics for the comma separated list
                            of database name. 
   --list-metric            list available metrics actions that can be performed.
@@ -275,6 +277,8 @@ options:
 			   table name. You can use it multiple time or
 			   give a comma separated list of database name.
   -T, --no-table           Do not report statistics related to tables.
+  -v, --verbose            Print out debug informations.
+  -V, --version            Show pgcluu_collectd version and exit.
   -z, --timezone +/-XX     Set the number of hour(s) from GMT of the timezone.
                            Use this to adjust date/time from the sar output,
                            pgcluu use GMT time to draw charts.
