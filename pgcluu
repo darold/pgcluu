@@ -37,6 +37,7 @@ my $FH          = undef;
 my %DEVFH       = ();
 my $IDX         = 1;
 my $HELP        = 0;
+my $SHOW_VER    = 0;
 my $DEBUG       = 0;
 my $BEGIN       = '';
 my $END         = '';
@@ -690,9 +691,16 @@ GetOptions(
 	"t|with-table=s" => \@tbs_opts,
 	"T|no-table!"    => \$NO_TB_STAT,
 	"v|verbose!"     => \$DEBUG,
+	"V|version!"     => \$SHOW_VER,
 	"z|timezone=s"   => \$TIMEZONE,
 ) or die usage();
 &usage if ($HELP);
+
+# Print version number to stdout
+if ($SHOW_VER) {
+	print "Version: $VERSION\n";
+	exit 0;
+}
 
 my $INPUT_DIR   = $ARGV[0] || '';
 $INPUT_DIR =~ s/\/$//;
@@ -1013,6 +1021,8 @@ options:
 			   table name. You can use it multiple time or
 			   give a comma separated list of database name.
   -T, --no-table           Do not report statistics related to tables.
+  -v, --verbose            Print out debug informations.
+  -V, --version            Show pgcluu version and exit.
   -z, --timezone +/-XX     Set the number of hour(s) from GMT of the timezone.
                            Use this to adjust date/time from the sar output,
                            pgcluu use GMT time to draw charts.
