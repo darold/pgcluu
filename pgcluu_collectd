@@ -60,6 +60,7 @@ my @SKIP_END    = ();
 my $USE_BUFFERCACHE = 0;
 my $NO_STATEMENTS  = 0;
 my $NO_SYSINFO  = 0;
+my $SHOW_VER    = 0;
 
 my $USE_SSH = '';
 my $SSH_COMMAND = '';
@@ -275,6 +276,8 @@ my $result = GetOptions(
 	"S|disable-sar!" => \$DISABLE_SAR,
 	"T|notablespace!"=> \$NOTABLESPACE,
 	"U|dbuser=s"     => \$DBUSER,
+	"v|verbose!"     => \$DEBUG,
+	"V|version!"     => \$SHOW_VER,
 	"W|password=s"   => \$DBPASS,
 	"pgversion=s"    => \$PG_VERSION,
 	"pgservice=s"    => \$DBSERVICE,
@@ -295,6 +298,12 @@ my $result = GetOptions(
 	'ssh-user=s'     => \$SSH_USER,
 	'ssh-timeout=i'  => \$SSH_TIMEOUT,
 ) or die &usage();
+
+# Print version number to stdout
+if ($SHOW_VER) {
+	print "Version: $VERSION\n";
+	exit 0;
+}
 
 # The daemon should be stopped
 if ($KILL) {
@@ -1065,6 +1074,8 @@ options:
   -T, --notablespace       disable lookup at tablespace when the connect user
 			   is not superuser to avoid printing an error message.
   -U, --dbuser=USERNAME    database user to connect as. Default to current user.
+  -v, --verbose            Print out debug informations.
+  -V, --version            Show pgcluu_collectd version and exit.
   --included-db=DATABASE   do not collect statistics for the comma separated list
                            of database name. 
   --list-metric            list available metrics actions that can be performed.
