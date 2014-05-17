@@ -211,7 +211,7 @@ my %DB_GRAPH_INFOS = (
 			'title' => 'Connections by type on %s database',
 			'description' => 'Connections by type including idle ones',
 			'ylabel' => 'Number of connections',
-			'legends' => ['Active','Idle','Idle in xact'],
+			'legends' => ['Active','Idle','Idle in xact', 'Waiting for a lock'],
 		},
 	},
 	'pg_stat_user_functions.csv' => {
@@ -2658,11 +2658,13 @@ sub pg_stat_connections
 		$all_connections_stat{$data[0]}{$data[5]}{active} = $data[2];
 		$all_connections_stat{$data[0]}{$data[5]}{waiting} = $data[3];
 		$all_connections_stat{$data[0]}{$data[5]}{idle_in_xact} = $data[4];
+		$all_connections_stat{$data[0]}{$data[5]}{idle} = ($data[1] - $data[2] - $data[4]);
 
 		$all_connections_stat{$data[0]}{'all'}{total} += $data[1];
 		$all_connections_stat{$data[0]}{'all'}{active} += $data[2];
 		$all_connections_stat{$data[0]}{'all'}{waiting} += $data[3];
 		$all_connections_stat{$data[0]}{'all'}{idle_in_xact} += $data[4];
+		$all_connections_stat{$data[0]}{'all'}{idle_in_xact} += ($data[1] - $data[2] - $data[4]);
 	}
 	$curfh->close();
 	push(@databases, 'all') if ($#databases >= 0);
@@ -2672,6 +2674,7 @@ sub pg_stat_connections
 			$connections_stat{$db}{active} .= '[' . $time . ',' . ($all_connections_stat{$time}{$db}{active}||0) . '],';
 			$connections_stat{$db}{waiting} .= '[' . $time . ',' . ($all_connections_stat{$time}{$db}{waiting}||0) . '],';
 			$connections_stat{$db}{idle_in_xact} .= '[' . $time . ',' . ($all_connections_stat{$time}{$db}{idle_in_xact}||0) . '],';
+			$connections_stat{$db}{idle} .= '[' . $time . ',' . ($all_connections_stat{$time}{$db}{idle}||0) . '],';
 		}
 	}
 	%all_connections_stat = ();
@@ -2682,12 +2685,13 @@ sub pg_stat_connections
 		$connections_stat{$db}{active} =~ s/,$//;
 		$connections_stat{$db}{waiting} =~ s/,$//;
 		$connections_stat{$db}{idle_in_xact} =~ s/,$//;
+		$connections_stat{$db}{idle} =~ s/,$//;
 		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html");
 		if ($db ne 'all') {
-			$dbfh->print( &flotr2_linegraph_array($IDX++, 'database-connections', \%{$data_info{$id}}, $db, $connections_stat{$db}{active}, $connections_stat{$db}{waiting}, $connections_stat{$db}{idle_in_xact}) );
+			$dbfh->print( &flotr2_linegraph_array($IDX++, 'database-connections', \%{$data_info{$id}}, $db, $connections_stat{$db}{active}, $connections_stat{$db}{idle}, $connections_stat{$db}{idle_in_xact}, $connections_stat{$db}{waiting}) );
 		} else {
 			my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
-			print $fhcluster &flotr2_linegraph_array($IDX++, 'cluster-connections', \%{$data_info{$id}}, 'all', $connections_stat{$db}{active}, $connections_stat{$db}{waiting}, $connections_stat{$db}{idle_in_xact});
+			print $fhcluster &flotr2_linegraph_array($IDX++, 'cluster-connections', \%{$data_info{$id}}, 'all', $connections_stat{$db}{active}, $connections_stat{$db}{idle}, $connections_stat{$db}{idle_in_xact}, $connections_stat{$db}{waiting});
 			$fhcluster->close();
 		}
 		$dbfh->close();
