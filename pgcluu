@@ -211,7 +211,7 @@ my %DB_GRAPH_INFOS = (
 			'title' => 'Connections by type on %s database',
 			'description' => 'Connections by type including idle ones',
 			'ylabel' => 'Number of connections',
-			'legends' => ['Active','Waiting','Waiting in xact'],
+			'legends' => ['Active','Idle','Idle in xact'],
 		},
 	},
 	'pg_stat_user_functions.csv' => {
