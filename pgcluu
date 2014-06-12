@@ -2811,8 +2811,8 @@ sub pg_stat_replication
 		# timestamp | pid | usesysid | usename | application_name | client_addr | client_hostname | client_port | backend_start | state | master_location | sent_location | write_location | flush_location | replay_location | sync_priority | sync_state
 		push(@start_vals, @data) if ($#start_vals < 0);
 		my $tmp_val = 0;
-		# Do not care about BACKUP connection
-		if (uc($data[9]) eq 'STREAMING') {
+		# Do not care about BACKUP and pg_basebackup connection
+		if ( (uc($data[9]) eq 'STREAMING') && (uc($data[4]) eq 'WALRECEIVER') ) {
 			my $name = $data[5];
 			$data[6] =~ s/"//g;
 			$name .= " - $data[6]" if ($data[6]);
