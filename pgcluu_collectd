@@ -756,7 +756,8 @@ sub verify_action
 	if (!&backend_minimum_version(8, 1)) {
 		delete $METRICS_COMMANDS{'xlog_stats'};
 	}
-	if ($NO_STATEMENTS || !&has_pgstatstatements()) {
+	$DB_INFO{pg_stat_statement} = &has_pgstatstatements();
+	if ($NO_STATEMENTS || !$DB_INFO{pg_stat_statement}) {
 		delete $METRICS_COMMANDS{'statements_stats'};
 	}
 	if (!&is_superuser($DBUSER)) {
@@ -954,7 +955,7 @@ sub has_pg_buffercache
 sub has_pgstatstatements
 {
 
-	my $hasit = `$PSQL_PROG -c "SELECT 1 FROM pg_proc p, pg_namespace n WHERE p.proname='pg_stat_statements' AND p.pronamespace=n.oid;"`;
+	my $hasit = `$PSQL_PROG -c "SELECT n.nspname||'.'||p.proname FROM pg_proc p, pg_namespace n WHERE p.proname='pg_stat_statements' AND p.pronamespace=n.oid;"`;
 	if ($? != 0) {
 		&dprint("FATAL: psql error.\n");
 		# remove the pidfile
@@ -1403,7 +1404,7 @@ sub dump_pgstatstatements
 		"shared_blks_hit, shared_blks_read, shared_blks_written, " .
 		"local_blks_hit, local_blks_read, local_blks_written, " .
 		"temp_blks_read, temp_blks_written " .
-		"FROM pg_stat_statements q, pg_database d, pg_roles r " .
+		"FROM $DB_INFO{pg_stat_statement} q, pg_database d, pg_roles r " .
 		"WHERE q.userid=r.oid and q.dbid=d.oid " .
 		"ORDER BY r.rolname, d.datname"
 	);
