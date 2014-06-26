@@ -62,6 +62,7 @@ my $NO_STATEMENTS  = 0;
 my $NO_SYSINFO  = 0;
 my $SHOW_VER    = 0;
 my $END_AFTER   = 0;
+my $MAX_SIZE    = 0;
 
 # Stores starting time
 my $START_TIME = time();
@@ -275,6 +276,7 @@ my $result = GetOptions(
 	"i|interval=i"   => \$INTERVAL,
 	"k|kill!"        => \$KILL,
 	"m|metric=s"     => \@METRICS,
+	"M|max-size=s"   => \$MAX_SIZE,
 	"p|port=i"       => \$DBPORT,
 	"P|psql=s"       => \$PSQL_PROG,
 	"Q|no-statement!"=> \$NO_STATEMENTS,
@@ -398,6 +400,9 @@ if ($END_AFTER) {
 		$END_AFTER *= 86400;
 	}
 }
+
+# Set max size of the output dir before terminating
+$MAX_SIZE = &parse_pretty_size($MAX_SIZE);
 
 # Validate action(s) to execute
 if ($#METRICS >= 0) {
@@ -739,6 +744,19 @@ while (1) {
 	# Collecting system statistics
 	if (!$DISABLE_SAR && $sar_command && ($sysstat_version > -1)) {
 		&dprint(`$sar_command`);
+	}
+
+	# Lookup if output dir size is upper than limit
+	if ($MAX_SIZE) {
+		my $lsize = `du -s $OUTPUT_DIR`;
+		chomp($lsize);
+		if ($lsize > $MAX_SIZE) {
+			&dprint("LOG: max size limit reach, terminating.\n");
+			if (-f $PIDFILE) {
+				unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
+			}
+			exit 0;
+		}
 	}
 
 	my $t1 = time - $t0;
@@ -1091,7 +1109,7 @@ options:
 			   extension is installed.
   -d, --dbname=DATABASE    database name to connect to. Default to current user.
   -D, --daemonize          detach from console and enter in daemon mode.
-  -E, --end-after=SECOND   self terminate process after a given number of seconds.
+  -E, --end-after=SECOND   self terminate program after a given number of seconds.
                            Can be written: 7200 or 120M or 2H, for days use 7D for
                            example to stop collecting data after seven days. 
   -f, --pid-file=FILE      path to pid file. Default: $PIDFILE.
@@ -1099,6 +1117,8 @@ options:
   -i, --interval=NUM       time to wait between runs
   -k, --kill		   stop current $PROGRAM running daemon.
   -m, --metric=METRIC      set a coma separated list of metrics to perform.
+  -M, --max-size=SIZE      self terminate program when the size of the output dir
+                           exceed a given size. Can be written: 2GB or 2000MB. 
   -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
   -P, --psql=BIN           path to the psql command. Default: $PSQL_PROG.
   -Q, --no-statement       do not collect queries statistics from pg_stat_statements.
@@ -1892,4 +1912,28 @@ sub dump_pgstatarchiver
 
 	return $sql;
 }
+
+sub parse_pretty_size
+{
+        my $val = shift;
+        return 0 if (!$val);
+
+	$val =~ s/\s+//g;
+
+        if ($val =~ /^(\d+)PB/i) {
+                $val = $1 * 1024 * 1024 * 1024 * 1024 * 1024;
+        } elsif ($val =~ /^(\d+)TB/i) {
+                $val = $1 * 1024 * 1024 * 1024 * 1024;
+        } elsif ($val =~ /^(\d+)GB/i) {
+                $val = $1 * 1024 * 1024 * 1024;
+        } elsif ($val =~ /^(\d+)MB/i) {
+                $val = $1 * 1024 * 1024;
+        } elsif ($val =~ /^(\d+)KB/i) {
+                $val = $1 * 1024;
+        }
+
+	# du -s command returns kb so do the same here
+        return int($val/1024);
+}
+
 

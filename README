@@ -113,7 +113,7 @@ COLLECTING STATISTICS
                                extension is installed.
       -d, --dbname=DATABASE    database name to connect to. Default to current user.
       -D, --daemonize          detach from console and enter in daemon mode.
-      -E, --end-after=SECOND   self terminate process after a given number of seconds.
+      -E, --end-after=SECOND   self terminate program after a given number of seconds.
                                Can be written: 7200 or 120M or 2H, for days use 7D for
                                example to stop collecting data after seven days. 
       -f, --pid-file=FILE      path to pid file. Default: /tmp/pgcluu_collectd.pid.
@@ -121,6 +121,8 @@ COLLECTING STATISTICS
       -i, --interval=NUM       time to wait between runs
       -k, --kill               stop current pgcluu_collectd running daemon.
       -m, --metric=METRIC      set a coma separated list of metrics to perform.
+      -M, --max-size=SIZE      self terminate program when the size of the output dir
+                               exceed a given size. Can be written: 2GB or 2000MB. 
       -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
       -P, --psql=BIN           path to the psql command. Default: psql.
       -Q, --no-statement       do not collect queries statistics from pg_stat_statements.
