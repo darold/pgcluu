@@ -61,7 +61,12 @@ my $USE_BUFFERCACHE = 0;
 my $NO_STATEMENTS  = 0;
 my $NO_SYSINFO  = 0;
 my $SHOW_VER    = 0;
+my $END_AFTER   = 0;
 
+# Stores starting time
+my $START_TIME = time();
+
+# Variables related to remote ssh connection
 my $USE_SSH = '';
 my $SSH_COMMAND = '';
 my $SSH_BIN = 'ssh';
@@ -264,6 +269,7 @@ my $result = GetOptions(
 	"B|enable-buffercache!" => \$USE_BUFFERCACHE,
 	"d|dbname=s"     => \$DBNAME,
 	"D|daemonize!"   => \$DAEMONIZE,
+	"E|end-after=s"  => \$END_AFTER,
 	"f|pid-file=s"   => \$PIDFILE,
 	"h|host=s"       => \$DBHOST,
 	"i|interval=i"   => \$INTERVAL,
@@ -377,6 +383,19 @@ if ($SKIP_HOURS) {
 		} else {
 			&dprint("FATAL: Bad time range: $tmp. Format of exclusion time must be: HH:MM-HH:MM\n");
 		}
+	}
+}
+
+# Normalize number of seconds before terminating
+if ($END_AFTER) {
+	$END_AFTER =~ s/(\D+)//g;
+	$END_AFTER ||= 0;
+	if ($1 =~ /^M/i) {
+		$END_AFTER *= 60;
+	} elsif ($1 =~ /^H/i) {
+		$END_AFTER *= 3600;
+	} elsif ($1 =~ /^D/i) {
+		$END_AFTER *= 86400;
 	}
 }
 
@@ -628,6 +647,15 @@ while (1) {
 
 	# Stores loop start time
 	my $t0 = time;
+
+	# Search if the monitoring need to stop here
+	if ($END_AFTER && ($t0 > ($START_TIME + $END_AFTER))) {
+		&dprint("LOG: ending time reach, terminating.\n");
+		if (-f $PIDFILE) {
+			unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
+		}
+		exit 0;
+	}
 
 	# Some time range may not collect data
 	my ($sec , $min, $hour, @other) = localtime(time);
@@ -1063,6 +1091,9 @@ options:
 			   extension is installed.
   -d, --dbname=DATABASE    database name to connect to. Default to current user.
   -D, --daemonize          detach from console and enter in daemon mode.
+  -E, --end-after=SECOND   self terminate process after a given number of seconds.
+                           Can be written: 7200 or 120M or 2H, for days use 7D for
+                           example to stop collecting data after seven days. 
   -f, --pid-file=FILE      path to pid file. Default: $PIDFILE.
   -h, --host=HOSTNAME      database server host or socket directory
   -i, --interval=NUM       time to wait between runs
