@@ -5556,7 +5556,7 @@ sub compute_network_report
 		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
 			$devices_stat{$n}{'rxkB/s'} =~ s/,$//;
 			$devices_stat{$n}{'txkB/s'} =~ s/,$//;
-			$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'network-utilization', $data_info, $n, $devices_stat{$n}{'rxkB/s'}, $devices_stat{$n}{'txkB/s'}) );
+			$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'network-utilization', $data_info, $n, $devices_stat{$n}{'rxkB/s'}, $devices_stat{$n}{'txkB/s'}) ) if (exists $DEVFH{$n});
 		}
 	}
 }
@@ -5586,7 +5586,7 @@ sub compute_network_error_report
 			$devices_stat{$n}{'rxerr/s'} =~ s/,$//;
 			$devices_stat{$n}{'txerr/s'} =~ s/,$//;
 			$devices_stat{$n}{'coll/s'} =~ s/,$//;
-			$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'network-error', $data_info, $n, $devices_stat{$n}{'rxerr/s'}, $devices_stat{$n}{'txerr/s'}, $devices_stat{$n}{'coll/s'}) );
+			$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'network-error', $data_info, $n, $devices_stat{$n}{'rxerr/s'}, $devices_stat{$n}{'txerr/s'}, $devices_stat{$n}{'coll/s'}) ) if (exists $DEVFH{$n});
 		}
 	}
 }
@@ -6591,8 +6591,13 @@ sub read_sysinfo
 			}
 		}
 		if ($section eq 'DF') {
-			next if ($l !~ /^\//);
-			push(@{$sysinfo{$section}}, '<tr><td>' . join('</td><td>', split(/\s+/, $l)) . '</td></tr>');
+			next if ($l !~ /^[\s\/]/);
+			if ($l =~ s/^\s+//) {
+				$sysinfo{$section}[-1] =~ s/<\/tr>$/<td>/;
+				$sysinfo{$section}[-1] .= join('</td><td>', split(/\s+/, $l)) . "</td></tr>";
+				next;
+			}
+			push(@{$sysinfo{$section}}, '<tr><td>' . join('</td><td>', split(/\s+/, $l)) . "</td></tr>");
 		}
 		if ($section eq 'MOUNT') {
 			next if ($l !~ /^\//);
