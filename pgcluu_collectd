@@ -1752,7 +1752,7 @@ sub dump_pgsettings
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), category, name, " .
-		" setting, %s, context, source " . 
+		" setting, %s, context, source, boot_val, reset_val " . 
 		"FROM pg_settings " . 
 		"ORDER BY category,name",
 		&backend_minimum_version(8, 4) ? "unit" : "''::text as unit",
