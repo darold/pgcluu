@@ -863,7 +863,9 @@ if (-d "$INPUT_DIR") {
 	# Loop over CSV files and graphics definition to generate reports
 	foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS) {
 		if (-e "$INPUT_DIR/$k" && !-z "$INPUT_DIR/$k") {
-			&compute_dbstat_graph($k, %{$DB_GRAPH_INFOS{$k}});
+			if (-e "$INPUT_DIR/$k" && !-z "$INPUT_DIR/$k") {
+				&compute_dbstat_graph($k, %{$DB_GRAPH_INFOS{$k}}); 
+			}
 		} elsif ($k =~ /_all_/) {
 			my $f = $k;
 			$f =~ s/_all_/_user_/;

@@ -351,7 +351,7 @@ if ($USE_SSH && !$DBHOST) {
 	die "FATAL: you must give an ipaddress for the remote host with -h | --host option to use sar remotely\n";
 }
 
-# List metrics and associated SQL commands
+# List metrics and associated SQL commands, then exit
 if ($LIST_METRIC) {
 
 	# Detect PostgreSQL version
@@ -558,7 +558,7 @@ if (!$DISABLE_SAR) {
 my $sysstat_version = &sysstat_version() || '';
 
 # Remove action that can't be run with the PostgreSQL version
-&verify_action();
+my $pg_ret = &verify_action();
 
 # Generating global statistics collector SQL script 
 my $script_sql = &create_sql_script();
@@ -571,69 +571,72 @@ if (!$script_sql && ($#METRICS < 0)) {
 	exit 1;
 }
 
-# Get list of database in the PostgreSQL cluster
-my @alldbs = ();
-if ($#dbnames >= 0) {
-	# from command line
-	push(@alldbs, @dbnames);
-} else {
-	# or by querying the database list
-	@alldbs = &get_databases();
-}
+if ($pg_ret >= 0) {
+	# Get list of database in the PostgreSQL cluster
+	my @alldbs = ();
+	if ($#dbnames >= 0) {
+		# from command line
+		push(@alldbs, @dbnames);
+	} else {
+		# or by querying the database list
+		@alldbs = &get_databases();
+	}
 
-# Collect general information about each database
-if (!$NO_SYSINFO && &backend_minimum_version(9, 1) && ($#alldbs > -1)) {
-	my @extensions = ();
-	my @schemas = ();
-	my @procs = ();
-	my @trigs = ();
-	unless(open(OUT, ">>$OUTPUT_DIR/sysinfo.txt")) {
-		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
-		exit 1;
-	}
-	# Look for all installed extensions
-	print OUT "[EXTENSION]\n";
-	foreach my $db (@alldbs) {
-		my @ext = &get_extensions($db);
-		push(@extensions, "$db=" . join(',', @ext)) if ($#ext >= 0);
-	}
-	foreach my $e (@extensions) {
-		print OUT "$e\n";
-	}
-	# Look for all schema in a database
-	print OUT "[SCHEMA]\n";
-	foreach my $db (@alldbs) {
-		my @sch = &get_schemas($db);
-		push(@schemas, "$db=" . join(',', @sch)) if ($#sch >= 0);
-	}
-	foreach my $s (@schemas) {
-		print OUT "$s\n";
-	}
-	# Look for all schema in a database
-	print OUT "[PROCEDURE]\n";
-	foreach my $db (@alldbs) {
-		my @pro = &get_proc_name($db);
-		push(@procs, "$db=" . join(',', @pro)) if ($#pro >= 0);
-	}
-	foreach my $p (@procs) {
-		print OUT "$p\n";
-	}
-	# Look for all schema in a database
-	print OUT "[TRIGGER]\n";
-	foreach my $db (@alldbs) {
-		my $tgs = &get_triggers($db);
-		push(@trigs, "$db=$tgs");
-	}
-	foreach my $t (@trigs) {
-		print OUT "$t\n";
-	}
-	close(OUT);
+	# Collect general information about each database
+	if (!$NO_SYSINFO && &backend_minimum_version(9, 1) && ($#alldbs > -1)) {
+		my @extensions = ();
+		my @schemas = ();
+		my @procs = ();
+		my @trigs = ();
+		unless(open(OUT, ">>$OUTPUT_DIR/sysinfo.txt")) {
+			&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
+			exit 1;
+		}
+		# Look for all installed extensions
+		print OUT "[EXTENSION]\n";
+		foreach my $db (@alldbs) {
+			my @ext = &get_extensions($db);
+			push(@extensions, "$db=" . join(',', @ext)) if ($#ext >= 0);
+		}
+		foreach my $e (@extensions) {
+			print OUT "$e\n";
+		}
+		# Look for all schema in a database
+		print OUT "[SCHEMA]\n";
+		foreach my $db (@alldbs) {
+			my @sch = &get_schemas($db);
+			push(@schemas, "$db=" . join(',', @sch)) if ($#sch >= 0);
+		}
+		foreach my $s (@schemas) {
+			print OUT "$s\n";
+		}
+		# Look for all schema in a database
+		print OUT "[PROCEDURE]\n";
+		foreach my $db (@alldbs) {
+			my @pro = &get_proc_name($db);
+			push(@procs, "$db=" . join(',', @pro)) if ($#pro >= 0);
+		}
+		foreach my $p (@procs) {
+			print OUT "$p\n";
+		}
+		# Look for all schema in a database
+		print OUT "[TRIGGER]\n";
+		foreach my $db (@alldbs) {
+			my $tgs = &get_triggers($db);
+			push(@trigs, "$db=$tgs");
+		}
+		foreach my $t (@trigs) {
+			print OUT "$t\n";
+		}
+		close(OUT);
 
+	}
 }
 
 # Copy configuration files into output directory
 if (($#METRICS >= 0) && !grep(/^configuration_stats$/, @METRICS)) {
 	my @conf_files = $METRICS_COMMANDS{'configuration_stats'}->{command}->();
+	@conf_files = () if ($pg_ret < 0);
 	foreach my $f (@conf_files, '/etc/pgbouncer/pgbouncer.ini') {
 		my $filename = basename($f);
 		next if (($#METRICS >= 0) && !grep(/^$filename/, @METRICS));
@@ -690,32 +693,34 @@ while (1) {
 		}
 	}
 
-	# Collecting database statistics
-	open(PSQL, "| $PSQL_PROG");
-	print PSQL $script_sql, "\n";
-	close(PSQL);
-
-	# Get database list
-	my @dblist = &get_databases();
-	push(@dblist, $DBNAME) if (($#dblist == -1) && $DBNAME);
-
-	# Generating per database statistics collector SQL script 
-	foreach my $db (@dblist) {
-
-		next if (($#included_dbs >= 0) && !grep(/^$db$/i, @included_dbs));
-
-		my $script_repeat_sql = &create_sql_script($db);
-		if (!$script_repeat_sql) {
-			last;
-		}
-		my $LOCAL_PSQL_PROG = $PSQL_PROG;
-		if ($db && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $db/i)) {
-			$LOCAL_PSQL_PROG .= " -d $db";
-		}
-		# Collecting database statistics
-		open(PSQL, "| $LOCAL_PSQL_PROG");
-		print PSQL $script_repeat_sql, "\n";
+	# Collecting database statistics if there other than pgbouncer metrics to collect
+	if ($pg_ret >= 0) {
+		open(PSQL, "| $PSQL_PROG");
+		print PSQL $script_sql, "\n";
 		close(PSQL);
+
+		# Get database list
+		my @dblist = &get_databases();
+		push(@dblist, $DBNAME) if (($#dblist == -1) && $DBNAME);
+
+		# Generating per database statistics collector SQL script 
+		foreach my $db (@dblist) {
+
+			next if (($#included_dbs >= 0) && !grep(/^$db$/i, @included_dbs));
+
+			my $script_repeat_sql = &create_sql_script($db);
+			if (!$script_repeat_sql) {
+				last;
+			}
+			my $LOCAL_PSQL_PROG = $PSQL_PROG;
+			if ($db && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $db/i)) {
+				$LOCAL_PSQL_PROG .= " -d $db";
+			}
+			# Collecting database statistics
+			open(PSQL, "| $LOCAL_PSQL_PROG");
+			print PSQL $script_repeat_sql, "\n";
+			close(PSQL);
+		}
 	}
 
 	# Collecting pgbouncer statistics
@@ -775,7 +780,15 @@ exit 0;
 sub verify_action
 {
 	# Detect PostgreSQL version
-	&fetch_version();
+	my $ret = &fetch_version();
+
+	# Only pgbouncer metrics and configuration
+	if ($ret < 0) {
+		foreach my $m (keys %METRICS_COMMANDS) {
+			delete $METRICS_COMMANDS{$m} if (($m ne 'configuration_stats') && ($m !~ /pgbouncer/));
+		}
+		return $ret;
+	}
 
 	if (!&backend_minimum_version(9, 4)) {
 		delete $METRICS_COMMANDS{'archiver_stats'};
@@ -821,6 +834,7 @@ sub verify_action
 		delete $METRICS_COMMANDS{'database_isdirty_stats'};
 	} 
 
+	return $ret;
 }
 
 sub create_sql_script
@@ -875,14 +889,19 @@ sub fetch_version
 		}
 	}
 
-	my $pg_ver = `$PSQL_PROG -c "SELECT version();"`;
+	my $pg_ver = `$PSQL_PROG -c "SELECT version();" 2>&1`;
 	if ($? != 0) {
-		&dprint("FATAL: psql error.\n");
-		# remove the pidfile
-		if (-f $PIDFILE) {
-			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
+		# Only stop here if there's no pgbouncer querying
+		if (!$PGBOUNCER_ARGS) {
+			&dprint("FATAL: psql error. $!\n");
+			# remove the pidfile
+			if (-f $PIDFILE) {
+				unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
+			}
+			exit 0;
+		} else {
+			return -1;
 		}
-		exit 0;
 	}
 	chomp($pg_ver);
 
