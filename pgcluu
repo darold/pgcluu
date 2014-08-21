@@ -4016,12 +4016,14 @@ sub generate_html_index
 	# Compute global statistics for home page dashboard
 	my %overall_database_stats = ();
 	if (exists $OVERALL_STATS{'cluster'}) {
+		$OVERALL_STATS{'cluster'}{'blks_hit'} ||= 0;
+		$OVERALL_STATS{'cluster'}{'blks_read'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'cache_ratio'} = sprintf("%3d", ($OVERALL_STATS{'cluster'}{'blks_hit'} * 100) / (($OVERALL_STATS{'cluster'}{'blks_read'} + $OVERALL_STATS{'cluster'}{'blks_hit'}) || 1)) . "%";
 		$OVERALL_STATS{'cluster'}{'temp_bytes'} = &pretty_print_size($OVERALL_STATS{'cluster'}{'temp_bytes'});
 		foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
 			$OVERALL_STATS{'database'}{$db}{'blks_hit'} ||= 0;
 			$OVERALL_STATS{'database'}{$db}{'blks_read'} ||= 0;
-			$OVERALL_STATS{'database'}{$db}{'blks_hit'} ||= 1;
+			$OVERALL_STATS{'database'}{$db}{'blks_hit'} ||= 0;
 			$OVERALL_STATS{'database'}{$db}{'cache_ratio'} = sprintf("%3d", ($OVERALL_STATS{'database'}{$db}{'blks_hit'} * 100) / (($OVERALL_STATS{'database'}{$db}{'blks_read'} + $OVERALL_STATS{'database'}{$db}{'blks_hit'}) || 1));
 		}
 		foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
@@ -4149,6 +4151,12 @@ EOF
 		}
 		$sysinfo{PGVERSION}{'full_version'} ||= '';
 		my $database_number = scalar keys %{$OVERALL_STATS{'database'}};
+		$OVERALL_STATS{'start_date'} ||= 'Unknown start date';
+		$OVERALL_STATS{'end_date'} ||= 'end date';
+		$OVERALL_STATS{'cluster'}{'size'} ||= '-';
+		$OVERALL_STATS{'cluster'}{'nbackend'} ||= '-';
+		$OVERALL_STATS{'cluster'}{'read_tuples'} ||= '-';
+		$OVERALL_STATS{'cluster'}{'cache_ratio'} ||= '-';
 		print $fh <<EOF;
       <div class="row">
             <div class="col-md-$numcol">
@@ -4186,16 +4194,27 @@ EOF
 		<div class="key-figures">
 		<ul>
 		<li></li>
+EOF
+		if (exists $overall_database_stats{'size'}) {
+			print $fh <<EOF;
 		<li><span class="figure">$overall_database_stats{'size'}[1]</span> <span class="figure-label">Largest database</span><br/><span class="figure-date">($overall_database_stats{'size'}[0])</span></li>
+EOF
+		}
+		if (exists $overall_database_stats{'nbackend'}) {
+			print $fh <<EOF;
 		<li><span class="figure">$overall_database_stats{'nbackend'}[1]</span> <span class="figure-label">Most connections</span><br/><span class="figure-date">($overall_database_stats{'nbackend'}[0])</span></li>
 EOF
+		}
 		if (exists $overall_database_stats{'read_tuples'}) {
 			print $fh qq{<li><span class="figure">$overall_database_stats{'read_tuples'}[1]</span> <span class="figure-label">Most tuples fetched</span><br/><span class="figure-date">($overall_database_stats{'read_tuples'}[0])</span></li>
 };
 		}
-		print $fh <<EOF;
+		if (exists $overall_database_stats{'cache_ratio'}) {
+			push(@{$overall_database_stats{'cache_ratio'}}, '-', '-') if ($#{$overall_database_stats{'cache_ratio'}} < 0);
+			print $fh <<EOF;
 		<li><span class="figure">$overall_database_stats{'cache_ratio'}[1]%</span> <span class="figure-label">Worst cache utilization</span><br/><span class="figure-date">($overall_database_stats{'cache_ratio'}[0])</span></li>
 EOF
+		}
 		if (exists $overall_database_stats{'temp_files'} && $overall_database_stats{'temp_files'}[1]) {
 			print $fh <<EOF;
 		<li><span class="figure">$overall_database_stats{'temp_files'}[1]</span> <span class="figure-label">Most temporary files</span><br/><span class="figure-date">($overall_database_stats{'temp_files'}[0])</span></li>
