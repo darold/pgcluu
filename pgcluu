@@ -5110,6 +5110,7 @@ sub generate_html_menu
 		      <ul class="dropdown-menu">
 };
 		for (my $i = 0; $i <= $#DEVICE_LIST; $i++) {
+			next if (!&device_in_report($DEVICE_LIST[$i]));
 			$menu_str .= qq{
 			  <li id="menu-device$i" class="dropdown-submenu">
 			     <a href="#" tabindex="-1">$DEVICE_LIST[$i] </a>
@@ -5129,6 +5130,7 @@ sub generate_html_menu
 		      <ul class="dropdown-menu">
 };
 		for (my $i = 0; $i <= $#IFACE_LIST; $i++) {
+			next if (!&interface_in_report($IFACE_LIST[$i]));
 			$menu_str .= qq{
 			  <li id="menu-device$i" class="dropdown-submenu">
 			     <a href="#" tabindex="-1">$IFACE_LIST[$i] </a>
