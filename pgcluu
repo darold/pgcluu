@@ -1423,7 +1423,7 @@ sub pg_stat_database
 			(($data[13] - $start_vals{$data[2]}[13]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[13] - $start_vals{$data[2]}[13]);
 			$all_database_stat{$data[0]}{$data[2]}{canceled_queries} = $tmp_val;
 			$all_database_stat{$data[0]}{all}{canceled_queries} += $tmp_val;
-			$has_conflict = 1;
+			$has_conflict = 1 if ($tmp_val > 0);
 		}
 
 		# Gather number of temporary data and deadlock
@@ -1445,7 +1445,7 @@ sub pg_stat_database
 			$all_database_stat{$data[0]}{all}{deadlocks} += $tmp_val;
 			$OVERALL_STATS{'cluster'}{'deadlocks'} += $tmp_val;
 			$OVERALL_STATS{'database'}{$data[2]}{'deadlocks'} += $tmp_val;
-			$has_temp = 1;
+			$has_temp = 1 if ($tmp_val > 0);
 		}
 
 		@{$start_vals{$data[2]}} = ();
@@ -1710,7 +1710,7 @@ sub pg_stat_database_conflicts
 		foreach my $k (sort keys %{$all_database_stat{$db}}) {
 			$total += $all_database_stat{$db}{$k};
 		}
-		$total ||= 1;
+		next if (!$total);
 		my %conflict_type = ();
 		if ($conflict_type{tablespace} || $conflict_type{lock} || $conflict_type{snapshot} || $conflict_type{bufferpin} || $conflict_type{deadlock}) {
 			$conflict_type{tablespace} = sprintf("%0.2f", ($all_database_stat{$db}{'tablespace'}*100)/$total);
