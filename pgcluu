@@ -3115,7 +3115,6 @@ sub pg_class_size
 			if ($data_info{$id}{name} eq 'table-size') {
 				$kind = 'tables';
 				$table_header = qq{
-					<th>Type</th>
 					<th>Size</th>
 					<th>Tuples</th>
 					<th>Avg width</th>
@@ -3123,7 +3122,6 @@ sub pg_class_size
 			} elsif ($data_info{$id}{name} eq 'index-size') {
 				$kind = 'indexes';
 				$table_header = qq{
-					<th>Type</th>
 					<th>Size</th>
 					<th>Tuples</th>
 					<th>Avg width</th>
@@ -3164,7 +3162,7 @@ sub pg_class_size
 						foreach ('size','tuples','width') {
 							$end_class_stat{$db}{$k}{$tb}{$_} ||= 0;
 						}
-						$table_data = "<tr><th>$tb</th><td>$RELKIND{$k}</td><td>" . &pretty_print_size($end_class_stat{$db}{$k}{$tb}{size}) . "</td><td>" . int($end_class_stat{$db}{$k}{$tb}{tuples}) . "</td><td>$end_class_stat{$db}{$k}{$tb}{width}</td></tr>\n";
+						$table_data = "<tr><th>$tb</th><td>" . &pretty_print_size($end_class_stat{$db}{$k}{$tb}{size}) . "</td><td>" . int($end_class_stat{$db}{$k}{$tb}{tuples}) . "</td><td>$end_class_stat{$db}{$k}{$tb}{width}</td></tr>\n";
 					}
 					if ($table_data) {
 						print $fhtable qq{$table_data} if ($table_data);
