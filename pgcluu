@@ -6397,7 +6397,8 @@ sub flotr2_linegraph
             },
             yaxis: {
                 min: area.y1,
-                max: area.y2
+                max: area.y2,
+		tickFormatter: function(val){ return pretty_print_number(val,'$type') },
             }
         });
     });
