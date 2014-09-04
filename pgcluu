@@ -1353,7 +1353,7 @@ sub pg_stat_database
 	my $has_tuples = 0;
 	my $has_conflict = 0;
 	my $has_temp = 0;
-	my $has_conn = 0;
+	my %has_con = ();
 	my %total_qtype = ();
 	my %total_query_type = ();
 	my @databases = ();
@@ -1425,10 +1425,13 @@ sub pg_stat_database
 		$OVERALL_STATS{'database'}{$data[2]}{'blks_hit'} += $tmp_val;
 
 		# Gather number of running backend
-		$all_database_stat{$data[0]}{$data[2]}{nbackend} = $data[3];
-		$all_database_stat{$data[0]}{all}{nbackend} += $data[3];
-		$OVERALL_STATS{'cluster'}{'nbackend'} += $data[3];
-		$OVERALL_STATS{'database'}{$data[2]}{'nbackend'} += $data[3];
+		if ($data[3]) {
+			$all_database_stat{$data[0]}{$data[2]}{nbackend} = $data[3];
+			$all_database_stat{$data[0]}{all}{nbackend} += $data[3];
+			$OVERALL_STATS{'cluster'}{'nbackend'} += $data[3];
+			$OVERALL_STATS{'database'}{$data[2]}{'nbackend'} += $data[3];
+			$has_con{$data[2]} = 1;
+		}
 
 		# Gather number of committed transaction
 		(($data[4] - $start_vals{$data[2]}[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals{$data[2]}[4]);
@@ -1607,7 +1610,7 @@ sub pg_stat_database
 			if ($data_info{$id}{name} eq 'database-backends') {
 				$database_stat{$db}{nbackend} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{nbackend};
-				if ($db ne 'all') {
+				if (($db ne 'all') && exists $has_con{$db}) {
 					$dbfh->print( &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{nbackend}) );
 				}
 				delete $database_stat{$db}{nbackend};
