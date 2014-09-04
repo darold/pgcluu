@@ -442,6 +442,28 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'PostgreSQL configuration',
 		},
 	},
+	'postgresql.auto.conf' => {
+		'1' => {
+			'name' =>  'cluster-alterconf',
+			'title' => 'PostgreSQL system altered configuration',
+			'description' => 'Configuration directives and values defined using ALTER SYSTEM.',
+			'ylabel' => 'Number',
+			'legends' => ['Settings'],
+			'active' => 1,
+			'menu' => 'PostgreSQL system altered configuration',
+		},
+	},
+	'recovery.conf' => {
+		'1' => {
+			'name' =>  'cluster-recoveryconf',
+			'title' => 'PostgreSQL recovery configuration',
+			'description' => 'Configuration directives and values defined in file recovery.conf.',
+			'ylabel' => 'Number',
+			'legends' => ['Settings'],
+			'active' => 1,
+			'menu' => 'PostgreSQL recovery configuration',
+		},
+	},
 	'pg_hba.conf' => {
 		'1' => {
 			'name' =>  'cluster-pghba',
@@ -3493,6 +3515,102 @@ sub postgresql_conf
 	$fhcluster->close();
 }
 
+# Show relevant content of recovery.conf
+sub recovery_conf
+{
+	my ($interval, $file, %data_info) = @_;
+
+	my $output = '';
+	# Load data from file
+	my $curfh = new IO::File;
+	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if ($l !~ /^[a-z]/);
+		$l =~ s/[\t\s]*#.*//;
+		$output .= "$l\n";
+	}
+	$curfh->close();
+	if (!$output) {
+		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
+	} else {
+		$output = "<div style=\"white-space: pre\">\n$output</div>\n";
+	}
+	my $id = &get_data_id('cluster-recoveryconf', %data_info);
+	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
+	print $fhcluster qq{
+<li style="display: none;" class="slide" id="cluster-recoveryconf-slide">
+      <div id="cluster-recoveryconf"><br><br><br><br></div>
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="cluster-ercoveryconf-report">
+			<div class="span11">
+				$output
+			</div>
+		</div>
+	      </div>
+	      </div>
+	    </div>
+	</div>
+  </li>
+};
+	$fhcluster->close();
+}
+
+# Show relevant content of postgresql.auto.conf
+sub postgresql_auto_conf
+{
+	my ($interval, $file, %data_info) = @_;
+
+	my $output = '';
+	# Load data from file
+	my $curfh = new IO::File;
+	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if ($l !~ /^[a-z]/);
+		$l =~ s/[\t\s]*#.*//;
+		$output .= "$l\n";
+	}
+	$curfh->close();
+	if (!$output) {
+		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
+	} else {
+		$output = "<div style=\"white-space: pre\">\n$output</div>\n";
+	}
+	my $id = &get_data_id('cluster-alterconf', %data_info);
+	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
+	print $fhcluster qq{
+<li style="display: none;" class="slide" id="cluster-alterconf-slide">
+      <div id="cluster-alterconf"><br><br><br><br></div>
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="cluster-alterconf-report">
+			<div class="span11">
+				$output
+			</div>
+		</div>
+	      </div>
+	      </div>
+	    </div>
+	</div>
+  </li>
+};
+	$fhcluster->close();
+}
+
 # Show relevant content of pg_hba.conf
 sub pg_hba_conf
 {
@@ -4596,6 +4714,8 @@ sub generate_html_menu
 };
 	}
 	my $disable_pgconf = '';
+	my $disable_recoveryconf = '';
+	my $disable_alterconf = '';
 	my $disable_pgsettings = '';
 	my $disable_pghba = '';
 	my $disable_pgident = '';
@@ -4603,6 +4723,16 @@ sub generate_html_menu
 	my $disable_conf = ' disabled';
 	if (!-e "$INPUT_DIR/postgresql.conf" || -z "$INPUT_DIR/postgresql.conf") {
 		$disable_pgconf = ' class="disabled"';
+	} else {
+		$disable_conf = '';
+	}
+	if (!-e "$INPUT_DIR/postgresql.auto.conf" || -z "$INPUT_DIR/postgresql.auto.conf") {
+		$disable_alterconf = ' class="disabled"';
+	} else {
+		$disable_conf = '';
+	}
+	if (!-e "$INPUT_DIR/recovery.conf" || -z "$INPUT_DIR/recovery.conf") {
+		$disable_recoveryconf = ' class="disabled"';
 	} else {
 		$disable_conf = '';
 	}
@@ -4802,6 +4932,8 @@ sub generate_html_menu
 			      <ul class="dropdown-menu">
 			      <li id="menu-cluster-pgconf"$disable_pgconf><a href="cluster.html#cluster-pgconf">PostgreSQL configuration</a></li>
 			      <li id="menu-cluster-settings"$disable_pgsettings><a href="cluster.html#cluster-settings">PostgreSQL settings</a></li>
+			      <li id="menu-cluster-alterconf"$disable_alterconf><a href="cluster.html#cluster-alterconf">PostgreSQL ALTER SYSTEM configuration</a></li>
+			      <li id="menu-cluster-recoveryconf"$disable_recoveryconf><a href="cluster.html#cluster-recoveryconf">PostgreSQL recovery configuration</a></li>
 			      <li id="menu-cluster-pghba"$disable_pghba><a href="cluster.html#cluster-pghba">PostgreSQL authorization</a></li>
 			      <li id="menu-cluster-pgident"$disable_pgident><a href="cluster.html#cluster-pgident">User Name Maps</a></li>
 			      <li id="menu-cluster-pgbouncer"$disable_pgbouncer><a href="cluster.html#cluster-pgbouncer">Pgbouncer settings</a></li>

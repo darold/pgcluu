@@ -1786,7 +1786,7 @@ sub dump_pgsettings
 ####
 sub get_configuration_files
 {
-	my @cfiles = `$PSQL_PROG -c "SELECT setting FROM pg_settings WHERE name IN ('config_file','hba_file','ident_file') ORDER BY name;"`;
+	my @cfiles = `$PSQL_PROG -c "SELECT setting FROM pg_settings WHERE name IN ('config_file','hba_file','ident_file','data_directory') ORDER BY name;"`;
 	if ($? != 0) {
 		&dprint("FATAL: psql error.\n");
 		# remove the pidfile
@@ -1796,6 +1796,16 @@ sub get_configuration_files
 		exit 0;
 	}
 	chomp(@cfiles);
+
+	# Add recovery.conf and postgresql.auto.conf to the file list
+	my $alter_system_conf = '';
+	for (my $i = 0; $i <= $#cfiles; $i++) {
+		if ($cfiles[$i] !~ /\.conf$/) {
+			$alter_system_conf = $cfiles[$i] . '/postgresql.auto.conf';
+			$cfiles[$i] .= '/recovery.conf';
+		}
+	}
+	push(@cfiles, $alter_system_conf);
 
 	return @cfiles;
 }
