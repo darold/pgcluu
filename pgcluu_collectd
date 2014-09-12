@@ -1087,7 +1087,7 @@ sub grab_os_information
 	# Release informations
 	my @releaseinfo = `cat /etc/*release 2>/dev/null`;
 	# System kernel tuning parameters
-	my @system = `/sbin/sysctl -a 2>/dev/null| grep -E "vm.overcommit|vm.dirty_.*(ratio|bytes)|swappiness|zone_reclaim_mode|shmmax|shmall"`;
+	my @system = `/sbin/sysctl -a 2>/dev/null| grep -E "vm.nr_hugepages |vm.overcommit|vm.dirty_.*(ratio|bytes)|swappiness|zone_reclaim_mode|shmmax|shmall"`;
 	unless(open(OUT, ">$OUTPUT_DIR/sysinfo.txt")) {
 		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
 		exit 1;
