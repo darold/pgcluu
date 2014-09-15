@@ -63,6 +63,7 @@ my $NO_SYSINFO  = 0;
 my $SHOW_VER    = 0;
 my $END_AFTER   = 0;
 my $MAX_SIZE    = 0;
+my $END_AFTER_COUNTER = 0;
 
 # Stores starting time
 my $START_TIME = time();
@@ -268,6 +269,7 @@ my %METRICS_COMMANDS = (
 # are no mandatory options.
 my $result = GetOptions(
 	"B|enable-buffercache!" => \$USE_BUFFERCACHE,
+	"C|end-counter=s" => \$END_AFTER_COUNTER,
 	"d|dbname=s"     => \$DBNAME,
 	"D|daemonize!"   => \$DAEMONIZE,
 	"E|end-after=s"  => \$END_AFTER,
@@ -651,6 +653,9 @@ if (($#METRICS >= 0) && !grep(/^configuration_stats$/, @METRICS)) {
 # Look if we should limit statistic collect to some DB
 my @included_dbs = split(/,/, $INCLUDED_DB);
 
+# end counter
+my $tcounter = 0;
+
 while (1) {
 
 	# Stores loop start time
@@ -659,6 +664,17 @@ while (1) {
 	# Search if the monitoring need to stop here
 	if ($END_AFTER && ($t0 > ($START_TIME + $END_AFTER))) {
 		&dprint("LOG: ending time reach, terminating.\n");
+		if (-f $PIDFILE) {
+			unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
+		}
+		exit 0;
+	}
+
+	# If counter reached then exit
+	$tcounter++;
+
+	if ($tcounter > $END_AFTER_COUNTER) {
+		&dprint("LOG: counter reached, terminating.\n");
 		if (-f $PIDFILE) {
 			unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
 		}
@@ -1126,6 +1142,7 @@ options:
 
   -B, --enable-buffercache enable buffercache statistics if pg_buffercache
 			   extension is installed.
+  -C, --end-counter=NUM    terminate program after NUM reports.
   -d, --dbname=DATABASE    database name to connect to. Default to current user.
   -D, --daemonize          detach from console and enter in daemon mode.
   -E, --end-after=SECOND   self terminate program after a given number of seconds.
