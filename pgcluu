@@ -80,7 +80,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'database-backends',
 			'title' => 'Connections on %s database',
-			'description' => 'Number of clients connected to a database',
+			'description' => 'Number of clients connected to a database.',
 			'ylabel' => 'Connections',
 			'legends' => ['backends'],
 		},
@@ -88,12 +88,12 @@ my %DB_GRAPH_INFOS = (
 			'name' =>  'database-read_write_query',
 			'title' => 'Affected tuples per operation on %s database',
 			'ylabel' => 'Tuples',
-			'description' => 'Affected rows on databases grouped by statement family',
+			'description' => 'Affected rows on databases grouped by statement family.',
 		},
 		'3' => {
 			'name' =>  'database-cache_ratio',
 			'title' => 'Cache hit/miss ratio on %s database',
-			'description' => 'Per database cache hit/miss ratio',
+			'description' => 'Per database cache hit/miss ratio.',
 			'ylabel' => 'Blocks per second',
 			'legends' => ['Cache hit','Cache miss','hit/miss ratio'],
 			'y2label' => 'Percentage',
@@ -101,7 +101,7 @@ my %DB_GRAPH_INFOS = (
 		'4' => {
 			'name' =>  'database-commits_rollbacks',
 			'title' => 'Commits/Rollbacks per second on %s database',
-			'description' => 'Number of commits / rollbacks per second and number of backends per database',
+			'description' => 'Number of commits / rollbacks per second and number of backends per database.',
 			'ylabel' => 'Transaction/sec',
 			'legends' => ['commit','rollback','backends'],
 			'y2label' => 'Number of backend',
@@ -109,21 +109,21 @@ my %DB_GRAPH_INFOS = (
 		'5' => {
 			'name' =>  'database-write_ratio',
 			'title' => 'Write ratio on %s database',
-			'description' => 'Write ratio on databases excluding templates and postgres',
+			'description' => 'Write ratio on databases excluding templates and postgres.',
 			'ylabel' => 'Write queries per second',
 			'legends' => ['Insert','Update','Delete'],
 		},
 		'6' => {
 			'name' =>  'database-read_ratio',
 			'title' => 'Read tuples on %s database',
-			'description' => 'Show entries returned from the index and live rows fetched from the tables. The latter will be less if any dead or not-yet-committed rows are fetched using the index',
+			'description' => 'Show entries returned from the index and live rows fetched from the tables. The latter will be less if any dead or not-yet-committed rows are fetched using the index.',
 			'ylabel' => 'Tuples per second',
 			'legends' => ['Table (returned)','Index (fetched)'],
 		},
 		'7' => {
 			'name' =>  'database-deadlocks',
 			'title' => 'Number of deadlocks on %s database',
-			'description' => 'Number of deadlocks detected in this database',
+			'description' => 'Number of deadlocks detected in this database.',
 			'ylabel' => 'Number of deadlocks',
 			'legends' => ['deadlocks'],
 		},
@@ -160,7 +160,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'database-size',
 			'title' => 'Size of %s database',
-			'description' => 'Sizes of databases',
+			'description' => 'Database sizes.',
 			'ylabel' => 'Size',
 			'legends' => ['size'],
 			'active' => 1,
@@ -170,7 +170,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'tablespace-size',
 			'title' => 'Size of %s tablespace',
-			'description' => 'Sizes of tablespaces',
+			'description' => 'Tablespace sizes.',
 			'ylabel' => 'Size',
 			'legends' => ['size'],
 		},
@@ -179,7 +179,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' => 'database-checkpoints',
 			'title' => 'checkpoints counter stats',
-			'description' => 'Background writer statistics on checkpoints. Checkpoints timed is checkpoints issued because of checkpoint_timeout and checkpoints request is checkpoint issued by request',
+			'description' => 'Background writer statistics on checkpoints. Checkpoints timed is checkpoints issued because of checkpoint_timeout and checkpoints request is checkpoint issued by request.',
 			'ylabel' => 'Number of checkpoints',
 			'legends' => ['checkpoints timed','checkpoints requests'],
 		},
@@ -193,14 +193,14 @@ my %DB_GRAPH_INFOS = (
 		'3' => {
 			'name' =>  'database-bgwriter_count',
 			'title' => 'background writer count stats',
-			'description' => 'Background writer counter stats. Max written clean reports the number of times the background writer stopped a cleaning scan because it had written too many buffers. Buffers backend fsync reports the number of times a backend had to execute its own fsync call (normally the background writer handles those even when the backend does its own write)',
+			'description' => 'Background writer counter stats. Max written clean reports the number of times the background writer stopped a cleaning scan because it had written too many buffers. Buffers backend fsync reports the number of times a backend had to execute its own fsync call (normally the background writer handles those even when the backend does its own write).',
 			'ylabel' => 'Times per second',
 			'legends' => ['maxwritten clean','buffers backend fsync'],
 		},
 		'4' => {
 			'name' => 'database-checkpoints_time',
 			'title' => 'checkpoints write stats',
-			'description' => 'Background writer statistics on checkpoints. Checkpoint write time reports the total amount of time that has been spent in the portion of checkpoint processing where files are written to disk. Checkpoint sync time reports the total amount of time that has been spent in the portion of checkpoint processing where files are synchronized to disk',
+			'description' => 'Background writer statistics on checkpoints. Checkpoint write time reports the total amount of time that has been spent in the portion of checkpoint processing where files are written to disk. Checkpoint sync time reports the total amount of time that has been spent in the portion of checkpoint processing where files are synchronized to disk.',
 			'ylabel' => 'Duration',
 			'legends' => ['checkpoint write time','checkpoint sync time'],
 		},
@@ -209,7 +209,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'database-connections',
 			'title' => 'Connections by type on %s database',
-			'description' => 'Connections by type including idle ones',
+			'description' => 'Connections by type including idle ones.',
 			'ylabel' => 'Number of connections',
 			'legends' => ['Active','Idle','Idle in xact', 'Waiting for a lock'],
 		},
@@ -229,7 +229,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'table-indexes',
 			'title' => 'Sequencial vs Index scan on %s',
-			'description' => 'Number of Sequencial scan versus index scan per table during the audit period',
+			'description' => 'Number of sequential scan versus index scan per table during the audit period.',
 			'ylabel' => 'Number per second',
 			'legends' => ['sequential scan','index scan','% index scan ratio'],
 			'y2label' => 'Percent',
@@ -239,7 +239,7 @@ my %DB_GRAPH_INFOS = (
 		'2' => {
 			'name' =>  'table-vacuums-analyzes',
 			'title' => 'Analyze/vacuums count on %s',
-			'description' => 'Number of analyze, autoanalyze, vacuum and autovacuum count per table during the audit period',
+			'description' => 'Number of analyze, autoanalyze, vacuum and autovacuum count per table during the audit period.',
 			'ylabel' => 'Number',
 			'legends' => ['Analyze','Autoanalyze','Vacuum','Autovacuum'],
 			'active' => 1,
@@ -248,16 +248,16 @@ my %DB_GRAPH_INFOS = (
 		'3' => {
 			'name' =>  'table-query-tuples',
 			'title' => 'Insert/update/delete and hot update tuples on %s',
-			'description' => 'Number of Insert/update/delete and hot update tuples count per table during the audit period',
-			'ylabel' => 'Number per seconde',
-			'legends' => ['Insert','Update','Delete','Hot update'],
+			'description' => 'Number of insert/update/delete and hot update tuples count per table during the audit period.',
+			'ylabel' => 'Number per second',
+			'legends' => ['Insert','Update','Delete','Hot Update'],
 			'active' => 1,
-			'menu' => 'Insert/update/delete',
+			'menu' => 'insert/update/delete',
 		},
 		'4' => {
 			'name' =>  'table-kind-tuples',
 			'title' => 'Live vs dead tuples on %s',
-			'description' => 'Number of live and dead tuples per table at end of the audit period',
+			'description' => 'Number of live and dead tuples per table at end of the audit period.',
 			'ylabel' => 'Number',
 			'legends' => ['Live','Dead','% Bloat ratio'],
 			'y2label' => 'Percent',
@@ -280,7 +280,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'index-scan',
 			'title' => 'Statistics about accesses to index %s',
-			'description' => 'Number of index entries returned by index scans, and number of live table rows fetched by simple index scans using that index during the audit period',
+			'description' => 'Number of index entries returned by index scans, and number of live table rows fetched by simple index scans using that index during the audit period.',
 			'ylabel' => 'Number per second',
 			'legends' => ['index scans initiated','index entries read','live table rows fetched'],
 			'y2label' => 'Percent',
@@ -303,7 +303,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'unused-index',
 			'title' => 'Unused indexes on %s',
-			'description' => 'List of indexes never used (idx_scan to 0)',
+			'description' => 'List of indexes never used (idx_scan = 0).',
 			'ylabel' => 'Number',
 			'legends' => ['Unused index'],
 			'active' => 1,
@@ -336,7 +336,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'database-xlog_files',
 			'title' => 'WAL files',
-			'description' => 'Number of WAL file in the xlog directory',
+			'description' => 'Number of WAL file in the xlog directory.',
 			'ylabel' => 'Number of files',
 			'legends' => ['total xlog'],
 		},
@@ -345,14 +345,14 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'database-xlog',
 			'title' => 'Xlog written',
-			'description' => 'Number of Xlog data written per second',
+			'description' => 'Number of xlog data written per second.',
 			'ylabel' => 'Size per second',
 			'legends' => ['written'],
 		},
 		'2' => {
 			'name' =>  'database-replication',
 			'title' => 'Replication lag with %s',
-			'description' => 'Lag of replication between primary and secondary servers',
+			'description' => 'Lag of replication between primary and secondary servers.',
 			'ylabel' => 'Lag sizes',
 			'legends' => ['Sent','Write','Replay'],
 		},
@@ -361,7 +361,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'pgbouncer-connections',
 			'title' => 'pgbouncer connections statistics on %s',
-			'description' => 'Number of active/waiting clients, active/idle/used server connections and maximum wait duration for client connections in each pgbouncer pool',
+			'description' => 'Number of active/waiting clients, active/idle/used server connections and maximum wait duration for client connections in each pgbouncer pool.',
 			'ylabel' => 'Number of connexions',
 			'legends' => ['Client active','Client waiting','Server active','Server idle','Server used','Clients wait time'],
 			'y2label' => 'Duration',
@@ -371,14 +371,14 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'pgbouncer-duration',
 			'title' => 'pgbouncer average queries duration on %s',
-			'description' => 'Average queries duration in each pgbouncer pool',
+			'description' => 'Average queries duration in each pgbouncer pool.',
 			'ylabel' => 'mDuration',
 			'legends' => ['avg_query'],
 		},
 		'2' => {
 			'name' =>  'pgbouncer-number',
 			'title' => 'pgbouncer queries per second on %s',
-			'description' => 'Number of queries per second in each pgbouncer pool',
+			'description' => 'Number of queries per second in each pgbouncer pool.',
 			'ylabel' => 'Number',
 			'legends' => ['avg_req'],
 		},
@@ -409,7 +409,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'database-lock-types',
 			'title' => 'Types of locks on %s database',
-			'description' => 'Number of locks per type in a database. Type of the lockable object: relation, extend, page, tuple, transactionid, virtualxid, object, userlock, or advisory',
+			'description' => 'Number of locks per type in a database. Type of the lockable object: relation, extend, page, tuple, transactionid, virtualxid, object, userlock, or advisory.',
 			'ylabel' => 'Number',
 			'legends' => [],
 			'active' => 1,
@@ -425,7 +425,7 @@ my %DB_GRAPH_INFOS = (
 		'3' => {
 			'name' =>  'database-lock-granted',
 			'title' => 'Granted locks on %s database',
-			'description' => 'Number of locks held (granted) or awaited (waiting)',
+			'description' => 'Number of locks held (granted) or awaited (waiting).',
 			'ylabel' => 'Number',
 			'legends' => [],
 			'active' => 1,
@@ -511,17 +511,17 @@ my %DB_GRAPH_INFOS = (
 	'pg_database_buffercache.csv' => {
 		'1' => {
 			'name' =>  'cluster-buffersused',
-			'title' => 'Shared buffers utilisation per database',
-			'description' => 'Show statistics about percentage of shared buffer used per database.',
+			'title' => 'Shared buffers utilization per database',
+			'description' => 'Show statistics about percentage of shared buffers used per database.',
 			'ylabel' => 'Percent',
 			'legends' => [],
 			'active' => 1,
-			'menu' => 'Shared buffers utilisation',
+			'menu' => 'Shared buffers utilization',
 		},
 		'2' => {
 			'name' =>  'cluster-databaseloaded',
 			'title' => 'Percentage of each databases loaded in shared buffers',
-			'description' => 'Show statistics about percentage of each databases loaded in shared buffer.',
+			'description' => 'Show statistics about percentage of each database loaded in shared buffers.',
 			'ylabel' => 'Percent',
 			'legends' => [],
 			'menu' => 'Databases in shared buffers',
@@ -531,10 +531,10 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'cluster-usagecount',
 			'title' => 'Shared buffers usagecount distribution',
-			'description' => 'Show statistics about usagecount distribution in shared buffer.',
+			'description' => 'Show statistics about usagecount distribution in shared buffers.',
 			'ylabel' => 'Percent',
 			'legends' => [],
-			'menu' => 'Usagecount utilisation',
+			'menu' => 'Usagecount utilization',
 			'active' => 1,
 		},
 	},
@@ -542,7 +542,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'cluster-isdirty',
 			'title' => 'Dirty shared buffers usagecount distribution',
-			'description' => 'Show statistics about usagecount distribution in dirty shared buffer.',
+			'description' => 'Show statistics about usagecount distribution in dirty shared buffers.',
 			'ylabel' => 'Percent',
 			'legends' => [],
 			'menu' => 'Dirty Usagecount',
@@ -552,8 +552,8 @@ my %DB_GRAPH_INFOS = (
 	'pg_relation_buffercache.csv' => {
 		'1' => {
 			'name' =>  'buffercache-relation',
-			'title' => 'Statistics about cache utilisation for %s database',
-			'description' => 'Number of shared buffer/pages used by a relation',
+			'title' => 'Statistics about cache utilization for %s database',
+			'description' => 'Number of shared buffers/pages used by a relation.',
 			'ylabel' => 'Number',
 			'legends' => ['buffers'],
 			'active' => 1,
@@ -561,7 +561,7 @@ my %DB_GRAPH_INFOS = (
 		},
 		'2' => {
 			'name' =>  'statio-buffercache',
-			'title' => 'Statistics about cache utilisation %s relation',
+			'title' => 'Statistics about cache utilization %s relation',
 			'description' => 'Number of buffers loaded in cache for a relation and the percentage of the relation loaded.',
 			'ylabel' => 'Number',
 			'y2label' => 'percent',
@@ -573,7 +573,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'cluster-archive',
 			'title' => 'Statistics about archiver',
-			'description' => 'Number of WAL files archived with number of failure',
+			'description' => 'Number of WAL files archived with number of failure.',
 			'ylabel' => 'Number',
 			'legends' => ['archived count', 'failed count'],
 			'active' => 1,
@@ -584,7 +584,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'database-queries',
 			'title' => 'Statistics about statements',
-			'description' => 'Top N statistics about slowest or most used queries',
+			'description' => 'Top N statistics about slowest or most used queries.',
 			'ylabel' => 'Number',
 			'legends' => ['queries'],
 			'active' => 1,
@@ -596,7 +596,7 @@ my %DB_GRAPH_INFOS = (
 my %SAR_GRAPH_INFOS = (
 	'1' => {
 		'name' =>  'system-cpu',
-		'title' => 'CPU %s utilisation',
+		'title' => 'CPU %s utilization',
 		'description' => 'Percentage of CPU utilization that occurred while executing at the system level (kernel), the user level (application) and the percentage of time that the CPU or CPUs were idle during which the system had an outstanding disk I/O request.',
 		'ylabel' => 'Percentage',
 		'legends' => ['Total','System','User','Iowait'],
@@ -626,14 +626,14 @@ my %SAR_GRAPH_INFOS = (
 	'5' => {
 		'name' =>  'system-swap',
 		'title' => 'Swap In/Out (pages/seconds)',
-		'description' => 'Total number of swap pages the system brought in/out per second. The page size is usualy of 4096 bytes',
+		'description' => 'Total number of swap pages the system brought in/out per second. The page size usually is 4096 bytes.',
 		'ylabel' => 'Pages/second',
 		'legends' => ['pswpin/s','pswpout/s'],
 	},
 	'6' => {
 		'name' =>  'system-block',
 		'title' => 'Block In/Out (blocks/seconds)',
-		'description' => 'Total amount of data read/write from the devices in blocks per second. Blocks are equivalent to sectors and therefore have a size of 512 bytes',
+		'description' => 'Total amount of data read/write from the devices in blocks per second. Blocks are equivalent to sectors and therefore have a size of 512 bytes.',
 		'ylabel' => 'Block per second',
 		'legends' => ['bread/s','bwrtn/s'],
 	},
@@ -646,7 +646,7 @@ my %SAR_GRAPH_INFOS = (
 	},
 	'8' => {
 		'name' =>  'system-cpudevice',
-		'title' => 'CPU utilisation on device %s',
+		'title' => 'CPU utilization on device %s',
 		'description' => 'Percentage of CPU time during which I/O requests were issued to the device (bandwidth utilization for the device). Device saturation occurs when this value is close to 100%.',
 		'ylabel' => 'Percentage of CPU',
 		'legends' => ['cpu used'],
@@ -683,7 +683,7 @@ my %SAR_GRAPH_INFOS = (
 	'13' => {
 		'name' => 'network-error',
 		'title' => 'Network errors on interface %s',
-		'description' => 'Report statistics on failures from the network device. Number of bad packets received,  number of errors that happened while transmitting packets, and number of collisions that happened per second while transmitting packets..',
+		'description' => 'Report statistics on failures from the network device. Number of bad packets received,  number of errors that happened while transmitting packets, and number of collisions that happened per second while transmitting packets.',
 		'ylabel' => 'Number per second',
 		'legends' => ['rx errors', 'tx errors', 'collisions' ],
 	},
@@ -728,7 +728,7 @@ my $INPUT_DIR   = $ARGV[0] || '';
 $INPUT_DIR =~ s/\/$//;
 $OUTPUT_DIR =~ s/\/$//;
 
-# Set list of ojbects to monitor from command line options
+# Set list of objects to monitor from command line options
 # options cna be used multiple time but also as a comma
 # separated list of object name.
 foreach (@dbs_opts) {
@@ -753,7 +753,7 @@ if (!$DISABLE_SAR) {
 			$SAR_INPUT_FILE = "$INPUT_DIR/" . 'sar_stats.dat';
 		}
 		if (!$SADC_INPUT_FILE && !$SAR_INPUT_FILE) {
-			print STDERR "ERROR: No sar data file found. Considere using -S or --disable-sar command line option or use -i / -I option to set the path to the data file.\n";
+			print STDERR "ERROR: No sar data file found. Consider using -S or --disable-sar command line option or use -i / -I option to set the path to the data file.\n";
 			&usage();
 		}
 	}
@@ -798,7 +798,7 @@ if ($BEGIN) {
 		$o_month = $2;
 		$o_year = $1;
 	} else {
-		die "FATAL: bad format for begin datetime, shoud be yyyy-mm-dd hh:mm:ss\n";
+		die "FATAL: bad format for begin datetime, should be yyyy-mm-dd hh:mm:ss\n";
 	}
 }
 if ($END) {
@@ -807,14 +807,14 @@ if ($END) {
 	} elsif ($END =~ /^(\d{4})-(\d{2})-(\d{2})$/) {
 		$END = &timegm_nocheck(0, 0, 0, $3, $2 - 1, $1 - 1900) * 1000;
 	} else {
-		die "FATAL: bad format for ending datetime, shoud be yyyy-mm-dd hh:mm:ss\n";
+		die "FATAL: bad format for ending datetime, should be yyyy-mm-dd hh:mm:ss\n";
 	}
 }
 
 # Look at system information
 if (-e "$INPUT_DIR/sysinfo.txt") {
 	%sysinfo = &read_sysinfo("$INPUT_DIR/sysinfo.txt");
-	$sysinfo{RELEASE}{'name'} ||= 'unknow';
+	$sysinfo{RELEASE}{'name'} ||= 'unknown';
 }
 
 # Extract the device list first
@@ -958,7 +958,7 @@ if (!$DISABLE_SAR) {
 			&compute_sarfile_graph($SAR_INPUT_FILE, %{$SAR_GRAPH_INFOS{$id}});
 		}
 	} else {
-		print "WARNING: No sar data file not found. Considere using -S or --disable-sar command line option if you don't have a sysstat data file.\n";
+		print "WARNING: No sar data file not found. Consider using -S or --disable-sar command line option if you don't have a sysstat data file.\n";
 	}
 	print $FH "</ul>\n";
 	&html_footer($FH);
@@ -1033,8 +1033,8 @@ options:
   -n, --top-number         Top number of tables or indexes I/O stats to show.
 			   Default is set to top 10. Set it to 0 to show all.
   -N, --network-only iface only report stats for a particular network interface.
-			   You can use it multiple time or give a comma separated
-			   list of network ingterface, ex: eth0,eth1.
+			   You can use it multiple times or give a comma separated
+			   list of network interfaces, ex: eth0,eth1.
   -o, --output=DIR         output directory
   -r, --reverse-date       By default pgcluu look at mm/dd/yy format in sar file.
                            When enabled pgcluu will look at dd/mm/yy format.
@@ -1362,7 +1362,7 @@ sub pg_stat_database
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# timestamp | datid | datname | numbackends | xact_commit | xact_rollback | blks_read | blks_hit | tup_returned | tup_fetched | tup_inserted | tup_updated | tup_deleted | conflicts | stats_reset | temp_files | temp_bytes | deadlocks | blk_read_time | blk_write_time
 		push(@{$start_vals{$data[2]}}, @data) if ($#{$start_vals{$data[2]}} < 0);
@@ -1697,7 +1697,7 @@ sub pg_stat_database_conflicts
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 		# timestamp | datid | datname | confl_tablespace | confl_lock | confl_snapshot | confl_bufferpin | confl_deadlock
 
 		# Get database size statistics
@@ -1771,7 +1771,7 @@ sub pg_database_size
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 		push(@databases, $data[2]) if (!grep(/^$data[2]$/, @databases));
 		# Get database size statistics
 		$all_database_stat{$data[0]}{$data[2]} = $data[3];
@@ -1820,7 +1820,7 @@ sub pg_tablespace_size
 	my @tbspnames = ();
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# timestamp | tbspname | size | path
 
@@ -1860,7 +1860,7 @@ sub pg_tablespace_size
 	$fhcluster->close();
 }
 
-# Compute statistics about tables acces
+# Compute statistics about table accesses
 sub pg_stat_user_tables
 {
 	my ($interval, $file, %data_info) = @_;
@@ -1878,7 +1878,7 @@ sub pg_stat_user_tables
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | relid | schemaname | relname | seq_scan | seq_tup_read | idx_scan | idx_tup_fetch | n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | last_vacuum | last_autovacuum | last_analyze | last_autoanalyze | vacuum_count | autovacuum_count | analyze_count | autoanalyze_count
 		$data[4] = "$data[3].$data[4]";
@@ -1967,7 +1967,7 @@ sub pg_stat_user_tables
 					<th>Inserted</th>
 					<th>Updated</th>
 					<th>Deleted</th>
-					<th>Hot updated</th>
+					<th>Hot Updated</th>
 };
 				$colspan = ' colspan="6"';
 			} elsif ($data_info{$id}{name} eq 'table-kind-tuples') {
@@ -1984,7 +1984,7 @@ sub pg_stat_user_tables
 					<th>Analyze</th>
 					<th>Autoanalyze</th>
 					<th>Last vacuum</th>
-					<th>last autovacuum</th>
+					<th>Last autovacuum</th>
 					<th>Last analyze</th>
 					<th>Last autoanalyze</th>
 };
@@ -2115,7 +2115,7 @@ sub pg_stat_user_indexes
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | idx_tup_read | idx_tup_fetch
 		$data[6] = "$data[4].$data[5].$data[6]";
@@ -2231,7 +2231,7 @@ sub pg_statio_user_tables
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | relid | schemaname | relname | heap_blks_read | heap_blks_hit | idx_blks_read | idx_blks_hit | toast_blks_read | toast_blks_hit | tidx_blks_read | tidx_blks_hit
 		$data[4] = "$data[3].$data[4]";
@@ -2349,7 +2349,7 @@ sub pg_relation_buffercache
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		$data[7] = 100 if ($data[7] > 100);
 		# date_trunc | datname | relname | buffers | relpages | buffered | buffers % | relation %
@@ -2492,7 +2492,7 @@ sub pg_statio_user_indexes
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_blks_read | idx_blks_hit
 		$data[6] = "$data[4].$data[5].$data[6]";
@@ -2557,7 +2557,7 @@ sub pg_xlog_stat
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# timestamp | total_file | last_wal_name | wal_recycled | wal_written | max_wal
 
@@ -2604,7 +2604,7 @@ sub pg_stat_bgwriter
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		push(@start_vals, @data) if ($#start_vals < 0);
 		(($data[1] - $start_vals[1]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[1] - $start_vals[1]);
@@ -2675,7 +2675,7 @@ sub pg_stat_connections
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data, 5));
+		next if (!&normalize_line(\@data, 5));
 
 		# timestamp | total | active | waiting | idle_in_xact | datname
 
@@ -2740,7 +2740,7 @@ sub pg_stat_user_functions
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# timestamp | datname | funcid | schemaname | funcname | calls | total_time | self_time
 		push(@start_vals, @data) if ($#start_vals < 0);
@@ -2818,7 +2818,7 @@ sub pg_stat_user_functions
 	}
 }
 
-# Compute graphs of repliction cluster statistics
+# Compute graphs of replication cluster statistics
 sub pg_stat_replication
 {
 	my ($interval, $file, %data_info) = @_;
@@ -2833,7 +2833,7 @@ sub pg_stat_replication
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# timestamp | pid | usesysid | usename | application_name | client_addr | client_hostname | client_port | backend_start | state | master_location | sent_location | write_location | flush_location | replay_location | sync_priority | sync_state
 		push(@start_vals, @data) if ($#start_vals < 0);
@@ -2906,7 +2906,7 @@ sub pgbouncer_stats
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 		next if ($data[1] eq 'pgbouncer');
 
 		# timestamp|database|user|cl_active|cl_waiting|sv_active|sv_idle|sv_used|sv_tested|sv_login|maxwait
@@ -3042,7 +3042,7 @@ sub pgbouncer_req_stats
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 		next if ($data[1] eq 'pgbouncer');
 
 		# timestamp|database|total_requests|total_received|total_sent|total_query_time|avg_req|avg_recv|avg_sent|avg_query
@@ -3098,7 +3098,7 @@ sub pg_class_size
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 		if ($data[4] !~ /^[a-zA-Z]$/) {
 			print STDERR "WARNING: incompatible type of file pg_class_size.csv, the second field should be the database name\n";
 			last;
@@ -3230,7 +3230,7 @@ sub pg_stat_locks
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# timestamp|database|label|(type|mode|granted)|count
 		$data[3] = 'granted' if ($data[3] eq 't');
@@ -3298,7 +3298,7 @@ sub pg_stat_unused_indexes
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | schemaname | relname | indexrelname | index_code
 		$idx_stat{$data[1]} .= "<tr><td>$data[2]</td><td>$data[3]</td><td>$data[4]</td><td>$data[5]</td></tr>\n";
@@ -3328,7 +3328,7 @@ sub pg_stat_unused_indexes
 			<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
 				<thead>
 					<tr>
-					<th>Shema</th>
+					<th>Schema</th>
 					<th>Table</th>
 					<th>Index</th>
 					<th>Code</th>
@@ -3361,7 +3361,7 @@ sub pg_stat_redundant_indexes
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | contained | containing
 		$idx_stat{$data[1]} .= "<tr><td>$data[2]</td><td>$data[3]</td></tr>\n";
@@ -3422,7 +3422,7 @@ sub pg_stat_missing_fkindexes
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | relname | ddl
 		$idx_stat{$data[1]} .= "<tr><td>$data[2]</td><td>$data[3]</td></tr>\n";
@@ -3724,7 +3724,7 @@ sub pg_settings
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# timestamp | label | setting | value
 		$conf_stat{$data[1]}{$data[2]} = $data[3];
@@ -3781,7 +3781,7 @@ sub pg_database_buffercache
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# date_trunc | datname | buffers | buffers % | database %
 		$shared_stat{$data[1]}{shared_buffers_used} .= '[' . $data[0] . ',' . ($data[3]||0) . '],';
@@ -3831,7 +3831,7 @@ sub pg_database_usagecount
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# date_trunc | datname | usagecount | buffer | buffers %
 		$all_stat{$data[0]}{$data[2]} += ($data[4]||0);
@@ -3870,7 +3870,7 @@ sub pg_database_isdirty
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# date_trunc | datname | usagecount | isdirty | buffer | buffers %
 		$all_stat{$data[0]}{$data[2]} += $data[5] if ($data[3] eq 't');
@@ -3912,7 +3912,7 @@ sub pg_stat_archiver
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		# timestamp | archived_count | last_archived_wal | last_archived_time | failed_count | last_failed_wal | last_failed_time | stats_reset
                 push(@start_vals, @data) if ($#start_vals < 0);
@@ -3958,7 +3958,7 @@ sub pg_stat_statements
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalyze_line(\@data));
+		next if (!&normalize_line(\@data));
 
 		next if (($#INCLUDE_DB >= 0) && (!grep(/^$data[2]$/, @INCLUDE_DB)));
 
@@ -4035,7 +4035,7 @@ sub pg_stat_statements
 					<tr>
 					<th>Query</th>
 					<th>Calls</th>
-					<th>Avg. time</th>
+					<th>Avg time</th>
 					<th>Total time</th>
 					<th>Rows</th>
 					$header
@@ -4071,7 +4071,7 @@ sub pg_stat_statements
 
 }
 
-sub normalyze_line
+sub normalize_line
 {
 	my $data = shift;
 
@@ -4262,10 +4262,10 @@ EOF
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'deadlocks'}</span> <span class="figure-label">Deadlocks</span></li>
 };
 		}
-		my $extnum = $#{$OVERALL_STATS{'cluster'}{'extentions'}} + 1;
+		my $extnum = $#{$OVERALL_STATS{'cluster'}{'extensions'}} + 1;
 		my $extensions_info = '';
 		if ($extnum) {
-			my $extlist = join(', ', @{$OVERALL_STATS{'cluster'}{'extentions'}});
+			my $extlist = join(', ', @{$OVERALL_STATS{'cluster'}{'extensions'}});
 			$extensions_info = qq{<li><span class="figure">$extnum</span> <span class="figure-label">Extensions ($extlist)</span></li>};
 		}
 		$sysinfo{PGVERSION}{'full_version'} ||= '';
@@ -4448,7 +4448,7 @@ EOF
               <div class="panel-body panel-height">
               <p>$PROGRAM is licenced under the PostgreSQL Licence a liberal Open Source license, similar to the BSD or MIT licenses.</p>
 	      <p>That mean that all parts of the program are open source and free of charge.</p>
-	      <p>This is the case for both, the collecter and the grapher programs.</p>
+	      <p>This is the case for both, the collector and the grapher programs.</p>
               </div>
               </div>
             </div><!--/span-->
@@ -4475,7 +4475,7 @@ EOF
               <div class="panel-body panel-height">
 	      <p>$PROGRAM is an original development of <a href="http://www.darold.net/">Gilles Darold</a>.</p>
 	      <p>Some parts of the collector are taken from <a href="https://github.com/gleu/pgstats">pgstats</a> a C program writen by Guillaume Lelarge and especially the SQL queries including the compatibility with all PostgreSQL versions.</p>
-	      <p>Btw $PROGRAM grapher is compatible with files generated by pgstats, sar and sadc so you can use it independantly to graph those data. Some part of the sar output parser are taken from <a href="http://sysusage.darold.net/">SysUsage</a></p>
+	      <p>Btw $PROGRAM grapher is compatible with files generated by pgstats, sar and sadc so you can use it independently to graph those data. Some part of the sar output parser are taken from <a href="http://sysusage.darold.net/">SysUsage</a></p>
               </div>
               </div>
             </div><!--/span-->
@@ -4881,7 +4881,7 @@ sub generate_html_menu
 			<li id="menu-pgbuffercache" class="dropdown-submenu$disable_buffer">
 			   <a href="#" tabindex="-1">Shared buffers statistics </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-cluster-buffersused"$disable_buffercache><a href="cluster.html#cluster-buffersused">Shared buffers utilisation</a></li>
+			      <li id="menu-cluster-buffersused"$disable_buffercache><a href="cluster.html#cluster-buffersused">Shared buffers utilization</a></li>
 			      <li id="menu-cluster-databaseloaded"$disable_buffercache><a href="cluster.html#cluster-databaseloaded">Database in shared buffers</a></li>
 			      <li id="menu-cluster-usagecount"$disable_buffercache><a href="cluster.html#cluster-usagecount">Usagecount in shared buffers</a></li>
 			      <li id="menu-cluster-isdirty"$disable_buffercache><a href="cluster.html#cluster-isdirty">Usagecount in dirty buffers</a></li>
@@ -5268,7 +5268,7 @@ sub generate_html_menu
 			  <li id="menu-device$i" class="dropdown-submenu">
 			     <a href="#" tabindex="-1">$IFACE_LIST[$i] </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-network-utilisation"><a href="network-device$i.html#network-utilization">Network utilization</a></li>
+			      <li id="menu-network-utilization"><a href="network-device$i.html#network-utilization">Network utilization</a></li>
 			      <li id="menu-network-error"><a href="network-device$i.html#network-error">Network errors</a></li>
 			      </ul>
 			  </li>
@@ -6790,7 +6790,7 @@ sub read_sysinfo
 			my ($db, @vals) = split(/[=,]+/, $l);
 			push(@{$sysinfo{$section}{$db}}, @vals);
 			foreach my $e (@vals) {
-				push(@{$OVERALL_STATS{'cluster'}{'extentions'}}, $e) if (!grep(/^$e$/, @{$OVERALL_STATS{'cluster'}{'extentions'}}));
+				push(@{$OVERALL_STATS{'cluster'}{'extensions'}}, $e) if (!grep(/^$e$/, @{$OVERALL_STATS{'cluster'}{'extensions'}}));
 			}
 
 		}
