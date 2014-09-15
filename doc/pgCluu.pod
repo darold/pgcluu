@@ -115,6 +115,7 @@ options:
 
   -B, --enable-buffercache enable buffercache statistics if pg_buffercache
 			   extension is installed.
+  -C, --end-counter=NUM    terminate program after NUM reports.
   -d, --dbname=DATABASE    database name to connect to. Default to current user.
   -D, --daemonize          detach from console and enter in daemon mode.
   -E, --end-after=SECOND   self terminate program after a given number of seconds.
@@ -140,7 +141,8 @@ options:
   --included-db=DATABASE   do not collect statistics for the comma separated list
                            of database name. 
   --list-metric            list available metrics actions that can be performed.
-  --os-info                grab operating system information and exit.
+  --sysinfo                get operating system information and exit (sysinfo.txt).
+  --no-sysinfo             do not collect operating system information at all. 
   --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
 			   database. Ex: -p 6432 -U postgres -h 192.168.1.100
                            You must at least give one parameter to enable
