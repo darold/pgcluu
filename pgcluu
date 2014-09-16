@@ -1169,8 +1169,6 @@ sub get_device_list
 				} else {
 					last;
 				}
-			} elsif ($l =~ m#IFACE\s+#) {
-				last;
 			}
 			# Empty line, maybe the end of a report
 			if (($l eq '') && ($#headers >= 0)) {
