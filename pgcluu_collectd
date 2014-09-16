@@ -1788,11 +1788,12 @@ sub dump_pgsettings
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), category, name, " .
-		" setting, %s, context, source, boot_val, reset_val " . 
+		" setting, %s, context, source, %s, %s " .
 		"FROM pg_settings " . 
 		"ORDER BY category,name",
-		&backend_minimum_version(8, 4) ? "unit" : "''::text as unit",
-
+		&backend_minimum_version(8, 2) ? "unit" : "''::text as unit",
+		&backend_minimum_version(8, 4) ? "boot_val" : "''::text as boot_val",
+		&backend_minimum_version(8, 4) ? "reset_val" : "''::text as reset_val"
 	);
 
 	return $sql;
