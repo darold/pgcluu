@@ -673,7 +673,7 @@ while (1) {
 	# If counter reached then exit
 	$tcounter++;
 
-	if ($tcounter > $END_AFTER_COUNTER) {
+	if (($END_AFTER_COUNTER > 0) && ($tcounter > $END_AFTER_COUNTER)) {
 		&dprint("LOG: counter reached, terminating.\n");
 		if (-f $PIDFILE) {
 			unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
