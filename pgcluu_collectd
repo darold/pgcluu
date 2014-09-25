@@ -64,6 +64,7 @@ my $SHOW_VER    = 0;
 my $END_AFTER   = 0;
 my $MAX_SIZE    = 0;
 my $END_AFTER_COUNTER = 0;
+my $NO_DATABASE = 0;
 
 # Stores starting time
 my $START_TIME = time();
@@ -298,6 +299,7 @@ my $result = GetOptions(
 	"pgbouncer-args=s" => \$PGBOUNCER_ARGS,
 	"sysinfo!"       => \$OS_INFO,
 	"no-sysinfo!"    => \$NO_SYSINFO,
+	"no-database!"   => \$NO_DATABASE,
 	"included-db=s"  => \$INCLUDED_DB,
 	"exclude-time=s" => \$SKIP_HOURS,
 	'enable-ssh!'    => \$USE_SSH,
@@ -560,7 +562,8 @@ if (!$DISABLE_SAR) {
 my $sysstat_version = &sysstat_version() || '';
 
 # Remove action that can't be run with the PostgreSQL version
-my $pg_ret = &verify_action();
+my $pg_ret = '';
+&verify_action() if (!$NO_DATABASE);
 
 # Generating global statistics collector SQL script 
 my $script_sql = &create_sql_script();
@@ -573,7 +576,7 @@ if (!$script_sql && ($#METRICS < 0)) {
 	exit 1;
 }
 
-if ($pg_ret >= 0) {
+if (!$NO_DATABASE && ($pg_ret >= 0)) {
 	# Get list of database in the PostgreSQL cluster
 	my @alldbs = ();
 	if ($#dbnames >= 0) {
@@ -709,33 +712,35 @@ while (1) {
 		}
 	}
 
-	# Collecting database statistics if there other than pgbouncer metrics to collect
-	if ($pg_ret >= 0) {
-		open(PSQL, "| $PSQL_PROG");
-		print PSQL $script_sql, "\n";
-		close(PSQL);
-
-		# Get database list
-		my @dblist = &get_databases();
-		push(@dblist, $DBNAME) if (($#dblist == -1) && $DBNAME);
-
-		# Generating per database statistics collector SQL script 
-		foreach my $db (@dblist) {
-
-			next if (($#included_dbs >= 0) && !grep(/^$db$/i, @included_dbs));
-
-			my $script_repeat_sql = &create_sql_script($db);
-			if (!$script_repeat_sql) {
-				last;
-			}
-			my $LOCAL_PSQL_PROG = $PSQL_PROG;
-			if ($db && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $db/i)) {
-				$LOCAL_PSQL_PROG .= " -d $db";
-			}
-			# Collecting database statistics
-			open(PSQL, "| $LOCAL_PSQL_PROG");
-			print PSQL $script_repeat_sql, "\n";
+	if (!$NO_DATABASE) {
+		# Collecting database statistics if there other than pgbouncer metrics to collect
+		if ($pg_ret >= 0) {
+			open(PSQL, "| $PSQL_PROG");
+			print PSQL $script_sql, "\n";
 			close(PSQL);
+
+			# Get database list
+			my @dblist = &get_databases();
+			push(@dblist, $DBNAME) if (($#dblist == -1) && $DBNAME);
+
+			# Generating per database statistics collector SQL script 
+			foreach my $db (@dblist) {
+
+				next if (($#included_dbs >= 0) && !grep(/^$db$/i, @included_dbs));
+
+				my $script_repeat_sql = &create_sql_script($db);
+				if (!$script_repeat_sql) {
+					last;
+				}
+				my $LOCAL_PSQL_PROG = $PSQL_PROG;
+				if ($db && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $db/i)) {
+					$LOCAL_PSQL_PROG .= " -d $db";
+				}
+				# Collecting database statistics
+				open(PSQL, "| $LOCAL_PSQL_PROG");
+				print PSQL $script_repeat_sql, "\n";
+				close(PSQL);
+			}
 		}
 	}
 
@@ -1170,6 +1175,7 @@ options:
   --list-metric            list available metrics actions that can be performed.
   --sysinfo                get operating system information and exit (sysinfo.txt).
   --no-sysinfo             do not collect operating system information at all. 
+  --no-database            do not collect database statistics at all.
   --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
 			   database. Ex: -p 6432 -U postgres -h 192.168.1.100
                            You must at least give one parameter to enable

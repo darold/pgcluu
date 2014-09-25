@@ -2,15 +2,15 @@ NAME
     pgCluu - PostgreSQL Cluster utilization
 
 DESCRIPTION
-    pgCluu is a PostgreSQL performances monitoring and auditing tool.
+    pgCluu is a PostgreSQL performance monitoring and auditing tool.
 
     It is a Perl program used to perform a full audit of a PostgreSQL
-    Cluster and System performances. It is divided in two parts:
+    Cluster and System performance. It is divided in two parts:
 
     - A collector used to grab statistics on the PostgreSQL cluster using
     the psql command line utility and sar from the sysstat package.
 
-    - A pur Perl grapher that will generate all HTML and charts output
+    - A pure Perl grapher that will generate all HTML and charts output
     without any requirements.
 
     If you don't need system utilization reports or don't want to install
@@ -27,21 +27,21 @@ SYNOPSIS
 
             pgcluu_collectd [options] output_dir
 
-    Reports generator.
+    Report generator.
 
             pgcluu [options] -o report_dir input_dir
 
 REQUIREMENT
     pgCluu comes with two Perl scripts. You need a modern Perl distribution,
-    the psql PostgreSQL client and the sar command line utility (from
-    sysstat). The sysstat package is optional, you can still use pgCluu to
-    generate reports about your PostgreSQL Cluster without it.
+    the psql client and the sar command line utility (sysstat). The sysstat
+    package is optional, you can still use pgCluu to generate reports about
+    your PostgreSQL Cluster without it.
 
     Charts are rendered using a Javascript library so you don't need
     anything else. Your browser will do all the work.
 
 INSTALLATION
-    Download the tarball from Source Forge and unpack the archive:
+    Download the tarball from SourceForge and unpack the archive:
 
             tar xzf pgcluu-2.x.tar.gz
             cd pgcluu-2.x/
@@ -96,9 +96,9 @@ USAGE
 COLLECTING STATISTICS
     To generate reports about your PostgreSQL Cluster Utilization you must
     collect statistics before. pgcluu_collectd is here for that. It can be
-    run in a daemom mode (option -D) or in interactive mode for debuging
+    run in a daemon mode (option -D) or in interactive mode for debugging
     purpose. All you need is to provide a directory where data will be
-    stored. Statistics will be pooled at a default interval of 60 secondes,
+    stored. Statistics will be pooled at a default interval of 60 seconds,
     using option -i you can customize it. See below for a complete list of
     command line options.
 
@@ -139,6 +139,7 @@ COLLECTING STATISTICS
       --list-metric            list available metrics actions that can be performed.
       --sysinfo                get operating system information and exit (sysinfo.txt).
       --no-sysinfo             do not collect operating system information at all. 
+      --no-database            do not collect database statistics at all. 
       --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
                                database. Ex: -p 6432 -U postgres -h 192.168.1.100
                                You must at least give one parameter to enable
@@ -186,7 +187,7 @@ COLLECTING STATISTICS
 
             pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.0.0.1 -U postgres --disable-sar
 
-    the same but with collecting system statistics using remote sar calls:
+    the same but collecting system statistics using remote sar calls:
 
             pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.0.0.1 -U postgres --enable-ssh 
                     --ssh-user postgres --ssh-identity /var/lib/postgresql/.ssh/id_rsa.pub
@@ -204,39 +205,39 @@ COLLECTING STATISTICS
     The output directory with all statistics collected should look likes:
 
             /tmp/stat_db1/
-            ├── pgbouncer.ini
-            ├── pgbouncer_req_stats.csv
-            ├── pgbouncer_stats.csv
-            ├── pg_class_size.csv
-            ├── pg_database_buffercache.csv
-            ├── pg_database_isdirty.csv
-            ├── pg_database_size.csv
-            ├── pg_database_usagecount.csv
-            ├── pg_hba.conf
-            ├── pg_ident.conf
-            ├── pg_relation_buffercache.csv
-            ├── pg_settings.csv
-            ├── pg_stat_bgwriter.csv
-            ├── pg_stat_connections.csv
-            ├── pg_stat_database_conflicts.csv
-            ├── pg_stat_database.csv
-            ├── pg_statio_user_indexes.csv
-            ├── pg_statio_user_sequences.csv
-            ├── pg_statio_user_tables.csv
-            ├── pg_stat_locks.csv
-            ├── pg_stat_missing_fkindexes.csv
-            ├── pg_stat_redundant_indexes.csv
-            ├── pg_stat_replication.csv
-            ├── pg_stat_statements.csv
-            ├── pg_stat_unused_indexes.csv
-            ├── pg_stat_user_functions.csv
-            ├── pg_stat_user_indexes.csv
-            ├── pg_stat_user_tables.csv
-            ├── pg_tablespace_size.csv
-            ├── pg_xlog_stat.csv
-            ├── postgresql.conf
-            ├── sar_stats.dat
-            └── sysinfo.txt
+            |--- pgbouncer.ini
+            |--- pgbouncer_req_stats.csv
+            |--- pgbouncer_stats.csv
+            |--- pg_class_size.csv
+            |--- pg_database_buffercache.csv
+            |--- pg_database_isdirty.csv
+            |--- pg_database_size.csv
+            |--- pg_database_usagecount.csv
+            |--- pg_hba.conf
+            |--- pg_ident.conf
+            |--- pg_relation_buffercache.csv
+            |--- pg_settings.csv
+            |--- pg_stat_bgwriter.csv
+            |--- pg_stat_connections.csv
+            |--- pg_stat_database_conflicts.csv
+            |--- pg_stat_database.csv
+            |--- pg_statio_user_indexes.csv
+            |--- pg_statio_user_sequences.csv
+            |--- pg_statio_user_tables.csv
+            |--- pg_stat_locks.csv
+            |--- pg_stat_missing_fkindexes.csv
+            |--- pg_stat_redundant_indexes.csv
+            |--- pg_stat_replication.csv
+            |--- pg_stat_statements.csv
+            |--- pg_stat_unused_indexes.csv
+            |--- pg_stat_user_functions.csv
+            |--- pg_stat_user_indexes.csv
+            |--- pg_stat_user_tables.csv
+            |--- pg_tablespace_size.csv
+            |--- pg_xlog_stat.csv
+            |--- postgresql.conf
+            |--- sar_stats.dat
+            |--- sysinfo.txt
 
     Then now you can proceed with pgcluu to generate reports.
 
@@ -245,7 +246,7 @@ GENERATING REPORTS
     least, have a directory that contains all data files generated by
     pgcluu_collectd or pgstats. In this directory, if you have a file named
     sar_stats.dat or sadc_stats.dat for binary sadc data file, it will be
-    taken to build report about system utilisation. If you just want to make
+    taken to build report about system utilization. If you just want to make
     a report from a sar file use the -i or -I options.
 
     usage: pgcluu [options] [-i sar_file | -I sadc_file] [input_dir]
