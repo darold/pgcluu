@@ -456,6 +456,36 @@ if (!-d $OUTPUT_DIR) {
 # Go to that directory
 chdir($OUTPUT_DIR);
 
+# Generate the sar command
+my $sar_command = "LC_ALL=C $SAR_PROG -t -p -A 1 1";
+my $sshcmd = '';
+# Set command to execute sar remotely using ssh if necessary 
+if ($USE_SSH) {
+	# Force using the user defined ssh command
+	if ($SSH_COMMAND) {
+		$sshcmd = $SSH_COMMAND;
+	# else compute command following the configuration parameters
+	} else {
+		$sshcmd = $SSH_BIN || 'ssh';
+		$sshcmd .= " -i $SSH_IDENTITY" if ($SSH_IDENTITY);
+		$sshcmd .= " $SSH_OPTIONS" if ($SSH_OPTIONS);
+		if ($SSH_USER) {
+			$sshcmd .= " $SSH_USER\@$DBHOST";
+		} else {
+			$sshcmd .= " $DBHOST";
+		}
+	}
+
+}
+
+if (!$DISABLE_SAR) {
+	$sar_command = $sshcmd . ' "' . $sar_command . "\"";
+	$sar_command .= " >>$SAR_FILE";
+} else {
+	$sar_command = '';
+}
+
+
 # Get Os information and exit
 if ($OS_INFO && !$NO_SYSINFO) {
 	&grab_os_information();
@@ -526,36 +556,6 @@ $PSQL_PROG .= " -U $DBUSER" if ($DBUSER);
 $PSQL_PROG .= " -d $dbnames[0]"  if ($#dbnames >= 0);
 if ($DBPASS) {
 	$ENV{PGPASSWORD} = $DBPASS;
-}
-
-# Generate the sar command
-my $sar_command = "LC_ALL=C $SAR_PROG -t -p -A 1 1";
-my $sshcmd = '';
-# Set command to execute sar remotely using ssh if necessary 
-if (!$DISABLE_SAR) {
-
-	if ($USE_SSH) {
-		# Force using the user defined ssh command
-		if ($SSH_COMMAND) {
-			$sshcmd = $SSH_COMMAND;
-		# else compute command following the configuration parameters
-		} else {
-			$sshcmd = $SSH_BIN || 'ssh';
-			$sshcmd .= " -i $SSH_IDENTITY" if ($SSH_IDENTITY);
-			$sshcmd .= " $SSH_OPTIONS" if ($SSH_OPTIONS);
-			if ($SSH_USER) {
-				$sshcmd .= " $SSH_USER\@$DBHOST";
-			} else {
-				$sshcmd .= " $DBHOST";
-			}
-		}
-		$sar_command = $sshcmd . ' "' . $sar_command . "\"";
-
-	}
-
-	$sar_command .= " >>$SAR_FILE";
-} else {
-	$sar_command = '';
 }
 
 # Try to grab the sysstat version
@@ -1092,23 +1092,41 @@ sub grab_os_information
 {
 
 	# Look at CPU informations
-	my @cpuinfo = `cat /proc/cpuinfo | grep -E "model name|cpu MHz|cache size|cpu cores|processor" 2>/dev/null`;
+	my $cmd = 'cat /proc/cpuinfo 2>/dev/null';
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my @cpuinfo = `$cmd | grep -E "model name|cpu MHz|cache size|cpu cores|processor"`;
 	# Look at kernel informations
-	my $kernel_info = `uname -a  2>/dev/null`;
+	$cmd = 'uname -a  2>/dev/null';
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my $kernel_info = `$cmd`;
 	# Look at memory informations
-	my @meminfo = `cat /proc/meminfo 2>/dev/null`;
+	$cmd = 'cat /proc/meminfo 2>/dev/null';
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my @meminfo = `$cmd`;
 	# Look at filesystem informations
-	my @dfinfo = `df -h 2>/dev/null`;
+	$cmd = 'df -h 2>/dev/null';
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my @dfinfo = `$cmd`;
 	# Mount informations
-	my @mountinfo = `mount -l 2>/dev/null`;
+	$cmd = 'mount -l 2>/dev/null';
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my @mountinfo = `$cmd`;
 	# Fstab informations
-	my @fstabinfo = `cat /etc/fstab | grep -v "^#" 2>/dev/null`;
+	$cmd = 'cat /etc/fstab 2>/dev/null';
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my @fstabinfo = `$cmd | grep -v "^#"`;
 	# PCI information
-	my @pciinfo = `lspci  2>/dev/null`;
+	$cmd = 'lspci 2>/dev/null';
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my @pciinfo = `$cmd`;
 	# Release informations
-	my @releaseinfo = `cat /etc/*release 2>/dev/null`;
+	$cmd = 'cat /etc/*release 2>/dev/null';
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my @releaseinfo = `$cmd`;
 	# System kernel tuning parameters
-	my @system = `/sbin/sysctl -a 2>/dev/null| grep -E "vm.nr_hugepages |vm.overcommit|vm.dirty_.*(ratio|bytes)|swappiness|zone_reclaim_mode|shmmax|shmall"`;
+	$cmd = '/sbin/sysctl -a 2>/dev/null';
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my @system = `$cmd | grep -E "vm.nr_hugepages |vm.overcommit|vm.dirty_.*(ratio|bytes)|swappiness|zone_reclaim_mode|shmmax|shmall"`;
 	unless(open(OUT, ">$OUTPUT_DIR/sysinfo.txt")) {
 		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
 		exit 1;
