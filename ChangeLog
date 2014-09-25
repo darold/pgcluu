@@ -1,10 +1,156 @@
+2014-09-25 - Version 2.1 released
+
+This release fix a lot of issue reported since six month and adds some
+improvments:
+
+Allow system information commands to be executed remotely
+Allow sar to be executed on a remote serveur using ssh connection.
+New options to pgcluu_collectd:
+    -M or --max-size option to allow an output dir size limit.
+    --no-database to avoid collecting statistics from a database.
+    -C count to terminate program after collecting data for X times.
+    -E or --end-after to terminate program after for some time.
+    -V or --version to show version information.
+
+New or enhanced reports/features:
+    Add report of connections waiting for a lock.
+    Add average duration time in statement report.
+    Add pg_stat_statements report.
+    Add pg_default and pg_global to tablespace size report.
+
+
+Other changes/fixes:
+
+	- Allow system information commands to be executed remotely. Thanks to
+	  Ahmad Iftekhar Rumman for the report.
+	- Add --no-database to avoid collecting statistics from a database.
+	  Useful if you just want to collect sar statistics.
+	- Fix query to collect information from pg_stat_activity that fail on
+	  postgres-xl and certainly postgres-xc. Thanks to xiao huan for the
+	  report.
+	- Fix pgcluu_collectd to stop capturing activity when option -C is
+	  omitted. Thanks to Thomas Reiss.
+	- Fix pg_settings query unit is available in >= 8.2 and boot and reset
+	  since 8.4. Thanks to Euler Taveira de Oliveira for the patch.
+	- Fix unopen filehandle in printing system disk device statistics.
+	  Thanks to Ahmad Iftekhar Rumman for the report.
+	- Cosmetic fixes in docs. Thanks to Euler Taveira de Oliveira for the
+	  patch.
+	- Documentation update with the new -C option to pgcluu_collectd.
+	- Terminate program after collecting data for X times. This is another
+	  option to end the program. Instead of doing some math with time
+	  counter, use a numeric counter. It can be combined with -i option too.
+	  Also, time (-E) has precedence over numeric (-C). Thanks to Euler
+	  Taveira de Oliveira for the patch.
+	- Add report of kernel nr_hugepages report, 9.4+ now support huge page
+	  supported. Thanks to Euler Taveira de Oliveira for the patch.
+	- Fix connection report enabled when a database has no connection.
+	  Thanks to Guillaume Lelarge for the report.
+	- Add configuration report of recovery.conf and postgresql.auto.conf.
+	  Thanks to Guillaume Lelarge and Julien Rouhaud for the report.
+	- Removed useless Type column in Indexes ans Tables size reports. Thanks
+	  to Guillaume Lelarge for the report.
+	- Disable Conflict and Canceled queries menus when this is not a standby
+	  server. Thanks to Guillaume Lelarge for the report.
+	- Fix some typo reported in issue #20. Thanks to Guillaume Lelarge for
+	  the report.
+	- Change Returned and Fetched legend to Table (returned) and Index
+	  (fetched). Thanks to Guillaume Lelarge for the report.
+	- Fix keep tick formatting when zooming. Thanks to Julien Rouhaud for
+	  the patch.
+	- Fix non exclusion of devices in System Network and Devices submenu.
+	  Thanks to Thomas Reiss for the report.
+	- Fix some error uninitialized value in concatenation.
+	- Allow pgbouncer statistics collect+report only. Thanks to Eric
+	  Veldhuyzen for the report.
+	- Add boot_val and reset_val to pg_settings output.
+	- Fix multiline in df system information. Thanks to Nicolas Thauvin
+	  for the report.
+	- Add -M or --max-size option to allow an output dir size limit. For
+	  example using -M 100MB will interrupt pgcluu_collectd when output dir
+	  will reach this size. Require the du system command. Thanks to Nicolas
+	  Thauvin for the feature request.
+	- Add new option -E or --end-after to tell pgcluu_collectd to run for
+	  some time before terminating automatically. Thanks to Nicolas Thauvin
+	  for the feature resquest.
+	- Fix issue with pg_stat_statements metrics when the extension was not
+	  installed in a schema searchable in the search_path connected user
+	  value. Thanks to Nicolas Thauvin for the report.
+	- Failure on null value on replication report when pg_basebackup was
+	  running. Thanks to Emmanuel Vinet for the report.
+	- Add/fix report of connections waiting for a lock. Thanks to Guillaume
+	  Lelarge for the report.
+	- Replace label Waiting and Waiting in xact by Idle and Idle in xact in
+	  connection graph. Thanks to Guillaume Lelarge for the report.
+	- Fix metrics that was not accepted if passed alone: pg_settings,
+	  lock_granted,lock_modes,lock_types. Thanks to Fabio Pardi for the
+	  report.
+	- Add information about -v|--verbose and -V|--version to documentation.
+	- Add -V | --version option. Thanks to Fabio Pardi for the feature
+	  request.
+	- Fix several issues in disabling menu in cluster reports.
+	- Fix temporary statistics report, menu was always disabled. Thanks to
+	  Julien Rouhaud for the report.
+	- Fix wring number of CPU sockets that was reporting the total number
+	  of cores. Thanks to Thomas Reiss for the report.
+	- Add collect of the extensions version. Thanks to Jehan-Guillaume de
+	  Rorthais for the request.
+	- Add support to individual reports when the --metrics option have been
+	  used with pgcluu_collectd.
+	- Fix some uninitialized variables and errors when pgcluu has only some
+	  metrics to parse.
+	- It will not search for pg_database_size.csv anymore to contruct the
+	  list of database and read pgbouncer file to get list of database with
+	  pgbouncer.
+	- Generation of database related reports (cluster, database, pgbouncer)
+	  have been review to use non global filehandle. It will not search for
+	  pg_database_size.csv anymore to contruct the list of database and
+	  prevent case where some reports was genereted twice.
+	- Speed improvement.
+	- Rename --os-info option into --sysinfo and add --no-sysinfo option to
+	  completly disable the generation of sysinfo.txt
+	- Fix --metrics option that was not limiting the kind of metrics to use.
+	  Thanks to Fabio Pardi for the report.
+	- Fix bug in device lookup in sar file that was generating undefined
+	  filehandle. Thanks to Toth Csaba for the help
+	- Fix several part where pgcluu crash using undefined variable if the
+	  database in not found in pg_database_size.csv.
+	- Fix error print on an undefined value when a database does not have
+	  lock defined. Thanks to Csaba Toth for the report.
+	- Fix typo in System memory utilization report description.
+	- Fix typo in Commits/Rollbacks report description.
+	- Fix typo in Read Tuples report description.
+	- Fix typo in locks per type report description.
+	- Fix typo in Statistics about cache utilisation per relation.
+	- Change description of Replication lag report.
+	- Add sorttable.js to resources directory.
+	- Fix position of index.html#home.
+	- Fix parsing of --db-only, --dev-only ... comma separated list.
+	- Fix typo in ssh related option. Thanks to Jehan-Guillaume de Rorthais
+	  for the report.
+	- Fix code to set ssh command and allow collect of configuration files
+	  through ssh.
+	- Allow sar to be executed on a remote serveur using ssh connection.
+	  Add --enable-ssh to activate this feature, the remote host is defined
+	  using -h option. There is several new options --ssh-* to be able to
+	  take full control of the ssh connection.
+	- Add average duration time in statement report.
+	- Add pg_stat_statements report.
+	- Override statements statistics on each loop.
+	- Replace multiple space by single one in pg_stat_statements queries.
+	- Fix pg_stat_statements collect to replace semi-colon by SEMICOLON
+	  keyword to prevent breaking CSV format.
+	- Add pg_default and pg_global to tablespace size report. Fix issue on
+	  spclocation display on per tablespace reports.
+
 2014-03-22 - Version 2.0 released
 
-This major release adds more than twenty new reports. pgCluu now reports everything
-you want to know about your PostgreSQL server from a cluster, database, or operating
-system point of view. It is also able to collect statistics about pgBouncer, shared
-buffer utilization using pg_buffercache, most frequent and time consuming queries
-with pg_stat_statements and really much more, see full list bellow. 
+This major release adds more than twenty new reports. pgCluu now reports
+everything you want to know about your PostgreSQL server from a cluster,
+database, or operating system point of view. It is also able to collect
+statistics about pgBouncer, shared buffer utilization using pg_buffercache,
+most frequent and time consuming queries with pg_stat_statements and really
+much more, see full list bellow. 
 
 New or enhanced reports/features:
 
