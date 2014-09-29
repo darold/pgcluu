@@ -479,7 +479,7 @@ if ($USE_SSH) {
 }
 
 if (!$DISABLE_SAR) {
-	$sar_command = $sshcmd . ' "' . $sar_command . "\"";
+	$sar_command = $sshcmd . ' "' . $sar_command . "\"" if ($sshcmd);
 	$sar_command .= " >>$SAR_FILE";
 } else {
 	$sar_command = '';
@@ -897,7 +897,7 @@ EOF
 		}
 	}
 
-	if ($sql_queries) {
+	if ($sql_queries && &backend_minimum_version(9, 0)) {
 		$sql_queries = "SET application_name TO pgcluu;\n" . $sql_queries;
 	}
 	return $sql_queries
@@ -1287,7 +1287,7 @@ sub dump_pgstatactivity
 		"usesysid, usename, %s%s%s%s%s" .
 		"date_trunc('seconds', query_start) AS query_start, " .
 		"%s%s%s " .
-		"FROM pg_stat_activity WHERE application_name != 'pgcluu' " .
+		"FROM pg_stat_activity %s" .
 		"ORDER BY %s",
 		&backend_minimum_version(9, 2) ? "pid" : "procpid",
 		&backend_minimum_version(9, 0) ? "application_name, " : "",
@@ -1298,6 +1298,7 @@ sub dump_pgstatactivity
 		&backend_minimum_version(9, 2) ? "state_change, " : "",
 		&backend_minimum_version(8, 2) ? "waiting, " : "",
 		&backend_minimum_version(9, 2) ? "query" : "current_query",
+		&backend_minimum_version(9, 0) ? "WHERE application_name != 'pgcluu' " : "",
 		&backend_minimum_version(9, 2) ? "pid" : "procpid"
 	);
 
