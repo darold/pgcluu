@@ -5244,12 +5244,27 @@ sub generate_html_menu
                   <li id="menu-system-block"><a href="system.html#system-block">Blocks</a></li>
                   <li id="menu-system-page"><a href="system.html#system-page">Pages</a></li>
                   <li class="divider"></li>
-		  <li id="menu-device" class="dropdown-submenu">
-		     <a href="#" tabindex="-1">Devices </a>
-		      <ul class="dropdown-menu">
 };
+		my $idx = 0;
 		for (my $i = 0; $i <= $#DEVICE_LIST; $i++) {
 			next if (!&device_in_report($DEVICE_LIST[$i]));
+			my $md = $i % 10;
+			if ($md == 0) {
+				$idx++;
+				if ($i > 0) {
+					$menu_str .= qq{
+		    </ul>
+		  </li>
+};
+				}
+				my $lbl = '';
+				$lbl = " (part $idx)" if ($#DEVICE_LIST >= 10);
+				$menu_str .= qq{
+		  <li id="menu-device$idx" class="dropdown-submenu">
+		     <a href="#" tabindex="-1">Devices $lbl</a>
+		      <ul class="dropdown-menu">
+};
+			}
 			$menu_str .= qq{
 			  <li id="menu-device$i" class="dropdown-submenu">
 			     <a href="#" tabindex="-1">$DEVICE_LIST[$i] </a>
