@@ -252,7 +252,7 @@ sadc_stats.dat for binary sadc data file, it will be taken to build report
 about system utilization. If you just want to make a report from a sar file
 use the -i or -I options.
 
-usage: pgcluu [options] [-i sar_file | -I sadc_file] [input_dir]
+usage: pgcluu [options] [-i sar_file [--from-sa-file] | -I sadc_file] [input_dir]
 
 	input_dir: directory where pgcluu_collectd or pgstats and sar data
 		   files are stored.
@@ -290,6 +290,8 @@ options:
   -z, --timezone +/-XX     Set the number of hour(s) from GMT of the timezone.
                            Use this to adjust date/time from the sar output,
                            pgcluu use GMT time to draw charts.
+  --from-sa-file           instruct pgcluu that file specified by the -i option
+                           uses the standard system activity daily data file.
   --help                   print usage
 
 For example, you can generate all HTML reports from data files stored into
@@ -306,6 +308,12 @@ If you just want to create a report from a sar output file:
 
         sar -p -A 10 60 > /root/my_sar_file.txt
         pgcluu -o /tmp/report_sar/ -i /root/my_sar_file.txt
+
+or from a daily sa file:
+
+        sar -p -A -f /var/log/sa/sa18 > /root/my_sar_file.txt
+        pgcluu -o /tmp/report_sar/ -i /root/my_sar_file.txt --from-sa-file
+
 
 =head1 LICENSE
 

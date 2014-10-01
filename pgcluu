@@ -44,13 +44,14 @@ my $END         = '';
 my $NUMBER_CPU  = 0;
 my $TIMEZONE    = '00';
 my $REVERT_DATE = 0;
+my $FROM_SA_FILE= 0;
 my $SADC_INPUT_FILE    = '';
 my $SAR_INPUT_FILE     = '';
 my @DEVICE_LIST        = ();
 my @IFACE_LIST         = ();
 my %OVERALL_STATS      = ();
 my @GRAPH_COLORS       = ('#6e9dc9', '#f4ab3a', '#ac7fa8', '#8dbd0f'); 
-my $FROM_SA_FILE = 0;
+
 my %RELKIND = (
 	'r' => 'tables',
 	'i' => 'indexes',
@@ -715,6 +716,7 @@ GetOptions(
 	"v|verbose!"     => \$DEBUG,
 	"V|version!"     => \$SHOW_VER,
 	"z|timezone=s"   => \$TIMEZONE,
+	"from-sa-file!"  => \$FROM_SA_FILE,
 ) or die usage();
 &usage if ($HELP);
 
@@ -1050,6 +1052,8 @@ options:
   -z, --timezone +/-XX     Set the number of hour(s) from GMT of the timezone.
                            Use this to adjust date/time from the sar output,
                            pgcluu use GMT time to draw charts.
+  --from-sa-file           instruct pgcluu that file specified by the -i option
+                           uses the standard system activity daily data file.
   --help                   print usage
 
 For example, you can generate all HTML reports from data files stored into
@@ -1162,6 +1166,9 @@ sub get_device_list
 			if ($l !~ /^\d+:\d+:\d+/) {
 				next;
 			}
+			# Format timestamp when AM or PM is used
+			$l =~ s/^(\d+:\d+:\d+)\s(AM|PM)/$1/;
+
 			if ($l =~ m#DEV\s+#) {
 				if ($#headers == -1) {
 					push(@headers, split(m#\s+#, $l));
@@ -1231,6 +1238,9 @@ sub get_interface_list
 			if ($l !~ /^\d+:\d+:\d+/) {
 				next;
 			}
+			# Format timestamp when AM or PM is used
+			$l =~ s/^(\d+:\d+:\d+)\s(AM|PM)/$1/;
+
 			if ($l =~ m#IFACE\s+#) {
 				if ($#headers == -1) {
 					push(@headers, split(m#\s+#, $l));
@@ -1870,7 +1880,6 @@ sub pg_stat_user_tables
 	my %start_vals = ();
 	my $tmp_val = 0;
 	my $do_vacuum = 0;
-	my $old_time = 0;
 	# Load data from file
 	my $curfh = new IO::File;
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
@@ -2107,7 +2116,6 @@ sub pg_stat_user_indexes
 	my %start_vals = ();
 	my $tmp_val = 0;
 	my $do_vacuum = 0;
-	my $old_time = 0;
 	# Load data from file
 	my $curfh = new IO::File;
 	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
@@ -5337,7 +5345,6 @@ sub compute_cpu_report
 		}
 	}
 	$ncpu += 1;
-	$FROM_SA_FILE = 1 if ($count > 1);
 
 	for (my $i = 0; $i <= $#_; $i++) {
 		my @data = split(/;/, $_[$i]);
@@ -6067,13 +6074,15 @@ sub compute_sarfile_graph
 	my $type = '';
 	my @headers = ();
 	my %fulldata = ();
-	my $old_time = '';
+	my $old_time = 0;
+	my $orig_time = 0;
 
 	for (my $i = 0; $i <= $#content; $i++) {
 		# Empty line, maybe the end of a report
 		if ($content[$i] eq '') {
 			$type = '';
 			@headers = ();
+			$old_time = 0 if ($FROM_SA_FILE);
 			next;
 		}
 		# look for kernel header to find the date
@@ -6113,6 +6122,12 @@ sub compute_sarfile_graph
 			next;
 		}
 
+		# Remove AM|PM timestamp information
+		my $am_pm = '';
+		if ($content[$i] =~ s/^(\d+:\d+:\d+)\s(AM|PM)/$1/) {
+			$am_pm = $2;
+			shift(@headers) if ($headers[0] =~ /^(AM|PM)$/);
+		}
 		# Get all values reported
 		my @values = ();
 		push(@values, split(m#\s+#, $content[$i]));
@@ -6124,7 +6139,7 @@ sub compute_sarfile_graph
 			die "Header: " . join(';', @headers) . " | Values: " . join(';', @values) . "\n";
 		}
 		if ($timestamp =~ /(\d+:\d+:\d+)/) {
-			$timestamp = &convert_sar_time($1, $old_time);
+			$timestamp = &convert_sar_time($1, $old_time, $am_pm);
 			$old_time = $timestamp;
 		}
 		if (!$timestamp) {
@@ -6292,7 +6307,7 @@ sub convert_time
 
 sub convert_sar_time
 {
-	my ($str, $old_timestamp) = @_;
+	my ($str, $old_timestamp, $am_pm) = @_;
 
 	my $curdate = '';
 
@@ -6302,8 +6317,16 @@ sub convert_sar_time
 	$sar_year ||= $o_year;
 
 	if ($str =~ /(\d+):(\d+):(\d+)/) {
-
-		my $time = ($1*3600)+($2*60)+$3;
+		my $h = $1;
+		my $m = $2;
+		my $s = $3;
+		if ($am_pm && ($am_pm eq 'AM')) {
+			$h = 0 if ($h == 12);
+		} elsif ($am_pm && ($am_pm eq 'PM')) {
+			$h += 12 if ($h < 12);
+		}
+			
+		my $time = ($h*3600)+($m*60)+$s;
 
 		my $tz = ((0-$TIMEZONE)*3600);
 		$curdate = &timegm_nocheck(0, 0, 0, $sar_day, $sar_month - 1, $sar_year - 1900) + $tz;
