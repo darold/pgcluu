@@ -1796,14 +1796,16 @@ sub dump_redundantindexes
 		"  SELECT indexrelid, " . 
 		"    indrelid, " . 
 		"    array_to_string(indkey,'+') AS colindex, " . 
+		"    indisunique AS is_unique, " . 
 		"    lag(array_to_string(indkey,'+')) OVER search_window AS colindexbackward, " . 
-		"    lag(indexrelid) OVER search_window AS index_backward " . 
+		"    lag(indexrelid) OVER search_window AS index_backward, " . 
+		"    lag(indisunique) OVER search_window AS is_unique_backward " . 
 		"  FROM pg_index " . 
 		"    WINDOW search_window AS (PARTITION BY indrelid " . 
 		"    ORDER BY array_to_string(indkey,'+') DESC) " . 
 		") AS tmp " . 
-		"WHERE colindexbackward LIKE (colindex || '+%')" 
-
+		"WHERE (colindexbackward LIKE (colindex || '+%') OR colindexbackward = colindex) " .
+		"  AND (is_unique_backward <> is_unique)" 
 	);
 
 	return $sql;
