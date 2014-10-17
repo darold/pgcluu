@@ -3368,6 +3368,8 @@ sub pg_stat_redundant_indexes
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
+		# Do not report indexes when one is partial and not the oher one
+		next if (grep(/\bWHERE\b/i, $data[2], $data[3]) == 1);
 
 		# timestamp | dbname | contained | containing
 		$idx_stat{$data[1]} .= "<tr><td>$data[2]</td><td>$data[3]</td></tr>\n";
