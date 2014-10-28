@@ -1889,7 +1889,8 @@ sub dump_missingfkindexes
 		"     ) candidate_index " . 
 		"JOIN pg_class ON pg_class.oid = candidate_index.conrelid " . 
 		"LEFT JOIN pg_index ON pg_index.indrelid = conrelid " . 
-		"                      AND indkey::text = array_to_string(column_list, ' ') "
+		"                      AND indkey::text = array_to_string(column_list, ' ') " .
+		"WHERE pg_index.indrelid IS NULL "
 	);
 
 	return $sql;
