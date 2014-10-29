@@ -2697,7 +2697,7 @@ sub pg_stat_connections
 		$all_connections_stat{$data[0]}{'all'}{active} += $data[2];
 		$all_connections_stat{$data[0]}{'all'}{waiting} += $data[3];
 		$all_connections_stat{$data[0]}{'all'}{idle_in_xact} += $data[4];
-		$all_connections_stat{$data[0]}{'all'}{idle_in_xact} += ($data[1] - $data[2] - $data[4]);
+		$all_connections_stat{$data[0]}{'all'}{idle} += ($data[1] - $data[2] - $data[4]);
 	}
 	$curfh->close();
 	push(@databases, 'all') if ($#databases >= 0);
