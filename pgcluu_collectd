@@ -1134,6 +1134,18 @@ sub grab_os_information
 		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
 		exit 1;
 	}
+	$cmd = 'cat /sys/kernel/mm/*transparent_hugepage/enabled 2>/dev/null';
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my $ret = `$cmd`;
+	push(@system, "/sys/kernel/mm/transparent_hugepage/enabled: " . $ret);
+	$cmd = 'cat /sys/kernel/mm/*transparent_hugepage/defrag 2>/dev/null';
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	$ret = `$cmd`;
+	push(@system, "/sys/kernel/mm/transparent_hugepage/defrag: " . $ret);
+	$cmd = 'cat /sys/kernel/mm/*transparent_hugepage/khugepaged/defrag 2>/dev/null';
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	$ret = `$cmd`;
+	push(@system, "/sys/kernel/mm/transparent_hugepage/khugepaged/defrag: " . $ret);
 	print OUT "[CPU]\n";
 	print OUT @cpuinfo;
 	print OUT "[KERNEL]\n";
