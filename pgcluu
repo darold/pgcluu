@@ -4769,7 +4769,7 @@ sub generate_html_menu
 	}
 
 	opendir(ODIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
-	my @database_list = grep { !/^database-all.html$/ && s/^database-(.*).html$/$1/; } readdir(ODIR);
+	my @database_list = grep { !/^database-all.html$/ && s/^database-([^\-]+).html$/$1/; } readdir(ODIR);
 	closedir(ODIR);
 	if ($#database_list >= 0) {
 		my $disable_size = ' class="disabled"';
