@@ -4519,10 +4519,19 @@ EOF
 		}
 		print $fh "<li>\n";
 		foreach my $k (sort keys %{$sysinfo{SYSTEM}}) {
-			next if ($k =~ /kernel/);
-			print $fh <<EOF;
-	     <span class="figure-label">$k</span> <span class="figure">$sysinfo{SYSTEM}{$k}</span><br>
+			next if ($k =~ /^kernel/);
+            if ($k =~ /transparent_hugepage/) {
+                my $k2 = $k;
+                $k2 =~ s/\/sys\/kernel\/mm\//.../;
+                $sysinfo{SYSTEM}{$k} =~ s/.*\[(.*)\].*/$1/;
+                print $fh <<EOF;
+                <span class="figure-label" data-toggle="tooltip" data-placement="top" title="$k">$k2</span> <span class="figure">$sysinfo{SYSTEM}{$k}</span><br>
 EOF
+            } else {
+                print $fh <<EOF;
+                <span class="figure-label">$k</span> <span class="figure">$sysinfo{SYSTEM}{$k}</span><br>
+EOF
+            }
 		}
 		print $fh "</li>\n";
 		my $core_info = '';
@@ -4585,6 +4594,14 @@ EOF
 	      <li><span class="figure">$sysinfo{MEMORY}{'committed_as'}</span> <span class="figure-label">Committed</span></li>
 EOF
 		}
+		if (exists $sysinfo{SYSTEM}{'kernel.shmmax'} and exists $sysinfo{SYSTEM}{'kernel.shmall'}) {
+          $sysinfo{SYSTEM}{'kernel.shmmax'} = pretty_print_size($sysinfo{SYSTEM}{'kernel.shmmax'});
+          $sysinfo{SYSTEM}{'kernel.shmall'} = pretty_print_size($sysinfo{SYSTEM}{'kernel.shmall'} * 1024 * 4);
+          print $fh <<EOF;
+            <li><span class="figure">$sysinfo{SYSTEM}{'kernel.shmmax'}</span> <span class="figure-label">kernel.shmmax</span></li>
+            <li><span class="figure">$sysinfo{SYSTEM}{'kernel.shmall'}</span> <span class="figure-label">kernel.shmall</span></li>
+EOF
+        }
 		print $fh <<EOF;
 		</ul>
 		</div>
@@ -6802,8 +6819,8 @@ sub read_sysinfo
 			push(@{$sysinfo{$section}}, "$l\n");
 		}
 		if ($section eq 'SYSTEM') {
-			my ($key, $val) = split(/\s+=\s+/, $l);
-			$sysinfo{$section}{$key} = $val if ($key);
+			my ($key, $val) = split(/\s*[=:]\s+/, $l);
+			$sysinfo{$section}{$key} = $val if ($key) and ($val);
 		}
 		if ($section eq 'PGVERSION') {
 			$sysinfo{$section}{full_version} = $l;
