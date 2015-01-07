@@ -3735,7 +3735,15 @@ sub pg_settings
 		next if (!&normalize_line(\@data));
 
 		# timestamp | label | setting | value
-		$conf_stat{$data[1]}{$data[2]} = $data[3];
+		$conf_stat{$data[1]}{$data[2]}{value} = $data[3];
+		$conf_stat{$data[1]}{$data[2]}{unit} = '';
+		$conf_stat{$data[1]}{$data[2]}{bootval} = '';
+		$conf_stat{$data[1]}{$data[2]}{resetval} = '';
+		if ($#data >= 6) {
+			$conf_stat{$data[1]}{$data[2]}{unit} = $data[4];
+			$conf_stat{$data[1]}{$data[2]}{bootval} = $data[7];
+			$conf_stat{$data[1]}{$data[2]}{resetval} = $data[8];
+		}
 	}
 	$curfh->close();
 
@@ -3759,9 +3767,14 @@ sub pg_settings
 					<tbody>
 };
 	foreach my $lbl (sort keys %conf_stat) {
-		print $fhcluster "<tr><th colspan=\"2\">$lbl</th></tr>\n";
+		print $fhcluster "<tr><th colspan=\"4\">$lbl</th></tr>\n";
+		print $fhcluster "<tr><th>Name</th><th>Current</th><th>Unit</th><th>Reset val</th></tr>\n";
 		foreach my $set (sort { lc($a) cmp lc($b) } keys %{$conf_stat{$lbl}}) {
-			print $fhcluster "<tr><td>$set</td><td>$conf_stat{$lbl}{$set}</td></tr>\n";
+			my $sign = '';
+			if ($conf_stat{$lbl}{$set}{value} ne $conf_stat{$lbl}{$set}{resetval}) {
+				$sign = '**';
+			}
+			print $fhcluster "<tr><td>$sign$set$sign</td><td>$conf_stat{$lbl}{$set}{value}</td><td>$conf_stat{$lbl}{$set}{unit}</td><td>$conf_stat{$lbl}{$set}{resetval}</td></tr>\n";
 		}
 	}
 	print $fhcluster qq{
