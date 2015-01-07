@@ -3768,13 +3768,9 @@ sub pg_settings
 };
 	foreach my $lbl (sort keys %conf_stat) {
 		print $fhcluster "<tr><th colspan=\"4\">$lbl</th></tr>\n";
-		print $fhcluster "<tr><th>Name</th><th>Current</th><th>Unit</th><th>Reset val</th></tr>\n";
+		print $fhcluster "<tr><th>Name</th><th>Current</th><th>Unit</th><th>Reset val</th><th>Boot val</th></tr>\n";
 		foreach my $set (sort { lc($a) cmp lc($b) } keys %{$conf_stat{$lbl}}) {
-			my $sign = '';
-			if ($conf_stat{$lbl}{$set}{value} ne $conf_stat{$lbl}{$set}{resetval}) {
-				$sign = '**';
-			}
-			print $fhcluster "<tr><td>$sign$set$sign</td><td>$conf_stat{$lbl}{$set}{value}</td><td>$conf_stat{$lbl}{$set}{unit}</td><td>$conf_stat{$lbl}{$set}{resetval}</td></tr>\n";
+			print $fhcluster "<tr><td>$set</td><td>$conf_stat{$lbl}{$set}{value}</td><td>$conf_stat{$lbl}{$set}{unit}</td><td>$conf_stat{$lbl}{$set}{resetval}</td><td>$conf_stat{$lbl}{$set}{bootval}</td></tr>\n";
 		}
 	}
 	print $fhcluster qq{
