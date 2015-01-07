@@ -1169,6 +1169,7 @@ sub get_device_list
 			# Format timestamp when AM or PM is used
 			$l =~ s/^(\d+:\d+:\d+)\s(AM|PM)/$1/;
 
+			last if ($l =~ m#IFACE\s+#);
 			if ($l =~ m#DEV\s+#) {
 				if ($#headers == -1) {
 					push(@headers, split(m#\s+#, $l));
