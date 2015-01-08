@@ -219,6 +219,7 @@ The output directory with all statistics collected should look likes:
 	|--- pg_ident.conf
 	|--- pg_relation_buffercache.csv
 	|--- pg_settings.csv
+	|--- pg_db_role_setting.csv
 	|--- pg_stat_bgwriter.csv
 	|--- pg_stat_connections.csv
 	|--- pg_stat_database_conflicts.csv

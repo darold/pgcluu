@@ -498,6 +498,17 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'PostgreSQL settings',
 		},
 	},
+	'pg_db_role_setting.csv' => {
+		'1' => {
+			'name' =>  'cluster-dbrolesetting',
+			'title' => 'PostgreSQL Database/Roles Settings',
+			'description' => 'Configuration directives and values defined with ALTER DATABASE and ALTER ROLE.',
+			'ylabel' => 'Number',
+			'legends' => ['Settings'],
+			'active' => 1,
+			'menu' => 'Database/Roles settings',
+		},
+	},
 	'pgbouncer.ini' => {
 		'1' => {
 			'name' =>  'cluster-pgbouncer',
@@ -3787,6 +3798,65 @@ sub pg_settings
 	$fhcluster->close();
 }
 
+# Show configuration from pg_db_role_setting
+sub pg_db_role_setting
+{
+	my ($interval, $file, %data_info) = @_;
+
+	my %conf_stat = ();
+	# Load data from file
+	my $curfh = new IO::File;
+	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	while (<$curfh>) {
+		my @data = split(/;/);
+		next if (!&normalize_line(\@data));
+
+		# timestamp | database | role | settings
+		$data[1] ||= 'All';
+		$data[2] ||= 'All';
+		$conf_stat{$data[1]}{$data[2]} = $data[3];
+	}
+	$curfh->close();
+
+	my $id = &get_data_id('cluster-dbrolesetting', %data_info);
+	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
+	print $fhcluster qq{
+<li style="display: none;" class="slide" id="cluster-dbrolesetting-slide">
+      <div id="cluster-dbrolesetting"><br><br><br><br></div>
+
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="$data_info{$id}{name}-report">
+			<div class="span11">
+				<table class="table table-striped" id="$data_info{$id}{name}-table">
+					<tbody>
+};
+	print $fhcluster "<tr><th>Database</th><th>Role</th><th>Settings</th></tr>\n";
+	foreach my $lbl (sort keys %conf_stat) {
+		foreach my $set (sort { lc($a) cmp lc($b) } keys %{$conf_stat{$lbl}}) {
+			print $fhcluster "<tr><td>$lbl</td><td>$set</td><td>$conf_stat{$lbl}{$set}</td></tr>\n";
+		}
+	}
+	print $fhcluster qq{
+					</tbody>
+				</table>
+			</div>
+		</div>
+		</div>
+	    </div>
+	</div>
+    </li>
+};
+	$fhcluster->close();
+}
+
+
 # Compute graphs of buffercache database statistics
 sub pg_database_buffercache
 {
@@ -4758,6 +4828,7 @@ sub generate_html_menu
 	my $disable_pghba = '';
 	my $disable_pgident = '';
 	my $disable_pgbouncer = '';
+	my $disable_pgdb_role_setting = '';
 	my $disable_conf = ' disabled';
 	if (!-e "$INPUT_DIR/postgresql.conf" || -z "$INPUT_DIR/postgresql.conf") {
 		$disable_pgconf = ' class="disabled"';
@@ -4786,6 +4857,11 @@ sub generate_html_menu
 	}
 	if (!-e "$INPUT_DIR/pg_settings.csv" || -z "$INPUT_DIR/pg_settings.csv") {
 		$disable_pgsettings = ' class="disabled"';
+	} else {
+		$disable_conf = '';
+	}
+	if (!-e "$INPUT_DIR/pg_db_role_setting.csv" || -z "$INPUT_DIR/pg_db_role_setting.csv") {
+		$disable_pgdb_role_setting = ' class="disabled"';
 	} else {
 		$disable_conf = '';
 	}
@@ -4970,6 +5046,7 @@ sub generate_html_menu
 			      <ul class="dropdown-menu">
 			      <li id="menu-cluster-pgconf"$disable_pgconf><a href="cluster.html#cluster-pgconf">PostgreSQL configuration</a></li>
 			      <li id="menu-cluster-settings"$disable_pgsettings><a href="cluster.html#cluster-settings">PostgreSQL settings</a></li>
+			      <li id="menu-cluster-dbrolesetting"$disable_pgdb_role_setting><a href="cluster.html#cluster-dbrolesetting">Database/Roles settings</a></li>
 			      <li id="menu-cluster-alterconf"$disable_alterconf><a href="cluster.html#cluster-alterconf">PostgreSQL ALTER SYSTEM configuration</a></li>
 			      <li id="menu-cluster-recoveryconf"$disable_recoveryconf><a href="cluster.html#cluster-recoveryconf">PostgreSQL recovery configuration</a></li>
 			      <li id="menu-cluster-pghba"$disable_pghba><a href="cluster.html#cluster-pghba">PostgreSQL authorization</a></li>

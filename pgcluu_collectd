@@ -240,6 +240,12 @@ my %METRICS_COMMANDS = (
 		'repeat'  => 1,
 		'override'  => 1,
 	},
+	'pg_db_role_setting_stats' => {
+		'output' => 'pg_db_role_setting.csv',
+		'command' => 'dump_pgdbrolesetting',
+		'repeat'  => 1,
+		'override'  => 1,
+	},
 	'database_buffercache_stats' => {
 		'output' => 'pg_database_buffercache.csv',
 		'command' => 'dump_pgdatabase_buffercache'
@@ -827,6 +833,7 @@ sub verify_action
 		delete $METRICS_COMMANDS{'user_xact_tables_stats'};
 		delete $METRICS_COMMANDS{'all_xact_tables_stats'};
 		delete $METRICS_COMMANDS{'xact_functions_stats'};
+		delete $METRICS_COMMANDS{'pg_db_role_setting_stats'};
 	}
 	if (!&backend_minimum_version(8, 4)) {
 		delete $METRICS_COMMANDS{'functions_stats'};
@@ -1841,6 +1848,23 @@ sub dump_pgsettings
 
 	return $sql;
 }
+
+####
+# Get PostgreSQL database and role settings
+####
+sub dump_pgdbrolesetting
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), b.datname, c.rolname, a.setconfig " .
+		"FROM pg_db_role_setting a LEFT JOIN pg_database b ON (a.setdatabase=b.oid) " .
+		"LEFT JOIN pg_roles c ON (a.setrole=c.oid) " .
+		"ORDER BY 2,3"
+	);
+
+	return $sql;
+}
+
 
 ####
 # Get path the PostgreSQL configuration files
