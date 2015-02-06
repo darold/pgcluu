@@ -20,7 +20,7 @@ use Time::Local 'timegm_nocheck';
 use POSIX qw(locale_h sys_wait_h ceil);
 setlocale(LC_ALL, 'C');
 
-$VERSION = '2.2';
+$VERSION = '2.3';
 $PROGRAM = 'pgCluu';
 
 my $OUTPUT_DIR  = '';

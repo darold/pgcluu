@@ -1,3 +1,20 @@
+2015-02-06 - Version 2.3 released
+
+This release is a maintenance release that fix some issues. There's also a new
+report about "Role Settings" per database.
+
+    - Report default parameters values set with ALTER DATABASE and ALTER ROLE
+      in new menu item: "Database/Role Settings". Thanks to Thomas Reiss for
+      the feature request.
+    - Fix detection of disk device in sar file.
+    - Add boot value to the settings report
+    - Add Unit and Reset value in pg_settings report to highlight parameters
+      where values have been changes outside the configuration file.
+    - Fix handling of sysinfo information, and enhance .gitignore. Thanks to
+      Julien Rouhaud for the patch.
+    - Fix kernel.* and transparent_hugepage display on Sysinfo section. Thanks
+      to Julien Rouhaud for the patch.
+
 2015-01-05 - Version 2.2 released
 
 This release is a maintenance release that fix several issues. There's also a
