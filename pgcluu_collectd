@@ -65,6 +65,13 @@ my $END_AFTER   = 0;
 my $MAX_SIZE    = 0;
 my $END_AFTER_COUNTER = 0;
 my $NO_DATABASE = 0;
+my $D_ROTATE    = 0;
+my $H_ROTATE    = 0;
+my $OUT_DIR     = 0;
+my $COMPRESS    = 0;
+my $OLD_OUT_DIR = '';
+my $GZIP_PID    = 0;
+my $GZIP_PROG   = '/bin/gzip';
 
 # Stores starting time
 my $START_TIME = time();
@@ -289,6 +296,8 @@ my $result = GetOptions(
 	"p|port=i"       => \$DBPORT,
 	"P|psql=s"       => \$PSQL_PROG,
 	"Q|no-statement!"=> \$NO_STATEMENTS,
+	"r|rotate-daily!"=> \$D_ROTATE,
+	"R|rotate-hourly!"=> \$H_ROTATE,
 	"s|sar=s"        => \$SAR_PROG,
 	"S|disable-sar!" => \$DISABLE_SAR,
 	"T|notablespace!"=> \$NOTABLESPACE,
@@ -296,6 +305,7 @@ my $result = GetOptions(
 	"v|verbose!"     => \$DEBUG,
 	"V|version!"     => \$SHOW_VER,
 	"W|password=s"   => \$DBPASS,
+	"z|compress!"    => \$COMPRESS,
 	"pgversion=s"    => \$PG_VERSION,
 	"pgservice=s"    => \$DBSERVICE,
 	"help!"          => \$HELP,
@@ -461,9 +471,11 @@ if (!-d $OUTPUT_DIR) {
 
 # Go to that directory
 chdir($OUTPUT_DIR);
+# Save original output dir for rotate purpose
+$OUT_DIR = $OUTPUT_DIR;
 
 # Generate the sar command
-my $sar_command = "LC_ALL=C $SAR_PROG -t -p -A 1 1";
+my $def_sar_command = "LC_ALL=C $SAR_PROG -t -p -A 1 1";
 my $sshcmd = '';
 # Set command to execute sar remotely using ssh if necessary 
 if ($USE_SSH) {
@@ -484,14 +496,6 @@ if ($USE_SSH) {
 
 }
 
-if (!$DISABLE_SAR) {
-	$sar_command = $sshcmd . ' "' . $sar_command . "\"" if ($sshcmd);
-	$sar_command .= " >>$SAR_FILE";
-} else {
-	$sar_command = '';
-}
-
-
 # Get Os information and exit
 if ($OS_INFO && !$NO_SYSINFO) {
 	&grab_os_information();
@@ -508,9 +512,13 @@ sub terminate
 	local $SIG{QUIT} = 'IGNORE';
 
 	&dprint("LOG: Received terminating signal.\n");
+
 	if (-f $PIDFILE) {
 		unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
 	}
+
+        # Wait for all child processes to die except for the logger
+	&wait_all_childs();
 
 	exit 0;
 }
@@ -547,11 +555,6 @@ unless(open(OUT, ">$PIDFILE")) {
 print OUT $$;
 close(OUT);
 
-# Get Os information
-if (!$NO_SYSINFO) {
-	&grab_os_information();
-}
-
 # Generate the psql command
 $PSQL_PROG .= " -Atq -F';' -f - ";
 my $PGBOUNCER_PROG = $PSQL_PROG . ' ' . $PGBOUNCER_ARGS . ' pgbouncer';
@@ -568,96 +571,8 @@ if ($DBPASS) {
 my $sysstat_version = &sysstat_version() || '';
 
 # Remove action that can't be run with the PostgreSQL version
-my $pg_ret = '';
-&verify_action() if (!$NO_DATABASE);
-
-# Generating global statistics collector SQL script 
-my $script_sql = &create_sql_script();
-if (!$script_sql && ($#METRICS < 0)) {
-	# No action can be perform with this PostgreSQL version
-	if (-f $PIDFILE) {
-		unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
-	}
-	&dprint("FATAL: no action will be run on this PostgreSQL version $DB_INFO{major}.$DB_INFO{minor}, $!\n");
-	exit 1;
-}
-
-if (!$NO_DATABASE && ($pg_ret >= 0)) {
-	# Get list of database in the PostgreSQL cluster
-	my @alldbs = ();
-	if ($#dbnames >= 0) {
-		# from command line
-		push(@alldbs, @dbnames);
-	} else {
-		# or by querying the database list
-		@alldbs = &get_databases();
-	}
-
-	# Collect general information about each database
-	if (!$NO_SYSINFO && &backend_minimum_version(9, 1) && ($#alldbs > -1)) {
-		my @extensions = ();
-		my @schemas = ();
-		my @procs = ();
-		my @trigs = ();
-		unless(open(OUT, ">>$OUTPUT_DIR/sysinfo.txt")) {
-			&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
-			exit 1;
-		}
-		# Look for all installed extensions
-		print OUT "[EXTENSION]\n";
-		foreach my $db (@alldbs) {
-			my @ext = &get_extensions($db);
-			push(@extensions, "$db=" . join(',', @ext)) if ($#ext >= 0);
-		}
-		foreach my $e (@extensions) {
-			print OUT "$e\n";
-		}
-		# Look for all schema in a database
-		print OUT "[SCHEMA]\n";
-		foreach my $db (@alldbs) {
-			my @sch = &get_schemas($db);
-			push(@schemas, "$db=" . join(',', @sch)) if ($#sch >= 0);
-		}
-		foreach my $s (@schemas) {
-			print OUT "$s\n";
-		}
-		# Look for all schema in a database
-		print OUT "[PROCEDURE]\n";
-		foreach my $db (@alldbs) {
-			my @pro = &get_proc_name($db);
-			push(@procs, "$db=" . join(',', @pro)) if ($#pro >= 0);
-		}
-		foreach my $p (@procs) {
-			print OUT "$p\n";
-		}
-		# Look for all schema in a database
-		print OUT "[TRIGGER]\n";
-		foreach my $db (@alldbs) {
-			my $tgs = &get_triggers($db);
-			push(@trigs, "$db=$tgs");
-		}
-		foreach my $t (@trigs) {
-			print OUT "$t\n";
-		}
-		close(OUT);
-
-	}
-}
-
-# Copy configuration files into output directory
-if (($#METRICS >= 0) && !grep(/^configuration_stats$/, @METRICS)) {
-	my @conf_files = $METRICS_COMMANDS{'configuration_stats'}->{command}->();
-	@conf_files = () if ($pg_ret < 0);
-	foreach my $f (@conf_files, '/etc/pgbouncer/pgbouncer.ini') {
-		my $filename = basename($f);
-		next if (($#METRICS >= 0) && !grep(/^$filename/, @METRICS));
-		if ($sshcmd) {
-			`$sshcmd "$CAT_PROG $f" >$OUTPUT_DIR/$filename 2>/dev/null`;
-		} else {
-			`$CAT_PROG $f >$OUTPUT_DIR/$filename 2>/dev/null`;
-		}
-	}
-}
+my $PG_RET = '';
+$PG_RET = &verify_action() if (!$NO_DATABASE);
 
 # Look if we should limit statistic collect to some DB
 my @included_dbs = split(/,/, $INCLUDED_DB);
@@ -691,9 +606,17 @@ while (1) {
 	}
 
 	# Some time range may not collect data
-	my ($sec , $min, $hour, @other) = localtime(time);
+	my ($sec , $min, $hour, $mday, $mon, $year, @other) = localtime(time);
 	$min = "0$min" if ($min < 10);
+if ($tcounter == 3) {
+	print STDERR "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n";
+	$hour++;
+}
 	$hour = "0$hour" if ($hour < 10);
+	$mday = "0$mday" if ($mday < 10);
+	$mon++;
+	$mon = "0$mon" if ($mon < 10);
+	$year += 1900;
 	for (my $i = 0; $i <= $#SKIP_BEGIN; $i++) {
 		if ( $SKIP_BEGIN[$i] <= $SKIP_END[$i] ) {
 			if ( ("$hour$min" >= $SKIP_BEGIN[$i]) && ("$hour$min" <= $SKIP_END[$i]) ) {
@@ -711,16 +634,96 @@ while (1) {
 		}
 	}
 
+	# Set rotation subdirectory
+	if ($D_ROTATE && !-d "$OUTPUT_DIR/$year/$mon/$mday") {
+		mkdir "$OUTPUT_DIR/$year" if (!-d "$OUTPUT_DIR/$year");
+		mkdir "$OUTPUT_DIR/$year/$mon" if (!-d "$OUTPUT_DIR/$year/$mon");
+		mkdir "$OUTPUT_DIR/$year/$mon/$mday";
+		# Compress previous directory if required
+		if ($COMPRESS && $OLD_OUT_DIR) {
+			# Fork a process to compress old data files
+			&spawn(sub {
+				&compress_files($OLD_OUT_DIR);
+			});
+                }
+		# Set the new output directory
+		$OUT_DIR = "$OUTPUT_DIR/$year/$mon/$mday";
+		# stores previous directory for compressed rotated files
+		$OLD_OUT_DIR = $OUT_DIR;
+        } elsif ($H_ROTATE && !-d "$OUTPUT_DIR/$year/$mon/$mday/$hour") {
+		mkdir "$OUTPUT_DIR/$year" if (!-d "$OUTPUT_DIR/$year");
+		mkdir "$OUTPUT_DIR/$year/$mon" if (!-d "$OUTPUT_DIR/$year/$mon");
+		mkdir "$OUTPUT_DIR/$year/$mon/$mday" if (!-d "$OUTPUT_DIR/$year/$mon/$mday");
+		mkdir "$OUTPUT_DIR/$year/$mon/$mday/$hour";
+		# Compress previous directory if required
+		if ($COMPRESS && $OLD_OUT_DIR) {
+			# Fork a process to compress old data files
+			&spawn(sub {
+				&compress_files($OLD_OUT_DIR);
+			});
+                }
+		# Set the new output directory
+		$OUT_DIR = "$OUTPUT_DIR/$year/$mon/$mday/$hour";
+		# stores previous directory for compressed rotated files
+		$OLD_OUT_DIR = $OUT_DIR;
+        }
+
+	# Collect initial information about the cluster
+	if (!-e "$OUT_DIR/sysinfo.txt") {
+		if (!$NO_DATABASE && ($PG_RET >= 0)) {
+			&get_initial_info();
+		}
+
+		# Get Os information
+		if (!$NO_SYSINFO) {
+			&grab_os_information();
+		}
+	}
+
+	# Set the sar command
+	my $sar_command = '';
+	if (!$DISABLE_SAR) {
+		$sar_command = $sshcmd . ' "' . $def_sar_command . "\"" if ($sshcmd);
+		$sar_command .= " >>$OUT_DIR/$SAR_FILE";
+	}
+
 	# Remove files that must be overriden
 	foreach my $type (sort {$a cmp $b} keys %METRICS_COMMANDS) {
-		if (($METRICS_COMMANDS{$type}->{override}) && -e "$OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}") {
-			unlink("$OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}");
+		if (($METRICS_COMMANDS{$type}->{override}) && -e "$OUT_DIR/$METRICS_COMMANDS{$type}->{output}") {
+			unlink("$OUT_DIR/$METRICS_COMMANDS{$type}->{output}");
+		}
+	}
+
+	# Generating global statistics collector SQL script 
+	my $script_sql = &create_sql_script();
+	if (!$script_sql && ($#METRICS < 0)) {
+		# No action can be perform with this PostgreSQL version
+		if (-f $PIDFILE) {
+			unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
+		}
+		&dprint("FATAL: no action will be run on this PostgreSQL version $DB_INFO{major}.$DB_INFO{minor}, $!\n");
+		exit 1;
+	}
+
+	# Copy configuration files into output directory
+	if (($#METRICS >= 0) && !grep(/^configuration_stats$/, @METRICS)) {
+		my @conf_files = $METRICS_COMMANDS{'configuration_stats'}->{command}->();
+		@conf_files = () if ($PG_RET < 0);
+		foreach my $f (@conf_files, '/etc/pgbouncer/pgbouncer.ini') {
+			my $filename = basename($f);
+			next if (-e "$OUT_DIR/$filename"); # Do not copy file twice in same directory
+			next if (($#METRICS >= 0) && !grep(/^$filename/, @METRICS));
+			if ($sshcmd) {
+				`$sshcmd "$CAT_PROG $f" >$OUT_DIR/$filename 2>/dev/null`;
+			} else {
+				`$CAT_PROG $f >$OUT_DIR/$filename 2>/dev/null`;
+			}
 		}
 	}
 
 	if (!$NO_DATABASE) {
 		# Collecting database statistics if there other than pgbouncer metrics to collect
-		if ($pg_ret >= 0) {
+		if ($PG_RET >= 0) {
 			open(PSQL, "| $PSQL_PROG");
 			print PSQL $script_sql, "\n";
 			close(PSQL);
@@ -765,9 +768,9 @@ while (1) {
 				}
 				die "FATAL: no SQL with metric command pgbouncer_stats ($sql).\n" if (!$sql || $@);
 			}
-			`$PGBOUNCER_PROG -c "$sql" | sed 's/^/$timestamp;/' $FILE_REDIR $OUTPUT_DIR/$METRICS_COMMANDS{$c}->{output}`;
+			`$PGBOUNCER_PROG -c "$sql" | sed 's/^/$timestamp;/' $FILE_REDIR $OUT_DIR/$METRICS_COMMANDS{$c}->{output}`;
 			if ($? != 0) {
-				&dprint("LOG: $PGBOUNCER_PROG -c \"$sql\" | sed 's/^/$timestamp;/' $FILE_REDIR $OUTPUT_DIR/$METRICS_COMMANDS{$c}->{output}\n");
+				&dprint("LOG: $PGBOUNCER_PROG -c \"$sql\" | sed 's/^/$timestamp;/' $FILE_REDIR $OUT_DIR/$METRICS_COMMANDS{$c}->{output}\n");
 				&dprint("ERROR: pgbouncer pool query failure, $!\n");
 			}
 		}
@@ -802,7 +805,80 @@ while (1) {
 	}
 }
 
+if ($COMPRESS) {
+        # Wait for last child stop
+        &wait_all_childs();
+}
+
 exit 0;
+
+sub get_initial_info
+{
+	# Get list of database in the PostgreSQL cluster
+	my @alldbs = ();
+	if ($#dbnames >= 0) {
+		# from command line
+		push(@alldbs, @dbnames);
+	} else {
+		# or by querying the database list
+		@alldbs = &get_databases();
+	}
+
+	# Store PG version into sysinfo file
+	&fetch_version(1);
+
+	# Collect general information about each database
+	if (!$NO_SYSINFO && ($#alldbs > -1)) {
+		my @extensions = ();
+		my @schemas = ();
+		my @procs = ();
+		my @trigs = ();
+		unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
+			&dprint("FATAL: can't write into output directory $OUT_DIR\n");
+			exit 1;
+		}
+		if (&backend_minimum_version(9, 1)) {
+			# Look for all installed extensions
+			print OUT "[EXTENSION]\n";
+			foreach my $db (@alldbs) {
+				my @ext = &get_extensions($db);
+				push(@extensions, "$db=" . join(',', @ext)) if ($#ext >= 0);
+			}
+			foreach my $e (@extensions) {
+				print OUT "$e\n";
+			}
+		}
+		# Look for all schema in a database
+		print OUT "[SCHEMA]\n";
+		foreach my $db (@alldbs) {
+			my @sch = &get_schemas($db);
+			push(@schemas, "$db=" . join(',', @sch)) if ($#sch >= 0);
+		}
+		foreach my $s (@schemas) {
+			print OUT "$s\n";
+		}
+		# Look for all schema in a database
+		print OUT "[PROCEDURE]\n";
+		foreach my $db (@alldbs) {
+			my @pro = &get_proc_name($db);
+			push(@procs, "$db=" . join(',', @pro)) if ($#pro >= 0);
+		}
+		foreach my $p (@procs) {
+			print OUT "$p\n";
+		}
+		# Look for all schema in a database
+		print OUT "[TRIGGER]\n";
+		foreach my $db (@alldbs) {
+			my $tgs = &get_triggers($db);
+			push(@trigs, "$db=$tgs");
+		}
+		foreach my $t (@trigs) {
+			print OUT "$t\n";
+		}
+		close(OUT);
+
+	}
+}
 
 sub verify_action
 {
@@ -885,7 +961,7 @@ sub create_sql_script
 		if (&backend_minimum_version(8, 2)) {
 			$sql_queries .= <<EOF
 -- $type
-\\o | cat $FILE_REDIR $OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}
+\\o | cat $FILE_REDIR $OUT_DIR/$METRICS_COMMANDS{$type}->{output}
 COPY ($sql) TO STDOUT CSV DELIMITER ';';
 
 EOF
@@ -894,7 +970,7 @@ EOF
 			# we use a temporary table instead
 			$sql_queries .= <<EOF
 -- $type
-\\o | cat $FILE_REDIR $OUTPUT_DIR/$METRICS_COMMANDS{$type}->{output}
+\\o | cat $FILE_REDIR $OUT_DIR/$METRICS_COMMANDS{$type}->{output}
 BEGIN;
 CREATE TEMPORARY TABLE __pgcluu as $sql;
 COPY __pgcluu TO STDOUT CSV DELIMITER ';';
@@ -912,6 +988,8 @@ EOF
 
 sub fetch_version
 {
+	my $save = shift;
+
 	if ($PG_VERSION) {
 		if ($PG_VERSION =~ /^(\d+)\.(\d+)/) {
 			$DB_INFO{major} = $1;
@@ -941,9 +1019,9 @@ sub fetch_version
 		$DB_INFO{minor} = $2;
 	}
 
-	if (!$NO_SYSINFO) {
-		unless(open(OUT, ">>$OUTPUT_DIR/sysinfo.txt")) {
-			&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
+	if (!$NO_SYSINFO && $save) {
+		unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
+			&dprint("FATAL: can't write into output directory $OUT_DIR\n");
 			exit 1;
 		}
 		print OUT "[PGVERSION]\n";
@@ -1137,8 +1215,8 @@ sub grab_os_information
 	$cmd = '/sbin/sysctl -a 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 	my @system = `$cmd | grep -E "vm.nr_hugepages |vm.overcommit|vm.dirty_.*(ratio|bytes)|swappiness|zone_reclaim_mode|shmmax|shmall"`;
-	unless(open(OUT, ">$OUTPUT_DIR/sysinfo.txt")) {
-		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
+	unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
+		&dprint("FATAL: can't write into output directory $OUT_DIR\n");
 		exit 1;
 	}
 	$cmd = 'cat /sys/kernel/mm/*transparent_hugepage/enabled 2>/dev/null';
@@ -1203,6 +1281,8 @@ options:
   -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
   -P, --psql=BIN           path to the psql command. Default: $PSQL_PROG.
   -Q, --no-statement       do not collect queries statistics from pg_stat_statements.
+  -r, --rotate-daily       force the daily rotation of data files.
+  -R, --rotate-hourly      force the daily rotation of data files.
   -s, --sar=BIN            path to sar sysstat command. Default: $SAR_PROG.
   -S, --disable-sar        disable collect of system statistics with sar.
   -T, --notablespace       disable lookup at tablespace when the connect user
@@ -1210,6 +1290,7 @@ options:
   -U, --dbuser=USERNAME    database user to connect as. Default to current user.
   -v, --verbose            Print out debug informations.
   -V, --version            Show pgcluu_collectd version and exit.
+  -z, --compress           force compression of rotated data files.
   --included-db=DATABASE   do not collect statistics for the comma separated list
                            of database name. 
   --list-metric            list available metrics actions that can be performed.
@@ -2052,3 +2133,49 @@ sub parse_pretty_size
 }
 
 
+####
+# method used to fork as many child as wanted
+##
+sub spawn
+{
+	my $coderef = shift;
+
+	unless (@_ == 0 && $coderef && ref($coderef) eq 'CODE') {
+		print "usage: spawn CODEREF";
+		exit 0;
+	}
+
+	if (!defined($GZIP_PID = fork)) {
+		print STDERR "Error: cannot fork: $!\n";
+		return;
+	} elsif ($GZIP_PID) {
+		return; # the parent
+	}
+	# the child -- go spawn
+	$< = $>;
+	$( = $); # suid progs only
+
+	exit &$coderef();
+}
+
+sub wait_all_childs
+{
+
+	while ($GZIP_PID) {
+		my $kid = waitpid(-1, WNOHANG);
+		if ($kid > 0) {
+			$GZIP_PID = 0;
+		}
+		sleep(1);
+	}
+}
+
+sub compress_files
+{
+	my ($dir) = shift;
+
+	&dprint("LOG: compressing directory $dir using $GZIP_PROG.\n");
+
+	`$GZIP_PROG $dir/*`;
+
+}

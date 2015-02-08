@@ -106,6 +106,8 @@ to provide a directory where data will be stored. Statistics will be pooled at
 a default interval of 60 seconds, using option -i you can customize it. See
 below for a complete list of command line options. 
 
+=head2 pgcluu_collectd usage
+
 usage: pgcluu_collectd [options] output_dir
 
 	output_dir: full path to directory where pgcluu_collectd will
@@ -131,6 +133,8 @@ options:
   -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
   -P, --psql=BIN           path to the psql command. Default: psql.
   -Q, --no-statement       do not collect queries statistics from pg_stat_statements.
+  -r, --rotate-daily       force the daily rotation of data files.
+  -R, --rotate-hourly      force the hourly rotation of data files.
   -s, --sar=BIN            path to sar sysstat command. Default: sar.
   -S, --disable-sar        disable collect of system statistics with sar.
   -T, --notablespace       disable lookup at tablespace when the connect user
@@ -138,6 +142,7 @@ options:
   -U, --dbuser=USERNAME    database user to connect as. Default to current user.
   -v, --verbose            Print out debug informations.
   -V, --version            Show pgcluu_collectd version and exit.
+  -z, --compress           force compression of rotated data files.
   --included-db=DATABASE   do not collect statistics for the comma separated list
                            of database name. 
   --list-metric            list available metrics actions that can be performed.
@@ -204,6 +209,8 @@ Then after some time and activities on the database, stop the daemon as follow:
 
 or by sending sigterm to the pgcluu_collectd's pid.
 
+=head2 Statistics files
+
 The output directory with all statistics collected should look likes:
 
 	/tmp/stat_db1/
@@ -243,6 +250,17 @@ The output directory with all statistics collected should look likes:
 	|--- sysinfo.txt
 
 Then now you can proceed with pgcluu to generate reports.
+
+=head2 Rotation and compression
+
+When used the --rotate-daily or --rotate-hourly commands line option will force
+pgcluu_collectd to rotate daily or hourly all statistic's files. In this case,
+statistics files will be created in a subdirectory based on rotation frequency,
+output_dir/year/month/day[/hour].
+
+To save filesystem space it is possible to enable compression of all rotated
+files during the rotation process. Just activate the -z or --compress command
+line option.
 
 =head1 GENERATING REPORTS
 
