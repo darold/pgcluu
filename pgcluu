@@ -1287,6 +1287,8 @@ sub write_database_info
 {
 	my $db = shift;
 
+	return if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
+
 	my $next = $#{$sysinfo{EXTENSION}{$db}} + 1;
 	my $extlist = join(',', @{$sysinfo{EXTENSION}{$db}});
 	$extlist = ' (' . $extlist . ')' if ($extlist);
@@ -1502,7 +1504,7 @@ sub pg_stat_database
 	my %database_stat = ();
 	foreach my $time (sort {$a <=> $b} keys %all_database_stat) {
 		foreach my $db (@databases) {
-			next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			foreach my $k (qw(insert returned fetched update delete blks_read blks_hit nbackend xact_commit xact_rollback canceled_queries deadlocks temp_files)) {
 				$all_database_stat{$time}{$db}{$k} ||= 0;
 			}
@@ -1546,7 +1548,7 @@ sub pg_stat_database
 	%all_database_stat = ();
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		foreach my $db (sort keys %database_stat) {
-			next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 
 			my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html");
 			my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
@@ -1624,7 +1626,7 @@ sub pg_stat_database
 		my %data = ();
 		my $found = 0;
 		foreach my $db (sort keys %database_stat) {
-			next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 
 			my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html");
 			if ($data_info{$id}{name} eq 'database-backends') {
@@ -1750,7 +1752,8 @@ sub pg_stat_database_conflicts
 	$curfh->close();
 	my $id = &get_data_id('database-conflicts', %data_info);
 	foreach my $db (sort keys %all_database_stat) {
-		next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+
+		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		my $total = 0;
 		foreach my $k (sort keys %{$all_database_stat{$db}}) {
 			$total += $all_database_stat{$db}{$k};
@@ -1811,7 +1814,7 @@ sub pg_database_size
 	my $id = &get_data_id('database-size', %data_info);
 	my %data = ();
 	foreach my $db (sort keys %database_stat) {
-		next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		$database_stat{$db}{size} =~ s/,$//;
 		$data{$db} = $database_stat{$db}{size};
 		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html");
@@ -1966,6 +1969,7 @@ sub pg_stat_user_tables
 	foreach my $db (keys %cumul_database_stat) {
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^table-/);
+			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			# Open filehandle to cluster file
 			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
 			if (not defined $fhtable) {
@@ -2157,6 +2161,7 @@ sub pg_stat_user_indexes
 	foreach my $db (keys %cumul_database_stat) {
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^index-/);
+			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			# Open filehandle to cluster file
 			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
 			if (not defined $fhtable) {
@@ -2317,6 +2322,7 @@ sub pg_statio_user_tables
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^statio-/);
 			next if (scalar keys %{$is_used{$db}} == 0);
+			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			# Open filehandle to cluster file
 			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
 			if (not defined $fhtable) {
@@ -2389,6 +2395,7 @@ sub pg_relation_buffercache
 	foreach my $db (keys %shm_use) {
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^buffercache-/);
+			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			# Open filehandle to cluster file
 			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
 			if (not defined $fhtable) {
@@ -2470,6 +2477,7 @@ sub pg_relation_buffercache
 	foreach my $db (sort keys %rel_stat) {
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^statio-buffercache/);
+			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			# Open filehandle to cluster file
 			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
 			if (not defined $fhtable) {
@@ -2536,6 +2544,7 @@ sub pg_statio_user_indexes
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^statio-/);
 			next if (scalar keys %{$is_used{$db}} == 0);
+			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			# Open filehandle to cluster file
 			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
 			if (not defined $fhtable) {
@@ -2725,7 +2734,7 @@ sub pg_stat_connections
 	%all_connections_stat = ();
 	my $id = &get_data_id('database-connections', %data_info);
 	foreach my $db (sort keys %connections_stat) {
-		next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		$connections_stat{$db}{total} =~ s/,$//;
 		$connections_stat{$db}{active} =~ s/,$//;
 		$connections_stat{$db}{waiting} =~ s/,$//;
@@ -3147,6 +3156,7 @@ sub pg_class_size
 		}
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^(table|index)-/);
+			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			# Open filehandle to cluster file
 			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
 			if (not defined $fhtable) {
@@ -3273,7 +3283,7 @@ sub pg_stat_locks
 	%legends = ();
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		foreach my $db (sort keys %locks_stat) {
-			next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			my @graph_data = ();
 			my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html");
 			if ($data_info{$id}{name} eq 'database-lock-types') {
@@ -3325,6 +3335,7 @@ sub pg_stat_unused_indexes
 
 	my $id = &get_data_id('unused-index', %data_info);
 	foreach my $db (sort keys %idx_stat) {
+		next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		# Open filehandle to cluster file
 		my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
 		if (not defined $fhtable) {
@@ -3390,6 +3401,7 @@ sub pg_stat_redundant_indexes
 
 	my $id = &get_data_id('redundant-index', %data_info);
 	foreach my $db (sort keys %idx_stat) {
+		next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		# Open filehandle to cluster file
 		my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
 		if (not defined $fhtable) {
@@ -3451,6 +3463,7 @@ sub pg_stat_missing_fkindexes
 
 	my $id = &get_data_id('missing-index', %data_info);
 	foreach my $db (sort keys %idx_stat) {
+		next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		# Open filehandle to cluster file
 		my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
 		if (not defined $fhtable) {
@@ -3886,7 +3899,7 @@ sub pg_database_buffercache
 		if ($data_info{$id}{name} eq 'cluster-buffersused') {
 			my @graph_data = ();
 			foreach my $db (sort keys %shared_stat) {
-				next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+				next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 				push(@{$data_info{$id}{legends}}, "% used by $db");
 				$shared_stat{$db}{shared_buffers_used} =~ s/,$//;
 				push(@graph_data, $shared_stat{$db}{shared_buffers_used});
@@ -4095,7 +4108,7 @@ sub pg_stat_statements
 
 	my $id = &get_data_id('database-queries', %data_info);
 	foreach my $db (keys %queries_stats) {
-		next if (($#INCLUDE_DB >= 0) && ($db ne 'all') && (!grep(/^$db$/, @INCLUDE_DB)));
+		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		my $header = '';
 		if ($has_temp) {
 			$header = qq{<th>Temp read</th><th>Temp write</th>};
@@ -5063,6 +5076,7 @@ sub generate_html_menu
 	}
 
 	foreach my $db (sort @database_list) {
+		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		$menu_str .= qq{
 		<li id="menu-$db" class="dropdown-submenu">
 		   <a href="#" tabindex="-1">$db </a>
