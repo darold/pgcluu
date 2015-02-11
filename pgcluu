@@ -51,6 +51,8 @@ my @DEVICE_LIST        = ();
 my @IFACE_LIST         = ();
 my %OVERALL_STATS      = ();
 my @GRAPH_COLORS       = ('#6e9dc9', '#f4ab3a', '#ac7fa8', '#8dbd0f'); 
+my $ZCAT_PROG = '/bin/zcat';
+my $INTERVAL  = 1;
 
 my %RELKIND = (
 	'r' => 'tables',
@@ -764,6 +766,8 @@ if (!$DISABLE_SAR) {
 			$SADC_INPUT_FILE = "$INPUT_DIR/" . 'sadc_stats.dat';
 		} elsif (-f "$INPUT_DIR/sar_stats.dat") {
 			$SAR_INPUT_FILE = "$INPUT_DIR/" . 'sar_stats.dat';
+		} elsif (-f "$INPUT_DIR/sar_stats.dat.gz") {
+			$SAR_INPUT_FILE = "$INPUT_DIR/" . 'sar_stats.dat.gz';
 		}
 		if (!$SADC_INPUT_FILE && !$SAR_INPUT_FILE) {
 			print STDERR "ERROR: No sar data file found. Consider using -S or --disable-sar command line option or use -i / -I option to set the path to the data file.\n";
@@ -828,6 +832,9 @@ if ($END) {
 if (-e "$INPUT_DIR/sysinfo.txt") {
 	%sysinfo = &read_sysinfo("$INPUT_DIR/sysinfo.txt");
 	$sysinfo{RELEASE}{'name'} ||= 'unknown';
+} elsif (-e "$INPUT_DIR/sysinfo.txt.gz") {
+	%sysinfo = &read_sysinfo("$INPUT_DIR/sysinfo.txt.gz");
+	$sysinfo{RELEASE}{'name'} ||= 'unknown';
 }
 
 # Extract the device list first
@@ -889,11 +896,20 @@ if (-d "$INPUT_DIR") {
 	# Check if there is csv file in the input directory
 	print "DEBUG: looking for CSV file into directory $INPUT_DIR/\n" if ($DEBUG);
 	opendir(IDIR, "$INPUT_DIR") || die "FATAL: can't opendir $INPUT_DIR: $!";
-	my @files = grep { /\.csv$/ } readdir(IDIR);
+	my @files = grep { /\.csv(\.gz)?$/ } readdir(IDIR);
 	closedir(IDIR);
 	if ($#files < 0) {
 		die "FATAL: no csv file found in $INPUT_DIR";
 	}
+
+	# Detect interval from csv file
+	if (-e "$INPUT_DIR/pg_stat_database.csv" && !-z "$INPUT_DIR/pg_stat_database.csv") {
+		$INTERVAL = &detect_interval("$INPUT_DIR/pg_stat_database.csv");
+	} elsif (-e "$INPUT_DIR/pg_stat_database.csv.gz" ) {
+		$INTERVAL = &detect_interval("$INPUT_DIR/pg_stat_database.csv.gz");
+	}
+	print "DEBUG: autodetected interval value $INTERVAL\n" if ($DEBUG);
+
 
 	# Loop over CSV files and graphics definition to generate reports
 	foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS) {
@@ -901,17 +917,23 @@ if (-d "$INPUT_DIR") {
 			if (-e "$INPUT_DIR/$k" && !-z "$INPUT_DIR/$k") {
 				&compute_dbstat_graph($k, %{$DB_GRAPH_INFOS{$k}}); 
 			}
+		} elsif (-e "$INPUT_DIR/$k.gz" && !-z "$INPUT_DIR/$k.gz") {
+			if (-e "$INPUT_DIR/$k.gz" && !-z "$INPUT_DIR/$k.gz") {
+				&compute_dbstat_graph("$k.gz", %{$DB_GRAPH_INFOS{$k}}); 
+			}
 		} elsif ($k =~ /_all_/) {
 			my $f = $k;
 			$f =~ s/_all_/_user_/;
 			if (-e "$INPUT_DIR/$f" && !-z "$INPUT_DIR/$f") {
 				&compute_dbstat_graph($f, %{$DB_GRAPH_INFOS{$k}});
+			} elsif (-e "$INPUT_DIR/$f.gz" && !-z "$INPUT_DIR/$f.gz") {
+				&compute_dbstat_graph("$f.gz", %{$DB_GRAPH_INFOS{$k}});
 			}
 		}
 	}
 
 	# Add database general information
-	if (-e "$INPUT_DIR/sysinfo.txt") {
+	if ( (-e "$INPUT_DIR/sysinfo.txt") || (-e "$INPUT_DIR/sysinfo.txt.gz") ) {
 		foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
 			&write_database_info($db);
 		}
@@ -1096,6 +1118,28 @@ sub progress_bar
 		$got, $total, 100*$got/+$total);
 }
 
+sub is_compressed
+{
+	my $file = shift;
+
+	return 1 if ($file =~ /\.gz/);
+
+	return 0;
+}
+
+sub open_filehdl
+{
+	my $file = shift;
+
+	my $curfh = new IO::File;
+	if (!is_compressed("$file")) {
+		$curfh->open("< $file") or die "FATAL: can't read file $file: $!\n";
+	} else {
+		$curfh->open("$ZCAT_PROG $file |") or die "FATAL: can't read pipe from command: $ZCAT_PROG $file, $!\n";
+	}
+	return $curfh;
+}
+
 sub detect_interval
 {
 	my $file = shift;
@@ -1103,8 +1147,14 @@ sub detect_interval
 	my $dt = 0;
 	my $prev_val = 0;
 
-	if (!open(IN, "$file")) {
-		die "FATAL: can't read file $file: $!\n";
+	if (!&is_compressed($file)) {
+		if (!open(IN, "$file")) {
+			die "FATAL: can't read file $file: $!\n";
+		}
+	} else {
+		if (!open(IN, "$ZCAT_PROG $file |")) {
+			die "FATAL: can't read pipe on command: $ZCAT_PROG $file, $!\n";
+		}
 	}
 	while (<IN>) {
 		my @data = split(/;/);
@@ -1118,7 +1168,7 @@ sub detect_interval
 	}
 	close(IN);
 
-	if ( (length($dt) >= 2) && ($dt =~ /([123])$/) ) {
+	if ( (length($dt) >= 2) && ($dt =~ /([1234])$/) ) {
 		$dt -= $1;
 	}
 
@@ -1165,8 +1215,14 @@ sub get_device_list
 	} elsif ($SAR_INPUT_FILE && -f "$SAR_INPUT_FILE") {
 
 		# Load data from file
-		if (!open(IN, "$SAR_INPUT_FILE")) {
-			die "FATAL: can't read input file $SAR_INPUT_FILE: $!\n";
+		if (!&is_compressed($SAR_INPUT_FILE)) {
+			if (!open(IN, "$SAR_INPUT_FILE")) {
+				die "FATAL: can't read input file $SAR_INPUT_FILE: $!\n";
+			}
+		} else {
+			if (!open(IN, "$ZCAT_PROG $SAR_INPUT_FILE |")) {
+				die "FATAL: can't read pipe from command: $ZCAT_PROG $SAR_INPUT_FILE, $!\n";
+			}
 		}
 		my $type = '';
 		my @headers = ();
@@ -1238,8 +1294,14 @@ sub get_interface_list
 	} elsif ($SAR_INPUT_FILE && -f "$SAR_INPUT_FILE") {
 
 		# Load data from file
-		if (!open(IN, "$SAR_INPUT_FILE")) {
-			die "FATAL: can't read input file $SAR_INPUT_FILE: $!\n";
+		if (!&is_compressed($SAR_INPUT_FILE)) {
+			if (!open(IN, "$SAR_INPUT_FILE")) {
+				die "FATAL: can't read input file $SAR_INPUT_FILE: $!\n";
+			}
+		} else {
+			if (!open(IN, "$ZCAT_PROG $SAR_INPUT_FILE |")) {
+				die "FATAL: can't read input file $SAR_INPUT_FILE: $!\n";
+			}
 		}
 		my $type = '';
 		my @headers = ();
@@ -1348,18 +1410,13 @@ sub compute_dbstat_graph
 
 	print "DEBUG: reading statistics in file $INPUT_DIR/$file\n" if ($DEBUG);
 
-	# Detect interval from file
-	my $interval = &detect_interval("$INPUT_DIR/$file");
-	$interval = 1 if (!$interval);
-
-	print "DEBUG: autodetected interval value $interval\n" if ($DEBUG);
-
 	# Compute graphs following the data file
 	my $fctname = $file;
-	$fctname =~ s/\.csv//;
+	$fctname =~ s/\.csv(\.gz)?//;
+	$fctname =~ s/\.gz//;
 	$fctname =~ s/_all_/_user_/;
 	$fctname =~ s/\./_/g;
-	$fctname->($interval, $file, %data_info);
+	$fctname->($INTERVAL, $file, %data_info);
 }
 
 
@@ -1380,8 +1437,7 @@ sub pg_stat_database
 	my %total_query_type = ();
 	my @databases = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -1715,8 +1771,7 @@ sub pg_stat_database_conflicts
 	my %total_count = ();
 	my $tmp_val = 0;
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -1790,8 +1845,7 @@ sub pg_database_size
 	my @databases = ();
 
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -1837,8 +1891,7 @@ sub pg_tablespace_size
 	my %tablespace_stat = ();
 	my %all_tablespace_stat = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	my $total_val = 0;
 	my @tbspnames = ();
 	while (<$curfh>) {
@@ -1896,8 +1949,7 @@ sub pg_stat_user_tables
 	my $tmp_val = 0;
 	my $do_vacuum = 0;
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -2133,8 +2185,7 @@ sub pg_stat_user_indexes
 	my $tmp_val = 0;
 	my $do_vacuum = 0;
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -2250,8 +2301,7 @@ sub pg_statio_user_tables
 	my %is_toast = ();
 	my %is_used = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -2369,8 +2419,7 @@ sub pg_relation_buffercache
 	my $tmp_val = 0;
 	my %to_show = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -2514,8 +2563,7 @@ sub pg_statio_user_indexes
 	my %is_toast = ();
 	my %is_used = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -2580,8 +2628,7 @@ sub pg_xlog_stat
 	my %tmp_xlog_stat = ();
 	my %xlog_stat = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -2627,8 +2674,7 @@ sub pg_stat_bgwriter
 	my %total_count = ();
 	my $tmp_val = 0;
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -2698,8 +2744,7 @@ sub pg_stat_connections
 	my $tmp_val = 0;
 	my @databases = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data, 5));
@@ -2763,8 +2808,7 @@ sub pg_stat_user_functions
 	my %total_count = ();
 	my $tmp_val = 0;
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -2856,8 +2900,7 @@ sub pg_stat_replication
 	my %xlog_stat = ();
 	my @clients = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -2929,8 +2972,7 @@ sub pgbouncer_stats
 	my %all_stat = ();
 	my %total_count = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -3015,12 +3057,11 @@ sub pgbouncer_ini
 {
 	my ($interval, $file, %data_info) = @_;
 
-	return if (!-e "$INPUT_DIR/pgbouncer_stats.csv");
+	return if ( (!-e "$INPUT_DIR/pgbouncer_stats.csv") || (!-e "$INPUT_DIR/pgbouncer_stats.csv.gz") );
 
 	my $output = "<div style=\"white-space: pre\">\n";
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (my $l = <$curfh>) {
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
@@ -3065,8 +3106,7 @@ sub pgbouncer_req_stats
 	my %all_stat = ();
 	my %total_count = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -3121,8 +3161,7 @@ sub pg_class_size
 	my $total_val = 0;
 	my %table_changed = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -3254,8 +3293,7 @@ sub pg_stat_locks
 	my %total_count = ();
 	my %legends = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -3322,8 +3360,7 @@ sub pg_stat_unused_indexes
 
 	my %idx_stat = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -3386,8 +3423,7 @@ sub pg_stat_redundant_indexes
 
 	my %idx_stat = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -3450,8 +3486,7 @@ sub pg_stat_missing_fkindexes
 
 	my %idx_stat = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -3510,8 +3545,7 @@ sub postgresql_conf
 
 	my $output = '';
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (my $l = <$curfh>) {
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
@@ -3558,8 +3592,7 @@ sub recovery_conf
 
 	my $output = '';
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (my $l = <$curfh>) {
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
@@ -3606,8 +3639,7 @@ sub postgresql_auto_conf
 
 	my $output = '';
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (my $l = <$curfh>) {
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
@@ -3654,8 +3686,7 @@ sub pg_hba_conf
 
 	my $output = '';
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (my $l = <$curfh>) {
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
@@ -3704,8 +3735,7 @@ sub pg_ident_conf
 
 	my $output = '';
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (my $l = <$curfh>) {
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
@@ -3753,8 +3783,7 @@ sub pg_settings
 
 	my %conf_stat = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -3795,7 +3824,18 @@ sub pg_settings
 		print $fhcluster "<tr><th colspan=\"4\">$lbl</th></tr>\n";
 		print $fhcluster "<tr><th>Name</th><th>Current</th><th>Unit</th><th>Reset val</th><th>Boot val</th></tr>\n";
 		foreach my $set (sort { lc($a) cmp lc($b) } keys %{$conf_stat{$lbl}}) {
-			print $fhcluster "<tr><td>$set</td><td>$conf_stat{$lbl}{$set}{value}</td><td>$conf_stat{$lbl}{$set}{unit}</td><td>$conf_stat{$lbl}{$set}{resetval}</td><td>$conf_stat{$lbl}{$set}{bootval}</td></tr>\n";
+			print $fhcluster "<tr><td>$set</td><td>$conf_stat{$lbl}{$set}{value}</td><td>$conf_stat{$lbl}{$set}{unit}</td>";
+			if ($conf_stat{$lbl}{$set}{resetval}) {
+				print $fhcluster "<td>$conf_stat{$lbl}{$set}{resetval}</td>";
+			} else {
+				print $fhcluster "<td></td>";
+			}
+			if ($conf_stat{$lbl}{$set}{bootval}) {
+				print $fhcluster "<td>$conf_stat{$lbl}{$set}{bootval}</td>";
+			} else {
+				print $fhcluster "<td></td>";
+			}
+			print $fhcluster "</tr>\n";
 		}
 	}
 	print $fhcluster qq{
@@ -3818,8 +3858,7 @@ sub pg_db_role_setting
 
 	my %conf_stat = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -3878,8 +3917,7 @@ sub pg_database_buffercache
 	my %shared_stat = ();
 	my %all_stat = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -3928,8 +3966,7 @@ sub pg_database_usagecount
 	my %shared_stat = ();
 	my %all_stat = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -3967,8 +4004,7 @@ sub pg_database_isdirty
 	my %shared_stat = ();
 	my %all_stat = ();
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -4009,8 +4045,7 @@ sub pg_stat_archiver
 	my @start_vals = ();
 
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -4055,8 +4090,7 @@ sub pg_stat_statements
 	my $has_temp = 0;
 
 	# Load data from file
-	my $curfh = new IO::File;
-	$curfh->open("< $INPUT_DIR/$file") or die "FATAL: can't read file $INPUT_DIR/$file: $!\n";
+	my $curfh = open_filehdl("$INPUT_DIR/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
@@ -4585,7 +4619,7 @@ EOF
 
 EOF
 
-	if (-e "$INPUT_DIR/sysinfo.txt") {
+	if ( (-e "$INPUT_DIR/sysinfo.txt") || (-e "$INPUT_DIR/sysinfo.txt.gz") ) {
 		print $fh <<EOF;
 <li class="slide" id="info-slide">
 
@@ -4829,7 +4863,7 @@ sub generate_html_menu
           <ul class="nav navbar-nav">
               <li id="menu-home" class="dropdown"><a href="index.html#home">Home</a></li>
 };
-	if (-e "$INPUT_DIR/sysinfo.txt") {
+	if ( (-e "$INPUT_DIR/sysinfo.txt") || (-e "$INPUT_DIR/sysinfo.txt.gz") ) {
 		$menu_str .= qq{
               <li id="menu-info" class="dropdown"><a href="index.html#info">SysInfo</a></li>
 };
@@ -5082,7 +5116,7 @@ sub generate_html_menu
 		   <a href="#" tabindex="-1">$db </a>
 		      <ul class="dropdown-menu">
 };
-		if (-e "$INPUT_DIR/sysinfo.txt") {
+		if ( (-e "$INPUT_DIR/sysinfo.txt") || (-e "$INPUT_DIR/sysinfo.txt.gz") ) {
 			$menu_str .= qq{
 		      <li id="menu-database-info"><a href="database-$db.html#database-info">Database info</a></li>
 };
@@ -5523,16 +5557,9 @@ sub compute_cpu_report
 		$cpu_all_stat{idle} =~ s/,$//;
 	}
 	print $FH &flotr2_linegraph_array($IDX++, 'system-cpu', $data_info, 'all', $cpu_all_stat{total}, $cpu_all_stat{system}, $cpu_all_stat{user}, $cpu_all_stat{iowait});
-#	foreach my $n (sort { $a <=> $b } keys %cpu_stat) {
-#		$cpu_stat{$n}{total} =~ s/,$//;
-#		$cpu_stat{$n}{system} =~ s/,$//;
-#		$cpu_stat{$n}{user} =~ s/,$//;
-#		$cpu_stat{$n}{iowait} =~ s/,$//;
-#		$cpu_stat{$n}{idle} =~ s/,$//;
-#		my $id = $n + 1;
-#		print $FH &flotr2_linegraph_array($IDX++, 'system-cpu'.$n, $data_info, $n, $cpu_stat{$n}{total}, $cpu_stat{$n}{system}, $cpu_stat{$n}{user}, $cpu_stat{$n}{iowait});
-#	}
+
 }
+
 
 sub compute_load_report
 {
@@ -6192,8 +6219,10 @@ sub compute_sarfile_graph
 	my $hostname = 'unknown';
 
 	# Load data from file
-	if (!open(IN, "$file")) {
-		die "FATAL: can't read input file $file: $!\n";
+	if (!is_compressed($file)) {
+		open(IN, $file) or die "ERROR: can't read file $file, $!\n";
+	} else {
+		open(IN, "$ZCAT_PROG $file |") or die "ERROR: can't read pipe on command: $ZCAT_PROG $file, $!\n";
 	}
 	my @content = ();
 	while (my $l = <IN>) {
@@ -6213,6 +6242,7 @@ sub compute_sarfile_graph
 	my $orig_time = 0;
 
 	for (my $i = 0; $i <= $#content; $i++) {
+
 		# Empty line, maybe the end of a report
 		if ($content[$i] eq '') {
 			$type = '';
@@ -6856,8 +6886,10 @@ sub read_sysinfo
 {
 	my $file = shift;
 
-	unless(open(IN, $file)) {
-		die "ERROR: can't read file $file, $!\n";
+	if (!is_compressed($file)) {
+		open(IN, $file) or die "ERROR: can't read file $file, $!\n";
+	} else {
+		open(IN, "$ZCAT_PROG $file |") or die "ERROR: can't read pipe on command: $ZCAT_PROG $file, $!\n";
 	}
 	my %sysinfo = ();
 	my $section = '';
