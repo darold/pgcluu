@@ -799,7 +799,7 @@ opendir(IDIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
 my @files = grep { /\.html$/ } readdir(IDIR);
 closedir(IDIR);
 if ($#files >= 0) {
-	die "FATAL: output directory $INPUT_DIR is not empty.";
+	die "FATAL: output directory $OUTPUT_DIR is not empty.";
 }
 
 # Check start/end date time
@@ -1228,7 +1228,8 @@ sub get_device_list
 		my @headers = ();
 		while (my $l = <IN>) {
 			chomp($l);
-			$l =~ s///;
+			$l =~ s/
+//;
 			# Skip kernel header part
 			if ($l !~ /^\d+:\d+:\d+/) {
 				next;
@@ -1307,7 +1308,8 @@ sub get_interface_list
 		my @headers = ();
 		while (my $l = <IN>) {
 			chomp($l);
-			$l =~ s///;
+			$l =~ s/
+//;
 			# Skip kernel header part
 			if ($l !~ /^\d+:\d+:\d+/) {
 				next;
@@ -6227,7 +6229,8 @@ sub compute_sarfile_graph
 	my @content = ();
 	while (my $l = <IN>) {
 		chomp($l);
-		$l =~ s///;
+		$l =~ s/
+//;
 		# Skip kernel header part
 		if ( ($l eq '') || ($l =~ /^\d+:\d+:\d+/) || ($l =~ /\d+\/\d+\/\d+/)) {
 			push(@content, $l);
