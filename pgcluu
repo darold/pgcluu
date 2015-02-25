@@ -1172,7 +1172,7 @@ sub detect_interval
 		$dt -= $1;
 	}
 
-	return $dt;
+	return $dt || 1;
 }
 
 sub get_data_id
