@@ -1002,7 +1002,7 @@ sub fetch_version
 	if ($? != 0) {
 		# Only stop here if there's no pgbouncer querying
 		if (!$PGBOUNCER_ARGS) {
-			&dprint("FATAL: psql error. $!\n");
+			&dprint("FATAL: psql error. $pg_ver\n");
 			# remove the pidfile
 			if (-f $PIDFILE) {
 				unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
