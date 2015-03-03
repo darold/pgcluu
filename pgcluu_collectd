@@ -608,10 +608,6 @@ while (1) {
 	# Some time range may not collect data
 	my ($sec , $min, $hour, $mday, $mon, $year, @other) = localtime(time);
 	$min = "0$min" if ($min < 10);
-if ($tcounter == 3) {
-	print STDERR "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n";
-	$hour++;
-}
 	$hour = "0$hour" if ($hour < 10);
 	$mday = "0$mday" if ($mday < 10);
 	$mon++;
@@ -1290,6 +1286,7 @@ options:
   -U, --dbuser=USERNAME    database user to connect as. Default to current user.
   -v, --verbose            Print out debug informations.
   -V, --version            Show pgcluu_collectd version and exit.
+  -W, --password=pass      database password.
   -z, --compress           force compression of rotated data files.
   --included-db=DATABASE   do not collect statistics for the comma separated list
                            of database name. 

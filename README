@@ -137,6 +137,7 @@ COLLECTING STATISTICS
       -U, --dbuser=USERNAME    database user to connect as. Default to current user.
       -v, --verbose            Print out debug informations.
       -V, --version            Show pgcluu_collectd version and exit.
+      -W, --password=pass      database password.
       -z, --compress           force compression of rotated data files.
       --included-db=DATABASE   do not collect statistics for the comma separated list
                                of database name. 
