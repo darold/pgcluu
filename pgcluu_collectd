@@ -679,7 +679,7 @@ while (1) {
 	# Set the sar command
 	my $sar_command = '';
 	if (!$DISABLE_SAR) {
-		$sar_command = $sshcmd . ' "' . $def_sar_command . "\"" if ($sshcmd);
+		$sar_command = ($sshcmd) ? $sshcmd . ' "' . $def_sar_command . ' "' : $def_sar_command;
 		$sar_command .= " >>$OUT_DIR/$SAR_FILE";
 	}
 
