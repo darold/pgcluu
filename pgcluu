@@ -967,16 +967,10 @@ if (!$DISABLE_SAR) {
 	&html_header($FH);
 	print $FH "<ul id=\"slides\">\n";
 	for (my $i = 0; $i <= $#DEVICE_LIST; $i++) {
-		# Open a filehandle for each database
-		$DEVFH{$DEVICE_LIST[$i]} = new IO::File ">$OUTPUT_DIR/system-device$i.html";
-		if (not defined $DEVFH{$DEVICE_LIST[$i]}) {
-			die "FATAL: can't write to $OUTPUT_DIR/system-device$i.html, $!\n";
-		}
-		&html_header($DEVFH{$DEVICE_LIST[$i]});
-		$DEVFH{$DEVICE_LIST[$i]}->print("<ul id=\"slides\">\n");
+		&init_device_output($i);
 	}
 	for (my $i = 0; $i <= $#IFACE_LIST; $i++) {
-		# Open a filehandle for each database
+		# Open a filehandle for each network devices
 		$DEVFH{$IFACE_LIST[$i]} = new IO::File ">$OUTPUT_DIR/network-device$i.html";
 		if (not defined $DEVFH{$IFACE_LIST[$i]}) {
 			die "FATAL: can't write to $OUTPUT_DIR/network-device$i.html, $!\n";
@@ -1111,6 +1105,18 @@ If you just want to create a report from a sar output file:
 
 };
     exit 0;
+}
+
+sub init_device_output
+{
+	my $i = shift;
+	# Open a filehandle for each database
+	$DEVFH{$DEVICE_LIST[$i]} = new IO::File ">$OUTPUT_DIR/system-device$i.html";
+	if (not defined $DEVFH{$DEVICE_LIST[$i]}) {
+		die "FATAL: can't write to $OUTPUT_DIR/system-device$i.html, $!\n";
+	}
+	&html_header($DEVFH{$DEVICE_LIST[$i]});
+	$DEVFH{$DEVICE_LIST[$i]}->print("<ul id=\"slides\">\n");
 }
 
 sub progress_bar
@@ -5797,6 +5803,10 @@ sub compute_srvtime_report
 	}
 	if (scalar keys %devices_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
+			if (!exists $DEVFH{$n}) {
+				push(@DEVICE_LIST, $n);
+				&init_device_output($#DEVICE_LIST);
+			}
 			$devices_stat{$n}{'await'} =~ s/,$//;
 			$devices_stat{$n}{'svctm'} =~ s/,$//;
 			$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'device-service_time', $data_info, $n, $devices_stat{$n}{'svctm'}, $devices_stat{$n}{'await'}) );
@@ -5828,6 +5838,10 @@ sub compute_rw_device_report
 	}
 	if (scalar keys %devices_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
+			if (!exists $DEVFH{$n}) {
+				push(@DEVICE_LIST, $n);
+				&init_device_output($#DEVICE_LIST);
+			}
 			$devices_stat{$n}{'rd_sec/s'} =~ s/,$//;
 			$devices_stat{$n}{'wr_sec/s'} =~ s/,$//;
 			#$devices_stat{$n}{'tps'} =~ s/,$//;
@@ -5856,6 +5870,10 @@ sub compute_util_device_report
 	}
 	if (scalar keys %devices_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
+			if (!exists $DEVFH{$n}) {
+				push(@DEVICE_LIST, $n);
+				&init_device_output($#DEVICE_LIST);
+			}
 			$devices_stat{$n}{'%util'} =~ s/,$//;
 			$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'device-cpu', $data_info, $n, $devices_stat{$n}{'%util'}) );
 		}
@@ -5883,6 +5901,10 @@ sub compute_network_report
 	}
 	if (scalar keys %devices_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
+			if (!exists $DEVFH{$n}) {
+				push(@DEVICE_LIST, $n);
+				&init_device_output($#DEVICE_LIST);
+			}
 			$devices_stat{$n}{'rxkB/s'} =~ s/,$//;
 			$devices_stat{$n}{'txkB/s'} =~ s/,$//;
 			$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'network-utilization', $data_info, $n, $devices_stat{$n}{'rxkB/s'}, $devices_stat{$n}{'txkB/s'}) ) if (exists $DEVFH{$n});
@@ -5912,6 +5934,10 @@ sub compute_network_error_report
 	}
 	if (scalar keys %devices_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
+			if (!exists $DEVFH{$n}) {
+				push(@DEVICE_LIST, $n);
+				&init_device_output($#DEVICE_LIST);
+			}
 			$devices_stat{$n}{'rxerr/s'} =~ s/,$//;
 			$devices_stat{$n}{'txerr/s'} =~ s/,$//;
 			$devices_stat{$n}{'coll/s'} =~ s/,$//;
