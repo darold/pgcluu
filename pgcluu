@@ -1554,12 +1554,13 @@ sub pg_stat_database
 			$OVERALL_STATS{'cluster'}{'temp_bytes'} += $tmp_val;
 			$OVERALL_STATS{'database'}{$data[2]}{'temp_bytes'} += $tmp_val;
 
+			$has_temp = 1 if ($tmp_val > 0);
+
 			(($data[17] - $start_vals{$data[2]}[17]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[17] - $start_vals{$data[2]}[17]);
 			$all_database_stat{$data[0]}{$data[2]}{deadlocks} = $tmp_val;
 			$all_database_stat{$data[0]}{all}{deadlocks} += $tmp_val;
 			$OVERALL_STATS{'cluster'}{'deadlocks'} += $tmp_val;
 			$OVERALL_STATS{'database'}{$data[2]}{'deadlocks'} += $tmp_val;
-			$has_temp = 1 if ($tmp_val > 0);
 		}
 
 		@{$start_vals{$data[2]}} = ();
