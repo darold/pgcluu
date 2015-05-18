@@ -702,6 +702,20 @@ my %SAR_GRAPH_INFOS = (
 		'ylabel' => 'Number per second',
 		'legends' => ['rx errors', 'tx errors', 'collisions' ],
 	},
+	'14' => {
+		'name' =>  'system-cswch',
+		'title' => 'Context switches',
+		'description' => 'Total number of context switches per second.',
+		'ylabel' => 'Context switches',
+		'legends' => ['cswch/s'],
+	},
+	'15' => {
+		'name' =>  'system-pcrea',
+		'title' => 'Tasks created',
+		'description' => 'Total number of tasks created per second.',
+		'ylabel' => 'Tasks',
+		'legends' => ['proc/s'],
+	},
 
 );
 
@@ -5404,8 +5418,10 @@ sub generate_html_menu
                   <li id="menu-system-swap"><a href="system.html#system-swap">Swap</a></li>
                   <li class="divider"></li>
                   <li id="menu-system-load"><a href="system.html#system-load">Load</a></li>
-                  <li id="menu-system-process"><a href="system.html#system-process">Process</a></li>
+                  <li id="menu-system-process"><a href="system.html#system-process">Task list</a></li>
                   <li id="menu-system-runqueue"><a href="system.html#system-runqueue">Run queue</a></li>
+                  <li id="menu-system-cswch"><a href="system.html#system-cswch">Context switches</a></li>
+                  <li id="menu-system-pcrea"><a href="system.html#system-pcrea">Tasks created per second</a></li>
                   <li class="divider"></li>
                   <li id="menu-system-block"><a href="system.html#system-block">Blocks</a></li>
                   <li id="menu-system-page"><a href="system.html#system-page">Pages</a></li>
@@ -5636,6 +5652,42 @@ sub compute_process_report
 		} elsif ($data_info->{name} eq 'system-runqueue') {
 			$process_stat{'runq-sz'} =~ s/,$//;
 			print $FH &flotr2_linegraph_array($IDX++, 'system-runqueue', $data_info, '', $process_stat{'runq-sz'});
+		}
+	}
+}
+
+sub compute_context_report
+{
+	my $data_info = shift();
+
+	my %process_stat = ();
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;proc;cswch
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+
+		map { s/,/\./ } @data ;
+		if (!exists $OVERALL_STATS{'system'}{'cswch'} || ($OVERALL_STATS{'system'}{'cswch'}[1] < $data[4])) {
+			my $t = localtime($data[2]/1000);
+			@{$OVERALL_STATS{'system'}{'cswch'}} = ($t, $data[4]);
+		}
+		if ($data_info->{name} eq 'system-cswch') {
+			$process_stat{'cswch'}  .= '[' . $data[2] . ',' . ($data[4]||0) . '],';
+		} elsif ($data_info->{name} eq 'system-pcrea') {
+			$process_stat{'pcrea'}   .= '[' . $data[2] . ',' . ($data[3]||0) . '],';
+		}
+	}
+	if (scalar keys %process_stat > 0) {
+		if ($data_info->{name} eq 'system-cswch') {
+			$process_stat{'cswch'} =~ s/,$//;
+			print $FH &flotr2_linegraph_array($IDX++, 'system-cswch', $data_info, '', $process_stat{'cswch'});
+		} elsif ($data_info->{name} eq 'system-pcrea') {
+			$process_stat{'pcrea'} =~ s/,$//;
+			print $FH &flotr2_linegraph_array($IDX++, 'system-pcrea', $data_info, '', $process_stat{'pcrea'});
 		}
 	}
 }
@@ -6023,6 +6075,43 @@ sub compute_sarstat_graph
 	}
 
 	####
+	# Show context swiches
+	####
+	if ($data_info{name} eq 'system-cswch') {
+		my $command = "$SADF_PROG -t -D $file -- -w";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for process statistics
+		&compute_context_report(\%data_info, @content);
+	}
+
+	####
+	# Show tasks created per second
+	####
+	if ($data_info{name} eq 'system-pcrea') {
+		my $command = "$SADF_PROG -t -D $file -- -w";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for process statistics
+		&compute_context_report(\%data_info, @content);
+	}
+
+
+	####
 	# Show memory utilization
 	####
 	if ($data_info{name} eq 'system-memory') {
@@ -6194,10 +6283,10 @@ sub find_report_type
 	my $data = shift;
 	my $type = '';
 
-	if ($data =~ m#proc/s#) {
-		$type = 'pcrea';
-	} elsif ($data =~ m#cswch/s#) {
+	if ($data =~ m#cswch/s#) {
 		$type = 'cswch';
+	} elsif ($data =~ m#proc/s#) {
+		$type = 'pcrea';
 	} elsif ($data =~ m#CPU\s+i\d+#) {
 		$type = 'ncpu';
 	} elsif ($data =~ m#CPU\s+M#) {
@@ -6391,6 +6480,25 @@ sub compute_sarfile_graph
 
 	}
 
+	####
+	# Show context switches
+	####
+	if ($data_info{name} eq 'system-cswch') {
+
+		# Compute graphs for context switches statistics
+		&compute_context_report(\%data_info, @{$fulldata{cswch}});
+
+	}
+
+	####
+	# Show process created per second
+	####
+	if ($data_info{name} eq 'system-pcrea') {
+
+		# Compute graphs for number of process created per second statistics
+		&compute_context_report(\%data_info, @{$fulldata{cswch}});
+
+	}
 
 	####
 	# Show memory utilization
