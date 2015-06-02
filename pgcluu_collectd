@@ -562,7 +562,13 @@ my $PGBOUNCER_PROG = $PSQL_PROG . ' ' . $PGBOUNCER_ARGS . ' pgbouncer';
 $PSQL_PROG .= " -h $DBHOST" if ($DBHOST);
 $PSQL_PROG .= " -p $DBPORT" if ($DBPORT);
 $PSQL_PROG .= " -U $DBUSER" if ($DBUSER);
-$PSQL_PROG .= " -d $dbnames[0]"  if ($#dbnames >= 0);
+if ($#dbnames >= 0) {
+	if ($dbnames[0] !~ /^[a-z0-9\_\-]+$/i) {
+		$PSQL_PROG .= " -d '$dbnames[0]'";
+	} else {
+		$PSQL_PROG .= " -d $dbnames[0]";
+	}
+}
 if ($DBPASS) {
 	$ENV{PGPASSWORD} = $DBPASS;
 }
@@ -739,7 +745,11 @@ while (1) {
 				}
 				my $LOCAL_PSQL_PROG = $PSQL_PROG;
 				if ($db && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $db/i)) {
-					$LOCAL_PSQL_PROG .= " -d $db";
+					if ($db !~ /^[a-z0-9\_\-]+$/i) {
+						$LOCAL_PSQL_PROG .= " -d '$db'";
+					} else {
+						$LOCAL_PSQL_PROG .= " -d $db";
+					}
 				}
 				# Collecting database statistics
 				open(PSQL, "| $LOCAL_PSQL_PROG");
@@ -1037,7 +1047,11 @@ sub get_extensions
 
 	my $LOCAL_PSQL_PROG = $PSQL_PROG;
 	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
-		$LOCAL_PSQL_PROG .= " -d $database";
+		if ($database !~ /^[a-z0-9\_\-]+$/i) {
+			$LOCAL_PSQL_PROG .= " -d '$database'";
+		} else {
+			$LOCAL_PSQL_PROG .= " -d $database";
+		}
 	}
 	my @db_extension = `$LOCAL_PSQL_PROG -c "SELECT extname||'-'||extversion FROM pg_extension;"`;
 	if ($? != 0) {
@@ -1082,7 +1096,11 @@ sub get_schemas
 
 	my $LOCAL_PSQL_PROG = $PSQL_PROG;
 	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
-		$LOCAL_PSQL_PROG .= " -d $database";
+		if ($database !~ /^[a-z0-9\_\-]+$/i) {
+			$LOCAL_PSQL_PROG .= " -d '$database'";
+		} else {
+			$LOCAL_PSQL_PROG .= " -d $database";
+		}
 	}
 	my @db_schema = `$LOCAL_PSQL_PROG -c "SELECT nspname FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' ORDER BY 1"`;
 	if ($? != 0) {
@@ -1816,7 +1834,11 @@ sub get_proc_name
 
 	my $LOCAL_PSQL_PROG = $PSQL_PROG;
 	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
-		$LOCAL_PSQL_PROG .= " -d $database";
+		if ($database !~ /^[a-z0-9\_\-]+$/i) {
+			$LOCAL_PSQL_PROG .= " -d '$database'";
+		} else {
+			$LOCAL_PSQL_PROG .= " -d $database";
+		}
 	}
 	my @db_proc = `$LOCAL_PSQL_PROG -c "SELECT n.nspname||'.'||p.proname FROM pg_proc p, pg_namespace n WHERE p.pronamespace=n.oid AND n.nspname NOT IN ('pg_catalog', 'information_schema');"`;
 	if ($? != 0) {
@@ -1842,7 +1864,11 @@ sub get_triggers
 
 	my $LOCAL_PSQL_PROG = $PSQL_PROG;
 	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
-		$LOCAL_PSQL_PROG .= " -d $database";
+		if ($database !~ /^[a-z0-9\_\-]+$/i) {
+			$LOCAL_PSQL_PROG .= " -d '$database'";
+		} else {
+			$LOCAL_PSQL_PROG .= " -d $database";
+		}
 	}
 	my $db_trigger = `$LOCAL_PSQL_PROG -c "SELECT count(tgname) FROM pg_trigger WHERE NOT tgisinternal;"`;
 	if ($? != 0) {
