@@ -680,34 +680,29 @@ while (1) {
 		}
 	}
 
-	# Set rotation subdirectory
+	# Compress previous directory if required
+	if ($COMPRESS && $OLD_OUT_DIR) {
+		# Fork a process to compress old data files in parallel
+		&spawn(sub {
+			&compress_files($OLD_OUT_DIR);
+		});
+	}
+
+	# Set rotation/incremental subdirectories 
 	if ($D_ROTATE && !-d "$OUTPUT_DIR/$year/$mon/$mday") {
 		mkdir "$OUTPUT_DIR/$year" if (!-d "$OUTPUT_DIR/$year");
 		mkdir "$OUTPUT_DIR/$year/$mon" if (!-d "$OUTPUT_DIR/$year/$mon");
 		mkdir "$OUTPUT_DIR/$year/$mon/$mday";
-		# Compress previous directory if required
-		if ($COMPRESS && $OLD_OUT_DIR) {
-			# Fork a process to compress old data files
-			&spawn(sub {
-				&compress_files($OLD_OUT_DIR);
-			});
-                }
 		# Set the new output directory
 		$OUT_DIR = "$OUTPUT_DIR/$year/$mon/$mday";
 		# stores previous directory for compressed rotated files
 		$OLD_OUT_DIR = $OUT_DIR;
-        } elsif ($H_ROTATE && !-d "$OUTPUT_DIR/$year/$mon/$mday/$hour") {
+        }
+	if ($H_ROTATE && !-d "$OUTPUT_DIR/$year/$mon/$mday/$hour") {
 		mkdir "$OUTPUT_DIR/$year" if (!-d "$OUTPUT_DIR/$year");
 		mkdir "$OUTPUT_DIR/$year/$mon" if (!-d "$OUTPUT_DIR/$year/$mon");
 		mkdir "$OUTPUT_DIR/$year/$mon/$mday" if (!-d "$OUTPUT_DIR/$year/$mon/$mday");
 		mkdir "$OUTPUT_DIR/$year/$mon/$mday/$hour";
-		# Compress previous directory if required
-		if ($COMPRESS && $OLD_OUT_DIR) {
-			# Fork a process to compress old data files
-			&spawn(sub {
-				&compress_files($OLD_OUT_DIR);
-			});
-                }
 		# Set the new output directory
 		$OUT_DIR = "$OUTPUT_DIR/$year/$mon/$mday/$hour";
 		# stores previous directory for compressed rotated files
@@ -738,6 +733,8 @@ while (1) {
 			} else {
 				`$CAT_PROG $f >$OUT_DIR/$filename 2>/dev/null`;
 			}
+			# remove file when empty
+			unlink("$OUT_DIR/$filename" ) if (-z "$OUT_DIR/$filename");
 		}
 	}
 
