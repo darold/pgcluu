@@ -727,13 +727,12 @@ while (1) {
 	}
 
 	# Copy configuration files into output directory
-	if (($#METRICS >= 0) && !grep(/^configuration_stats$/, @METRICS)) {
+	if (($#METRICS >= 0) && grep(/^configuration_stats$/, @METRICS)) {
 		my @conf_files = $METRICS_COMMANDS{'configuration_stats'}->{command}->();
 		@conf_files = () if ($PG_RET < 0);
 		foreach my $f (@conf_files, '/etc/pgbouncer/pgbouncer.ini') {
 			my $filename = basename($f);
 			next if (-e "$OUT_DIR/$filename"); # Do not copy file twice in same directory
-			next if (($#METRICS >= 0) && !grep(/^$filename/, @METRICS));
 			if ($sshcmd) {
 				`$sshcmd "$CAT_PROG $f" >$OUT_DIR/$filename 2>/dev/null`;
 			} else {
