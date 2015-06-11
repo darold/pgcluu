@@ -5412,7 +5412,7 @@ AAAASUVORK5CYII=';
 		} else {
 			$menu_str .= qq{
 		      <li class="divider"></li>
-		      <li id="menu-cluster-replication"$disable_allrepli><a href="cluster.html#cluster-replication">Replication statistics</a></li>
+		      <li id="menu-cluster-replication"$disable_replication><a href="cluster.html#cluster-replication">Replication statistics</a></li>
 };
 		}
 		$menu_str .= qq{
