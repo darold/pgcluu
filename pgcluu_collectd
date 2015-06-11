@@ -67,7 +67,7 @@ my $END_AFTER_COUNTER = 0;
 my $NO_DATABASE = 0;
 my $D_ROTATE    = 0;
 my $H_ROTATE    = 0;
-my $OUT_DIR     = 0;
+my $OUT_DIR     = '.';
 my $COMPRESS    = 0;
 my $OLD_OUT_DIR = '';
 my $GZIP_PID    = 0;
@@ -486,11 +486,12 @@ if (!$CAPTURE) {
 		exit 1;
 	} else {
 		# Check if we can write in this directory
-		unless(open(OUT, ">$OUTPUT_DIR/wtest")) {
-			&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
+		unless(open(OUT, ">wtest")) {
+			&dprint("FATAL: can not write into output directory $OUTPUT_DIR\n");
 			exit 1;
 		}
-		unlink("$OUTPUT_DIR/wtest");
+		close(OUT);
+		unlink("wtest");
 
 	}
 } else {
@@ -498,10 +499,8 @@ if (!$CAPTURE) {
 		&dprint("FATAL: can not change directory to $CAPTURE_DIR: $!\n");
 		exit 1;
 	}
+	$OUT_DIR = $OUTPUT_DIR;
 }
-
-# Save original output dir for rotate purpose
-$OUT_DIR = $OUTPUT_DIR;
 
 # Generate the sar command
 my $def_sar_command = "LC_ALL=C $SAR_PROG -t -p -A 1 1";
@@ -680,34 +679,53 @@ while (1) {
 		}
 	}
 
-	# Compress previous directory if required
-	if ($COMPRESS && $OLD_OUT_DIR) {
+	####
+	# Output dir is now relative to $OUTPUT_DIR because we have chdir to that directory.
+	####
+
+	# Compress previous hourly directory if required
+	if ($COMPRESS && $OLD_OUT_DIR && ($OLD_OUT_DIR ne "$year/$mon/$mday") && $D_ROTATE && !$H_ROTATE) {
 		# Fork a process to compress old data files in parallel
 		&spawn(sub {
 			&compress_files($OLD_OUT_DIR);
 		});
 	}
 
-	# Set rotation/incremental subdirectories 
-	if ($D_ROTATE && !-d "$OUTPUT_DIR/$year/$mon/$mday") {
-		mkdir "$OUTPUT_DIR/$year" if (!-d "$OUTPUT_DIR/$year");
-		mkdir "$OUTPUT_DIR/$year/$mon" if (!-d "$OUTPUT_DIR/$year/$mon");
-		mkdir "$OUTPUT_DIR/$year/$mon/$mday";
+	# Set daily rotation subdirectories 
+	if ($D_ROTATE && !$H_ROTATE && !-d "$year/$mon/$mday") {
+		mkdir "$year" if (!-d "$year");
+		mkdir "$year/$mon" if (!-d "$year/$mon");
+		mkdir "$year/$mon/$mday";
 		# Set the new output directory
-		$OUT_DIR = "$OUTPUT_DIR/$year/$mon/$mday";
-		# stores previous directory for compressed rotated files
-		$OLD_OUT_DIR = $OUT_DIR;
-        }
-	if ($H_ROTATE && !-d "$OUTPUT_DIR/$year/$mon/$mday/$hour") {
-		mkdir "$OUTPUT_DIR/$year" if (!-d "$OUTPUT_DIR/$year");
-		mkdir "$OUTPUT_DIR/$year/$mon" if (!-d "$OUTPUT_DIR/$year/$mon");
-		mkdir "$OUTPUT_DIR/$year/$mon/$mday" if (!-d "$OUTPUT_DIR/$year/$mon/$mday");
-		mkdir "$OUTPUT_DIR/$year/$mon/$mday/$hour";
+		$OUT_DIR = "$year/$mon/$mday";
+	} elsif ($D_ROTATE) {
 		# Set the new output directory
-		$OUT_DIR = "$OUTPUT_DIR/$year/$mon/$mday/$hour";
-		# stores previous directory for compressed rotated files
-		$OLD_OUT_DIR = $OUT_DIR;
+		$OUT_DIR = "$year/$mon/$mday";
         }
+
+	# Compress previous hourly directory if required
+	if ($COMPRESS && $OLD_OUT_DIR && ($OLD_OUT_DIR ne "$year/$mon/$mday") && $H_ROTATE) {
+		# Fork a process to compress old data files in parallel
+		&spawn(sub {
+			&compress_files($OLD_OUT_DIR);
+		});
+	}
+
+	# Set hourly rotation/incremental subdirectories 
+	if ($H_ROTATE && !-d "$year/$mon/$mday/$hour") {
+		mkdir "$year" if (!-d "$year");
+		mkdir "$year/$mon" if (!-d "$year/$mon");
+		mkdir "$year/$mon/$mday" if (!-d "$year/$mon/$mday");
+		mkdir "$year/$mon/$mday/$hour";
+		# Set the new output directory
+		$OUT_DIR = "$year/$mon/$mday/$hour";
+	} elsif ($H_ROTATE) {
+		# Set the new output directory
+		$OUT_DIR = "$year/$mon/$mday/$hour";
+        }
+
+	# stores previous directory to check when rotated files must compressed
+	$OLD_OUT_DIR = $OUT_DIR;
 
 	# Collect initial information about the cluster
 	if (!-e "$OUT_DIR/sysinfo.txt") {
@@ -725,13 +743,15 @@ while (1) {
 	if (($#METRICS >= 0) && grep(/^configuration_stats$/, @METRICS)) {
 		my @conf_files = $METRICS_COMMANDS{'configuration_stats'}->{command}->();
 		@conf_files = () if ($PG_RET < 0);
+		my $outdir = $OUT_DIR;
+		$outdir = "$CAPTURE_DIR/$OUT_DIR" if ($CAPTURE);
 		foreach my $f (@conf_files, '/etc/pgbouncer/pgbouncer.ini') {
 			my $filename = basename($f);
 			next if (-e "$OUT_DIR/$filename"); # Do not copy file twice in same directory
 			if ($sshcmd) {
-				`$sshcmd "$CAT_PROG $f" >$OUT_DIR/$filename 2>/dev/null`;
+				`$sshcmd "$CAT_PROG $f" >$outdir/$filename 2>/dev/null`;
 			} else {
-				`$CAT_PROG $f >$OUT_DIR/$filename 2>/dev/null`;
+				`$CAT_PROG $f >$outdir/$filename 2>/dev/null`;
 			}
 			# remove file when empty
 			unlink("$OUT_DIR/$filename" ) if (-z "$OUT_DIR/$filename");
@@ -902,7 +922,7 @@ sub get_initial_info
 		my @procs = ();
 		my @trigs = ();
 		unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
-			&dprint("FATAL: can't write into output directory $OUT_DIR\n");
+			&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
 			exit 1;
 		}
 		if (&backend_minimum_version(9, 1)) {
@@ -1101,7 +1121,7 @@ sub fetch_version
 
 	if (!$NO_SYSINFO && $save) {
 		unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
-			&dprint("FATAL: can't write into output directory $OUT_DIR\n");
+			&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
 			exit 1;
 		}
 		print OUT "[PGVERSION]\n";
@@ -1308,7 +1328,7 @@ sub grab_os_information
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 	my @system = `$cmd | grep -E "vm.nr_hugepages |vm.overcommit|vm.dirty_.*(ratio|bytes)|swappiness|zone_reclaim_mode|shmmax|shmall"`;
 	unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
-		&dprint("FATAL: can't write into output directory $OUT_DIR\n");
+		&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
 		exit 1;
 	}
 	$cmd = 'cat /sys/kernel/mm/*transparent_hugepage/enabled 2>/dev/null';
