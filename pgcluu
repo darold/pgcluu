@@ -78,6 +78,9 @@ my $sar_day   = '';
 # Hash used to store system information
 my %sysinfo   = ();
 
+# Charset used in the html output
+my $charset = 'utf-8';
+
 # Statistics files to use with report
 my %DB_GRAPH_INFOS = (
 	'pg_stat_database.csv' => {
@@ -746,6 +749,7 @@ GetOptions(
 	"z|timezone=s"       => \$TIMEZONE,
 	"Z|stats-timezone=s" => \$STATS_TIMEZONE,
 	"from-sa-file!"      => \$FROM_SA_FILE,
+	"charset=s"          => \$charset,
 ) or die usage();
 &usage if ($HELP);
 
@@ -1100,6 +1104,8 @@ options:
                              system stats output, pgcluu use GMT time.
   --from-sa-file             instruct pgcluu that file specified by the -i option
                              uses the standard system activity daily data file.
+  --charset                  used to set the HTML charset to be used.
+                             Default: utf-8.
   --help                     print usage
 
 For example, you can generate all HTML reports from data files stored into
@@ -4595,7 +4601,7 @@ EOF
 
 <li class="slide" id="about-slide">
 
-	<div id="about"><br/><br/><br/></div>
+	<div id="about"><br/><br/><br/><br/><br/></div>
 	<div class="jumbotron">
 	<h1>About $PROGRAM</h1>
 	<p>$PROGRAM is a Perl program used to perform a full audit of a PostgreSQL Cluster. It is divided in two parts, a collector used to grab statistics on the PostgreSQL cluster using psql and sysstat, a grapher that will generate all HTML output. It is fully open source and free of charge.</p>
@@ -4649,7 +4655,7 @@ EOF
 		print $fh <<EOF;
 <li class="slide" id="info-slide">
 
-	<div id="info"><br/><br/><br/></div>
+	<div id="info"><br/><br/><br/><br/><br/></div>
 	<div class="row">
             <div class="col-md-4">
               <div class="panel panel-default">
@@ -4808,6 +4814,27 @@ sub html_header
 	my $fh = shift();
 	my @db_list = @_;
 
+	my $pgcluu_ico =
+        'data:image/png;base64,
+iVBORw0KGgoAAAANSUhEUgAAACAAAAAjCAYAAAD17ghaAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A
+/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB98GCwcGIvGIhhwAAAOBSURBVFjD
+vZdZiI1hGMd/55gFM/Ylss4YGsuQLDP2C3uWGyVzI1mypOxSCAmFO2WJUJaoKReDIhcmSbYaaphG
+msgWMXZmmPnc/L96ejvfd86ZOeOp03e+733e9/m/z/5EaBxFgWFAgd6fAg+BBv4D9QBuAj8BT79f
+wG2gT3MK7gSs0y09PSt1+z8GzBagY6qFFwNvjZCfwEygNdAKmAJ8NOvvgOWpEFwAXDEH1wAngPQA
+vzjsALlu/CQp6gKcBr6bwy4A+Qns7QucNPt+AGeBrokIjgArgM/mgCpgcpx9LbTX0ljgsTnnG7Aa
+yAhTd7XZ8BfYKtW6NA7oad63yB9iAVsD1JpzXwDDXcZlhqEWOAfkhdx4krM+QsKCqJd8x4buGn+x
+P/BVH8uBIQG3bipFBPqeMclwhMQDKgK82/fwZMIqO05SqpDM9VEgRx/vyO5B6N843yaHAM4HRoUA
+KNczN2psVx+yoR4oNe9zgRvAfr2XKgf49AAoCTnP8520sbZeoudAmXA2sFL5I+mqlij1BLYBWUCd
+STo9DE8bIA2Yn0oAUfnAUWA3sA+4q7VvwC3DWyNfuggcSAWAlsBi3Wy0bFcInAEuSyOl8odF8qfB
+4lsBdIgHIC3Oegbw0omGzsobc8z3qXrmGAfLVP6vaYoGvqqi/XDU/gvoJjDdgXZae69MGgFeOeAb
+7QPZ0tRSYK1ufkz9QTXwGngO7BXQkbL/GAGNS4ektmMxKlqGOp4nxlyzTEfkOb+DCTr/WfEfiaeB
+PKCfwi1fTnXcJC3PPD2F34BU5oHnakrSJLxMNo8ap/TM/17A/URDMBEAtcAl4JNKboEERozwiDGd
+J5/ZCCxIFoAXwLNR9b/I4fUMCM/RBMCEBGqBl6YOFpXPaIyiVCPvznHUHolhBktVIZf2a8YHgIkq
+w3VqwVoEbLrmeP8LYDOwU+HmrzXIZO0DAGwAfmuWmOYe7insxscIyaEaRL6oNyg0azNMI9ugAcal
+IuCRkVNm+4kosMss1mv8cm+RrvTaOiBki6VRV3tXnelpR1AZGKUhs84wrwLaNqJnyFaB8s+pUydU
+GG9jujqeCrO5MsmecKGj7ipgngpUUrTTaaXLgUEh/Lmaku1UtKep7XRv4Lwzip9yzJIJHJFAn69E
+gFJG04FnRsAnYDuwyRlIq9UjNgu1Uof0OkYlfKMuKCuZA/8B+QsSxkN8YYwAAAAASUVORK5CYII=
+';
         my $date = localtime(time);
         print $fh qq{
 <!DOCTYPE html>
@@ -4816,9 +4843,15 @@ sub html_header
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Type" content="text/html; charset=$charset" />
+    <meta name="robots" content="noindex,nofollow">
+    <meta http-equiv="Expires" content="$date">
+    <meta http-equiv="Generator" content="pgCluu v$VERSION">
+    <meta http-equiv="Date" content="$date">
+
     <meta name="description" content="">
     <meta name="author" content="">
-    <link rel="shortcut icon" href="favicon.png">
+    <link rel="shortcut icon" href="$pgcluu_ico"i />
 
     <title>$PROGRAM</title>
     <!-- Bootstrap core CSS -->
@@ -4874,8 +4907,104 @@ sub generate_html_menu
 {
         my $date = localtime(time);
 
+	my $pgcluu_logo =
+        'data:image/png;base64,
+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
+AAAASUVORK5CYII=';
+
         my $menu_str = qq{
     <div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+      <a class="navbar-brand" href="http://pgcluu.darold.net/">
+      <img src="$pgcluu_logo" title="$PROGRAM"></a>
       <div class="container">
         <div class="navbar-header">
           <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
@@ -4883,7 +5012,6 @@ sub generate_html_menu
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="http://pgcluu.darold.net/">$PROGRAM</a>
         </div>
         <div class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
