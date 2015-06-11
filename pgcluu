@@ -1080,8 +1080,9 @@ sub set_default_sysstat_file
 			$SAR_INPUT_FILE = "$input_dir/" . 'sar_stats.dat.gz';
 		}
 		if (!$SADC_INPUT_FILE && !$SAR_INPUT_FILE) {
-			print STDERR "ERROR: No sar data file found. Consider using -S or --disable-sar command line option or use -i / -I option to set the path to the data file.\n";
-			&usage();
+			print STDERR "WARNING: No sar data file found. Consider using -S or --disable-sar command\nline option or use -i / -I option to set the path to the data file.\nContinuing normally without reporting sar statistics.\n";
+			$DISABLE_SAR = 1;
+			return;
 		}
 	}
 
