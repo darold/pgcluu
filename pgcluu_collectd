@@ -74,6 +74,8 @@ my $GZIP_PID    = 0;
 my $GZIP_PROG   = '/bin/gzip';
 my $INCREMENTAL = 0;
 my $CAPTURE     = 0;
+my $TAR_PROG    = 'tar -czf';
+my $CAPTURE_DIR = '/tmp';
 
 # Stores starting time
 my $START_TIME = time();
@@ -376,6 +378,15 @@ for (my $i = 0; $i <= $#dbhosts; $i++) {
 
 # Get the output dir from command line
 my $OUTPUT_DIR = $ARGV[0] || '';
+# Overwrite the output directory in capture mode
+if ($CAPTURE) {
+	$OUTPUT_DIR = 'pgcluu_capture';
+	unless(mkdir "$CAPTURE_DIR/$OUTPUT_DIR") {
+		die "FATAL: can not create capture temporary directory $CAPTURE_DIR/$OUTPUT_DIR: $!.\n";
+	} else {
+		print "INFO: creating temporary output directory: $CAPTURE_DIR/$OUTPUT_DIR\n";
+	}
+}
 
 if ($USE_SSH && !$DBHOST) {
 	die "FATAL: you must give an ipaddress for the remote host with -h | --host option to use sar remotely\n";
@@ -456,33 +467,39 @@ if ($#METRICS >= 0) {
 
 }
 
-# Create output directory if not exists
+# Check if output directory exists
 if (!$OUTPUT_DIR) {
 	&dprint("FATAL: no output directory\n");
 	exit 1;
-} else {
+} elsif (!$CAPTURE) {
 	# Ensure this is not a relative path
-	if (!$CAPTURE) {
-		if (dirname($OUTPUT_DIR) eq '.') {
-			&dprint("FATAL: output directory ($OUTPUT_DIR) is not an absolute path.\n");
-			exit 1;
-		}
-	}
-}
-if (!-d $OUTPUT_DIR) {
-	&dprint("FATAL: output directory $OUTPUT_DIR doesn't exists\n");
-	exit 1;
-} else {
-	# Check if we can write in this directory
-	unless(open(OUT, ">$OUTPUT_DIR/wtest")) {
-		&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
+	if (dirname($OUTPUT_DIR) eq '.') {
+		&dprint("FATAL: output directory ($OUTPUT_DIR) is not an absolute path.\n");
 		exit 1;
 	}
-	unlink("$OUTPUT_DIR/wtest");
 }
 
-# Go to that directory
-chdir($OUTPUT_DIR) if (!$CAPTURE);
+# Go to that directory if we are not in capture mode otherwise go to /tmp
+if (!$CAPTURE) {
+	unless (chdir($OUTPUT_DIR)) {
+		&dprint("FATAL: can not change directory to $OUTPUT_DIR: $!\n");
+		exit 1;
+	} else {
+		# Check if we can write in this directory
+		unless(open(OUT, ">$OUTPUT_DIR/wtest")) {
+			&dprint("FATAL: can't write into output directory $OUTPUT_DIR\n");
+			exit 1;
+		}
+		unlink("$OUTPUT_DIR/wtest");
+
+	}
+} else {
+	unless(chdir("$CAPTURE_DIR")) {
+		&dprint("FATAL: can not change directory to $CAPTURE_DIR: $!\n");
+		exit 1;
+	}
+}
+
 # Save original output dir for rotate purpose
 $OUT_DIR = $OUTPUT_DIR;
 
@@ -542,7 +559,11 @@ $SIG{'INT'} = $SIG{'QUIT'} = $SIG{'TERM'} = 'terminate';
 if (!$DAEMONIZE) {
 	# Start in interactive mode
 	print "\n*** $PROGRAM v$VERSION (pid:$$) started at " . localtime(time) . "\n";
-	print "Type Ctrl+c to quit.\n\n";
+	if ($CAPTURE) {
+		print "Capture mode enabled, $PROGRAM will ended after one single loop.\n\n";
+	} else {
+		print "Type Ctrl+c to quit.\n\n";
+	}
 } else {
 	# detach from terminal
 	my $pid = fork;
@@ -588,7 +609,7 @@ if ($DBPASS) {
 # Try to grab the sysstat version
 my $sysstat_version = '';
 if (!$CAPTURE) {
-	&sysstat_version() || '';
+	$sysstat_version = &sysstat_version() || '';
 }
 
 # Remove action that can't be run with the PostgreSQL version
@@ -840,8 +861,21 @@ while (1) {
 }
 
 if ($COMPRESS) {
-        # Wait for last child stop
-        &wait_all_childs();
+	# Wait for last child stop
+	&wait_all_childs();
+}
+
+if ($CAPTURE) {
+	# be sure to be in the parent directory
+	chdir($CAPTURE_DIR);
+	# Then create a tarball before removing the output directory
+	print "INFO: creating archive $CAPTURE_DIR/pgcluu_capture.tar.gz of the capture directory $CAPTURE_DIR/$OUTPUT_DIR.\n";
+	`$TAR_PROG pgcluu_capture.tar.gz $OUTPUT_DIR`;
+	# Removing temporary directory and ensure that we are not removing anything else
+	print "INFO: removing capture temporary directory: $CAPTURE_DIR/$OUTPUT_DIR\n";
+	if ($OUTPUT_DIR eq 'pgcluu_capture') {
+		`rm -rf $OUTPUT_DIR`;
+	}
 }
 
 if (-f $PIDFILE) {
@@ -1329,7 +1363,8 @@ options:
 
   -B, --enable-buffercache enable buffercache statistics if pg_buffercache
 			   extension is installed.
-  -c, --capture            create a snapshot of the installation.
+  -c, --capture            create a snapshot of the PostgreSQL installation
+                           into tmp/pgcluu_capture.tar.gz.
   -C, --end-counter=NUM    terminate program after NUM reports.
   -d, --dbname=DATABASE    database name to connect to. Default to current user.
   -D, --daemonize          detach from console and enter in daemon mode.

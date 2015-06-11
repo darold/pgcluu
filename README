@@ -112,7 +112,8 @@ COLLECTING STATISTICS
 
       -B, --enable-buffercache enable buffercache statistics if pg_buffercache
                                extension is installed.
-      -c, --capture            create a snapshot of the installation.
+      -c, --capture            create a snapshot of the PostgreSQL installation
+                               into tmp/pgcluu_capture.tar.gz.
       -C, --end-counter=NUM    terminate program after NUM reports.
       -d, --dbname=DATABASE    database name to connect to. Default to current user.
       -D, --daemonize          detach from console and enter in daemon mode.
@@ -258,6 +259,20 @@ COLLECTING STATISTICS
     To save filesystem space it is possible to enable compression of all
     rotated files during the rotation process. Just activate the -z or
     --compress command line option.
+
+  Capture mode
+    The goal of this mode is to be able to obtain a simple report about the
+    PostgreSQL installation without collected metrics others than database
+    and tablespace size. This report can be use by ITs to better understand
+    the configuration and things that need to be tuned.
+
+    To enable this mode, just run pgcluu_collectd with the single option -c
+    or --capture. Other command line options will not be taken in account.
+    pgcluu_collectd will create e temporary directory /tmp/pgcluu_capture to
+    store temporary data and will removed if after building a compressed tar
+    archive: /tmp/pgcluu_capture.tar.gz. This is this archive that can be
+    used with pgcluu to build a snapshot report of the instance. pgcluu will
+    automatically detect this mode.
 
 GENERATING REPORTS
     To generate a pgCluu report about a PostgreSQL Cluster you must, at
