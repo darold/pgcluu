@@ -72,6 +72,8 @@ my $COMPRESS    = 0;
 my $OLD_OUT_DIR = '';
 my $GZIP_PID    = 0;
 my $GZIP_PROG   = '/bin/gzip';
+my $INCREMENTAL = 0;
+my $CAPTURE     = 0;
 
 # Stores starting time
 my $START_TIME = time();
@@ -283,13 +285,15 @@ my %METRICS_COMMANDS = (
 # are no mandatory options.
 my $result = GetOptions(
 	"B|enable-buffercache!" => \$USE_BUFFERCACHE,
-	"C|end-counter=s" => \$END_AFTER_COUNTER,
+	"c|capture!"     => \$CAPTURE,
+	"C|end-counter=s"=> \$END_AFTER_COUNTER,
 	"d|dbname=s"     => \$DBNAME,
 	"D|daemonize!"   => \$DAEMONIZE,
 	"E|end-after=s"  => \$END_AFTER,
 	"f|pid-file=s"   => \$PIDFILE,
 	"h|host=s"       => \$DBHOST,
 	"i|interval=i"   => \$INTERVAL,
+	"I|incremental!" => \$INCREMENTAL,
 	"k|kill!"        => \$KILL,
 	"m|metric=s"     => \@METRICS,
 	"M|max-size=s"   => \$MAX_SIZE,
@@ -352,6 +356,12 @@ if ($KILL) {
 
 # Display usage if help is asked
 &usage if $HELP;
+
+if ($CAPTURE && $DAEMONIZE) {
+	die "ERROR: option -D (--daemonize) can not be used with option -c (--capture).\n";
+} elsif ($CAPTURE) {
+	$DISABLE_SAR = 1;
+}
 
 # Set the multi host information
 my @MULTI_HOST_INFO = ();
@@ -452,9 +462,11 @@ if (!$OUTPUT_DIR) {
 	exit 1;
 } else {
 	# Ensure this is not a relative path
-	if (dirname($OUTPUT_DIR) eq '.') {
-		&dprint("FATAL: output directory ($OUTPUT_DIR) is not an absolute path.\n");
-		exit 1;
+	if (!$CAPTURE) {
+		if (dirname($OUTPUT_DIR) eq '.') {
+			&dprint("FATAL: output directory ($OUTPUT_DIR) is not an absolute path.\n");
+			exit 1;
+		}
 	}
 }
 if (!-d $OUTPUT_DIR) {
@@ -470,7 +482,7 @@ if (!-d $OUTPUT_DIR) {
 }
 
 # Go to that directory
-chdir($OUTPUT_DIR);
+chdir($OUTPUT_DIR) if (!$CAPTURE);
 # Save original output dir for rotate purpose
 $OUT_DIR = $OUTPUT_DIR;
 
@@ -574,7 +586,10 @@ if ($DBPASS) {
 }
 
 # Try to grab the sysstat version
-my $sysstat_version = &sysstat_version() || '';
+my $sysstat_version = '';
+if (!$CAPTURE) {
+	&sysstat_version() || '';
+}
 
 # Remove action that can't be run with the PostgreSQL version
 my $PG_RET = '';
@@ -585,6 +600,12 @@ my @included_dbs = split(/,/, $INCLUDED_DB);
 
 # end counter
 my $tcounter = 0;
+
+# Force rotation in incremental mode
+if ($INCREMENTAL) {
+	$D_ROTATE = 1;
+	$H_ROTATE = 1;
+}
 
 while (1) {
 
@@ -619,19 +640,21 @@ while (1) {
 	$mon++;
 	$mon = "0$mon" if ($mon < 10);
 	$year += 1900;
-	for (my $i = 0; $i <= $#SKIP_BEGIN; $i++) {
-		if ( $SKIP_BEGIN[$i] <= $SKIP_END[$i] ) {
-			if ( ("$hour$min" >= $SKIP_BEGIN[$i]) && ("$hour$min" <= $SKIP_END[$i]) ) {
-				# Wait next run
-				sleep($INTERVAL);
-				next;
-			}
-		} elsif ( $SKIP_BEGIN[$i] > $SKIP_END[$i] ) {
-			if ( ("$hour$min" >= $SKIP_BEGIN[$i]) && ("$hour$min" < 2400) ||
-					("$hour$min" <= $SKIP_END[$i]) && ("$hour$min" > 0)) {
-				# Wait for next run
-				sleep($INTERVAL);
-				next;
+	if (!$CAPTURE) {
+		for (my $i = 0; $i <= $#SKIP_BEGIN; $i++) {
+			if ( $SKIP_BEGIN[$i] <= $SKIP_END[$i] ) {
+				if ( ("$hour$min" >= $SKIP_BEGIN[$i]) && ("$hour$min" <= $SKIP_END[$i]) ) {
+					# Wait next run
+					sleep($INTERVAL);
+					next;
+				}
+			} elsif ( $SKIP_BEGIN[$i] > $SKIP_END[$i] ) {
+				if ( ("$hour$min" >= $SKIP_BEGIN[$i]) && ("$hour$min" < 2400) ||
+						("$hour$min" <= $SKIP_END[$i]) && ("$hour$min" > 0)) {
+					# Wait for next run
+					sleep($INTERVAL);
+					next;
+				}
 			}
 		}
 	}
@@ -682,6 +705,22 @@ while (1) {
 		}
 	}
 
+	# Copy configuration files into output directory
+	if (($#METRICS >= 0) && !grep(/^configuration_stats$/, @METRICS)) {
+		my @conf_files = $METRICS_COMMANDS{'configuration_stats'}->{command}->();
+		@conf_files = () if ($PG_RET < 0);
+		foreach my $f (@conf_files, '/etc/pgbouncer/pgbouncer.ini') {
+			my $filename = basename($f);
+			next if (-e "$OUT_DIR/$filename"); # Do not copy file twice in same directory
+			next if (($#METRICS >= 0) && !grep(/^$filename/, @METRICS));
+			if ($sshcmd) {
+				`$sshcmd "$CAT_PROG $f" >$OUT_DIR/$filename 2>/dev/null`;
+			} else {
+				`$CAT_PROG $f >$OUT_DIR/$filename 2>/dev/null`;
+			}
+		}
+	}
+
 	# Set the sar command
 	my $sar_command = '';
 	if (!$DISABLE_SAR) {
@@ -705,22 +744,6 @@ while (1) {
 		}
 		&dprint("FATAL: no action will be run on this PostgreSQL version $DB_INFO{major}.$DB_INFO{minor}, $!\n");
 		exit 1;
-	}
-
-	# Copy configuration files into output directory
-	if (($#METRICS >= 0) && !grep(/^configuration_stats$/, @METRICS)) {
-		my @conf_files = $METRICS_COMMANDS{'configuration_stats'}->{command}->();
-		@conf_files = () if ($PG_RET < 0);
-		foreach my $f (@conf_files, '/etc/pgbouncer/pgbouncer.ini') {
-			my $filename = basename($f);
-			next if (-e "$OUT_DIR/$filename"); # Do not copy file twice in same directory
-			next if (($#METRICS >= 0) && !grep(/^$filename/, @METRICS));
-			if ($sshcmd) {
-				`$sshcmd "$CAT_PROG $f" >$OUT_DIR/$filename 2>/dev/null`;
-			} else {
-				`$CAT_PROG $f >$OUT_DIR/$filename 2>/dev/null`;
-			}
-		}
 	}
 
 	if (!$NO_DATABASE) {
@@ -787,33 +810,42 @@ while (1) {
 		&dprint(`$sar_command`);
 	}
 
-	# Lookup if output dir size is upper than limit
-	if ($MAX_SIZE) {
-		my $lsize = `du -s $OUTPUT_DIR`;
-		chomp($lsize);
-		if ($lsize > $MAX_SIZE) {
-			&dprint("LOG: max size limit reach, terminating.\n");
-			if (-f $PIDFILE) {
-				unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
+	if (!$CAPTURE) {
+		# Lookup if output dir size is upper than limit
+		if ($MAX_SIZE) {
+			my $lsize = `du -s $OUTPUT_DIR`;
+			chomp($lsize);
+			if ($lsize > $MAX_SIZE) {
+				&dprint("LOG: max size limit reach, terminating.\n");
+				if (-f $PIDFILE) {
+					unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
+				}
+				exit 0;
 			}
-			exit 0;
+		}
+
+		# Wait next run following the interval value
+		my $t1 = time - $t0;
+		if ($t1 >= $INTERVAL) {
+			print "WARNING: loop took: $t1, you may consider increase the interval ($INTERVAL sec) using -i option.\n";
+			# Wait next run following the interval value
+			sleep($INTERVAL);
+		} else {
+			# Wait next run following the interval value minus the loop time
+			sleep($INTERVAL - $t1);
 		}
 	}
 
-	my $t1 = time - $t0;
-	if ($t1 >= $INTERVAL) {
-		print "WARNING: loop took: $t1, you may consider increase the interval ($INTERVAL sec) using -i option.\n";
-		# Wait next run following the interval value
-		sleep($INTERVAL);
-	} else {
-		# Wait next run following the interval value minus the loop time
-		sleep($INTERVAL - $t1);
-	}
+	last if ($CAPTURE);
 }
 
 if ($COMPRESS) {
         # Wait for last child stop
         &wait_all_childs();
+}
+
+if (-f $PIDFILE) {
+	unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
 }
 
 exit 0;
@@ -898,7 +930,19 @@ sub verify_action
 		}
 		return $ret;
 	}
-
+	# Only keep setting and configuration collect
+	if ($CAPTURE) {
+		foreach my $m (keys %METRICS_COMMANDS) {
+			delete $METRICS_COMMANDS{$m} if (($m ne 'configuration_stats') &&
+							 ($m ne 'pg_settings_stats') &&
+							 ($m ne 'pg_db_role_setting_stats') &&
+							 ($m ne 'tablespace_size_stats') &&
+							 ($m ne 'database_size_stats') &&
+							 ($m ne 'replication_stats')
+							);
+		}
+		return $ret;
+	}
 	if (!&backend_minimum_version(9, 4)) {
 		delete $METRICS_COMMANDS{'archiver_stats'};
 	}
@@ -1225,6 +1269,10 @@ sub grab_os_information
 	$cmd = 'cat /etc/*release 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 	my @releaseinfo = `$cmd`;
+	# Process list
+	$cmd = 'ps -faux 2>/dev/null';
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my @pslist = `$cmd`;
 	# System kernel tuning parameters
 	$cmd = '/sbin/sysctl -a 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
@@ -1263,6 +1311,8 @@ sub grab_os_information
 	print OUT @releaseinfo;
 	print OUT "[SYSTEM]\n";
 	print OUT @system;
+	print OUT "[PROCESS]\n";
+	print OUT @pslist;
 	
 	close(OUT);
 }
@@ -1279,6 +1329,7 @@ options:
 
   -B, --enable-buffercache enable buffercache statistics if pg_buffercache
 			   extension is installed.
+  -c, --capture            create a snapshot of the installation.
   -C, --end-counter=NUM    terminate program after NUM reports.
   -d, --dbname=DATABASE    database name to connect to. Default to current user.
   -D, --daemonize          detach from console and enter in daemon mode.

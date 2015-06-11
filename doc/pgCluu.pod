@@ -117,6 +117,7 @@ options:
 
   -B, --enable-buffercache enable buffercache statistics if pg_buffercache
 			   extension is installed.
+  -c, --capture            create a snapshot of the installation.
   -C, --end-counter=NUM    terminate program after NUM reports.
   -d, --dbname=DATABASE    database name to connect to. Default to current user.
   -D, --daemonize          detach from console and enter in daemon mode.

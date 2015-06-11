@@ -54,6 +54,7 @@ my %OVERALL_STATS   = ();
 my @GRAPH_COLORS    = ('#6e9dc9', '#f4ab3a', '#ac7fa8', '#8dbd0f'); 
 my $ZCAT_PROG       = '/bin/zcat';
 my $INTERVAL        = 1;
+my $CAPTURE         = 0;
 
 my %RELKIND = (
 	'r' => 'tables',
@@ -174,7 +175,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'tablespace-size',
 			'title' => 'Size of %s tablespace',
-			'description' => 'Tablespace sizes.',
+			'description' => 'Tablespace size and location.',
 			'ylabel' => 'Size',
 			'legends' => ['size'],
 		},
@@ -775,49 +776,6 @@ foreach (@net_opts) {
 	push(@INCLUDE_IFACE, split(/[,]+/, $_));
 }
 
-# Set default sysstat file to read (binary or text format)
-if (!$DISABLE_SAR) {
-	if (!$SADC_INPUT_FILE && !$SAR_INPUT_FILE) {
-		if (-f "$INPUT_DIR/sadc_stats.dat") {
-			$SADC_INPUT_FILE = "$INPUT_DIR/" . 'sadc_stats.dat';
-		} elsif (-f "$INPUT_DIR/sar_stats.dat") {
-			$SAR_INPUT_FILE = "$INPUT_DIR/" . 'sar_stats.dat';
-		} elsif (-f "$INPUT_DIR/sar_stats.dat.gz") {
-			$SAR_INPUT_FILE = "$INPUT_DIR/" . 'sar_stats.dat.gz';
-		}
-		if (!$SADC_INPUT_FILE && !$SAR_INPUT_FILE) {
-			print STDERR "ERROR: No sar data file found. Consider using -S or --disable-sar command line option or use -i / -I option to set the path to the data file.\n";
-			&usage();
-		}
-	}
-
-	# Verify that the sar data file exists.
-	if ($SADC_INPUT_FILE && !-f "$SADC_INPUT_FILE") {
-		print STDERR "ERROR: sar binary data file $SADC_INPUT_FILE can't be found.\n";
-		exit 1;
-	}
-	if ($SAR_INPUT_FILE && !-f "$SAR_INPUT_FILE") {
-		print STDERR "ERROR: sar text data file $SAR_INPUT_FILE can't be found.\n";
-		exit 1;
-	}
-}
-
-if (!$INPUT_DIR || !-d $INPUT_DIR) {
-	if (!$SAR_INPUT_FILE && !$SADC_INPUT_FILE) {
-		print STDERR "ERROR: you must specify a valid input directory: $INPUT_DIR.\n";
-		&usage();
-	}
-}
-$OUTPUT_DIR = '.' if (!$OUTPUT_DIR);
-
-# Check if the directory is empty
-opendir(IDIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
-my @files = grep { /\.html$/ } readdir(IDIR);
-closedir(IDIR);
-if ($#files >= 0) {
-	die "FATAL: output directory $OUTPUT_DIR is not empty.";
-}
-
 # Check start/end date time
 if ($BEGIN) {
 	if ($BEGIN =~ /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/) {
@@ -844,6 +802,28 @@ if ($END) {
 	}
 }
 
+
+# Set default sysstat file to read (binary or text format)
+if (!$DISABLE_SAR) {
+	&set_default_sysstat_file($INPUT_DIR);
+}
+
+if (!$INPUT_DIR || !-d $INPUT_DIR) {
+	if (!$SAR_INPUT_FILE && !$SADC_INPUT_FILE) {
+		print STDERR "ERROR: you must specify a valid input directory: $INPUT_DIR.\n";
+		&usage();
+	}
+}
+$OUTPUT_DIR = '.' if (!$OUTPUT_DIR);
+
+# Check if the directory is empty
+opendir(IDIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
+my @files = grep { /\.html$/ } readdir(IDIR);
+closedir(IDIR);
+if ($#files >= 0) {
+	die "FATAL: output directory $OUTPUT_DIR is not empty.";
+}
+
 # Look at system information
 if (-e "$INPUT_DIR/sysinfo.txt") {
 	%sysinfo = &read_sysinfo("$INPUT_DIR/sysinfo.txt");
@@ -861,50 +841,6 @@ if (!$DISABLE_SAR) {
 
 # Write resources files from __DATA__ section if they have not been already copied
 &write_resources();
-
-sub init_html_file
-{
-	my $ofile = shift;
-
-	# Open a filehandle for each database
-	my $fhdb = new IO::File ">$ofile";
-	if (not defined $fhdb) {
-		die "FATAL: can't write to $ofile, $!\n";
-	}
-	&html_header($fhdb);
-	$fhdb->print("<ul id=\"slides\">\n");
-	$fhdb->close();
-}
-
-sub append_to_html_file
-{
-	my $ofile = shift;
-
-	# If file doesn't exist create it
-	if (! -e $ofile) {
-		&init_html_file($ofile);
-	}
-
-	# Open a filehandle for each database
-	my $fhdb = new IO::File ">>$ofile";
-	if (not defined $fhdb) {
-		die "FATAL: can't write to $ofile, $!\n";
-	}
-	return $fhdb;
-}
-
-sub end_html_file
-{
-	my $ofile = shift;
-
-	my $fhdb = new IO::File ">>$ofile";
-	if (not defined $fhdb) {
-		die "FATAL: can't write to $ofile, $!\n";
-	}
-	$fhdb->print("</ul>\n");
-	&html_footer($fhdb);
-	$fhdb->close;
-}
 
 # parse SQL stats files
 if (-d "$INPUT_DIR") {
@@ -926,6 +862,8 @@ if (-d "$INPUT_DIR") {
 	}
 	print "DEBUG: autodetected interval value $INTERVAL\n" if ($DEBUG);
 
+	# Enable capture mode if all data file are not present
+	$CAPTURE = 1 if (!-e "$INPUT_DIR/pg_stat_connections.csv");
 
 	# Loop over CSV files and graphics definition to generate reports
 	foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS) {
@@ -1064,7 +1002,7 @@ usage: $0 [options] [-i sar_file | -I sadc_file] [input_dir]
 
 options:
   -b, --begin  datetime      start date/time for the data to be parsed.
-  -d, --db-only dbname       Only report for the whole cluster and the given
+  -d, --db-only dbname       only report for the whole cluster and the given
                              database name. You can use it multiple time or
                              give a comma separated list of database name.
   -D, --device-only dev      only report I/O stats for a particular device
@@ -1120,6 +1058,83 @@ If you just want to create a report from a sar output file:
 };
     exit 0;
 }
+
+sub set_default_sysstat_file
+{
+	my $input_dir = shift;
+
+	$input_dir ||= $INPUT_DIR;
+
+	if (!$SADC_INPUT_FILE && !$SAR_INPUT_FILE) {
+		if (-f "$input_dir/sadc_stats.dat") {
+			$SADC_INPUT_FILE = "$input_dir/" . 'sadc_stats.dat';
+		} elsif (-f "$input_dir/sar_stats.dat") {
+			$SAR_INPUT_FILE = "$input_dir/" . 'sar_stats.dat';
+		} elsif (-f "$input_dir/sar_stats.dat.gz") {
+			$SAR_INPUT_FILE = "$input_dir/" . 'sar_stats.dat.gz';
+		}
+		if (!$SADC_INPUT_FILE && !$SAR_INPUT_FILE) {
+			print STDERR "ERROR: No sar data file found. Consider using -S or --disable-sar command line option or use -i / -I option to set the path to the data file.\n";
+			&usage();
+		}
+	}
+
+	# Verify that the sar data file exists.
+	if ($SADC_INPUT_FILE && !-f "$SADC_INPUT_FILE") {
+		print STDERR "ERROR: sar binary data file $SADC_INPUT_FILE can't be found.\n";
+		exit 1;
+	}
+	if ($SAR_INPUT_FILE && !-f "$SAR_INPUT_FILE") {
+		print STDERR "ERROR: sar text data file $SAR_INPUT_FILE can't be found.\n";
+		exit 1;
+	}
+}
+
+
+sub init_html_file
+{
+	my $ofile = shift;
+
+	# Open a filehandle for each database
+	my $fhdb = new IO::File ">$ofile";
+	if (not defined $fhdb) {
+		die "FATAL: can't write to $ofile, $!\n";
+	}
+	&html_header($fhdb);
+	$fhdb->print("<ul id=\"slides\">\n");
+	$fhdb->close();
+}
+
+sub append_to_html_file
+{
+	my $ofile = shift;
+
+	# If file doesn't exist create it
+	if (! -e $ofile) {
+		&init_html_file($ofile);
+	}
+
+	# Open a filehandle for each database
+	my $fhdb = new IO::File ">>$ofile";
+	if (not defined $fhdb) {
+		die "FATAL: can't write to $ofile, $!\n";
+	}
+	return $fhdb;
+}
+
+sub end_html_file
+{
+	my $ofile = shift;
+
+	my $fhdb = new IO::File ">>$ofile";
+	if (not defined $fhdb) {
+		die "FATAL: can't write to $ofile, $!\n";
+	}
+	$fhdb->print("</ul>\n");
+	&html_footer($fhdb);
+	$fhdb->close;
+}
+
 
 sub init_device_output
 {
@@ -1905,7 +1920,44 @@ sub pg_database_size
 		delete $database_stat{$db}{size};
 	}
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
-	print $fhcluster &flotr2_linegraph_hash($IDX++, 'cluster-size', \%{$data_info{$id}}, 'all', %data);
+	if (!$CAPTURE) {
+		print $fhcluster &flotr2_linegraph_hash($IDX++, 'cluster-size', \%{$data_info{$id}}, 'all', %data);
+	} else {
+		$data_info{$id}{title} =~ s/\%s/all/;
+		print $fhcluster qq{
+<li class="slide" id="cluster-size-slide">
+      <div id="cluster-size"><br/><br/><br/><br/></div>
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{title}</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="$data_info{$id}{name}-report">
+			<div class="span11">
+				<table class="table table-striped" id="$data_info{$id}{name}-table">
+					<tbody>
+					<tr><th>Database Name</th><th>Size</th></tr>
+};
+		foreach my $db (sort keys %{$OVERALL_STATS{'database'}}) {
+			my $dbsize = &pretty_print_size($OVERALL_STATS{'database'}{$db}{size});
+			print $fhcluster "<tr><td>$db</td><td>$dbsize</td></tr>\n";
+		}
+		print $fhcluster qq{
+					</tbody>
+				</table>
+			</div>
+		</div>
+		</div>
+	    </div>
+	    </div>
+	</div>
+    </li>
+};
+	}
+
 	$fhcluster->close();
 }
 
@@ -1935,29 +1987,68 @@ sub pg_tablespace_size
 		$OVERALL_STATS{'tablespace'}{$data[1]}{'location'} = $data[3];
 	}
 	$curfh->close();
-	push(@tbspnames, 'all') if ($#tbspnames > 0);
-	foreach my $t (sort {$a <=> $b} keys %all_tablespace_stat) {
-		foreach my $tbsp (@tbspnames) {
-			$tablespace_stat{$tbsp}{size} .= '[' . $t . ',' . ($all_tablespace_stat{$t}{$tbsp}||0) . '],';
-		}
-	}
-	%all_tablespace_stat = ();
+
 	my $id = &get_data_id('tablespace-size', %data_info);
 	my %data = ();
 	my $print_after = '';
-	foreach my $tbsp (sort keys %tablespace_stat) {
-		$tablespace_stat{$tbsp}{size} =~ s/,$//;
-		$data{$tbsp} = $tablespace_stat{$tbsp}{size};
-		if ($tbsp ne 'all') {
-			my $location = "$tbsp";
-			$location .= " ($OVERALL_STATS{'tablespace'}{$tbsp}{location})" if ($OVERALL_STATS{'tablespace'}{$tbsp}{location});
-			$print_after .= &flotr2_linegraph_array($IDX++, 'tablespace-size+', \%{$data_info{$id}}, $location, $tablespace_stat{$tbsp}{size});
+	if (!$CAPTURE) {
+		push(@tbspnames, 'all') if ($#tbspnames > 0);
+
+		foreach my $t (sort {$a <=> $b} keys %all_tablespace_stat) {
+			foreach my $tbsp (@tbspnames) {
+				$tablespace_stat{$tbsp}{size} .= '[' . $t . ',' . ($all_tablespace_stat{$t}{$tbsp}||0) . '],';
+			}
 		}
-		delete $tablespace_stat{$tbsp}{size};
+		%all_tablespace_stat = ();
+		foreach my $tbsp (sort keys %tablespace_stat) {
+			$tablespace_stat{$tbsp}{size} =~ s/,$//;
+			$data{$tbsp} = $tablespace_stat{$tbsp}{size};
+			if ($tbsp ne 'all') {
+				my $location = "$tbsp";
+				$location .= " ($OVERALL_STATS{'tablespace'}{$tbsp}{location})" if ($OVERALL_STATS{'tablespace'}{$tbsp}{location});
+				$print_after .= &flotr2_linegraph_array($IDX++, 'tablespace-size+', \%{$data_info{$id}}, $location, $tablespace_stat{$tbsp}{size});
+			}
+			delete $tablespace_stat{$tbsp}{size};
+		}
 	}
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
-	print $fhcluster &flotr2_linegraph_hash($IDX++, 'tablespace-cluster-size', \%{$data_info{$id}}, 'all', %data);
-	print $fhcluster  $print_after;
+	if (!$CAPTURE) {
+		print $fhcluster &flotr2_linegraph_hash($IDX++, 'tablespace-cluster-size', \%{$data_info{$id}}, 'all', %data);
+		print $fhcluster  $print_after;
+	} else {
+		$data_info{$id}{title} =~ s/\%s/all/;
+		print $fhcluster qq{
+<li class="slide" id="tablespace-cluster-size-slide">
+      <div id="tablespace-cluster-size"><br/><br/><br/><br/></div>
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{title}</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="$data_info{$id}{name}-report">
+			<div class="span11">
+				<table class="table table-striped" id="$data_info{$id}{name}-table">
+					<tbody>
+					<tr><th>Tablespace Name</th><th>Location</th><th>Size</th></tr>
+};
+		foreach my $tbsp (sort keys %{$OVERALL_STATS{'tablespace'}}) {
+			my $tbsize = &pretty_print_size($OVERALL_STATS{'tablespace'}{$tbsp}{size});
+			print $fhcluster "<tr><td>$tbsp</td><td>$OVERALL_STATS{'tablespace'}{$tbsp}{location}</td><td>$tbsize</td></tr>\n";
+		}
+		print $fhcluster qq{
+					</tbody>
+				</table>
+			</div>
+		</div>
+		</div>
+	    </div>
+	</div>
+    </div>
+};
+	}
 	print $fhcluster "</li>\n";
 	$fhcluster->close();
 }
@@ -2948,41 +3039,86 @@ sub pg_stat_replication
 			$all_xlog_stat{$data[0]}{$name}{write_location} = sprintf("%.2f", ($tmp_val/$interval));
 			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[13])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[13]));
 			$all_xlog_stat{$data[0]}{$name}{flush_location} = sprintf("%.2f", ($tmp_val/$interval));
+			if ($CAPTURE) {
+				$xlog_stat{$name}{master_location} = ($data[10] || 0);
+				$xlog_stat{$name}{replay_location} = ($data[14] || 0);
+				$xlog_stat{$name}{sent_location} = ($data[11] || 0);
+				$xlog_stat{$name}{write_location} = ($data[12] || 0);
+				$xlog_stat{$name}{flush_location} = ($data[13] || 0);
+			}
 		}
 		@start_vals = ();
 		push(@start_vals, @data);
 	}
 	$curfh->close();
-	foreach my $t (sort {$a <=> $b} keys %tmp_xlog_stat) {
-		$xlog_stat{master_location} .= '[' . $t . ',' . (sprintf("%.2f", $tmp_xlog_stat{$t}{master_location}/$interval) || 0) . '],';
-	}
-	%tmp_xlog_stat = ();
-	foreach my $t (sort {$a <=> $b} keys %all_xlog_stat) {
-		foreach my $name (sort {$a cmp $b} keys %{$all_xlog_stat{$t}}) {
-			$xlog_stat{$name}{replay_location} .= '[' . $t . ',' . ($all_xlog_stat{$t}{$name}{replay_location} || 0) . '],';
-			$xlog_stat{$name}{sent_location} .= '[' . $t . ',' . ($all_xlog_stat{$t}{$name}{sent_location} || 0) . '],';
-			$xlog_stat{$name}{write_location} .= '[' . $t . ',' . ($all_xlog_stat{$t}{$name}{write_location} || 0) . '],';
-			$xlog_stat{$name}{flush_location} .= '[' . $t . ',' . ($all_xlog_stat{$t}{$name}{flush_location} || 0) . '],';
+	if (!$CAPTURE) {
+		foreach my $t (sort {$a <=> $b} keys %tmp_xlog_stat) {
+			$xlog_stat{master_location} .= '[' . $t . ',' . (sprintf("%.2f", $tmp_xlog_stat{$t}{master_location}/$interval) || 0) . '],';
 		}
-	}
-	%all_xlog_stat = ();
-	foreach my $id (sort {$a <=> $b} keys %data_info) {
-		my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
-		if (exists $xlog_stat{master_location} && ($data_info{$id}{name} eq 'database-xlog')) {
-			$xlog_stat{master_location} =~ s/,$//;
-			print $fhcluster &flotr2_linegraph_array($IDX++, 'cluster-xlog', \%{$data_info{$id}}, '', $xlog_stat{master_location});
-			delete $xlog_stat{master_location};
-
-		} elsif ($data_info{$id}{name} eq 'database-replication') {
-			foreach my $host (sort {$a cmp $b} keys %xlog_stat) {
-				next if ($host eq 'master_location');
-				$xlog_stat{$host}{sent_location} =~ s/,$//;
-				$xlog_stat{$host}{write_location} =~ s/,$//;
-				$xlog_stat{$host}{flush_location} =~ s/,$//;
-				$xlog_stat{$host}{replay_location} =~ s/,$//;
-				print $fhcluster &flotr2_linegraph_array($IDX++, 'cluster-replication', \%{$data_info{$id}}, $host, $xlog_stat{$host}{sent_location}, $xlog_stat{$host}{write_location}, $xlog_stat{$host}{replay_location});
+		%tmp_xlog_stat = ();
+		foreach my $t (sort {$a <=> $b} keys %all_xlog_stat) {
+			foreach my $name (sort {$a cmp $b} keys %{$all_xlog_stat{$t}}) {
+				$xlog_stat{$name}{replay_location} .= '[' . $t . ',' . ($all_xlog_stat{$t}{$name}{replay_location} || 0) . '],';
+				$xlog_stat{$name}{sent_location} .= '[' . $t . ',' . ($all_xlog_stat{$t}{$name}{sent_location} || 0) . '],';
+				$xlog_stat{$name}{write_location} .= '[' . $t . ',' . ($all_xlog_stat{$t}{$name}{write_location} || 0) . '],';
+				$xlog_stat{$name}{flush_location} .= '[' . $t . ',' . ($all_xlog_stat{$t}{$name}{flush_location} || 0) . '],';
 			}
 		}
+		%all_xlog_stat = ();
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
+			if (exists $xlog_stat{master_location} && ($data_info{$id}{name} eq 'database-xlog')) {
+				$xlog_stat{master_location} =~ s/,$//;
+				print $fhcluster &flotr2_linegraph_array($IDX++, 'cluster-xlog', \%{$data_info{$id}}, '', $xlog_stat{master_location});
+				delete $xlog_stat{master_location};
+
+			} elsif ($data_info{$id}{name} eq 'database-replication') {
+				foreach my $host (sort {$a cmp $b} keys %xlog_stat) {
+					next if ($host eq 'master_location');
+					$xlog_stat{$host}{sent_location} =~ s/,$//;
+					$xlog_stat{$host}{write_location} =~ s/,$//;
+					$xlog_stat{$host}{flush_location} =~ s/,$//;
+					$xlog_stat{$host}{replay_location} =~ s/,$//;
+					print $fhcluster &flotr2_linegraph_array($IDX++, 'cluster-replication', \%{$data_info{$id}}, $host, $xlog_stat{$host}{sent_location}, $xlog_stat{$host}{write_location}, $xlog_stat{$host}{replay_location});
+				}
+			}
+			$fhcluster->close();
+		}
+	} else {
+		my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html");
+		my $id = &get_data_id('database-replication', %data_info);
+		$data_info{$id}{title} =~ s/ with \%s//;
+		print $fhcluster qq{
+<li class="slide" id="cluster-replication-slide">
+      <div id="cluster-replication"><br/><br/><br/><br/></div>
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{title}</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="$data_info{$id}{name}-report">
+			<div class="span11">
+				<table class="table table-striped" id="$data_info{$id}{name}-table">
+					<tbody>
+					<tr><th>Name</th><th>Master location</th><th>Sent location</th><th>Replay location</th><th>Flushed location</th><th>Write location</th></tr>
+};
+		foreach my $name (sort {$a cmp $b} keys %xlog_stat) {
+			print $fhcluster "<tr><td>$name</td><td>$xlog_stat{$name}{master_location}</td><td>$xlog_stat{$name}{sent_location}</td><td>$xlog_stat{$name}{replay_location}</td><td>$xlog_stat{$name}{flush_location}</td><td>$xlog_stat{$name}{write_location}</td></tr>\n";
+		}
+		print $fhcluster qq{
+					</tbody>
+				</table>
+			</div>
+		</div>
+		</div>
+	    </div>
+	    </div>
+	</div>
+    </li>
+};
 		$fhcluster->close();
 	}
 }
@@ -3870,6 +4006,7 @@ sub pg_settings
 		</div>
 		</div>
 	    </div>
+	    </div>
 	</div>
     </li>
 };
@@ -3926,6 +4063,7 @@ sub pg_db_role_setting
 			</div>
 		</div>
 		</div>
+	    </div>
 	    </div>
 	</div>
     </li>
@@ -4791,9 +4929,35 @@ EOF
               </div>
             </div><!--/span-->
 	</div>
+EOF
+		if (exists $sysinfo{PROCESS}) {
+			print $fh <<EOF;
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="fa fa-hdd-o fa-2x pull-left fa-border"></i><h2>Process list</h2>
+              </div>
+              <div class="panel-body panel-lheight">
+		<div class="key-figures">
+		<ul>
+		<li></li>
+		<li>
+		<table>
+		<tr><th>USER</th><th>PID</th><th>%CPU</th><th>%MEM</th><th>VSZ</th><th>RSS</th><th>TTY</th><th>STAT</th><th>START</th><th>TIME</th><th>COMMAND</th></tr>
+		@{$sysinfo{PROCESS}}
+		</table>
+		</li>
+		</ul>
+		</div>
+              </div>
+              </div>
+            </div><!--/span-->
+	</div>
 
 </li>
 EOF
+		}
 	}
 
 	print $fh <<EOF;
@@ -4945,7 +5109,7 @@ sub generate_html_menu
 	}
 
 	opendir(ODIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
-	my @database_list = grep { !/^database-all.html$/ && s/^database-(.*)\.html$/$1/; } readdir(ODIR);
+	my @database_list = grep { !/^database-(all|queries-.*).html$/ && s/^database-(.*)\.html$/$1/; } readdir(ODIR);
 	closedir(ODIR);
 	if ($#database_list >= 0) {
 		my $disable_size = ' class="disabled"';
@@ -5052,6 +5216,9 @@ sub generate_html_menu
                 <ul class="dropdown-menu">
 		      <li id="menu-cluster-size"$disable_size><a href="cluster.html#cluster-size">Databases sizes</a></li>
 		      <li id="menu-tablespace-cluster-size"$disable_tablespace><a href="cluster.html#tablespace-cluster-size">Tablespaces sizes</a></li>
+};
+		if (!$CAPTURE) {
+			$menu_str .= qq{
 			<li id="menu-connectionbackend" class="dropdown-submenu$disable_connection">
 			   <a href="#" tabindex="-1">Connections </a>
 			      <ul class="dropdown-menu">
@@ -5113,6 +5280,14 @@ sub generate_html_menu
 			      <li id="menu-cluster-conflicts"$disable_conflicts><a href="cluster.html#cluster-conflicts">Conflicts</a></li>
 			      </ul>
 		        </li>
+};
+		} else {
+			$menu_str .= qq{
+		      <li class="divider"></li>
+		      <li id="menu-cluster-replication"$disable_allrepli><a href="cluster.html#cluster-replication">Replication statistics</a></li>
+};
+		}
+		$menu_str .= qq{
 		      <li class="divider"></li>
 			<li id="menu-configuration" class="dropdown-submenu$disable_conf">
 			   <a href="#" tabindex="-1">Configurations </a>
@@ -5129,6 +5304,13 @@ sub generate_html_menu
 			</li>
                 </ul>
               </li>
+};
+	}
+
+	if ($CAPTURE) {
+		@database_list = ();
+	} else {
+		$menu_str .= qq{
               <li id="menu-database" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">Databases <b class="caret"></b></a>
                 <ul class="dropdown-menu">
@@ -7133,6 +7315,10 @@ sub read_sysinfo
 		if ($section eq 'TRIGGER') {
 			my ($db, $val) = split(/[=]+/, $l);
 			$sysinfo{$section}{$db} = $val;
+		}
+		if ($section eq 'PROCESS') {
+			my ($USER,$PID,$CPU,$MEM,$VSZ,$RSS,$TTY,$STAT,$START,$TIME,$COMMAND) = split(/\s+/, $l, 11);
+			push(@{$sysinfo{$section}}, '<tr><td>' . join('</td><td>', $USER,$PID,$CPU,$MEM,$VSZ,$RSS,$TTY,$STAT,$START,$TIME,$COMMAND) . '</td></tr>') if ($l !~/^USER/);
 		}
 	}
 	close(IN);
