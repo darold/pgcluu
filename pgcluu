@@ -914,12 +914,20 @@ my @WORK_DIRS = &get_data_directories();
 my $ORIG_OUTPUT_DIR = $OUTPUT_DIR;
 foreach my $stat_dir (@WORK_DIRS) {
 
+	# Reset global variables before processing a new work dir
+	&clear_stats();
+
 	my $in_dir = "$INPUT_DIR/$stat_dir";
 	$OUTPUT_DIR = "$ORIG_OUTPUT_DIR/$stat_dir";
 
 	# Set default sysstat file to read (binary or text format)
+	# an extract the disk devices and network interfaces list
+	my $sar_file = '';
+	my $sadc_file = '';
 	if (!$DISABLE_SAR) {
-		&set_default_sysstat_file($in_dir);
+		($sar_file, $sadc_file) = &set_sysstat_file($in_dir);
+		@DEVICE_LIST = &get_device_list($sar_file, $sadc_file);
+		@IFACE_LIST = &get_interface_list($sar_file, $sadc_file);
 	}
 
 	# Look at system information
@@ -929,12 +937,6 @@ foreach my $stat_dir (@WORK_DIRS) {
 	} elsif (-e "$in_dir/sysinfo.txt.gz") {
 		%sysinfo = &read_sysinfo("$in_dir/sysinfo.txt.gz");
 		$sysinfo{RELEASE}{'name'} ||= 'unknown';
-	}
-
-	# Extract the device list first
-	if (!$DISABLE_SAR) {
-		@DEVICE_LIST = &get_device_list();
-		@IFACE_LIST = &get_interface_list();
 	}
 
 	# Defined the backward level where ressources files are stored
@@ -1008,7 +1010,7 @@ foreach my $stat_dir (@WORK_DIRS) {
 			&end_html_file("$OUTPUT_DIR/$f");
 		}
 
-	} elsif (!$SAR_INPUT_FILE) {
+	} elsif (!$sar_file) {
 
 		print "FATAL: $in_dir is not a valid data directory\n";
 		exit 1;
@@ -1019,15 +1021,15 @@ foreach my $stat_dir (@WORK_DIRS) {
 	if (!$DISABLE_SAR) {
 
 		# Build sar statistics
-		if (-f "$SADC_INPUT_FILE") {
-			print "DEBUG: looking for sadc binary data file $SADC_INPUT_FILE\n" if ($DEBUG);
+		if (-f "$sadc_file") {
+			print "DEBUG: looking for sadc binary data file $sadc_file\n" if ($DEBUG);
 			foreach my $id (sort keys %SAR_GRAPH_INFOS) {
-				&compute_sarstat_stats($SADC_INPUT_FILE, %{$SAR_GRAPH_INFOS{$id}});
+				&compute_sarstat_stats($sadc_file, %{$SAR_GRAPH_INFOS{$id}});
 			}
-		} elsif (-f "$SAR_INPUT_FILE") {
-			print "DEBUG: looking for sar text data file $SADC_INPUT_FILE\n" if ($DEBUG);
+		} elsif (-f "$sar_file") {
+			print "DEBUG: looking for sar text data file $sar_file\n" if ($DEBUG);
 			foreach my $id (sort keys %SAR_GRAPH_INFOS) {
-				&compute_sarfile_stats($SAR_INPUT_FILE, %{$SAR_GRAPH_INFOS{$id}});
+				&compute_sarfile_stats($sar_file, %{$SAR_GRAPH_INFOS{$id}});
 			}
 		}
 
@@ -1178,36 +1180,43 @@ If you just want to create a report from a sar output file:
     exit 0;
 }
 
-sub set_default_sysstat_file
+sub set_sysstat_file
 {
 	my $input_dir = shift;
 
 	$input_dir ||= $INPUT_DIR;
 
+	my $sar_file = '';
+	my $sadc_file = '';
 	if (!$SADC_INPUT_FILE && !$SAR_INPUT_FILE) {
 		if (-f "$input_dir/sadc_stats.dat") {
-			$SADC_INPUT_FILE = "$input_dir/" . 'sadc_stats.dat';
+			$sadc_file = "$input_dir/" . 'sadc_stats.dat';
 		} elsif (-f "$input_dir/sar_stats.dat") {
-			$SAR_INPUT_FILE = "$input_dir/" . 'sar_stats.dat';
+			$sar_file = "$input_dir/" . 'sar_stats.dat';
 		} elsif (-f "$input_dir/sar_stats.dat.gz") {
-			$SAR_INPUT_FILE = "$input_dir/" . 'sar_stats.dat.gz';
+			$sar_file = "$input_dir/" . 'sar_stats.dat.gz';
 		}
-		if (!$SADC_INPUT_FILE && !$SAR_INPUT_FILE) {
+		if (!$sadc_file && !$sar_file) {
 			print STDERR "WARNING: No sar data file found. Consider using -S or --disable-sar command\nline option or use -i / -I option to set the path to the data file.\nContinuing normally without reporting sar statistics.\n";
 			$DISABLE_SAR = 1;
 			return;
 		}
+	} else {
+		$sadc_file = $SADC_INPUT_FILE;
+		$sar_file = $SAR_INPUT_FILE;
 	}
 
 	# Verify that the sar data file exists.
-	if ($SADC_INPUT_FILE && !-f "$SADC_INPUT_FILE") {
-		print STDERR "ERROR: sar binary data file $SADC_INPUT_FILE can't be found.\n";
+	if ($sadc_file && !-f "$sadc_file") {
+		print STDERR "ERROR: sar binary data file $sadc_file can't be found.\n";
 		exit 1;
 	}
-	if ($SAR_INPUT_FILE && !-f "$SAR_INPUT_FILE") {
-		print STDERR "ERROR: sar text data file $SAR_INPUT_FILE can't be found.\n";
+	if ($sar_file && !-f "$sar_file") {
+		print STDERR "ERROR: sar text data file $sar_file can't be found.\n";
 		exit 1;
 	}
+
+	return ($sar_file, $sadc_file);
 }
 
 
@@ -1353,11 +1362,13 @@ sub get_data_id
 
 sub get_device_list
 {
+	my ($sar_file, $sadc_file) = @_;
+
 	my @dev_list = ();
 
-	if ($SADC_INPUT_FILE && -f "$SADC_INPUT_FILE") {
+	if ($sadc_file && -f "$sadc_file") {
 
-		my $command = "$SADF_PROG -t -P ALL -D $SADC_INPUT_FILE -- -d -p";
+		my $command = "$SADF_PROG -t -P ALL -D $sadc_file -- -d -p";
 		print "DEBUG: looking for device list using command $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -1376,16 +1387,16 @@ sub get_device_list
 		}
 		close(IN);
 
-	} elsif ($SAR_INPUT_FILE && -f "$SAR_INPUT_FILE") {
+	} elsif ($sar_file && -f "$sar_file") {
 
 		# Load data from file
-		if (!&is_compressed($SAR_INPUT_FILE)) {
-			if (!open(IN, "$SAR_INPUT_FILE")) {
-				die "FATAL: can't read input file $SAR_INPUT_FILE: $!\n";
+		if (!&is_compressed($sar_file)) {
+			if (!open(IN, "$sar_file")) {
+				die "FATAL: can't read input file $sar_file: $!\n";
 			}
 		} else {
-			if (!open(IN, "$ZCAT_PROG $SAR_INPUT_FILE |")) {
-				die "FATAL: can't read pipe from command: $ZCAT_PROG $SAR_INPUT_FILE, $!\n";
+			if (!open(IN, "$ZCAT_PROG $sar_file |")) {
+				die "FATAL: can't read pipe from command: $ZCAT_PROG $sar_file, $!\n";
 			}
 		}
 		my $type = '';
@@ -1432,11 +1443,13 @@ sub get_device_list
 
 sub get_interface_list
 {
+	my ($sar_file, $sadc_file) = @_;
+
 	my @dev_list = ();
 
-	if ($SADC_INPUT_FILE && -f "$SADC_INPUT_FILE") {
+	if ($sadc_file && -f "$sadc_file") {
 
-		my $command = "$SADF_PROG -t -P ALL -D $SADC_INPUT_FILE -- -n DEV";
+		my $command = "$SADF_PROG -t -P ALL -D $sadc_file -- -n DEV";
 		print "DEBUG: looking for device list using command $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -1455,16 +1468,16 @@ sub get_interface_list
 		}
 		close(IN);
 
-	} elsif ($SAR_INPUT_FILE && -f "$SAR_INPUT_FILE") {
+	} elsif ($sar_file && -f "$sar_file") {
 
 		# Load data from file
-		if (!&is_compressed($SAR_INPUT_FILE)) {
-			if (!open(IN, "$SAR_INPUT_FILE")) {
-				die "FATAL: can't read input file $SAR_INPUT_FILE: $!\n";
+		if (!&is_compressed($sar_file)) {
+			if (!open(IN, "$sar_file")) {
+				die "FATAL: can't read input file $sar_file: $!\n";
 			}
 		} else {
-			if (!open(IN, "$ZCAT_PROG $SAR_INPUT_FILE |")) {
-				die "FATAL: can't read input file $SAR_INPUT_FILE: $!\n";
+			if (!open(IN, "$ZCAT_PROG $sar_file |")) {
+				die "FATAL: can't read input file $sar_file: $!\n";
 			}
 		}
 		my $type = '';
@@ -4990,10 +5003,14 @@ EOF
 		$OVERALL_STATS{'start_date'} = ($OVERALL_STATS{'start_date'}/1000) + $tz;
 		$OVERALL_STATS{'end_date'}   = ($OVERALL_STATS{'end_date'}/1000) + $tz;
 	}
+	my $start_date = gmtime($OVERALL_STATS{'start_date'}) || 'Unknown start date';
+	my $end_date = gmtime($OVERALL_STATS{'end_date'}) || 'Unknown end date';
 	if (exists $OVERALL_STATS{'sar_start_date'}) {
 		$OVERALL_STATS{'sar_start_date'} = ($OVERALL_STATS{'sar_start_date'}/1000) + $tz;
 		$OVERALL_STATS{'sar_end_date'}   = ($OVERALL_STATS{'sar_end_date'}/1000) + $tz;
 	}
+	my $sar_start_date = gmtime($OVERALL_STATS{'sar_start_date'}) || 'Unknown start date';
+	my $sar_end_date = gmtime($OVERALL_STATS{'sar_end_date'}) || 'Unknown end date';
 	if (exists $OVERALL_STATS{'cluster'}) {
 		$OVERALL_STATS{'cluster'}{'size'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'nbackend'} ||= 0;
@@ -5023,8 +5040,6 @@ EOF
 		}
 		$sysinfo{PGVERSION}{'full_version'} ||= '';
 		my $database_number = scalar keys %{$OVERALL_STATS{'database'}};
-		$OVERALL_STATS{'start_date'} ||= 'Unknown start date';
-		$OVERALL_STATS{'end_date'} ||= 'end date';
 		$OVERALL_STATS{'cluster'}{'size'} ||= '-';
 		$OVERALL_STATS{'cluster'}{'nbackend'} ||= '-';
 		$OVERALL_STATS{'cluster'}{'read_tuples'} ||= '-';
@@ -5039,7 +5054,7 @@ EOF
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
-		<span class="figure-date">$OVERALL_STATS{'start_date'} to $OVERALL_STATS{'end_date'}</span>
+		<span class="figure-date">$start_date to $end_date</span>
 		<ul>
 		<li></li>
 		<li><span class="figure">$cluster_size</span> <span class="figure-label">Cluster size</span></li>
@@ -5121,7 +5136,7 @@ EOF
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
-		<span class="figure-date">$OVERALL_STATS{'sar_start_date'} to $OVERALL_STATS{'sar_end_date'}</span>
+		<span class="figure-date">$sar_start_date to $sar_end_date</span>
 		<ul>
 		<li></li>
 		<li><span class="figure">$OVERALL_STATS{'system'}{'cpu'}[1]%</span> <span class="figure-label">Highest CPU utilization</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'cpu'}[0])</span></li>
@@ -8284,6 +8299,63 @@ sub get_data_directories
 	return @work_dirs;
 }
 
+# Initialise global variables storing statistics
+sub clear_stats
+{
+	%OVERALL_STATS   = ();
+	@global_databases = ();
+	@global_tbspnames = ();
+	%all_database_stat = ();
+	%all_conflict_stat = ();
+	%all_dbsize_stat = ();
+	%all_tablespace_stat = ();
+	%all_vacuum_stat = ();
+	%all_usertable_stat = ();
+	%all_userindex_stat = ();
+	%all_statio_usertable_stat = ();
+	%all_buffercache_stat = ();
+	%all_statio_userindex_stat = ();
+	%all_xlog_stat = ();
+	%all_bgwriter_stat = ();
+	%all_connections_stat = ();
+	%all_functions_stat = ();
+	%all_replication_stat = ();
+	%all_pgbouncer_stat = ();
+	%all_pgbouncer_ini = ();
+	%all_pgbouncer_req = ();
+	%all_class_stat = ();
+	%all_lock_stat = ();
+	%all_unusedidx_stat = ();
+	%all_redundantidx_stat = ();
+	%all_missingfkidx_stat = ();
+	%all_postgresql_conf = ();
+	%all_recovery_conf = ();
+	%all_postgresql_auto_conf = ();
+	%all_hba_conf = ();
+	%all_ident_conf = ();
+	%all_settings_stat = ();
+	%all_role_settings_stat = ();
+	%all_shared_stat = ();
+	%all_usagecount_stat = ();
+	%all_isdirty_stat = ();
+	%all_archiver_stat = ();
+	%all_statement_stat = ();
+
+	%sar_cpu_stat = ();
+	%sar_load_stat = ();
+	%sar_process_stat = ();
+	%sar_context_stat = ();
+	%sar_memory_stat = ();
+	%sar_swap_stat = ();
+	%sar_pageswap_stat = ();
+	%sar_block_stat = ();
+	%sar_srvtime_stat = ();
+	%sar_rw_devices_stat = ();
+	%sar_util_devices_stat = ();
+	%sar_networks_stat = ();
+	%sar_neterror_stat = ();
+
+}
 
 
 __DATA__
