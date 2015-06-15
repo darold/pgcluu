@@ -5003,14 +5003,14 @@ EOF
 		$OVERALL_STATS{'start_date'} = ($OVERALL_STATS{'start_date'}/1000) + $tz;
 		$OVERALL_STATS{'end_date'}   = ($OVERALL_STATS{'end_date'}/1000) + $tz;
 	}
-	my $start_date = gmtime($OVERALL_STATS{'start_date'}) || 'Unknown start date';
-	my $end_date = gmtime($OVERALL_STATS{'end_date'}) || 'Unknown end date';
+	my $start_date = gmtime($OVERALL_STATS{'start_date'}||0) || 'Unknown start date';
+	my $end_date = gmtime($OVERALL_STATS{'end_date'}||0) || 'Unknown end date';
 	if (exists $OVERALL_STATS{'sar_start_date'}) {
 		$OVERALL_STATS{'sar_start_date'} = ($OVERALL_STATS{'sar_start_date'}/1000) + $tz;
 		$OVERALL_STATS{'sar_end_date'}   = ($OVERALL_STATS{'sar_end_date'}/1000) + $tz;
 	}
-	my $sar_start_date = gmtime($OVERALL_STATS{'sar_start_date'}) || 'Unknown start date';
-	my $sar_end_date = gmtime($OVERALL_STATS{'sar_end_date'}) || 'Unknown end date';
+	my $sar_start_date = gmtime($OVERALL_STATS{'sar_start_date'}||0) || 'Unknown start date';
+	my $sar_end_date = gmtime($OVERALL_STATS{'sar_end_date'}||0) || 'Unknown end date';
 	if (exists $OVERALL_STATS{'cluster'}) {
 		$OVERALL_STATS{'cluster'}{'size'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'nbackend'} ||= 0;
