@@ -21,6 +21,7 @@ use File::Basename;
 use Time::Local 'timegm_nocheck';
 use POSIX qw(locale_h sys_wait_h ceil);
 setlocale(LC_ALL, 'C');
+use Storable qw(store_fd fd_retrieve);
 
 $VERSION = '2.3';
 $PROGRAM = 'pgCluu';
@@ -716,9 +717,9 @@ my %SAR_GRAPH_INFOS = (
 	'7' => {
 		'name' =>  'system-device',
 		'title' => 'Data read/write on device %s',
-		'description' => 'Number of bytes read/write from/to the device.',
+		'description' => 'Number of bytes read/write from/to the device..',
 		'ylabel' => 'Size Read/Written per second',
-		'legends' => ['Read','Write'],
+		'legends' => ['Read', 'Write'],
 	},
 	'8' => {
 		'name' =>  'system-cpudevice',
@@ -776,6 +777,20 @@ my %SAR_GRAPH_INFOS = (
 		'description' => 'Total number of tasks created per second.',
 		'ylabel' => 'Tasks',
 		'legends' => ['proc/s'],
+	},
+	'16' => {
+		'name' =>  'system-tps',
+		'title' => 'Total number of transfers per second',
+		'description' => 'Total number of transfers per second that were issued to physical devices. A transfer is an I/O request to a physical device. Multiple logical requests can be combined into a single I/O request to the device. A transfer is of indeterminate size.',
+		'ylabel' => 'Transfers per second',
+		'legends' => ['tps','rtps','wtps'],
+	},
+	'17' => {
+		'name' =>  'system-tpsdevice',
+		'title' => 'Transfert per second on device %s',
+		'description' => 'Number of transfers per second that were issued to the device, multiple logical requests can be combined into a single I/O request to the device (a transfer is of indeterminate size).',
+		'ylabel' => 'Number of transfers per second',
+		'legends' => ['Tps'],
 	},
 
 );
@@ -896,6 +911,13 @@ if (!$INPUT_DIR || !-d $INPUT_DIR) {
 	}
 }
 
+# As cache mode can be run in cron job, absolute input directory is mandatory
+if ($CACHE) {
+	# Ensure this is not a relative path
+	if (dirname($INPUT_DIR) eq '.') {
+		die "FATAL: input directory ($INPUT_DIR) must be an absolute path in caching mode.\n";
+	}
+}
 
 # Write resources files (js and css) from __DATA__ section if they have not
 # been copied yet.
@@ -978,36 +1000,38 @@ foreach my $stat_dir (@WORK_DIRS) {
 		foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS) {
 			if (-e "$in_dir/$k" && !-z "$in_dir/$k") {
 				if (-e "$in_dir/$k" && !-z "$in_dir/$k") {
-					&compute_dbstat_graph($in_dir, $k, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
+					&compute_postgresql_stat($in_dir, $k, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
 				}
 			} elsif (-e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz") {
 				if (-e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz") {
-					&compute_dbstat_graph($in_dir, "$k.gz", $src_base, %{$DB_GRAPH_INFOS{$k}}); 
+					&compute_postgresql_stat($in_dir, "$k.gz", $src_base, %{$DB_GRAPH_INFOS{$k}}); 
 				}
 			} elsif ($k =~ /_all_/) {
 				my $f = $k;
 				$f =~ s/_all_/_user_/;
 				if (-e "$in_dir/$f" && !-z "$in_dir/$f") {
-					&compute_dbstat_graph($in_dir, $f, $src_base, %{$DB_GRAPH_INFOS{$k}});
+					&compute_postgresql_stat($in_dir, $f, $src_base, %{$DB_GRAPH_INFOS{$k}});
 				} elsif (-e "$in_dir/$f.gz" && !-z "$in_dir/$f.gz") {
-					&compute_dbstat_graph($in_dir, "$f.gz", $src_base, %{$DB_GRAPH_INFOS{$k}});
+					&compute_postgresql_stat($in_dir, "$f.gz", $src_base, %{$DB_GRAPH_INFOS{$k}});
 				}
 			}
 		}
-
-		# Add database general information
-		if ( (-e "$in_dir/sysinfo.txt") || (-e "$in_dir/sysinfo.txt.gz") ) {
-			foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
-				&write_database_info($db);
+		
+		if (!$CACHE) {
+			# Add database general information
+			if ( (-e "$in_dir/sysinfo.txt") || (-e "$in_dir/sysinfo.txt.gz") ) {
+				foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
+					&write_database_info($db);
+				}
 			}
-		}
 
-		# Terminate each database and pgbouncer html file with the footer
-		opendir(ODIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
-		@files = grep { /\.html$/ } readdir(ODIR);
-		closedir(ODIR);
-		foreach my $f (@files) {
-			&end_html_file("$OUTPUT_DIR/$f");
+			# Terminate each database and pgbouncer html file with the footer
+			opendir(ODIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
+			@files = grep { /\.html$/ } readdir(ODIR);
+			closedir(ODIR);
+			foreach my $f (@files) {
+				&end_html_file("$OUTPUT_DIR/$f");
+			}
 		}
 
 	} elsif (!$sar_file) {
@@ -1033,77 +1057,86 @@ foreach my $stat_dir (@WORK_DIRS) {
 			}
 		}
 
-		# Open filehandle
-		$FH = new IO::File ">$OUTPUT_DIR/system.html";
-		if (not defined $FH) {
-			die "FATAL: can't write to $OUTPUT_DIR/system.html, $!\n";
-		}
-		# Generate the html header for each sar devices statistics report
-		&html_header($FH, $src_base);
-		print $FH "<ul id=\"slides\">\n";
-		for (my $i = 0; $i <= $#DEVICE_LIST; $i++) {
-			&init_device_output($i, $src_base);
-		}
-		for (my $i = 0; $i <= $#IFACE_LIST; $i++) {
-			# Open a filehandle for each network devices
-			$DEVFH{$IFACE_LIST[$i]} = new IO::File ">$OUTPUT_DIR/network-device$i.html";
-			if (not defined $DEVFH{$IFACE_LIST[$i]}) {
-				die "FATAL: can't write to $OUTPUT_DIR/network-device$i.html, $!\n";
+		if (!$CACHE) {
+			# Open filehandle
+			$FH = new IO::File ">$OUTPUT_DIR/system.html";
+			if (not defined $FH) {
+				die "FATAL: can't write to $OUTPUT_DIR/system.html, $!\n";
 			}
-			&html_header($DEVFH{$IFACE_LIST[$i]}, $src_base);
-			$DEVFH{$IFACE_LIST[$i]}->print("<ul id=\"slides\">\n");
-		}
+			# Generate the html header for each sar devices statistics report
+			&html_header($FH, $src_base);
+			print $FH "<ul id=\"slides\">\n";
+			for (my $i = 0; $i <= $#DEVICE_LIST; $i++) {
+				&init_device_output($i, $src_base);
+			}
+			for (my $i = 0; $i <= $#IFACE_LIST; $i++) {
+				# Open a filehandle for each network devices
+				$DEVFH{$IFACE_LIST[$i]} = new IO::File ">$OUTPUT_DIR/network-device$i.html";
+				if (not defined $DEVFH{$IFACE_LIST[$i]}) {
+					die "FATAL: can't write to $OUTPUT_DIR/network-device$i.html, $!\n";
+				}
+				&html_header($DEVFH{$IFACE_LIST[$i]}, $src_base);
+				$DEVFH{$IFACE_LIST[$i]}->print("<ul id=\"slides\">\n");
+			}
 
-		# Build sar statistics graphs
-		print "DEBUG: Building sar statistcs reports\n" if ($DEBUG);
-		foreach my $id (sort keys %SAR_GRAPH_INFOS) {
-			&compute_sar_graph($src_base, %{$SAR_GRAPH_INFOS{$id}});
-		}
+			# Build sar statistics graphs
+			print "DEBUG: Building sar statistcs reports\n" if ($DEBUG);
+			foreach my $id (sort keys %SAR_GRAPH_INFOS) {
+				&compute_sar_graph($src_base, %{$SAR_GRAPH_INFOS{$id}});
+			}
 
-		# Write html footer in all reports
-		print $FH "</ul>\n";
-		&html_footer($FH);
-		$FH->close;
-		# Terminate all database statistic file
-		foreach my $dev (@IFACE_LIST) {
-			$DEVFH{$dev}->print("</ul>\n");
-			&html_footer($DEVFH{$dev}, $dev);
-			$DEVFH{$dev}->close;
-		}
-		# Terminate all database statistic file
-		foreach my $dev (@DEVICE_LIST) {
-			$DEVFH{$dev}->print("</ul>\n");
-			&html_footer($DEVFH{$dev}, $dev);
-			$DEVFH{$dev}->close;
+			# Write html footer in all reports
+			print $FH "</ul>\n";
+			&html_footer($FH);
+			$FH->close;
+			# Terminate all database statistic file
+			foreach my $dev (@IFACE_LIST) {
+				$DEVFH{$dev}->print("</ul>\n");
+				&html_footer($DEVFH{$dev}, $dev);
+				$DEVFH{$dev}->close;
+			}
+			# Terminate all database statistic file
+			foreach my $dev (@DEVICE_LIST) {
+				$DEVFH{$dev}->print("</ul>\n");
+				&html_footer($DEVFH{$dev}, $dev);
+				$DEVFH{$dev}->close;
+			}
 		}
 	}
 
-	if ($OUTPUT_DIR) {
-		&generate_html_index($in_dir, $src_base);
-		my $menu = &generate_html_menu($in_dir);
-		print "DEBUG: Inserting menu into all html files.\n" if ($DEBUG);
-		opendir(ODIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
-		my @files = grep { /\.html$/ } readdir(ODIR);
-		closedir(ODIR);
-		foreach my $f (@files) {
-			my $tmp_content = '';
-			open(IN, "$OUTPUT_DIR/$f") or die "FATAL: can't read file $OUTPUT_DIR/$f, $!";
-			while (my $l = <IN>) {
-				chomp($l);
-				if ($l =~ /<div id="navigation"><\/div>/) {
-					$l = qq{
+	if ($CACHE) {
+		print "DEBUG: Generating cache into $OUTPUT_DIR/cache.bin.\n" if ($DEBUG);
+		&dump_as_binary("$OUTPUT_DIR/cache.bin");
+		&clear_stats();
+	} else {
+
+		if ($OUTPUT_DIR) {
+			&generate_html_index($in_dir, $src_base);
+			my $menu = &generate_html_menu($in_dir);
+			print "DEBUG: Inserting menu into all html files.\n" if ($DEBUG);
+			opendir(ODIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
+			my @files = grep { /\.html$/ } readdir(ODIR);
+			closedir(ODIR);
+			foreach my $f (@files) {
+				my $tmp_content = '';
+				open(IN, "$OUTPUT_DIR/$f") or die "FATAL: can't read file $OUTPUT_DIR/$f, $!";
+				while (my $l = <IN>) {
+					chomp($l);
+					if ($l =~ /<div id="navigation"><\/div>/) {
+						$l = qq{
 <div id="navigation">
 $menu
 </div>
 };
+					}
+					$tmp_content .= "$l\n";
 				}
-				$tmp_content .= "$l\n";
+				close(IN);
+				# override file
+				open(OUT, ">$OUTPUT_DIR/$f") or die "FATAL: can't write to file $OUTPUT_DIR/$f, $!";
+				print OUT $tmp_content;
+				close(OUT);
 			}
-			close(IN);
-			# override file
-			open(OUT, ">$OUTPUT_DIR/$f") or die "FATAL: can't write to file $OUTPUT_DIR/$f, $!";
-			print OUT $tmp_content;
-			close(OUT);
 		}
 	}
 }
@@ -1121,6 +1154,7 @@ usage: $0 [options] [-i sar_file | -I sadc_file] [input_dir]
 
 options:
   -b, --begin  datetime      start date/time for the data to be parsed.
+  -C, --cache                generate cache files only (.bin), no html output.
   -d, --db-only dbname       only report for the whole cluster and the given
                              database name. You can use it multiple time or
                              give a comma separated list of database name.
@@ -1582,7 +1616,7 @@ sub write_database_info
 
 }
 
-sub compute_dbstat_graph
+sub compute_postgresql_stat
 {
 	my ($in_dir, $file, $src_base, %data_info) = @_;
 
@@ -1595,8 +1629,10 @@ sub compute_dbstat_graph
 	$fctname =~ s/_all_/_user_/;
 	$fctname =~ s/\./_/g;
 	$fctname->($in_dir, $file, $INTERVAL);
-	$fctname .= '_report';
-	$fctname->($INTERVAL, $src_base, %data_info);
+	if (!$CACHE) {
+		$fctname .= '_report';
+		$fctname->($INTERVAL, $src_base, %data_info);
+	}
 }
 
 # Compute statistics of database statistics
@@ -1622,15 +1658,10 @@ sub pg_stat_database
 			(($data[8] - $start_vals{$data[2]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[2]}[8]);
 			$all_database_stat{$data[0]}{$data[2]}{returned} = $tmp_val;
 			$all_database_stat{$data[0]}{all}{returned} += $tmp_val;
-			$OVERALL_STATS{'cluster'}{'read_tuples'} += $tmp_val;
-			$OVERALL_STATS{'database'}{$data[2]}{'read_tuples'} += $tmp_val;
 
 			(($data[9] - $start_vals{$data[2]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[2]}[9]);
 			$all_database_stat{$data[0]}{$data[2]}{fetched} = $tmp_val;
 			$all_database_stat{$data[0]}{all}{fetched} += $tmp_val;
-
-			$OVERALL_STATS{'start_date'} = $data[0] if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} gt $data[0]));
-			$OVERALL_STATS{'end_date'} = $data[0] if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} lt $data[0]));
 
 			# Gather insert statement
 			(($data[10] - $start_vals{$data[2]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[2]}[10]);
@@ -1653,22 +1684,16 @@ sub pg_stat_database
 		(($data[6] - $start_vals{$data[2]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[2]}[6]);
 		$all_database_stat{$data[0]}{$data[2]}{blks_read} = $tmp_val;
 		$all_database_stat{$data[0]}{all}{blks_read} += $tmp_val;
-		$OVERALL_STATS{'cluster'}{'blks_read'} += $tmp_val;
-		$OVERALL_STATS{'database'}{$data[2]}{'blks_read'} += $tmp_val;
 
 		# Gather blks_hit
 		(($data[7] - $start_vals{$data[2]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[2]}[7]);
 		$all_database_stat{$data[0]}{$data[2]}{blks_hit} = $tmp_val;
 		$all_database_stat{$data[0]}{all}{blks_hit} += $tmp_val;
-		$OVERALL_STATS{'cluster'}{'blks_hit'} += $tmp_val;
-		$OVERALL_STATS{'database'}{$data[2]}{'blks_hit'} += $tmp_val;
 
 		# Gather number of running backend
 		if ($data[3]) {
 			$all_database_stat{$data[0]}{$data[2]}{nbackend} = $data[3];
 			$all_database_stat{$data[0]}{all}{nbackend} += $data[3];
-			$OVERALL_STATS{'cluster'}{'nbackend'} += $data[3];
-			$OVERALL_STATS{'database'}{$data[2]}{'nbackend'} += $data[3];
 		}
 
 		# Gather number of committed transaction
@@ -1693,20 +1718,14 @@ sub pg_stat_database
 			(($data[15] - $start_vals{$data[2]}[15]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[15] - $start_vals{$data[2]}[15]);
 			$all_database_stat{$data[0]}{$data[2]}{temp_files} = $tmp_val;
 			$all_database_stat{$data[0]}{all}{temp_files} += $tmp_val;
-			$OVERALL_STATS{'cluster'}{'temp_files'} += $tmp_val;
-			$OVERALL_STATS{'database'}{$data[2]}{'temp_files'} += $tmp_val;
 
 			(($data[16] - $start_vals{$data[2]}[16]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[16] - $start_vals{$data[2]}[16]);
 			$all_database_stat{$data[0]}{$data[2]}{temp_bytes} = $tmp_val;
 			$all_database_stat{$data[0]}{all}{temp_bytes} += $tmp_val;
-			$OVERALL_STATS{'cluster'}{'temp_bytes'} += $tmp_val;
-			$OVERALL_STATS{'database'}{$data[2]}{'temp_bytes'} += $tmp_val;
 
 			(($data[17] - $start_vals{$data[2]}[17]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[17] - $start_vals{$data[2]}[17]);
 			$all_database_stat{$data[0]}{$data[2]}{deadlocks} = $tmp_val;
 			$all_database_stat{$data[0]}{all}{deadlocks} += $tmp_val;
-			$OVERALL_STATS{'cluster'}{'deadlocks'} += $tmp_val;
-			$OVERALL_STATS{'database'}{$data[2]}{'deadlocks'} += $tmp_val;
 		}
 
 		@{$start_vals{$data[2]}} = ();
@@ -1732,9 +1751,14 @@ sub pg_stat_database_report
 	foreach my $time (sort {$a <=> $b} keys %all_database_stat) {
 		foreach my $db (@global_databases) {
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
-			foreach my $k (qw(insert returned fetched update delete blks_read blks_hit nbackend xact_commit xact_rollback canceled_queries deadlocks temp_files)) {
+			foreach my $k (qw(insert returned fetched update delete blks_read blks_hit nbackend xact_commit xact_rollback canceled_queries deadlocks temp_files temp_bytes)) {
 				$all_database_stat{$time}{$db}{$k} ||= 0;
+				$OVERALL_STATS{'cluster'}{$k} += $all_database_stat{$time}{$db}{$k};
+				$OVERALL_STATS{'database'}{$db}{$k} += $all_database_stat{$time}{$db}{$k};
 			}
+
+			$OVERALL_STATS{'start_date'} = $time if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} gt $time));
+			$OVERALL_STATS{'end_date'} = $time if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} lt $time));
 			# It depends on the postgresql version
 			if (!$has_tuples) {
 				foreach my $k (keys %{$all_database_stat{$time}{$db}}) {
@@ -2057,9 +2081,6 @@ sub pg_database_size
 		# Get database size statistics
 		$all_dbsize_stat{$data[0]}{$data[2]} = $data[3];
 		$all_dbsize_stat{$data[0]}{'all'} += $data[3];
-		$OVERALL_STATS{'database'}{$data[2]}{'size'} = $data[3];
-		$OVERALL_STATS{'start_date'} = $data[0] if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} gt $data[0]));
-		$OVERALL_STATS{'end_date'} = $data[0] if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} lt $data[0]));
 	}
 	$curfh->close();
 }
@@ -2074,6 +2095,9 @@ sub pg_database_size_report
 	foreach my $t (sort {$a <=> $b} keys %all_dbsize_stat) {
 		foreach my $db (@global_databases) {
 			$database_stat{$db}{size} .= '[' . $t . ',' . ($all_dbsize_stat{$t}{$db} || 0) . '],';
+			$OVERALL_STATS{'database'}{$db}{'size'} = $all_dbsize_stat{$t}{$db};
+			$OVERALL_STATS{'start_date'} = $t if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} gt $t));
+			$OVERALL_STATS{'end_date'} = $t if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} lt $t));
 		}
 	}
 	%all_dbsize_stat = ();
@@ -2150,10 +2174,9 @@ sub pg_tablespace_size
 		push(@global_tbspnames, $data[1]) if (!grep(/^$data[1]$/, @global_tbspnames));
 
 		# Get tablespace size statistics
-		$all_tablespace_stat{$data[0]}{$data[1]} = $data[2];
-		$all_tablespace_stat{$data[0]}{'all'} += $data[2];
-		$OVERALL_STATS{'tablespace'}{$data[1]}{'size'} = $data[2];
-		$OVERALL_STATS{'tablespace'}{$data[1]}{'location'} = $data[3];
+		$all_tablespace_stat{$data[0]}{$data[1]}{size} = $data[2];
+		$all_tablespace_stat{$data[0]}{$data[1]}{location} = $data[3];
+		$all_tablespace_stat{$data[0]}{'all'}{size} += $data[2];
 	}
 	$curfh->close();
 }
@@ -2163,16 +2186,20 @@ sub pg_tablespace_size_report
 {
 	my ($interval, $src_base, %data_info) = @_;
 
-	my %tablespace_stat = ();
 	my $id = &get_data_id('tablespace-size', %data_info);
 	my %data = ();
 	my $print_after = '';
 	if (!$CAPTURE) {
 		push(@global_tbspnames, 'all') if ($#global_tbspnames > 0);
 
+		my %tablespace_stat = ();
 		foreach my $t (sort {$a <=> $b} keys %all_tablespace_stat) {
 			foreach my $tbsp (@global_tbspnames) {
-				$tablespace_stat{$tbsp}{size} .= '[' . $t . ',' . ($all_tablespace_stat{$t}{$tbsp}||0) . '],';
+				$tablespace_stat{$tbsp}{size} .= '[' . $t . ',' . ($all_tablespace_stat{$t}{$tbsp}{size}||0) . '],';
+				if ($tbsp ne 'all') {
+					$OVERALL_STATS{'tablespace'}{$tbsp}{'size'} = $all_tablespace_stat{$t}{$tbsp}{size};
+					$OVERALL_STATS{'tablespace'}{$tbsp}{'location'} = $all_tablespace_stat{$t}{$tbsp}{location};
+				}
 			}
 		}
 		foreach my $tbsp (sort keys %tablespace_stat) {
@@ -2183,7 +2210,6 @@ sub pg_tablespace_size_report
 				$location .= " ($OVERALL_STATS{'tablespace'}{$tbsp}{location})" if ($OVERALL_STATS{'tablespace'}{$tbsp}{location});
 				$print_after .= &flotr2_linegraph_array($IDX++, 'tablespace-size+', \%{$data_info{$id}}, $location, $tablespace_stat{$tbsp}{size});
 			}
-			delete $tablespace_stat{$tbsp}{size};
 		}
 	}
 	%all_tablespace_stat = ();
@@ -2249,23 +2275,11 @@ sub pg_stat_user_tables
 		$data[4] = "$data[3].$data[4]";
 		push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
 
+		# Stores last manual vacuum/analyze
 		$all_usertable_stat{$data[1]}{$data[4]}{last_vacuum} = $data[15] if ($data[15]);
 		$all_usertable_stat{$data[1]}{$data[4]}{last_autovacuum} = $data[16] if ($data[16]);
 		$all_usertable_stat{$data[1]}{$data[4]}{last_analyze} = $data[17] if ($data[17]);
 		$all_usertable_stat{$data[1]}{$data[4]}{last_autoanalyze} = $data[18] if ($data[18]);
-		# Stores last manual vacuum/analyze
-		if ($data[15]) {
-			$OVERALL_STATS{$data[1]}{last_vacuum} = '-' if (!exists $OVERALL_STATS{$data[1]}{last_vacuum});
-			if ($data[15] gt $OVERALL_STATS{$data[1]}{last_vacuum}) {
-				$OVERALL_STATS{$data[1]}{last_vacuum} = $data[15];
-			}
-		}
-		if ($data[17]) {
-			$OVERALL_STATS{$data[1]}{last_analyze} = '-' if (!exists $OVERALL_STATS{$data[1]}{last_analyze});
-			if ($data[17] gt $OVERALL_STATS{$data[1]}{last_analyze}) {
-				$OVERALL_STATS{$data[1]}{last_analyze} = $data[17];
-			}
-		}
 
 		# Get database statistics
 		(($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]);
@@ -2322,12 +2336,12 @@ sub pg_stat_user_tables_report
 			foreach my $k (keys %{$all_vacuum_stat{$db}{$t}}) {
 				if (($k =~ /vacuum|analyze/) && $all_vacuum_stat{$db}{$t}{$k}) {
 					$do_vacuum = 1;
-					last;
+				}
+				if ($k =~ /^last_/) {
+					$OVERALL_STATS{$db}{$k} = $all_vacuum_stat{$db}{$t}{$k} if (!$OVERALL_STATS{$db}{$k} || ($all_vacuum_stat{$db}{$t}{$k} gt $OVERALL_STATS{$db}{$k}));
 				}
 			}
-			last if ($do_vacuum);
 		}
-			last if ($do_vacuum);
 	}
 	foreach my $db (keys %all_vacuum_stat) {
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
@@ -3660,17 +3674,6 @@ sub pg_class_size
 	}
 	$curfh->close();
 
-	foreach my $db (sort keys %all_class_stat) {
-		next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
-		foreach my $k (sort keys %RELKIND) {
-			# Count the number of object
-			if (exists $all_class_stat{$db}{$k}) {
-				$OVERALL_STATS{'class'}{$db}{$k} = scalar keys %{$all_class_stat{$db}{$k}};
-			} else {
-				$OVERALL_STATS{'class'}{$db}{$k} = 0;
-			}
-		}
-	}
 }
 
 # Compute graphs of object size statistics
@@ -3681,6 +3684,14 @@ sub pg_class_size_report
 	my %data = ();
 	foreach my $db (sort keys %all_class_stat) {
 		next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
+		foreach my $k (sort keys %RELKIND) {
+			# Count the number of object
+			if (exists $all_class_stat{$db}{$k}) {
+				$OVERALL_STATS{'class'}{$db}{$k} = scalar keys %{$all_class_stat{$db}{$k}};
+			} else {
+				$OVERALL_STATS{'class'}{$db}{$k} = 0;
+			}
+		}
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^(table|index)-/);
 			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
@@ -4662,15 +4673,14 @@ sub pg_stat_archiver
 		$all_archiver_stat{$data[0]}{archived_count} = $tmp_val;
                 (($data[4] - $start_vals[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals[4]);
 		$all_archiver_stat{$data[0]}{failed_count} = $tmp_val;
-
-		$OVERALL_STATS{'archiver'}{last_archived_wal} = $data[2];
+		$all_archiver_stat{$data[0]}{last_archived_wal} = $data[2];
 		$data[3] =~ s/\..*//;
-		$OVERALL_STATS{'archiver'}{last_archived_time} = $data[3];
-		$OVERALL_STATS{'archiver'}{last_failed_wal} = $data[5];
+		$all_archiver_stat{$data[0]}{last_archived_time} = $data[3];
+		$all_archiver_stat{$data[0]}{last_failed_wal} = $data[5];
 		$data[6] =~ s/\..*//;
-		$OVERALL_STATS{'archiver'}{last_failed_time} = $data[6];
+		$all_archiver_stat{$data[0]}{last_failed_time} = $data[6];
 		$data[7] =~ s/\..*//;
-		$OVERALL_STATS{'archiver'}{stats_reset} = $data[7];
+		$all_archiver_stat{$data[0]}{stats_reset} = $data[7];
 
 		@start_vals = ();
 		push(@start_vals, @data);
@@ -4687,6 +4697,18 @@ sub pg_stat_archiver_report
 	foreach my $t (sort {$a <=> $b} keys %all_archiver_stat) {
 		$archiver_stat{archived_count} .= '[' . $t . ',' . $all_archiver_stat{$t}{archived_count}. '],';
 		$archiver_stat{failed_count} .= '[' . $t . ',' . $all_archiver_stat{$t}{failed_count}. '],';
+		if (!$OVERALL_STATS{'archiver'}{last_archived_time} || ($all_archiver_stat{$t}{last_archived_time} gt $OVERALL_STATS{'archiver'}{last_archived_time})) {
+			$OVERALL_STATS{'archiver'}{last_archived_wal} = $all_archiver_stat{$t}{last_archived_wal};
+			$OVERALL_STATS{'archiver'}{last_archived_time} = $all_archiver_stat{$t}{last_archived_time};
+		}
+		if (!$OVERALL_STATS{'archiver'}{last_failed_time} || ($all_archiver_stat{$t}{last_failed_time} gt $OVERALL_STATS{'archiver'}{last_failed_time})) {
+			$OVERALL_STATS{'archiver'}{last_failed_wal} = $all_archiver_stat{$t}{last_failed_wal};
+			$OVERALL_STATS{'archiver'}{last_failed_time} = $all_archiver_stat{$t}{last_failed_time};
+		}
+		if (!$OVERALL_STATS{'archiver'}{stats_reset} || ($all_archiver_stat{$t}{stats_reset} gt $OVERALL_STATS{'archiver'}{stats_reset})) {
+			$OVERALL_STATS{'archiver'}{stats_reset} = $all_archiver_stat{$t}{stats_reset};
+		}
+
 	}
 	%all_archiver_stat = ();
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
@@ -4923,9 +4945,9 @@ sub generate_html_index
 					@{$overall_database_stats{'nbackend'}} = ($db, $OVERALL_STATS{'database'}{$db}{'nbackend'});
 				}
 			}
-			if (exists $OVERALL_STATS{'database'}{$db}{'read_tuples'}) {
-				if (!exists $overall_database_stats{'read_tuples'} || $OVERALL_STATS{'database'}{$db}{'read_tuples'} > $overall_database_stats{'read_tuples'}[1]) {
-					@{$overall_database_stats{'read_tuples'}} = ($db, $OVERALL_STATS{'database'}{$db}{'read_tuples'});
+			if (exists $OVERALL_STATS{'database'}{$db}{'returned'}) {
+				if (!exists $overall_database_stats{'returned'} || $OVERALL_STATS{'database'}{$db}{'returned'} > $overall_database_stats{'returned'}[1]) {
+					@{$overall_database_stats{'returned'}} = ($db, $OVERALL_STATS{'database'}{$db}{'returned'});
 				}
 			}
 			if (exists $OVERALL_STATS{'database'}{$db}{'temp_files'}) {
@@ -5014,7 +5036,7 @@ EOF
 	if (exists $OVERALL_STATS{'cluster'}) {
 		$OVERALL_STATS{'cluster'}{'size'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'nbackend'} ||= 0;
-		$OVERALL_STATS{'cluster'}{'read_tuples'} ||= 0;
+		$OVERALL_STATS{'cluster'}{'returned'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'cache_ratio'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'temp_files'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'temp_bytes'} ||= 0;
@@ -5042,7 +5064,7 @@ EOF
 		my $database_number = scalar keys %{$OVERALL_STATS{'database'}};
 		$OVERALL_STATS{'cluster'}{'size'} ||= '-';
 		$OVERALL_STATS{'cluster'}{'nbackend'} ||= '-';
-		$OVERALL_STATS{'cluster'}{'read_tuples'} ||= '-';
+		$OVERALL_STATS{'cluster'}{'returned'} ||= '-';
 		$OVERALL_STATS{'cluster'}{'cache_ratio'} ||= '-';
 		my $cluster_size = &pretty_print_size($OVERALL_STATS{'cluster'}{'size'});
 		print $fh <<EOF;
@@ -5060,7 +5082,7 @@ EOF
 		<li><span class="figure">$cluster_size</span> <span class="figure-label">Cluster size</span></li>
 		<li><span class="figure">$database_number</span> <span class="figure-label">Databases</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'nbackend'}</span> <span class="figure-label">Connections</span></li>
-		<li><span class="figure">$OVERALL_STATS{'cluster'}{'read_tuples'}</span> <span class="figure-label">Tuples returned</span></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'returned'}</span> <span class="figure-label">Tuples returned</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'cache_ratio'}</span> <span class="figure-label">Hit cache ratio</span></li>
 		$temp_file_info
 		$deadlock_info
@@ -5093,8 +5115,8 @@ EOF
 		<li><span class="figure">$overall_database_stats{'nbackend'}[1]</span> <span class="figure-label">Most connections</span><br/><span class="figure-date">($overall_database_stats{'nbackend'}[0])</span></li>
 EOF
 		}
-		if (exists $overall_database_stats{'read_tuples'}) {
-			print $fh qq{<li><span class="figure">$overall_database_stats{'read_tuples'}[1]</span> <span class="figure-label">Most tuples fetched</span><br/><span class="figure-date">($overall_database_stats{'read_tuples'}[0])</span></li>
+		if (exists $overall_database_stats{'returned'}) {
+			print $fh qq{<li><span class="figure">$overall_database_stats{'returned'}[1]</span> <span class="figure-label">Most tuples returned</span><br/><span class="figure-date">($overall_database_stats{'returned'}[0])</span></li>
 };
 		}
 		if (exists $overall_database_stats{'cache_ratio'}) {
@@ -6202,6 +6224,7 @@ AAAASUVORK5CYII=';
                   <li id="menu-system-pcrea"><a href="system.html#system-pcrea">Tasks created per second</a></li>
                   <li class="divider"></li>
                   <li id="menu-system-block"><a href="system.html#system-block">Blocks</a></li>
+                  <li id="menu-system-tps"><a href="system.html#system-tps">Transfers per second</a></li>
                   <li id="menu-system-page"><a href="system.html#system-page">Pages</a></li>
                   <li class="divider"></li>
 };
@@ -6231,6 +6254,7 @@ AAAASUVORK5CYII=';
 			      <ul class="dropdown-menu">
 			      <li id="menu-device-cpu"><a href="system-device$i.html#device-cpu">Cpu utilization</a></li>
 			      <li id="menu-device-read_write"><a href="system-device$i.html#device-read_write">Read/write bytes per second</a></li>
+			      <li id="menu-device-tps"><a href="system-device$i.html#device-tps">Transfert per second</a></li>
 			      <li id="menu-device-service_time"><a href="system-device$i.html#device-service_time">Average service time</a></li>
 			      </ul>
 			  </li>
@@ -6300,22 +6324,6 @@ sub interface_in_report
 
 sub compute_cpu_stat
 {
-	my $ncpu = 0;
-	my $count = 0;
-	for (my $i = 0; $i <= $#_; $i++) {
-		my @data = split(/;/, $_[$i]);
-		next if ($data[2] !~ /^\d+/);
-		$count++ if ($data[3] eq 'all');
-		next if ($data[3] eq 'all');
-		# hostname;interval;timestamp;CPU;%user;%nice;%system;%iowait;%steal;%idle
-		if ($data[3] >= $ncpu) {
-			$ncpu = $data[3];
-		} else {
-			
-		}
-	}
-	$ncpu += 1;
-
 	for (my $i = 0; $i <= $#_; $i++) {
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
@@ -6335,14 +6343,7 @@ sub compute_cpu_stat
 			$sar_cpu_stat{$data[2]}{$data[3]}{user}   = ($data[4]||0);
 			$sar_cpu_stat{$data[2]}{$data[3]}{iowait} = ($data[7]||0);
 			$sar_cpu_stat{$data[2]}{$data[3]}{idle}   = ($data[-1]||0);
-			if (!exists $OVERALL_STATS{'system'}{'cpu'} || ($OVERALL_STATS{'system'}{'cpu'}[1] < $total_cpu)) {
-				my $t = localtime($data[2]/1000);
-				@{$OVERALL_STATS{'system'}{'cpu'}} = ($t, $total_cpu);
-				$OVERALL_STATS{'system'}{'ncpu'} = $ncpu;
-			}
 		}
-		$OVERALL_STATS{'sar_start_date'} = $data[2] if (!$OVERALL_STATS{'sar_start_date'} || ($OVERALL_STATS{'sar_start_date'} gt $data[2]));
-		$OVERALL_STATS{'sar_end_date'} = $data[2] if (!$OVERALL_STATS{'sar_end_date'} || ($OVERALL_STATS{'sar_end_date'} lt $data[2]));
 	}
 }
 
@@ -6353,13 +6354,22 @@ sub compute_cpu_report
 	my %cpu_stat = ();
 	foreach my $t (sort {$a <=> $b} keys %sar_cpu_stat) {
 		foreach my $cpu (keys %{$sar_cpu_stat{$t}}) {
-			next if ($cpu ne 'all');
+			
+			if ($cpu eq 'all') {
+				if (!exists $OVERALL_STATS{'system'}{'cpu'} || ($OVERALL_STATS{'system'}{'cpu'}[1] < $sar_cpu_stat{$t}{$cpu}{total})) {
+					my $tmp = localtime($t/1000);
+					@{$OVERALL_STATS{'system'}{'cpu'}} = ($tmp, $sar_cpu_stat{$t}{$cpu}{total});
+				}
+			}
 			$cpu_stat{$cpu}{total}  .= '[' . $t . ',' . $sar_cpu_stat{$t}{$cpu}{total} . '],';
 			$cpu_stat{$cpu}{system} .= '[' . $t . ',' . $sar_cpu_stat{$t}{$cpu}{system} . '],';
 			$cpu_stat{$cpu}{user}   .= '[' . $t . ',' . $sar_cpu_stat{$t}{$cpu}{user} . '],';
 			$cpu_stat{$cpu}{iowait} .= '[' . $t . ',' . $sar_cpu_stat{$t}{$cpu}{iowait} . '],';
 			$cpu_stat{$cpu}{idle}   .= '[' . $t . ',' . $sar_cpu_stat{$t}{$cpu}{idle} . '],';
 		}
+		$OVERALL_STATS{'system'}{'ncpu'} = (scalar keys %{$sar_cpu_stat{$t}}) - 1;
+		$OVERALL_STATS{'sar_start_date'} = $t if (!$OVERALL_STATS{'sar_start_date'} || ($OVERALL_STATS{'sar_start_date'} gt $t));
+		$OVERALL_STATS{'sar_end_date'} = $t if (!$OVERALL_STATS{'sar_end_date'} || ($OVERALL_STATS{'sar_end_date'} lt $t));
 	}
 	%sar_cpu_stat = ();
 
@@ -6387,10 +6397,6 @@ sub compute_load_stat
 		next if ($END   && ($data[2] > $END));
 
 		map { s/,/\./ } @data ;
-		if (!exists $OVERALL_STATS{'system'}{'load'} || ($OVERALL_STATS{'system'}{'load'}[1] < $data[5])) {
-			my $t = localtime($data[2]/1000);
-			@{$OVERALL_STATS{'system'}{'load'}} = ($t, $data[5]);
-		}
 		$sar_load_stat{$data[2]}{'ldavg-1'}  = ($data[5]||0);
 		$sar_load_stat{$data[2]}{'ldavg-5'}  = ($data[6]||0);
 		$sar_load_stat{$data[2]}{'ldavg-15'} = ($data[7]||0);
@@ -6403,6 +6409,10 @@ sub compute_load_report
 
 	my %load_stat = ();
 	foreach my $t (sort { $a <=> $b } keys %sar_load_stat) {
+		if (!exists $OVERALL_STATS{'system'}{'load'} || ($OVERALL_STATS{'system'}{'load'}[1] < $sar_load_stat{$t}{'ldavg-1'})) {
+			my $tmp = localtime($t/1000);
+			@{$OVERALL_STATS{'system'}{'load'}} = ($tmp, $sar_load_stat{$t}{'ldavg-1'});
+		}
 		$load_stat{'ldavg-1'}  .= '[' . $t . ',' . $sar_load_stat{$t}{'ldavg-1'} . '],';
 		$load_stat{'ldavg-5'}  .= '[' . $t . ',' . $sar_load_stat{$t}{'ldavg-5'} . '],';
 		$load_stat{'ldavg-15'} .= '[' . $t . ',' . $sar_load_stat{$t}{'ldavg-15'} . '],';
@@ -6430,10 +6440,6 @@ sub compute_process_stat
 		next if ($END   && ($data[2] > $END));
 
 		map { s/,/\./ } @data ;
-		if (!exists $OVERALL_STATS{'system'}{'process'} || ($OVERALL_STATS{'system'}{'process'}[1] < $data[4])) {
-			my $t = localtime($data[2]/1000);
-			@{$OVERALL_STATS{'system'}{'process'}} = ($t, $data[4]);
-		}
 		$sar_process_stat{$data[2]}{'plist-sz'} = ($data[4]||0);
 		$sar_process_stat{$data[2]}{'runq-sz'} .= ($data[3]||0);
 	}
@@ -6445,6 +6451,10 @@ sub compute_process_report
 
 	my %process_stat = ();
 	foreach my $t (sort {$a <=> $b} keys %sar_process_stat) {
+		if (!exists $OVERALL_STATS{'system'}{'process'} || ($OVERALL_STATS{'system'}{'process'}[1] < $sar_process_stat{$t}{'plist-sz'})) {
+			my $tmp = localtime($t/1000);
+			@{$OVERALL_STATS{'system'}{'process'}} = ($tmp, $sar_process_stat{$t}{'plist-sz'});
+		}
 		$process_stat{'plist-sz'} .= '[' . $t . ',' . $sar_process_stat{$t}{'plist-sz'} . '],' if (exists $sar_process_stat{$t}{'plist-sz'});
 		$process_stat{'runq-sz'}  .= '[' . $t . ',' . $sar_process_stat{$t}{'runq-sz'} . '],' if (exists $sar_process_stat{$t}{'runq-sz'});
 	}
@@ -6472,10 +6482,6 @@ sub compute_context_stat
 		next if ($END   && ($data[2] > $END));
 
 		map { s/,/\./ } @data ;
-		if (!exists $OVERALL_STATS{'system'}{'cswch'} || ($OVERALL_STATS{'system'}{'cswch'}[1] < $data[4])) {
-			my $t = localtime($data[2]/1000);
-			@{$OVERALL_STATS{'system'}{'cswch'}} = ($t, $data[4]);
-		}
 		$sar_context_stat{$data[2]}{'cswch'}  = ($data[4]||0);
 		$sar_context_stat{$data[2]}{'pcrea'}  = ($data[3]||0);
 	}
@@ -6487,6 +6493,10 @@ sub compute_context_report
 
 	my %context_stat = ();
 	foreach my $t (sort {$a <=> $b} keys %sar_context_stat) {
+		if (!exists $OVERALL_STATS{'system'}{'cswch'} || ($OVERALL_STATS{'system'}{'cswch'}[1] < $sar_context_stat{$t}{'cswch'})) {
+			my $tmp = localtime($t/1000);
+			@{$OVERALL_STATS{'system'}{'cswch'}} = ($tmp, $sar_context_stat{$t}{'cswch'});
+		}
 		if ($data_info->{name} eq 'system-cswch') {
 			$context_stat{'cswch'}  .= '[' . $t . ',' . $sar_context_stat{$t}{'cswch'} . '],';
 		} elsif ($data_info->{name} eq 'system-pcrea') {
@@ -6517,10 +6527,6 @@ sub compute_memory_stat
 
 		map { s/,/\./ } @data ;
 		my $kbcached = ($data[7]*1024) || 0;
-		if (!exists $OVERALL_STATS{'system'}{'kbcached'} || ($OVERALL_STATS{'system'}{'kbcached'}[1] > $kbcached)) {
-			my $t = localtime($data[2]/1000);
-			@{$OVERALL_STATS{'system'}{'kbcached'}} = ($t, $kbcached);
-		}
 		$sar_memory_stat{$data[2]}{'kbcached'}  = $kbcached;
 		$sar_memory_stat{$data[2]}{'kbbuffers'} = ($data[6]*1024)||0;
 		$sar_memory_stat{$data[2]}{'kbmemfree'} = ($data[3]*1024)||0;
@@ -6533,6 +6539,10 @@ sub compute_memory_report
 
 	my %memory_stat = ();
 	foreach my $t (sort {$a <=> $b} keys %sar_memory_stat) {
+		if (!exists $OVERALL_STATS{'system'}{'kbcached'} || ($OVERALL_STATS{'system'}{'kbcached'}[1] > $sar_memory_stat{$t}{'kbcached'})) {
+			my $tmp = localtime($t/1000);
+			@{$OVERALL_STATS{'system'}{'kbcached'}} = ($tmp, $sar_memory_stat{$t}{'kbcached'});
+		}
 		$memory_stat{'kbcached'}  .= '[' . $t . ',' . $sar_memory_stat{$t}{'kbcached'} . '],';
 		$memory_stat{'kbbuffers'} .= '[' . $t . ',' . $sar_memory_stat{$t}{'kbbuffers'} . '],';
 		$memory_stat{'kbmemfree'} .= '[' . $t . ',' . $sar_memory_stat{$t}{'kbmemfree'} . '],';
@@ -6558,14 +6568,6 @@ sub compute_swap_stat
 		next if ($END   && ($data[2] > $END));
 
 		map { s/,/\./ } @data ;
-		if (!exists $OVERALL_STATS{'system'}{'pswpin'} || ($OVERALL_STATS{'system'}{'pswpin'}[1] < $data[3])) {
-			my $t = localtime($data[2]/1000);
-			@{$OVERALL_STATS{'system'}{'pswpin'}} = ($t, $data[3]);
-		}
-		if (!exists $OVERALL_STATS{'system'}{'pswpout'} || ($OVERALL_STATS{'system'}{'pswpout'}[1] < $data[4])) {
-			my $t = localtime($data[2]/1000);
-			@{$OVERALL_STATS{'system'}{'pswpout'}} = ($t, $data[4]);
-		}
 		$sar_swap_stat{$data[2]}{'pswpin/s'}  = ($data[3]||0);
 		$sar_swap_stat{$data[2]}{'pswpout/s'} = ($data[4]||0);
 	}
@@ -6577,6 +6579,14 @@ sub compute_swap_report
 
 	my %swap_stat = ();
 	foreach my $t (sort {$a <=> $b} keys %sar_swap_stat) {
+		if (!exists $OVERALL_STATS{'system'}{'pswpin'} || ($OVERALL_STATS{'system'}{'pswpin'}[1] < $sar_swap_stat{$t}{'pswpin/s'})) {
+			my $tmp = localtime($t/1000);
+			@{$OVERALL_STATS{'system'}{'pswpin'}} = ($tmp, $sar_swap_stat{$t}{'pswpin/s'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'pswpout'} || ($OVERALL_STATS{'system'}{'pswpout'}[1] < $sar_swap_stat{$t}{'pswpout/s'})) {
+			my $tmp = localtime($t/1000);
+			@{$OVERALL_STATS{'system'}{'pswpout'}} = ($tmp, $sar_swap_stat{$t}{'pswpout/s'});
+		}
 		$swap_stat{'pswpin/s'}  .= '[' . $t . ',' . $sar_swap_stat{$t}{'pswpin/s'} . '],';
 		$swap_stat{'pswpout/s'} .= '[' . $t . ',' . $sar_swap_stat{$t}{'pswpout/s'} . '],';
 	}
@@ -6600,18 +6610,6 @@ sub compute_page_stat
 		next if ($END   && ($data[2] > $END));
 
 		map { s/,/\./ } @data ;
-		if (!exists $OVERALL_STATS{'system'}{'pgpgin'} || ($OVERALL_STATS{'system'}{'pgpgin'}[1] < $data[3])) {
-			my $t = localtime($data[2]/1000);
-			@{$OVERALL_STATS{'system'}{'pgpgin'}} = ($t, $data[3]);
-		}
-		if (!exists $OVERALL_STATS{'system'}{'pgpgout'} || ($OVERALL_STATS{'system'}{'pgpgout'}[1] < $data[4])) {
-			my $t = localtime($data[2]/1000);
-			@{$OVERALL_STATS{'system'}{'pgpgout'}} = ($t, $data[4]);
-		}
-		if (!exists $OVERALL_STATS{'system'}{'majflt'} || ($OVERALL_STATS{'system'}{'majflt'}[1] < $data[6])) {
-			my $t = localtime($data[2]/1000);
-			@{$OVERALL_STATS{'system'}{'majflt'}} = ($t, $data[6]);
-		}
 		$sar_pageswap_stat{$data[2]}{'pgpgin/s'}  = ($data[3]||0);
 		$sar_pageswap_stat{$data[2]}{'pgpgout/s'} = ($data[4]||0);
 		$sar_pageswap_stat{$data[2]}{'majflt/s'}  = ($data[6]||0);
@@ -6624,6 +6622,18 @@ sub compute_page_report
 
 	my %pageswap_stat = ();
 	foreach my $t (sort {$a <=> $b} keys %sar_pageswap_stat) {
+		if (!exists $OVERALL_STATS{'system'}{'pgpgin'} || ($OVERALL_STATS{'system'}{'pgpgin'}[1] < $sar_pageswap_stat{$t}{'pgpgin/s'})) {
+			my $tmp = localtime($t/1000);
+			@{$OVERALL_STATS{'system'}{'pgpgin'}} = ($tmp, $sar_pageswap_stat{$t}{'pgpgin/s'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'pgpgout'} || ($OVERALL_STATS{'system'}{'pgpgout'}[1] < $sar_pageswap_stat{$t}{'pgpgout/s'})) {
+			my $tmp = localtime($t/1000);
+			@{$OVERALL_STATS{'system'}{'pgpgout'}} = ($tmp, $sar_pageswap_stat{$t}{'pgpgout/s'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'majflt'} || ($OVERALL_STATS{'system'}{'majflt'}[1] < $sar_pageswap_stat{$t}{'majflt/s'})) {
+			my $tmp = localtime($t/1000);
+			@{$OVERALL_STATS{'system'}{'majflt'}} = ($tmp, $sar_pageswap_stat{$t}{'majflt/s'});
+		}
 		$pageswap_stat{'pgpgin/s'}  .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgpgin/s'} . '],';
 		$pageswap_stat{'pgpgout/s'} .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgpgout/s'} . '],';
 		$pageswap_stat{'majflt/s'}  .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'majflt/s'} . '],';
@@ -6648,17 +6658,12 @@ sub compute_block_stat
 		next if ($BEGIN && ($data[2] < $BEGIN));
 		next if ($END   && ($data[2] > $END));
 
-		map { s/,/\./ } @data ;
-		if (!exists $OVERALL_STATS{'system'}{'bread'} || ($OVERALL_STATS{'system'}{'bread'}[1] < $data[6])) {
-			my $t = localtime($data[2]/1000);
-			@{$OVERALL_STATS{'system'}{'bread'}} = ($t, $data[6]);
-		}
-		if (!exists $OVERALL_STATS{'system'}{'bwrite'} || ($OVERALL_STATS{'system'}{'bwrite'}[1] < $data[7])) {
-			my $t = localtime($data[2]/1000);
-			@{$OVERALL_STATS{'system'}{'bwrite'}} = ($t, $data[7]);
-		}
+		map { s/,/\./ } @data;
 		$sar_block_stat{$data[2]}{'bread/s'} = ($data[6]||0);
 		$sar_block_stat{$data[2]}{'bwrtn/s'} = ($data[7]||0);
+		$sar_block_stat{$data[2]}{'tps'} = ($data[3]||0);
+		$sar_block_stat{$data[2]}{'rtps'} = ($data[4]||0);
+		$sar_block_stat{$data[2]}{'wtps'} = ($data[5]||0);
 	}
 }
 
@@ -6668,14 +6673,32 @@ sub compute_block_report
 
 	my %block_stat = ();
 	foreach my $t (sort {$a <=> $b} keys %sar_block_stat) {
+		if (!exists $OVERALL_STATS{'system'}{'bread'} || ($OVERALL_STATS{'system'}{'bread'}[1] < $sar_block_stat{$t}{'bread/s'})) {
+			my $tmp = localtime($t/1000);
+			@{$OVERALL_STATS{'system'}{'bread'}} = ($tmp, $sar_block_stat{$t}{'bread/s'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'bwrite'} || ($OVERALL_STATS{'system'}{'bwrite'}[1] < $sar_block_stat{$t}{'bwrtn/s'})) {
+			my $tmp = localtime($t/1000);
+			@{$OVERALL_STATS{'system'}{'bwrite'}} = ($tmp, $sar_block_stat{$t}{'bwrtn/s'});
+		}
 		$block_stat{'bread/s'} .= '[' . $t . ',' . $sar_block_stat{$t}{'bread/s'} . '],';
 		$block_stat{'bwrtn/s'} .= '[' . $t . ',' . $sar_block_stat{$t}{'bwrtn/s'} . '],';
+		$block_stat{'tps'} .= '[' . $t . ',' . $sar_block_stat{$t}{'tps'} . '],';
+		$block_stat{'rtps'} .= '[' . $t . ',' . $sar_block_stat{$t}{'rtps'} . '],';
+		$block_stat{'wtps'} .= '[' . $t . ',' . $sar_block_stat{$t}{'wtps'} . '],';
 	}
-	%sar_block_stat = ();
 	if (scalar keys %block_stat > 0) {
-		$block_stat{'bread/s'} =~ s/,$//;
-		$block_stat{'bwrtn/s'} =~ s/,$//;
-		print $FH &flotr2_linegraph_array($IDX++, 'system-block', $data_info, '', $block_stat{'bread/s'}, $block_stat{'bwrtn/s'});
+		if ($data_info->{name} eq 'system-block') {
+			%sar_block_stat = ();
+			$block_stat{'bread/s'} =~ s/,$//;
+			$block_stat{'bwrtn/s'} =~ s/,$//;
+			print $FH &flotr2_linegraph_array($IDX++, 'system-block', $data_info, '', $block_stat{'bread/s'}, $block_stat{'bwrtn/s'});
+		} elsif ($data_info->{name} eq 'system-tps') {
+			$block_stat{'tps'} =~ s/,$//;
+			$block_stat{'rtps'} =~ s/,$//;
+			$block_stat{'wtps'} =~ s/,$//;
+			print $FH &flotr2_linegraph_array($IDX++, 'system-tps', $data_info, '', $block_stat{'tps'}, $block_stat{'rtps'}, $block_stat{'wtps'});
+		}
 	}
 }
 
@@ -6692,10 +6715,6 @@ sub compute_srvtime_stat
 		next if (!&device_in_report($data[3]));
 
 		map { s/,/\./ } @data ;
-		if (!exists $OVERALL_STATS{'system'}{'svctm'} || ($OVERALL_STATS{'system'}{'svctm'}[1] < $data[10])) {
-			my $t = localtime($data[2]/1000);
-			@{$OVERALL_STATS{'system'}{'svctm'}} = ($t, $data[10]);
-		}
 		$sar_srvtime_stat{$data[2]}{$data[3]}{'await'} = ($data[9]||0);
 		$sar_srvtime_stat{$data[2]}{$data[3]}{'svctm'} = ($data[10]||0);
 	}
@@ -6709,6 +6728,10 @@ sub compute_srvtime_report
 	my %srvtime_stat = ();
 	foreach my $t (sort {$a <=> $b} keys %sar_srvtime_stat) {
 		foreach my $dev (keys %{$sar_srvtime_stat{$t}}) {
+			if (!exists $OVERALL_STATS{'system'}{'svctm'} || ($OVERALL_STATS{'system'}{'svctm'}[1] < $sar_srvtime_stat{$t}{$dev}{'svctm'})) {
+				my $tmp = localtime($t/1000);
+				@{$OVERALL_STATS{'system'}{'svctm'}} = ($tmp, $sar_srvtime_stat{$t}{$dev}{'svctm'});
+			}
 			$srvtime_stat{$dev}{'await'} .= '[' . $t . ',' . $sar_srvtime_stat{$t}{$dev}{'await'} . '],';
 			$srvtime_stat{$dev}{'svctm'} .= '[' . $t . ',' . $sar_srvtime_stat{$t}{$dev}{'svctm'} . '],';
 		}
@@ -6740,8 +6763,6 @@ sub compute_rw_device_stat
 		next if (!&device_in_report($data[3]));
 
 		map { s/,/\./ } @data ;
-		$OVERALL_STATS{'system'}{'devices'}{$data[3]}{read} += $data[5];
-		$OVERALL_STATS{'system'}{'devices'}{$data[3]}{write} += $data[6];
 		$sar_rw_devices_stat{$data[2]}{$data[3]}{'rd_sec/s'} = ($data[5]*512);
 		$sar_rw_devices_stat{$data[2]}{$data[3]}{'wr_sec/s'} = ($data[6]*512);
 		$sar_rw_devices_stat{$data[2]}{$data[3]}{'tps'}      = ($data[4]||0);
@@ -6756,21 +6777,32 @@ sub compute_rw_device_report
 	my %devices_stat = ();
 	foreach my $t (sort {$a <=> $b} keys %sar_srvtime_stat) {
 		foreach my $dev (keys %{$sar_srvtime_stat{$t}}) {
-			$devices_stat{$dev}{'rd_sec/s'} .= '[' . $t . ',' . $sar_rw_devices_stat{$t}{$dev}{'rd_sec/s'} . '],';
-			$devices_stat{$dev}{'wr_sec/s'} .= '[' . $t . ',' . $sar_rw_devices_stat{$t}{$dev}{'wr_sec/s'} . '],';
-			$devices_stat{$dev}{'tps'}      .= '[' . $t . ',' . $sar_rw_devices_stat{$t}{$dev}{'tps'} . '],';
+			if ($data_info->{name} eq 'system-device') { 
+				$OVERALL_STATS{'system'}{'devices'}{$dev}{read} += $sar_rw_devices_stat{$t}{$dev}{'rd_sec/s'};
+				$OVERALL_STATS{'system'}{'devices'}{$dev}{write} += $sar_rw_devices_stat{$t}{$dev}{'wr_sec/s'};
+				$devices_stat{$dev}{'rd_sec/s'} .= '[' . $t . ',' . $sar_rw_devices_stat{$t}{$dev}{'rd_sec/s'} . '],';
+				$devices_stat{$dev}{'wr_sec/s'} .= '[' . $t . ',' . $sar_rw_devices_stat{$t}{$dev}{'wr_sec/s'} . '],';
+			} elsif ($data_info->{name} eq 'system-tpsdevice') {
+				$devices_stat{$dev}{'tps'}      .= '[' . $t . ',' . $sar_rw_devices_stat{$t}{$dev}{'tps'} . '],';
+				$OVERALL_STATS{'system'}{'devices'}{$dev}{tps} += $sar_rw_devices_stat{$t}{$dev}{'tps'};
+			}
 		}
 	}
+
 	if (scalar keys %devices_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
 			if (!exists $DEVFH{$n}) {
 				push(@DEVICE_LIST, $n);
 				&init_device_output($#DEVICE_LIST, $src_base);
 			}
-			$devices_stat{$n}{'rd_sec/s'} =~ s/,$//;
-			$devices_stat{$n}{'wr_sec/s'} =~ s/,$//;
-			$devices_stat{$n}{'tps'} =~ s/,$//;
-			$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'device-read_write', $data_info, $n, $devices_stat{$n}{'rd_sec/s'}, $devices_stat{$n}{'wr_sec/s'}) );
+			if ($data_info->{name} eq 'system-device') { 
+				$devices_stat{$n}{'rd_sec/s'} =~ s/,$//;
+				$devices_stat{$n}{'wr_sec/s'} =~ s/,$//;
+				$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'device-read_write', $data_info, $n, $devices_stat{$n}{'rd_sec/s'}, $devices_stat{$n}{'wr_sec/s'}) );
+			} elsif ($data_info->{name} eq 'system-tpsdevice') {
+				$devices_stat{$n}{'tps'} =~ s/,$//;
+				$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'device-tpsdevice', $data_info, $n, $devices_stat{$n}{'tps'}) );
+			}
 		}
 	}
 }
@@ -6912,7 +6944,7 @@ sub compute_sarstat_stats
 	my ($file, %data_info) = @_;
 
 	####
-	# Show CPU utilization
+	# Get CPU utilization
 	####
 	if ($data_info{name} eq 'system-cpu') {
 		my $command = "$SADF_PROG -t -P ALL -D $file";
@@ -6930,7 +6962,7 @@ sub compute_sarstat_stats
 	}
 
 	####
-	# Show load average
+	# Get load average
 	####
 	if ($data_info{name} eq 'system-load') {
 		my $command = "$SADF_PROG -t -D $file -- -q";
@@ -6948,7 +6980,7 @@ sub compute_sarstat_stats
 	}
 
 	####
-	# Show process number
+	# Get process number
 	####
 	if ($data_info{name} eq 'system-process') {
 		my $command = "$SADF_PROG -t -D $file -- -q";
@@ -6966,7 +6998,7 @@ sub compute_sarstat_stats
 	}
 
 	####
-	# Show run queue length
+	# Get run queue length
 	####
 	if ($data_info{name} eq 'system-runqueue') {
 		my $command = "$SADF_PROG -t -D $file -- -q";
@@ -6984,7 +7016,7 @@ sub compute_sarstat_stats
 	}
 
 	####
-	# Show context swiches
+	# Get context swiches
 	####
 	if ($data_info{name} eq 'system-cswch') {
 		my $command = "$SADF_PROG -t -D $file -- -w";
@@ -7002,7 +7034,7 @@ sub compute_sarstat_stats
 	}
 
 	####
-	# Show tasks created per second
+	# Get tasks created per second
 	####
 	if ($data_info{name} eq 'system-pcrea') {
 		my $command = "$SADF_PROG -t -D $file -- -w";
@@ -7021,7 +7053,7 @@ sub compute_sarstat_stats
 
 
 	####
-	# Show memory utilization
+	# Get memory utilization
 	####
 	if ($data_info{name} eq 'system-memory') {
 		my $command = "$SADF_PROG -t -D $file -- -r";
@@ -7039,7 +7071,7 @@ sub compute_sarstat_stats
 	}
 
 	####
-	# Show swap utilization
+	# Get swap utilization
 	####
 	if ($data_info{name} eq 'system-swap') {
 		my $command = "$SADF_PROG -t -D $file -- -W";
@@ -7057,7 +7089,7 @@ sub compute_sarstat_stats
 	}
 
 	####
-	# Show page utilization
+	# Get page utilization
 	####
 	if ($data_info{name} eq 'system-page') {
 		my $command = "$SADF_PROG -t -D $file -- -B";
@@ -7075,7 +7107,7 @@ sub compute_sarstat_stats
 	}
 
 	####
-	# Show block in/out
+	# Get block in/out
 	####
 	if ($data_info{name} eq 'system-block') {
 		my $command = "$SADF_PROG -t -D $file -- -b";
@@ -7093,7 +7125,25 @@ sub compute_sarstat_stats
 	}
 
 	####
-	# Show Device service time
+	# Get TPS
+	####
+	if ($data_info{name} eq 'system-tps') {
+		my $command = "$SADF_PROG -t -D $file -- -b";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute block statistics
+		&compute_block_stat(@content);
+	}
+
+	####
+	# Get Device service time
 	####
 	if ($data_info{name} eq 'system-srvtime') {
 		my $command = "$SADF_PROG -t -P ALL -D $file -- -d -p";
@@ -7112,7 +7162,7 @@ sub compute_sarstat_stats
 
 
 	####
-	# Show Device block read/write utilization
+	# Get Device block read/write utilization
 	####
 	if ($data_info{name} eq 'system-device') {
 		my $command = "$SADF_PROG -t -P ALL -D $file -- -d -p";
@@ -7130,7 +7180,25 @@ sub compute_sarstat_stats
 	}
 
 	####
-	# Show Device utilization
+	# Get per device TPS utilization
+	####
+	if ($data_info{name} eq 'system-tpsdevice') {
+		my $command = "$SADF_PROG -t -P ALL -D $file -- -d -p";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute I/O per devices statistics
+		&compute_rw_device_stat(@content);
+	}
+
+	####
+	# Get Device utilization
 	####
 	if ($data_info{name} eq 'system-cpudevice') {
 		my $command = "$SADF_PROG -t -P ALL -D $file -- -d -p";
@@ -7149,7 +7217,7 @@ sub compute_sarstat_stats
 
 
 	####
-	# Show network interface utilization
+	# Get network interface utilization
 	####
 	if ($data_info{name} eq 'network-utilization') {
 		my $command = "$SADF_PROG -t -P ALL -D $file -- -n DEV";
@@ -7167,7 +7235,7 @@ sub compute_sarstat_stats
 	}
 
 	####
-	# Show network errors utilization
+	# Get network errors utilization
 	####
 	if ($data_info{name} eq 'network-error') {
 		my $command = "$SADF_PROG -t -P ALL -D $file -- -n EDEV";
@@ -7348,7 +7416,7 @@ sub compute_sarfile_stats
 	@content = ();
 
 	####
-	# Show CPU utilization
+	# Set CPU utilization
 	####
 	if ($data_info{name} eq 'system-cpu') {
 
@@ -7358,7 +7426,7 @@ sub compute_sarfile_stats
 	}
 
 	####
-	# Show load average
+	# Set load average
 	####
 	if ($data_info{name} eq 'system-load') {
 
@@ -7368,7 +7436,7 @@ sub compute_sarfile_stats
 	}
 
 	####
-	# Show process number
+	# Set process number
 	####
 	if ($data_info{name} eq 'system-process') {
 
@@ -7378,7 +7446,7 @@ sub compute_sarfile_stats
 	}
 
 	####
-	# Show run queue length
+	# Set run queue length
 	####
 	if ($data_info{name} eq 'system-runqueue') {
 
@@ -7388,7 +7456,7 @@ sub compute_sarfile_stats
 	}
 
 	####
-	# Show context switches
+	# Set context switches
 	####
 	if ($data_info{name} eq 'system-cswch') {
 
@@ -7398,7 +7466,7 @@ sub compute_sarfile_stats
 	}
 
 	####
-	# Show process created per second
+	# Set process created per second
 	####
 	if ($data_info{name} eq 'system-pcrea') {
 
@@ -7408,7 +7476,7 @@ sub compute_sarfile_stats
 	}
 
 	####
-	# Show memory utilization
+	# Set memory utilization
 	####
 	if ($data_info{name} eq 'system-memory') {
 
@@ -7418,7 +7486,7 @@ sub compute_sarfile_stats
 	}
 
 	####
-	# Show swap utilization
+	# Set swap utilization
 	####
 	if ($data_info{name} eq 'system-swap') {
 
@@ -7428,7 +7496,7 @@ sub compute_sarfile_stats
 	}
 
 	####
-	# Show page utilization
+	# Set page utilization
 	####
 	if ($data_info{name} eq 'system-page') {
 
@@ -7438,7 +7506,7 @@ sub compute_sarfile_stats
 	}
 
 	####
-	# Show block in/out
+	# Set block in/out
 	####
 	if ($data_info{name} eq 'system-block') {
 
@@ -7448,7 +7516,18 @@ sub compute_sarfile_stats
 	}
 
 	####
-	# Show Device service time
+	# Set TPS
+	####
+	if ($data_info{name} eq 'system-tps') {
+
+		# Compute block statistics
+		&compute_block_stat(@{$fulldata{io}});
+
+	}
+
+
+	####
+	# Set Device service time
 	####
 	if ($data_info{name} eq 'system-srvtime') {
 
@@ -7458,7 +7537,7 @@ sub compute_sarfile_stats
 	}
 
 	####
-	# Show Device read/write utilization
+	# Set Device read/write utilization
 	####
 	if ($data_info{name} eq 'system-device') {
 
@@ -7468,7 +7547,17 @@ sub compute_sarfile_stats
 	}
 
 	####
-	# Show Device utilization
+	# Set Device read/write utilization
+	####
+	if ($data_info{name} eq 'system-tpsdevice') {
+
+		# Compute I/O per devices statistics
+		&compute_rw_device_stat(@{$fulldata{dev}});
+
+	}
+
+	####
+	# Set Device utilization
 	####
 	if ($data_info{name} eq 'system-cpudevice') {
 
@@ -7478,7 +7567,7 @@ sub compute_sarfile_stats
 	}
 
 	####
-	# Show network utilization
+	# Set network utilization
 	####
 	if ($data_info{name} eq 'network-utilization') {
 
@@ -7488,7 +7577,7 @@ sub compute_sarfile_stats
 	}
 
 	####
-	# Show network error utilization
+	# Set network error utilization
 	####
 	if ($data_info{name} eq 'network-error') {
 
@@ -7498,7 +7587,6 @@ sub compute_sarfile_stats
 	}
 
 }
-
 
 sub compute_sar_graph
 {
@@ -7605,6 +7693,17 @@ sub compute_sar_graph
 	}
 
 	####
+	# Show TPS
+	####
+	if ($data_info{name} eq 'system-tps') {
+
+		# Compute graphs for block statistics
+		&compute_block_report(\%data_info);
+
+	}
+
+
+	####
 	# Show Device service time
 	####
 	if ($data_info{name} eq 'system-srvtime') {
@@ -7618,6 +7717,16 @@ sub compute_sar_graph
 	# Show Device read/write utilization
 	####
 	if ($data_info{name} eq 'system-device') {
+
+		# Compute graphs for I/O per devices statistics
+		&compute_rw_device_report(\%data_info, $src_base);
+
+	}
+
+	####
+	# Show per device TPS utilization
+	####
+	if ($data_info{name} eq 'system-tpsdevice') {
 
 		# Compute graphs for I/O per devices statistics
 		&compute_rw_device_report(\%data_info, $src_base);
@@ -8357,6 +8466,113 @@ sub clear_stats
 
 }
 
+# Dump relevant memory to file for incremental use
+sub dump_as_binary
+{
+        my $outfile = shift();
+
+	my $lfh = new IO::File ">$outfile";
+	if (not defined $lfh) {
+		die "FATAL: can't write to $outfile, $!\n";
+	}
+        store_fd({
+		'global_databases' => \@global_databases,
+		'global_tbspnames' => \@global_tbspnames,
+		'all_database_stat' => \%all_database_stat,
+		'all_conflict_stat' => \%all_conflict_stat,
+		'all_dbsize_stat' => \%all_dbsize_stat,
+		'all_tablespace_stat' => \%all_tablespace_stat,
+		'all_vacuum_stat' => \%all_vacuum_stat,
+		'all_usertable_stat' => \%all_usertable_stat,
+		'all_userindex_stat' => \%all_userindex_stat,
+		'all_statio_usertable_stat' => \%all_statio_usertable_stat,
+		'all_buffercache_stat' => \%all_buffercache_stat,
+		'all_statio_userindex_stat' => \%all_statio_userindex_stat,
+		'all_xlog_stat' => \%all_xlog_stat,
+		'all_bgwriter_stat' => \%all_bgwriter_stat,
+		'all_connections_stat' => \%all_connections_stat,
+		'all_functions_stat' => \%all_functions_stat,
+		'all_replication_stat' => \%all_replication_stat,
+		'all_pgbouncer_stat' => \%all_pgbouncer_stat,
+		'all_pgbouncer_ini' => \%all_pgbouncer_ini,
+		'all_pgbouncer_req' => \%all_pgbouncer_req,
+		'all_class_stat' => \%all_class_stat,
+		'all_lock_stat' => \%all_lock_stat,
+		'all_unusedidx_stat' => \%all_unusedidx_stat,
+		'all_redundantidx_stat' => \%all_redundantidx_stat,
+		'all_missingfkidx_stat' => \%all_missingfkidx_stat,
+		'all_postgresql_conf' => \%all_postgresql_conf,
+		'all_recovery_conf' => \%all_recovery_conf,
+		'all_postgresql_auto_conf' => \%all_postgresql_auto_conf,
+		'all_hba_conf' => \%all_hba_conf,
+		'all_ident_conf' => \%all_ident_conf,
+		'all_settings_stat' => \%all_settings_stat,
+		'all_role_settings_stat' => \%all_role_settings_stat,
+		'all_shared_stat' => \%all_shared_stat,
+		'all_usagecount_stat' => \%all_usagecount_stat,
+		'all_isdirty_stat' => \%all_isdirty_stat,
+		'all_archiver_stat' => \%all_archiver_stat,
+		'all_statement_stat' => \%all_statement_stat,
+		'sar_cpu_stat' => \%sar_cpu_stat,
+		'sar_load_stat' => \%sar_load_stat,
+		'sar_process_stat' => \%sar_process_stat,
+		'sar_context_stat' => \%sar_context_stat,
+		'sar_memory_stat' => \%sar_memory_stat,
+		'sar_swap_stat' => \%sar_swap_stat,
+		'sar_pageswap_stat' => \%sar_pageswap_stat,
+		'sar_block_stat' => \%sar_block_stat,
+		'sar_srvtime_stat' => \%sar_srvtime_stat,
+		'sar_rw_devices_stat' => \%sar_rw_devices_stat,
+		'sar_util_devices_stat' => \%sar_util_devices_stat,
+		'sar_networks_stat' => \%sar_networks_stat,
+		'sar_neterror_stat' => \%sar_neterror_stat,
+        }, $lfh) || die ("Couldn't save binary data to «$outfile»!\n");
+	$lfh->close;
+}
+
+
+# Dump relevant memory to file for incremental use
+sub load_binary
+{
+        my $outfile = shift();
+
+	my $lfh = new IO::File "<$outfile";
+	if (not defined $lfh) {
+		die "FATAL: can't write to $outfile, $!\n";
+	}
+	my %stats = %{ fd_retrieve($lfh) };
+	$lfh->close();
+
+	my @_global_databases = @{$stats{global_databases}};
+	my @_global_tbspnames = @{$stats{global_tbspnames}};
+
+	delete $stats{OVERALL_STATS};
+	# Look for database and tablespace
+	foreach my $d (@{$stats{global_databases}}) {
+		push(@global_databases, $d) if (!grep(/^$d$/, @global_databases));
+	}
+	delete $stats{global_databases};
+	foreach my $d (@{$stats{global_tbspnames}}) {
+		push(@global_tbspnames, $d) if (!grep(/^$d$/, @global_databases));
+	}
+	delete $stats{global_tbspnames};
+
+	# Load other storages
+	foreach my $m (keys %stats) {
+		foreach my $t (keys %{$stats{$m}}) {
+			foreach my $d (keys %{$stats{$m}{$t}}) {
+				if ($stats{$m}{$t}{$d} =~ /HASH/) {
+					foreach my $k (keys %{$stats{$m}{$t}{$d}}) {
+						${$m}{$t}{$d}{$k} = $stats{$m}{$t}{$d}{$k};
+					}
+				} else {
+					${$m}{$t}{$d} = $stats{$m}{$t}{$d};
+				}
+			}
+		}
+	}
+
+}
 
 __DATA__
 
