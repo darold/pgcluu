@@ -51,13 +51,14 @@ my $REVERT_DATE     = 0;
 my $FROM_SA_FILE    = 0;
 my $SADC_INPUT_FILE = '';
 my $SAR_INPUT_FILE  = '';
-my @DEVICE_LIST     = ();
-my @IFACE_LIST      = ();
+our @DEVICE_LIST    = ();
+our @IFACE_LIST     = ();
 my @GRAPH_COLORS    = ('#6e9dc9', '#f4ab3a', '#ac7fa8', '#8dbd0f'); 
 my $ZCAT_PROG       = '/bin/zcat';
 my $INTERVAL        = 1;
 my $CAPTURE         = 0;
 my $CACHE           = 0;
+my $CLEAN           = 0;
 
 my %RELKIND = (
 	'r' => 'tables',
@@ -70,58 +71,60 @@ my %RELKIND = (
 my $TOP_STAT       = 10;
 
 # Global variables that need to be saved in incremental mode
-my %OVERALL_STATS   = ();
-my @global_databases = ();
-my @global_tbspnames = ();
-my %all_database_stat = ();
-my %all_conflict_stat = ();
-my %all_dbsize_stat = ();
-my %all_tablespace_stat = ();
-my %all_vacuum_stat = ();
-my %all_usertable_stat = ();
-my %all_userindex_stat = ();
-my %all_statio_usertable_stat = ();
-my %all_buffercache_stat = ();
-my %all_statio_userindex_stat = ();
-my %all_xlog_stat = ();
-my %all_bgwriter_stat = ();
-my %all_connections_stat = ();
-my %all_functions_stat = ();
-my %all_replication_stat = ();
-my %all_pgbouncer_stat = ();
-my %all_pgbouncer_ini = ();
-my %all_pgbouncer_req = ();
-my %all_class_stat = ();
-my %all_lock_stat = ();
-my %all_unusedidx_stat = ();
-my %all_redundantidx_stat = ();
-my %all_missingfkidx_stat = ();
-my %all_postgresql_conf = ();
-my %all_recovery_conf = ();
-my %all_postgresql_auto_conf = ();
-my %all_hba_conf = ();
-my %all_ident_conf = ();
-my %all_settings_stat = ();
-my %all_role_settings_stat = ();
-my %all_shared_stat = ();
-my %all_usagecount_stat = ();
-my %all_isdirty_stat = ();
-my %all_archiver_stat = ();
-my %all_statement_stat = ();
+our %OVERALL_STATS   = ();
+our %global_infos = ();
+our @global_databases = ();
+our @global_tbspnames = ();
+our %all_stat_database = ();
+our %all_stat_database_conflicts = ();
+our %all_database_size = ();
+our %all_tablespace_size = ();
+our %all_vacuum_stat = ();
+our %all_stat_user_tables = ();
+our %all_stat_user_indexes = ();
+our %all_statio_user_tables = ();
+our %all_relation_buffercache = ();
+our %all_statio_all_indexes = ();
+our %all_xlog_stat = ();
+our %all_stat_bgwriter = ();
+our %all_stat_connections = ();
+our %all_stat_user_functions = ();
+our %all_stat_replication = ();
+our %all_pgbouncer_stats = ();
+our %all_pgbouncer_ini = ();
+our %all_pgbouncer_req_stats = ();
+our %all_class_size = ();
+our %all_stat_locks = ();
+our %all_stat_unused_indexes = ();
+our %all_stat_redundant_indexes = ();
+our %all_stat_missing_fkindexes = ();
+our %all_postgresql_conf = ();
+our %all_recovery_conf = ();
+our %all_postgresql_auto_conf = ();
+our %pg_hba_conf = ();
+our %pg_ident_conf = ();
+our %all_settings = ();
+our %all_db_role_setting = ();
+our %all_database_buffercache = ();
+our %all_database_usagecount = ();
+our %all_database_isdirty = ();
+our %all_stat_archiver = ();
+our %all_stat_statements = ();
 
-my %sar_cpu_stat = ();
-my %sar_load_stat = ();
-my %sar_process_stat = ();
-my %sar_context_stat = ();
-my %sar_memory_stat = ();
-my %sar_swap_stat = ();
-my %sar_pageswap_stat = ();
-my %sar_block_stat = ();
-my %sar_srvtime_stat = ();
-my %sar_rw_devices_stat = ();
-my %sar_util_devices_stat = ();
-my %sar_networks_stat = ();
-my %sar_neterror_stat = ();
+our %sar_cpu_stat = ();
+our %sar_load_stat = ();
+our %sar_process_stat = ();
+our %sar_context_stat = ();
+our %sar_memory_stat = ();
+our %sar_swap_stat = ();
+our %sar_pageswap_stat = ();
+our %sar_block_stat = ();
+our %sar_srvtime_stat = ();
+our %sar_rw_devices_stat = ();
+our %sar_util_devices_stat = ();
+our %sar_networks_stat = ();
+our %sar_neterror_stat = ();
+our %sysinfo   = (); # Hash used to store system information
 
 # Store default timestamp
 my ($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
@@ -134,8 +137,6 @@ my $sar_year  = '';
 my $sar_month = '';
 my $sar_day   = '';
 
-# Hash used to store system information
-my %sysinfo   = ();
 
 # Charset used in the html output
 my $charset = 'utf-8';
@@ -804,6 +805,7 @@ my @net_opts = ();
 GetOptions(
 	"b|begin=s"          => \$BEGIN,
 	"d|db-only=s"        => \@dbs_opts,
+	"c|clean!"           => \$CLEAN,
 	"C|cache!"           => \$CACHE,
 	"D|device-only=s"    => \@dev_opts,
 	"e|end=s"            => \$END,
@@ -879,25 +881,21 @@ if ($END) {
 	}
 }
 
-# Force the user to give an output directory
-if (!$OUTPUT_DIR) {
-	die "FATAL: you must give an output directory $OUTPUT_DIR.\n";
-} else {
+# Warn that in cache mode the output directory in the same as input one
+if ($CACHE && $OUTPUT_DIR) {
+	warn "WARNING: output directory will not be used, cache files will be generated in $INPUT_DIR\n";
+}
 
-	# As cache mode can be run in cron job, absolute output directory is mandatory
-	if ($CACHE) {
-		# Ensure this is not a relative path
-		if (dirname($OUTPUT_DIR) eq '.') {
-			die "FATAL: output directory ($OUTPUT_DIR) must be an absolute path in caching mode.\n";
-		}
-	} else {
-		# Check if the directory is empty if we are not in cache mode
-		opendir(IDIR, "$OUTPUT_DIR") || die "FATAL: can not open directory $OUTPUT_DIR: $!";
-		my @files = grep { /\.html$/ } readdir(IDIR);
-		closedir(IDIR);
-		if ($#files >= 0) {
-			die "FATAL: output directory $OUTPUT_DIR is not empty.";
-		}
+# Force the user to give an output directory
+if (!$CACHE && !$OUTPUT_DIR) {
+	die "FATAL: you must give an output directory $OUTPUT_DIR.\n";
+} elsif (!$CACHE) {
+	# Check if the directory is empty if we are not in cache mode
+	opendir(IDIR, "$OUTPUT_DIR") || die "FATAL: can not open directory $OUTPUT_DIR: $!";
+	my @files = grep { /\.html$/ } readdir(IDIR);
+	closedir(IDIR);
+	if ($#files >= 0) {
+		die "FATAL: output directory $OUTPUT_DIR is not empty.";
 	}
 }
 
@@ -911,17 +909,20 @@ if (!$INPUT_DIR || !-d $INPUT_DIR) {
 	}
 }
 
-# As cache mode can be run in cron job, absolute input directory is mandatory
+# As cache mode can be run in cron job, absolute path for input directory is mandatory
 if ($CACHE) {
 	# Ensure this is not a relative path
 	if (dirname($INPUT_DIR) eq '.') {
 		die "FATAL: input directory ($INPUT_DIR) must be an absolute path in caching mode.\n";
 	}
-}
 
-# Write resources files (js and css) from __DATA__ section if they have not
-# been copied yet.
-&write_resources();
+} else {
+
+	# Write resources files (js and css) from __DATA__ section if they have not
+	# been copied yet.
+	&write_resources();
+
+}
 
 ####
 # In cache mode we have to look into subdirectories to find daily or hourly data files.
@@ -934,13 +935,20 @@ my @WORK_DIRS = &get_data_directories();
 # Now we will look over each statistics directories to compute stats
 ####
 my $ORIG_OUTPUT_DIR = $OUTPUT_DIR;
-foreach my $stat_dir (@WORK_DIRS) {
+foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
+
 
 	# Reset global variables before processing a new work dir
 	&clear_stats();
 
-	my $in_dir = "$INPUT_DIR/$stat_dir";
-	$OUTPUT_DIR = "$ORIG_OUTPUT_DIR/$stat_dir";
+	my $in_dir = "$INPUT_DIR/$WORK_DIRS[$dx]";
+	$OUTPUT_DIR = "$ORIG_OUTPUT_DIR/$WORK_DIRS[$dx]";
+
+	# With cache mode look if the input directory already has cache files
+	if ( $CACHE && (-e "$in_dir/pg_cache.bin" || -e "$in_dir/sar_cache.bin") ) {
+		print "DEBUG: directory $in_dir has already been cached, skip it.\n" if ($DEBUG);
+		next;
+	}
 
 	# Set default sysstat file to read (binary or text format)
 	# an extract the disk devices and network interfaces list
@@ -953,81 +961,165 @@ foreach my $stat_dir (@WORK_DIRS) {
 	}
 
 	# Look at system information
-	if (-e "$in_dir/sysinfo.txt") {
+	if (-e "$in_dir/sys_cache.bin") {
+		print "DEBUG: Loading system information from cache file $in_dir/sys_cache.bin\n" if ($DEBUG);
+		&load_sys_binary($in_dir, "sys_cache.bin");
+	} elsif (-e "$in_dir/sysinfo.txt") {
+		print "DEBUG: Loading system information from file $in_dir/sysinfo.txt\n" if ($DEBUG);
 		%sysinfo = &read_sysinfo("$in_dir/sysinfo.txt");
 		$sysinfo{RELEASE}{'name'} ||= 'unknown';
 	} elsif (-e "$in_dir/sysinfo.txt.gz") {
+		print "DEBUG: Loading system information from file $in_dir/sysinfo.txt.gz\n" if ($DEBUG);
 		%sysinfo = &read_sysinfo("$in_dir/sysinfo.txt.gz");
 		$sysinfo{RELEASE}{'name'} ||= 'unknown';
 	}
+	if ($CACHE && (scalar keys %sysinfo > 0) ) {
+		print "DEBUG: Dumping system information into cache file $in_dir/sys_cache.bin\n" if ($DEBUG);
+		&dump_sys_binary($in_dir, "sys_cache.bin");
+	}
 
 	# Defined the backward level where ressources files are stored
-	my $src_base = $stat_dir;
+	my $src_base = $WORK_DIRS[$dx];
 	$src_base =~ s/\d+/../g;
 
 	# parse SQL stats files
 	if (-d "$in_dir") {
 
-		# Check if there is csv file in the input directory
-		print "DEBUG: looking for CSV file into directory $in_dir/\n" if ($DEBUG);
-		opendir(IDIR, "$in_dir") || die "FATAL: can't opendir $in_dir: $!";
-		my @files = grep { /\.csv(\.gz)?$/ } readdir(IDIR);
-		closedir(IDIR);
-		if ($#files < 0) {
-			die "FATAL: no csv file found in $in_dir";
-		}
-
-		# Detect interval from csv file
-		if (-e "$in_dir/pg_stat_database.csv" && !-z "$in_dir/pg_stat_database.csv") {
-			$INTERVAL = &detect_interval("$in_dir/pg_stat_database.csv");
-		} elsif (-e "$in_dir/pg_stat_database.csv.gz" ) {
-			$INTERVAL = &detect_interval("$in_dir/pg_stat_database.csv.gz");
-		}
-		print "DEBUG: autodetected interval value $INTERVAL\n" if ($DEBUG);
-
-		# Enable capture mode if all data file are not present
-		$CAPTURE = 1 if (!-e "$in_dir/pg_stat_connections.csv");
-
 		# Create output subdirectories if not exists yet
-		if (!-e "$OUTPUT_DIR") {
+		if (!$CACHE && !-e "$OUTPUT_DIR") {
 			my $ret = `mkdir -p $OUTPUT_DIR 2>&1`;
 			if ($ret) {
 				die "FATAL: $ret\n";
 			}
 		}
 
-		# Loop over CSV files and graphics definition to generate reports
-		foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS) {
-			if (-e "$in_dir/$k" && !-z "$in_dir/$k") {
-				if (-e "$in_dir/$k" && !-z "$in_dir/$k") {
-					&compute_postgresql_stat($in_dir, $k, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
-				}
-			} elsif (-e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz") {
-				if (-e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz") {
-					&compute_postgresql_stat($in_dir, "$k.gz", $src_base, %{$DB_GRAPH_INFOS{$k}}); 
-				}
-			} elsif ($k =~ /_all_/) {
-				my $f = $k;
-				$f =~ s/_all_/_user_/;
-				if (-e "$in_dir/$f" && !-z "$in_dir/$f") {
-					&compute_postgresql_stat($in_dir, $f, $src_base, %{$DB_GRAPH_INFOS{$k}});
-				} elsif (-e "$in_dir/$f.gz" && !-z "$in_dir/$f.gz") {
-					&compute_postgresql_stat($in_dir, "$f.gz", $src_base, %{$DB_GRAPH_INFOS{$k}});
+		my @statistics_build = ();
+		if (!-e "$in_dir/pg_cache.bin") {
+			# Check if there is csv file in the input directory
+			print "DEBUG: looking for CSV file into directory $in_dir/\n" if ($DEBUG);
+			opendir(IDIR, "$in_dir") || die "FATAL: can't opendir $in_dir: $!";
+			my @files = grep { /\.csv(\.gz)?$/ } readdir(IDIR);
+			closedir(IDIR);
+			if ($#files < 0) {
+				die "FATAL: no csv file found in $in_dir";
+			}
+
+			# Detect interval from csv file
+			if (-e "$in_dir/pg_stat_database.csv" && !-z "$in_dir/pg_stat_database.csv") {
+				$INTERVAL = &detect_interval("$in_dir/pg_stat_database.csv");
+			} elsif (-e "$in_dir/pg_stat_database.csv.gz" ) {
+				$INTERVAL = &detect_interval("$in_dir/pg_stat_database.csv.gz");
+			}
+			print "DEBUG: autodetected interval value $INTERVAL\n" if ($DEBUG);
+
+			# Enable capture mode if all data file are not present
+			if (!-e "$in_dir/pg_stat_connections.csv") {
+				$CAPTURE = 1;
+				print "DEBUG: detecting capture mode, enabling it.\n" if ($DEBUG);
+				if ($CACHE) {
+					die "FATAL: caching mode can not be used on a capture repository.\n";
 				}
 			}
+
+
+			# Loop over CSV files and graphics definition to generate reports
+			print "DEBUG: Building PostgreSQL statistics from CSV files\n" if ($DEBUG);
+			foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS) {
+				if (-e "$in_dir/$k" && !-z "$in_dir/$k") {
+					if (-e "$in_dir/$k" && !-z "$in_dir/$k") {
+						&compute_postgresql_stat($in_dir, $k, $src_base, %{$DB_GRAPH_INFOS{$k}});
+						push(@statistics_build, $k);
+					}
+				} elsif (-e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz") {
+					if (-e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz") {
+						&compute_postgresql_stat($in_dir, "$k.gz", $src_base, %{$DB_GRAPH_INFOS{$k}}); 
+						push(@statistics_build, $k);
+					}
+				} elsif ($k =~ /_all_/) {
+					my $f = $k;
+					$f =~ s/_all_/_user_/;
+					if (-e "$in_dir/$f" && !-z "$in_dir/$f") {
+						&compute_postgresql_stat($in_dir, $f, $src_base, %{$DB_GRAPH_INFOS{$k}});
+						push(@statistics_build, $f);
+					} elsif (-e "$in_dir/$f.gz" && !-z "$in_dir/$f.gz") {
+						&compute_postgresql_stat($in_dir, "$f.gz", $src_base, %{$DB_GRAPH_INFOS{$k}});
+						push(@statistics_build, $f);
+					}
+				}
+			}
+
+			if ($CACHE) {
+				print "DEBUG: Generating PostgreSQL statistics cache into $in_dir/pg_cache.bin.\n" if ($DEBUG);
+				%global_infos = ('interval' => $INTERVAL, 'in_dir' => $in_dir);
+				&dump_pg_binary($in_dir, "pg_cache.bin");
+			}
+
+		} else {
+
+			# Load statistics from cache files
+			print "DEBUG: Loading PostgreSQL statistics from cache file $in_dir/pg_cache.bin\n" if ($DEBUG);
+			&load_pg_binary($in_dir, "pg_cache.bin");
+			my $prev_val = 0;
+			my $dt = 0;
+			foreach $dt (sort {$a <=> $b} keys %all_stat_database) {
+				if ($prev_val) {
+					$dt = ($dt - $prev_val)/1000;
+					last if ($dt > 0);
+				}
+				$prev_val = $dt;
+			}
+			if ( (length($dt) >= 2) && ($dt =~ /([1234])$/) ) {
+				$dt -= $1;
+			}
+			$INTERVAL = $dt if ($dt);
+
 		}
 		
 		if (!$CACHE) {
-			# Add database general information
-			if ( (-e "$in_dir/sysinfo.txt") || (-e "$in_dir/sysinfo.txt.gz") ) {
-				foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
-					&write_database_info($db);
+
+			# Loop over statistic in memory to generate reports
+			print "DEBUG: Building PostgreSQL statistics reports\n" if ($DEBUG);
+			if ($#statistics_build > 0) {
+				foreach my $k (@statistics_build) {
+					&compute_postgresql_report($k, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
 				}
+			} else {
+				# Try to limit report generation to stats that exists in memory.
+				# The storage variable name are the same than the keys in DB_GRAPH_INFOS
+				# minus some transformation.
+				foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS) {
+					my $inmem = $k;
+					$inmem =~ s/\.csv//;
+					$inmem =~ s/\./_/g;
+					$inmem =~ s/^pg_/all_/;
+					if ($inmem eq 'pgbouncer_stats') {
+						$inmem = 'all_pgbouncer_stats';
+					}
+					if (($inmem =~ /_conf/) && ($inmem !~ /^all/)) {
+						$inmem = 'all_' . $inmem;
+					}
+					$inmem =~ s/_all_/_user_/;
+					# Skip this report if there's no statistics loaded in memory
+					next if (scalar keys %{$inmem} == 0);
+					print "DEBUG: Building report for $k (from memory \%$inmem)\n" if ($DEBUG);
+					if ($k =~ /_all_/) {
+						my $f = $k;
+						$f =~ s/_all_/_user_/;
+						&compute_postgresql_report($f, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
+					} else {
+						&compute_postgresql_report($k, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
+					}
+				}
+			}
+
+			# Add database general information
+			foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
+				&write_database_info($db);
 			}
 
 			# Terminate each database and pgbouncer html file with the footer
 			opendir(ODIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
-			@files = grep { /\.html$/ } readdir(ODIR);
+			my @files = grep { /\.html$/ } readdir(ODIR);
 			closedir(ODIR);
 			foreach my $f (@files) {
 				&end_html_file("$OUTPUT_DIR/$f");
@@ -1041,20 +1133,39 @@ foreach my $stat_dir (@WORK_DIRS) {
 
 	}
 
+	# Clear memory from PostgreSQL statistics storage
+	&clear_db_stats();
+
 	# parse SAR stats file
 	if (!$DISABLE_SAR) {
 
-		# Build sar statistics
-		if (-f "$sadc_file") {
-			print "DEBUG: looking for sadc binary data file $sadc_file\n" if ($DEBUG);
-			foreach my $id (sort keys %SAR_GRAPH_INFOS) {
-				&compute_sarstat_stats($sadc_file, %{$SAR_GRAPH_INFOS{$id}});
+		# Build sar statistics if a cache file is not present
+		if (!-e "$in_dir/sar_cache.bin") {
+			if (-f "$sadc_file") {
+				print "DEBUG: looking for sadc binary data file $sadc_file\n" if ($DEBUG);
+				foreach my $id (sort keys %SAR_GRAPH_INFOS) {
+					&compute_sarstat_stats($sadc_file, %{$SAR_GRAPH_INFOS{$id}});
+				}
+			} elsif (-f "$sar_file") {
+				print "DEBUG: looking for sar text data file $sar_file\n" if ($DEBUG);
+				foreach my $id (sort keys %SAR_GRAPH_INFOS) {
+					&compute_sarfile_stats($sar_file, %{$SAR_GRAPH_INFOS{$id}});
+				}
 			}
-		} elsif (-f "$sar_file") {
-			print "DEBUG: looking for sar text data file $sar_file\n" if ($DEBUG);
-			foreach my $id (sort keys %SAR_GRAPH_INFOS) {
-				&compute_sarfile_stats($sar_file, %{$SAR_GRAPH_INFOS{$id}});
+
+			if ($CACHE) {
+				print "DEBUG: Generating sar statistics cache into $in_dir/sar_cache.bin.\n" if ($DEBUG);
+				%global_infos = ('interval' => $INTERVAL, 'in_dir' => $in_dir);
+				push(@{$global_infos{DEVICE_LIST}}, @DEVICE_LIST);
+				push(@{$global_infos{IFACE_LIST}}, @IFACE_LIST);
+				&dump_sar_binary($in_dir, "sar_cache.bin");
 			}
+		} else {
+			#Load statistics from cache files
+			@DEVICE_LIST = ();
+			@IFACE_LIST = ();
+			print "DEBUG: Loading Sar statistics from cache file $in_dir/sar_cache.bin\n" if ($DEBUG);
+			&load_sar_binary($in_dir, "sar_cache.bin");
 		}
 
 		if (!$CACHE) {
@@ -1080,7 +1191,7 @@ foreach my $stat_dir (@WORK_DIRS) {
 			}
 
 			# Build sar statistics graphs
-			print "DEBUG: Building sar statistcs reports\n" if ($DEBUG);
+			print "DEBUG: Building sar statistics reports\n" if ($DEBUG);
 			foreach my $id (sort keys %SAR_GRAPH_INFOS) {
 				&compute_sar_graph($src_base, %{$SAR_GRAPH_INFOS{$id}});
 			}
@@ -1089,6 +1200,12 @@ foreach my $stat_dir (@WORK_DIRS) {
 			print $FH "</ul>\n";
 			&html_footer($FH);
 			$FH->close;
+		}
+	}
+
+	if (!$CACHE) {
+		if ($OUTPUT_DIR) {
+
 			# Terminate all database statistic file
 			foreach my $dev (@IFACE_LIST) {
 				$DEVFH{$dev}->print("</ul>\n");
@@ -1101,16 +1218,8 @@ foreach my $stat_dir (@WORK_DIRS) {
 				&html_footer($DEVFH{$dev}, $dev);
 				$DEVFH{$dev}->close;
 			}
-		}
-	}
 
-	if ($CACHE) {
-		print "DEBUG: Generating cache into $OUTPUT_DIR/cache.bin.\n" if ($DEBUG);
-		&dump_as_binary("$OUTPUT_DIR/cache.bin");
-		&clear_stats();
-	} else {
-
-		if ($OUTPUT_DIR) {
+			# Generate main index
 			&generate_html_index($in_dir, $src_base);
 			my $menu = &generate_html_menu($in_dir);
 			print "DEBUG: Inserting menu into all html files.\n" if ($DEBUG);
@@ -1137,6 +1246,16 @@ $menu
 				print OUT $tmp_content;
 				close(OUT);
 			}
+		}
+
+	# In cache mode if the --clean	option is enable we need to remove data file
+	} elsif ($CLEAN && (-e "$in_dir/pg_cache.bin" || -e "$in_dir/sar_cache.bin")) {
+		print "DEBUG: removing all csv and data files from $in_dir.\n" if ($DEBUG);
+		opendir(DIR, "$in_dir") || die "FATAL: can't opendir $in_dir: $!";
+		my @file_list = grep { !/^.*\.bin$/ && -f "$in_dir/$_"; } readdir(DIR);
+		closedir(DIR);
+		foreach my $f (@file_list) {
+			warn "ERROR: can not remove file $in_dir/$f: $!\n" unless(unlink("$in_dir/$f"));
 		}
 	}
 }
@@ -1230,7 +1349,7 @@ sub set_sysstat_file
 		} elsif (-f "$input_dir/sar_stats.dat.gz") {
 			$sar_file = "$input_dir/" . 'sar_stats.dat.gz';
 		}
-		if (!$sadc_file && !$sar_file) {
+		if (!$sadc_file && !$sar_file && !-e"$input_dir/sar_cache.bin") {
 			print STDERR "WARNING: No sar data file found. Consider using -S or --disable-sar command\nline option or use -i / -I option to set the path to the data file.\nContinuing normally without reporting sar statistics.\n";
 			$DISABLE_SAR = 1;
 			return;
@@ -1629,11 +1748,25 @@ sub compute_postgresql_stat
 	$fctname =~ s/_all_/_user_/;
 	$fctname =~ s/\./_/g;
 	$fctname->($in_dir, $file, $INTERVAL);
-	if (!$CACHE) {
-		$fctname .= '_report';
-		$fctname->($INTERVAL, $src_base, %data_info);
-	}
 }
+
+sub compute_postgresql_report
+{
+	my ($file, $src_base, %data_info) = @_;
+
+
+	# Compute graphs following the data file
+	my $fctname = $file;
+	$fctname =~ s/\.csv(\.gz)?//;
+	$fctname =~ s/\.gz//;
+	$fctname =~ s/_all_/_user_/;
+	$fctname =~ s/\./_/g;
+
+	print "DEBUG: creating reports from statistics $fctname.\n" if ($DEBUG);
+	$fctname .= '_report';
+	$fctname->($INTERVAL, $src_base, %data_info);
+}
+
 
 # Compute statistics of database statistics
 sub pg_stat_database
@@ -1656,76 +1789,76 @@ sub pg_stat_database
 		if ($#data >= 8) {
 
 			(($data[8] - $start_vals{$data[2]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[2]}[8]);
-			$all_database_stat{$data[0]}{$data[2]}{returned} = $tmp_val;
-			$all_database_stat{$data[0]}{all}{returned} += $tmp_val;
+			$all_stat_database{$data[0]}{$data[2]}{returned} = $tmp_val;
+			$all_stat_database{$data[0]}{all}{returned} += $tmp_val;
 
 			(($data[9] - $start_vals{$data[2]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[2]}[9]);
-			$all_database_stat{$data[0]}{$data[2]}{fetched} = $tmp_val;
-			$all_database_stat{$data[0]}{all}{fetched} += $tmp_val;
+			$all_stat_database{$data[0]}{$data[2]}{fetched} = $tmp_val;
+			$all_stat_database{$data[0]}{all}{fetched} += $tmp_val;
 
 			# Gather insert statement
 			(($data[10] - $start_vals{$data[2]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[2]}[10]);
-			$all_database_stat{$data[0]}{$data[2]}{insert} = $tmp_val;
-			$all_database_stat{$data[0]}{all}{insert} += $tmp_val;
+			$all_stat_database{$data[0]}{$data[2]}{insert} = $tmp_val;
+			$all_stat_database{$data[0]}{all}{insert} += $tmp_val;
 
 			# Gather update statement
 			(($data[11] - $start_vals{$data[2]}[11]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[11] - $start_vals{$data[2]}[11]);
-			$all_database_stat{$data[0]}{$data[2]}{update} = $tmp_val;
-			$all_database_stat{$data[0]}{all}{update} += $tmp_val;
+			$all_stat_database{$data[0]}{$data[2]}{update} = $tmp_val;
+			$all_stat_database{$data[0]}{all}{update} += $tmp_val;
 
 			# Gather delete statement
 			(($data[12] - $start_vals{$data[2]}[12]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[12] - $start_vals{$data[2]}[12]);
-			$all_database_stat{$data[0]}{$data[2]}{delete} = $tmp_val;
-			$all_database_stat{$data[0]}{all}{delete} += $tmp_val;
+			$all_stat_database{$data[0]}{$data[2]}{delete} = $tmp_val;
+			$all_stat_database{$data[0]}{all}{delete} += $tmp_val;
 
 		}
 
 		# Gather blks_read
 		(($data[6] - $start_vals{$data[2]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[2]}[6]);
-		$all_database_stat{$data[0]}{$data[2]}{blks_read} = $tmp_val;
-		$all_database_stat{$data[0]}{all}{blks_read} += $tmp_val;
+		$all_stat_database{$data[0]}{$data[2]}{blks_read} = $tmp_val;
+		$all_stat_database{$data[0]}{all}{blks_read} += $tmp_val;
 
 		# Gather blks_hit
 		(($data[7] - $start_vals{$data[2]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[2]}[7]);
-		$all_database_stat{$data[0]}{$data[2]}{blks_hit} = $tmp_val;
-		$all_database_stat{$data[0]}{all}{blks_hit} += $tmp_val;
+		$all_stat_database{$data[0]}{$data[2]}{blks_hit} = $tmp_val;
+		$all_stat_database{$data[0]}{all}{blks_hit} += $tmp_val;
 
 		# Gather number of running backend
 		if ($data[3]) {
-			$all_database_stat{$data[0]}{$data[2]}{nbackend} = $data[3];
-			$all_database_stat{$data[0]}{all}{nbackend} += $data[3];
+			$all_stat_database{$data[0]}{$data[2]}{nbackend} = $data[3];
+			$all_stat_database{$data[0]}{all}{nbackend} += $data[3];
 		}
 
 		# Gather number of committed transaction
 		(($data[4] - $start_vals{$data[2]}[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals{$data[2]}[4]);
-		$all_database_stat{$data[0]}{$data[2]}{xact_commit} = $tmp_val;
-		$all_database_stat{$data[0]}{all}{xact_commit} += $tmp_val;
+		$all_stat_database{$data[0]}{$data[2]}{xact_commit} = $tmp_val;
+		$all_stat_database{$data[0]}{all}{xact_commit} += $tmp_val;
 
 		# Gather number of rollbacked transaction
 		(($data[5] - $start_vals{$data[2]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[2]}[5]);
-		$all_database_stat{$data[0]}{$data[2]}{xact_rollback} = $tmp_val;
-		$all_database_stat{$data[0]}{all}{xact_rollback} += $tmp_val;
+		$all_stat_database{$data[0]}{$data[2]}{xact_rollback} = $tmp_val;
+		$all_stat_database{$data[0]}{all}{xact_rollback} += $tmp_val;
 
 		# Gather number of canceled queries
 		if ($#data >= 13) {
 			(($data[13] - $start_vals{$data[2]}[13]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[13] - $start_vals{$data[2]}[13]);
-			$all_database_stat{$data[0]}{$data[2]}{canceled_queries} = $tmp_val;
-			$all_database_stat{$data[0]}{all}{canceled_queries} += $tmp_val;
+			$all_stat_database{$data[0]}{$data[2]}{canceled_queries} = $tmp_val;
+			$all_stat_database{$data[0]}{all}{canceled_queries} += $tmp_val;
 		}
 
 		# Gather number of temporary data and deadlock
 		if ($#data > 15) {
 			(($data[15] - $start_vals{$data[2]}[15]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[15] - $start_vals{$data[2]}[15]);
-			$all_database_stat{$data[0]}{$data[2]}{temp_files} = $tmp_val;
-			$all_database_stat{$data[0]}{all}{temp_files} += $tmp_val;
+			$all_stat_database{$data[0]}{$data[2]}{temp_files} = $tmp_val;
+			$all_stat_database{$data[0]}{all}{temp_files} += $tmp_val;
 
 			(($data[16] - $start_vals{$data[2]}[16]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[16] - $start_vals{$data[2]}[16]);
-			$all_database_stat{$data[0]}{$data[2]}{temp_bytes} = $tmp_val;
-			$all_database_stat{$data[0]}{all}{temp_bytes} += $tmp_val;
+			$all_stat_database{$data[0]}{$data[2]}{temp_bytes} = $tmp_val;
+			$all_stat_database{$data[0]}{all}{temp_bytes} += $tmp_val;
 
 			(($data[17] - $start_vals{$data[2]}[17]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[17] - $start_vals{$data[2]}[17]);
-			$all_database_stat{$data[0]}{$data[2]}{deadlocks} = $tmp_val;
-			$all_database_stat{$data[0]}{all}{deadlocks} += $tmp_val;
+			$all_stat_database{$data[0]}{$data[2]}{deadlocks} = $tmp_val;
+			$all_stat_database{$data[0]}{all}{deadlocks} += $tmp_val;
 		}
 
 		@{$start_vals{$data[2]}} = ();
@@ -1748,20 +1881,21 @@ sub pg_stat_database_report
 	my $has_tuples = 0;
 	my $has_temp = 0;
 	my $has_conflict = 0;
-	foreach my $time (sort {$a <=> $b} keys %all_database_stat) {
+	foreach my $time (sort {$a <=> $b} keys %all_stat_database) {
 		foreach my $db (@global_databases) {
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			foreach my $k (qw(insert returned fetched update delete blks_read blks_hit nbackend xact_commit xact_rollback canceled_queries deadlocks temp_files temp_bytes)) {
-				$all_database_stat{$time}{$db}{$k} ||= 0;
-				$OVERALL_STATS{'cluster'}{$k} += $all_database_stat{$time}{$db}{$k};
-				$OVERALL_STATS{'database'}{$db}{$k} += $all_database_stat{$time}{$db}{$k};
+				$all_stat_database{$time}{$db}{$k} ||= 0;
+				$OVERALL_STATS{'cluster'}{$k} += $all_stat_database{$time}{$db}{$k};
+				$OVERALL_STATS{'database'}{$db}{$k} += $all_stat_database{$time}{$db}{$k};
+
 			}
 
 			$OVERALL_STATS{'start_date'} = $time if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} gt $time));
 			$OVERALL_STATS{'end_date'} = $time if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} lt $time));
 			# It depends on the postgresql version
 			if (!$has_tuples) {
-				foreach my $k (keys %{$all_database_stat{$time}{$db}}) {
+				foreach my $k (keys %{$all_stat_database{$time}{$db}}) {
 					if (grep(/^$k$/, 'insert','returned','fetched','update','delete')) {
 						$has_tuples = 1;
 						last;
@@ -1769,35 +1903,35 @@ sub pg_stat_database_report
 				}
 			}
 			if ($has_tuples) {
-				$database_stat{$db}{insert} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{insert}/$interval)) . '],';
-				$database_stat{$db}{returned} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{returned}/$interval)) . '],';
-				$database_stat{$db}{fetched} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{fetched}/$interval)) . '],';
-				$database_stat{$db}{update} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{update}/$interval)) . '],';
-				$database_stat{$db}{delete} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{delete}/$interval)) . '],';
-				$total_query_type{$db}{'all'} +=  $all_database_stat{$time}{$db}{insert} + $all_database_stat{$time}{$db}{returned} + $all_database_stat{$time}{$db}{update} + $all_database_stat{$time}{$db}{delete};
+				$database_stat{$db}{insert} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{insert}/$interval)) . '],';
+				$database_stat{$db}{returned} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{returned}/$interval)) . '],';
+				$database_stat{$db}{fetched} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{fetched}/$interval)) . '],';
+				$database_stat{$db}{update} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{update}/$interval)) . '],';
+				$database_stat{$db}{delete} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{delete}/$interval)) . '],';
+				$total_query_type{$db}{'all'} +=  $all_stat_database{$time}{$db}{insert} + $all_stat_database{$time}{$db}{returned} + $all_stat_database{$time}{$db}{update} + $all_stat_database{$time}{$db}{delete};
 
-				$total_query_type{$db}{'insert'} += $all_database_stat{$time}{$db}{insert};
-				$total_query_type{$db}{'delete'} += $all_database_stat{$time}{$db}{delete};
-				$total_query_type{$db}{'update'} += $all_database_stat{$time}{$db}{update};
-				$total_query_type{$db}{'select'} += $all_database_stat{$time}{$db}{returned};
+				$total_query_type{$db}{'insert'} += $all_stat_database{$time}{$db}{insert};
+				$total_query_type{$db}{'delete'} += $all_stat_database{$time}{$db}{delete};
+				$total_query_type{$db}{'update'} += $all_stat_database{$time}{$db}{update};
+				$total_query_type{$db}{'select'} += $all_stat_database{$time}{$db}{returned};
 			}
-			$all_database_stat{$time}{$db}{blks_read} ||= 0;
-			$all_database_stat{$time}{$db}{blks_hit} ||= 0;
-			$database_stat{$db}{blks_read} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{blks_read}/$interval)) . '],';
-			$database_stat{$db}{blks_hit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{blks_hit}/$interval)) . '],';
+			$all_stat_database{$time}{$db}{blks_read} ||= 0;
+			$all_stat_database{$time}{$db}{blks_hit} ||= 0;
+			$database_stat{$db}{blks_read} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{blks_read}/$interval)) . '],';
+			$database_stat{$db}{blks_hit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{blks_hit}/$interval)) . '],';
 
-			if (($all_database_stat{$time}{$db}{blks_read} + $all_database_stat{$time}{$db}{blks_hit}) > 0) {
-				$database_stat{$db}{ratio_hit_miss} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{blks_hit}*100)/($all_database_stat{$time}{$db}{blks_read} + $all_database_stat{$time}{$db}{blks_hit})) . '],';
+			if (($all_stat_database{$time}{$db}{blks_read} + $all_stat_database{$time}{$db}{blks_hit}) > 0) {
+				$database_stat{$db}{ratio_hit_miss} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{blks_hit}*100)/($all_stat_database{$time}{$db}{blks_read} + $all_stat_database{$time}{$db}{blks_hit})) . '],';
 			} else {
 				$database_stat{$db}{ratio_hit_miss} .= '[' . $time . ',0],';
 			}
-			$database_stat{$db}{nbackend} .= '[' . $time . ',' . ($all_database_stat{$time}{$db}{nbackend}||0) . '],';
-			$has_conn{$db} = 1 if ($all_database_stat{$time}{$db}{nbackend});
-			$database_stat{$db}{xact_commit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{xact_commit}||0)/$interval) . '],';
-			$database_stat{$db}{xact_rollback} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{xact_rollback}||0)/$interval) . '],';
+			$database_stat{$db}{nbackend} .= '[' . $time . ',' . ($all_stat_database{$time}{$db}{nbackend}||0) . '],';
+			$has_conn{$db} = 1 if ($all_stat_database{$time}{$db}{nbackend});
+			$database_stat{$db}{xact_commit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{xact_commit}||0)/$interval) . '],';
+			$database_stat{$db}{xact_rollback} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{xact_rollback}||0)/$interval) . '],';
 			# It depends on the postgresql version
 			if (!$has_conflict) {
-				foreach my $k (keys %{$all_database_stat{$time}{$db}}) {
+				foreach my $k (keys %{$all_stat_database{$time}{$db}}) {
 					if ($k eq 'canceled_queries') {
 						$has_conflict = 1;
 						last;
@@ -1805,11 +1939,11 @@ sub pg_stat_database_report
 				}
 			}
 			if ($has_conflict) {
-				$database_stat{$db}{canceled_queries} .= '[' . $time . ',' . ($all_database_stat{$time}{$db}{canceled_queries}||0) . '],';
+				$database_stat{$db}{canceled_queries} .= '[' . $time . ',' . ($all_stat_database{$time}{$db}{canceled_queries}||0) . '],';
 			}
 			# It depends on the postgresql version
 			if (!$has_temp) {
-				foreach my $k (keys %{$all_database_stat{$time}{$db}}) {
+				foreach my $k (keys %{$all_stat_database{$time}{$db}}) {
 					if (grep(/^$k$/, 'deadlocks','temp_files','temp_bytes')) {
 						$has_temp = 1;
 						last;
@@ -1817,15 +1951,13 @@ sub pg_stat_database_report
 				}
 			}
 			if ($has_temp) {
-				$database_stat{$db}{deadlocks} .= '[' . $time . ',' . ($all_database_stat{$time}{$db}{deadlocks}||0) . '],';
-				$database_stat{$db}{temp_files} .= '[' . $time . ',' . ($all_database_stat{$time}{$db}{temp_files}||0) . '],';
-				$database_stat{$db}{temp_bytes} .= '[' . $time . ',' . sprintf("%0.2f", ($all_database_stat{$time}{$db}{temp_bytes}||0)/$interval) . '],';
+				$database_stat{$db}{deadlocks} .= '[' . $time . ',' . ($all_stat_database{$time}{$db}{deadlocks}||0) . '],';
+				$database_stat{$db}{temp_files} .= '[' . $time . ',' . ($all_stat_database{$time}{$db}{temp_files}||0) . '],';
+				$database_stat{$db}{temp_bytes} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{temp_bytes}||0)/$interval) . '],';
 			}
 		}
-		delete $all_database_stat{$time};
 	}
-	%all_database_stat = ();
-	@global_databases  = ();
+	%all_stat_database = ();
 
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		foreach my $db (sort keys %database_stat) {
@@ -2004,24 +2136,24 @@ sub pg_stat_database_conflicts
 		push(@{$start_vals{$data[2]}}, @data) if ($#{$start_vals{$data[2]}} < 0);
 
 		(($data[3] - $start_vals{$data[2]}[3]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3] - $start_vals{$data[2]}[3]);
-		$all_conflict_stat{$data[2]}{tablespace} += $tmp_val;
-		$all_conflict_stat{'all'}{tablespace} += $tmp_val;
+		$all_stat_database_conflicts{$data[2]}{tablespace} += $tmp_val;
+		$all_stat_database_conflicts{'all'}{tablespace} += $tmp_val;
 
 		(($data[4] - $start_vals{$data[2]}[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals{$data[2]}[4]);
-		$all_conflict_stat{$data[2]}{lock} += $tmp_val;
-		$all_conflict_stat{'all'}{lock} += $tmp_val;
+		$all_stat_database_conflicts{$data[2]}{lock} += $tmp_val;
+		$all_stat_database_conflicts{'all'}{lock} += $tmp_val;
 
 		(($data[5] - $start_vals{$data[2]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[2]}[5]);
-		$all_conflict_stat{$data[2]}{snapshot} += $tmp_val;
-		$all_conflict_stat{'all'}{snapshot} += $tmp_val;
+		$all_stat_database_conflicts{$data[2]}{snapshot} += $tmp_val;
+		$all_stat_database_conflicts{'all'}{snapshot} += $tmp_val;
 
 		(($data[6] - $start_vals{$data[2]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[2]}[6]);
-		$all_conflict_stat{$data[2]}{bufferpin} += $tmp_val;
-		$all_conflict_stat{'all'}{bufferpin} += $tmp_val;
+		$all_stat_database_conflicts{$data[2]}{bufferpin} += $tmp_val;
+		$all_stat_database_conflicts{'all'}{bufferpin} += $tmp_val;
 
 		(($data[7] - $start_vals{$data[2]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[2]}[7]);
-		$all_conflict_stat{$data[2]}{deadlock} += $tmp_val;
-		$all_conflict_stat{'all'}{deadlock} += $tmp_val;
+		$all_stat_database_conflicts{$data[2]}{deadlock} += $tmp_val;
+		$all_stat_database_conflicts{'all'}{deadlock} += $tmp_val;
 
 		@{$start_vals{$data[2]}} = ();
 		push(@{$start_vals{$data[2]}}, @data);
@@ -2038,21 +2170,21 @@ sub pg_stat_database_conflicts_report
 	my %database_stat = ();
 	my %total_count = ();
 	my $id = &get_data_id('database-conflicts', %data_info);
-	foreach my $db (sort keys %all_conflict_stat) {
+	foreach my $db (sort keys %all_stat_database_conflicts) {
 
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		my $total = 0;
-		foreach my $k (sort keys %{$all_conflict_stat{$db}}) {
-			$total += $all_conflict_stat{$db}{$k};
+		foreach my $k (sort keys %{$all_stat_database_conflicts{$db}}) {
+			$total += $all_stat_database_conflicts{$db}{$k};
 		}
 		next if (!$total);
 		my %conflict_type = ();
 		if ($conflict_type{tablespace} || $conflict_type{lock} || $conflict_type{snapshot} || $conflict_type{bufferpin} || $conflict_type{deadlock}) {
-			$conflict_type{tablespace} = sprintf("%0.2f", ($all_conflict_stat{$db}{'tablespace'}*100)/$total);
-			$conflict_type{lock} = sprintf("%0.2f", ($all_conflict_stat{$db}{'lock'}*100)/$total);
-			$conflict_type{snapshot} = sprintf("%0.2f", ($all_conflict_stat{$db}{'snapshot'}*100)/$total);
-			$conflict_type{bufferpin} =  sprintf("%0.2f", ($all_conflict_stat{$db}{'bufferpin'}*100)/$total);
-			$conflict_type{deadlock} =  sprintf("%0.2f", ($all_conflict_stat{$db}{'deadlock'}*100)/$total);
+			$conflict_type{tablespace} = sprintf("%0.2f", ($all_stat_database_conflicts{$db}{'tablespace'}*100)/$total);
+			$conflict_type{lock} = sprintf("%0.2f", ($all_stat_database_conflicts{$db}{'lock'}*100)/$total);
+			$conflict_type{snapshot} = sprintf("%0.2f", ($all_stat_database_conflicts{$db}{'snapshot'}*100)/$total);
+			$conflict_type{bufferpin} =  sprintf("%0.2f", ($all_stat_database_conflicts{$db}{'bufferpin'}*100)/$total);
+			$conflict_type{deadlock} =  sprintf("%0.2f", ($all_stat_database_conflicts{$db}{'deadlock'}*100)/$total);
 		}
 		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html", $src_base);
 		if ($db ne 'all') {
@@ -2064,7 +2196,7 @@ sub pg_stat_database_conflicts_report
 		}
 		$dbfh->close();
 	}
-	%all_conflict_stat = ();
+	%all_stat_database_conflicts = ();
 }
 
 # Compute statistics of database size statistics
@@ -2079,10 +2211,12 @@ sub pg_database_size
 		next if (!&normalize_line(\@data));
 		push(@global_databases, $data[2]) if (!grep(/^$data[2]$/, @global_databases));
 		# Get database size statistics
-		$all_dbsize_stat{$data[0]}{$data[2]} = $data[3];
-		$all_dbsize_stat{$data[0]}{'all'} += $data[3];
+		$all_database_size{$data[0]}{$data[2]} = $data[3];
+		$all_database_size{$data[0]}{'all'} += $data[3];
+		push(@global_databases, $data[2]) if (!grep(/^$data[2]$/, @global_databases));
 	}
 	$curfh->close();
+	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
 }
 
 # Compute graphs of database size statistics
@@ -2092,15 +2226,15 @@ sub pg_database_size_report
 
 	my %database_stat = ();
 	my $total_val = 0;
-	foreach my $t (sort {$a <=> $b} keys %all_dbsize_stat) {
+	foreach my $t (sort {$a <=> $b} keys %all_database_size) {
 		foreach my $db (@global_databases) {
-			$database_stat{$db}{size} .= '[' . $t . ',' . ($all_dbsize_stat{$t}{$db} || 0) . '],';
-			$OVERALL_STATS{'database'}{$db}{'size'} = $all_dbsize_stat{$t}{$db};
+			$database_stat{$db}{size} .= '[' . $t . ',' . ($all_database_size{$t}{$db} || 0) . '],';
+			$OVERALL_STATS{'database'}{$db}{'size'} = $all_database_size{$t}{$db};
 			$OVERALL_STATS{'start_date'} = $t if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} gt $t));
 			$OVERALL_STATS{'end_date'} = $t if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} lt $t));
 		}
 	}
-	%all_dbsize_stat = ();
+	%all_database_size = ();
 
 	my $id = &get_data_id('database-size', %data_info);
 	my %data = ();
@@ -2115,6 +2249,7 @@ sub pg_database_size_report
 		$dbfh->close();
 		delete $database_stat{$db}{size};
 	}
+
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html", $src_base);
 	if (!$CAPTURE) {
 		print $fhcluster &flotr2_linegraph_hash($IDX++, 'cluster-size', \%{$data_info{$id}}, 'all', %data);
@@ -2153,8 +2288,8 @@ sub pg_database_size_report
     </li>
 };
 	}
-
 	$fhcluster->close();
+
 }
 
 # Compute statistics of tablespace size
@@ -2174,11 +2309,13 @@ sub pg_tablespace_size
 		push(@global_tbspnames, $data[1]) if (!grep(/^$data[1]$/, @global_tbspnames));
 
 		# Get tablespace size statistics
-		$all_tablespace_stat{$data[0]}{$data[1]}{size} = $data[2];
-		$all_tablespace_stat{$data[0]}{$data[1]}{location} = $data[3];
-		$all_tablespace_stat{$data[0]}{'all'}{size} += $data[2];
+		$all_tablespace_size{$data[0]}{$data[1]}{size} = $data[2];
+		$all_tablespace_size{$data[0]}{$data[1]}{location} = $data[3];
+		$all_tablespace_size{$data[0]}{'all'}{size} += $data[2];
 	}
 	$curfh->close();
+	push(@global_tbspnames, 'all') if ($#global_tbspnames > 0);
+
 }
 
 # Compute graphs of tablespace size
@@ -2190,15 +2327,13 @@ sub pg_tablespace_size_report
 	my %data = ();
 	my $print_after = '';
 	if (!$CAPTURE) {
-		push(@global_tbspnames, 'all') if ($#global_tbspnames > 0);
-
 		my %tablespace_stat = ();
-		foreach my $t (sort {$a <=> $b} keys %all_tablespace_stat) {
+		foreach my $t (sort {$a <=> $b} keys %all_tablespace_size) {
 			foreach my $tbsp (@global_tbspnames) {
-				$tablespace_stat{$tbsp}{size} .= '[' . $t . ',' . ($all_tablespace_stat{$t}{$tbsp}{size}||0) . '],';
+				$tablespace_stat{$tbsp}{size} .= '[' . $t . ',' . ($all_tablespace_size{$t}{$tbsp}{size}||0) . '],';
 				if ($tbsp ne 'all') {
-					$OVERALL_STATS{'tablespace'}{$tbsp}{'size'} = $all_tablespace_stat{$t}{$tbsp}{size};
-					$OVERALL_STATS{'tablespace'}{$tbsp}{'location'} = $all_tablespace_stat{$t}{$tbsp}{location};
+					$OVERALL_STATS{'tablespace'}{$tbsp}{'size'} = $all_tablespace_size{$t}{$tbsp}{size};
+					$OVERALL_STATS{'tablespace'}{$tbsp}{'location'} = $all_tablespace_size{$t}{$tbsp}{location};
 				}
 			}
 		}
@@ -2212,7 +2347,7 @@ sub pg_tablespace_size_report
 			}
 		}
 	}
-	%all_tablespace_stat = ();
+	%all_tablespace_size = ();
 
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html", $src_base);
 	if (!$CAPTURE) {
@@ -2276,46 +2411,46 @@ sub pg_stat_user_tables
 		push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
 
 		# Stores last manual vacuum/analyze
-		$all_usertable_stat{$data[1]}{$data[4]}{last_vacuum} = $data[15] if ($data[15]);
-		$all_usertable_stat{$data[1]}{$data[4]}{last_autovacuum} = $data[16] if ($data[16]);
-		$all_usertable_stat{$data[1]}{$data[4]}{last_analyze} = $data[17] if ($data[17]);
-		$all_usertable_stat{$data[1]}{$data[4]}{last_autoanalyze} = $data[18] if ($data[18]);
+		$all_stat_user_tables{$data[1]}{$data[4]}{last_vacuum} = $data[15] if ($data[15]);
+		$all_stat_user_tables{$data[1]}{$data[4]}{last_autovacuum} = $data[16] if ($data[16]);
+		$all_stat_user_tables{$data[1]}{$data[4]}{last_analyze} = $data[17] if ($data[17]);
+		$all_stat_user_tables{$data[1]}{$data[4]}{last_autoanalyze} = $data[18] if ($data[18]);
 
 		# Get database statistics
 		(($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]);
 		$all_vacuum_stat{$data[1]}{$data[4]}{seq_scan} += $tmp_val;
-		$all_usertable_stat{$data[1]}{$data[4]}{seq_scan} = $data[5] || 0;
+		$all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} = $data[5] || 0;
 		(($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]);
 		$all_vacuum_stat{$data[1]}{$data[4]}{idx_scan} += $tmp_val;
-		$all_usertable_stat{$data[1]}{$data[4]}{idx_scan} = $data[6] || 0;
+		$all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} = $data[6] || 0;
 		(($data[9] - $start_vals{$data[1]}{$data[4]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[4]}[9]);
 		$all_vacuum_stat{$data[1]}{$data[4]}{n_tup_ins} += $tmp_val;
-		$all_usertable_stat{$data[1]}{$data[4]}{n_tup_ins} = $data[9] || 0;
+		$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} = $data[9] || 0;
 		(($data[10] - $start_vals{$data[1]}{$data[4]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[1]}{$data[4]}[10]);
 		$all_vacuum_stat{$data[1]}{$data[4]}{n_tup_upd} += $tmp_val;
-		$all_usertable_stat{$data[1]}{$data[4]}{n_tup_upd} = $data[10] || 0;
+		$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} = $data[10] || 0;
 		(($data[11] - $start_vals{$data[1]}{$data[4]}[11]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[11] - $start_vals{$data[1]}{$data[4]}[11]);
 		$all_vacuum_stat{$data[1]}{$data[4]}{n_tup_del} += $tmp_val;
-		$all_usertable_stat{$data[1]}{$data[4]}{n_tup_del} = $data[11] || 0;
+		$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} = $data[11] || 0;
 		(($data[12] - $start_vals{$data[1]}{$data[4]}[12]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[12] - $start_vals{$data[1]}{$data[4]}[12]);
 		$all_vacuum_stat{$data[1]}{$data[4]}{n_tup_hot_upd} += $tmp_val;
-		$all_usertable_stat{$data[1]}{$data[4]}{n_tup_hot_upd} = $data[12] || 0;
-		$all_usertable_stat{$data[1]}{$data[4]}{n_dead_tup} = $data[14];
-		$all_usertable_stat{$data[1]}{$data[4]}{n_live_tup} = $data[13];
-		$all_usertable_stat{$data[1]}{$data[4]}{dead_vs_live} = sprintf("%.2f", ($data[14]*100)/(($data[13]+$data[14])||1));
+		$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} = $data[12] || 0;
+		$all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup} = $data[14];
+		$all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup} = $data[13];
+		$all_stat_user_tables{$data[1]}{$data[4]}{dead_vs_live} = sprintf("%.2f", ($data[14]*100)/(($data[13]+$data[14])||1));
 		if ($#data > 19) {
 			(($data[19] - $start_vals{$data[1]}{$data[4]}[19]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[19] - $start_vals{$data[1]}{$data[4]}[19]);
 			$all_vacuum_stat{$data[1]}{$data[4]}{vacuum_count} += $tmp_val;
-			$all_usertable_stat{$data[1]}{$data[4]}{vacuum_count} = $data[19];
+			$all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} = $data[19];
 			(($data[20] - $start_vals{$data[1]}{$data[4]}[20]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[20] - $start_vals{$data[1]}{$data[4]}[20]);
 			$all_vacuum_stat{$data[1]}{$data[4]}{autovacuum_count} += $tmp_val;
-			$all_usertable_stat{$data[1]}{$data[4]}{autovacuum_count} = $data[20];
+			$all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} = $data[20];
 			(($data[21] - $start_vals{$data[1]}{$data[4]}[21]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[21] - $start_vals{$data[1]}{$data[4]}[21]);
 			$all_vacuum_stat{$data[1]}{$data[4]}{analyze_count} += $tmp_val;
-			$all_usertable_stat{$data[1]}{$data[4]}{analyze_count} = $data[21];
+			$all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} = $data[21];
 			(($data[22] - $start_vals{$data[1]}{$data[4]}[22]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[22] - $start_vals{$data[1]}{$data[4]}[22]);
 			$all_vacuum_stat{$data[1]}{$data[4]}{autoanalyze_count} += $tmp_val;
-			$all_usertable_stat{$data[1]}{$data[4]}{autoanalyze_count} = $data[22];
+			$all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} = $data[22];
 		}
 		@{$start_vals{$data[1]}{$data[4]}} = ();
 		push(@{$start_vals{$data[1]}{$data[4]}}, @data);
@@ -2420,10 +2555,10 @@ sub pg_stat_user_tables_report
 					if (!$all_vacuum_stat{$db}{$tb}{seq_scan} && !$all_vacuum_stat{$db}{$tb}{idx_scan}) {
 						next;
 						foreach ('idx_scan','seq_scan') {
-							$all_usertable_stat{$db}{$tb}{$_} ||= 0;
+							$all_stat_user_tables{$db}{$tb}{$_} ||= 0;
 						}
-						$all_usertable_stat{$db}{$tb}{idx_scan_vs_seq_scan} = sprintf("%0.2f", ($all_usertable_stat{$db}{$tb}{idx_scan}*100)/(($all_usertable_stat{$db}{$tb}{seq_scan}+$all_usertable_stat{$db}{$tb}{idx_scan})||1));
-						$table_data = qq{<tr><th>$tb</th><td>$all_usertable_stat{$db}{$tb}{seq_scan}</td><td>$all_usertable_stat{$db}{$tb}{idx_scan}</td><td>$all_usertable_stat{$db}{$tb}{idx_scan_vs_seq_scan}%</td></tr>};
+						$all_stat_user_tables{$db}{$tb}{idx_scan_vs_seq_scan} = sprintf("%0.2f", ($all_stat_user_tables{$db}{$tb}{idx_scan}*100)/(($all_stat_user_tables{$db}{$tb}{seq_scan}+$all_stat_user_tables{$db}{$tb}{idx_scan})||1));
+						$table_data = qq{<tr><th>$tb</th><td>$all_stat_user_tables{$db}{$tb}{seq_scan}</td><td>$all_stat_user_tables{$db}{$tb}{idx_scan}</td><td>$all_stat_user_tables{$db}{$tb}{idx_scan_vs_seq_scan}%</td></tr>};
 					} else {
 						$has_table_data = 1;
 						foreach ('idx_scan','seq_scan') {
@@ -2436,9 +2571,9 @@ sub pg_stat_user_tables_report
 					if (!$all_vacuum_stat{$db}{$tb}{n_tup_ins} && !$all_vacuum_stat{$db}{$tb}{n_tup_upd} && !$all_vacuum_stat{$db}{$tb}{n_tup_del} && !$all_vacuum_stat{$db}{$tb}{n_tup_hot_upd}) {
 						next;
 						foreach ('n_tup_ins','n_tup_upd','n_tup_del','n_tup_hot_upd') {
-							$all_usertable_stat{$db}{$tb}{$_} ||= 0;
+							$all_stat_user_tables{$db}{$tb}{$_} ||= 0;
 						}
-						$table_data = qq{<tr><th>$tb</th><td>$all_usertable_stat{$db}{$tb}{n_tup_ins}</td><td>$all_usertable_stat{$db}{$tb}{n_tup_upd}</td><td>$all_usertable_stat{$db}{$tb}{n_tup_del}</td><td>$all_usertable_stat{$db}{$tb}{n_tup_hot_upd}</td></tr>};
+						$table_data = qq{<tr><th>$tb</th><td>$all_stat_user_tables{$db}{$tb}{n_tup_ins}</td><td>$all_stat_user_tables{$db}{$tb}{n_tup_upd}</td><td>$all_stat_user_tables{$db}{$tb}{n_tup_del}</td><td>$all_stat_user_tables{$db}{$tb}{n_tup_hot_upd}</td></tr>};
 					} else {
 						$has_table_data = 1;
 						foreach ('n_tup_ins','n_tup_upd','n_tup_del','n_tup_hot_upd') {
@@ -2447,21 +2582,21 @@ sub pg_stat_user_tables_report
 						$table_data = qq{<tr><th>$tb</th><td>$all_vacuum_stat{$db}{$tb}{n_tup_ins}</td><td>$all_vacuum_stat{$db}{$tb}{n_tup_upd}</td><td>$all_vacuum_stat{$db}{$tb}{n_tup_del}</td><td>$all_vacuum_stat{$db}{$tb}{n_tup_hot_upd}</td></tr>};
 					}
 				} elsif ($data_info{$id}{name} eq 'table-kind-tuples') {
-					if (!$all_usertable_stat{$db}{$tb}{n_live_tup} && !$all_usertable_stat{$db}{$tb}{n_dead_tup}) {
+					if (!$all_stat_user_tables{$db}{$tb}{n_live_tup} && !$all_stat_user_tables{$db}{$tb}{n_dead_tup}) {
 						next;
 					}
 					$has_table_data = 1;
 					foreach ('n_live_tup','n_dead_tup','dead_vs_live') {
-						$all_usertable_stat{$db}{$tb}{$_} ||= 0;
+						$all_stat_user_tables{$db}{$tb}{$_} ||= 0;
 					}
-					$table_data = qq{<tr><th>$tb</th><td>$all_usertable_stat{$db}{$tb}{n_live_tup}</td><td>$all_usertable_stat{$db}{$tb}{n_dead_tup}</td><td>$all_usertable_stat{$db}{$tb}{dead_vs_live}%</td></tr>};
+					$table_data = qq{<tr><th>$tb</th><td>$all_stat_user_tables{$db}{$tb}{n_live_tup}</td><td>$all_stat_user_tables{$db}{$tb}{n_dead_tup}</td><td>$all_stat_user_tables{$db}{$tb}{dead_vs_live}%</td></tr>};
 				} elsif ( $do_vacuum && ($data_info{$id}{name} eq 'table-vacuums-analyzes') ) {
 					if (!$all_vacuum_stat{$db}{$tb}{vacuum_count} && !$all_vacuum_stat{$db}{$tb}{autovacuum_count} && !$all_vacuum_stat{$db}{$tb}{analyze_count} && !$all_vacuum_stat{$db}{$tb}{analyze_count}) {
 						next;
 						foreach ('vacuum_count','autovacuum_count','analyze_count','autoanalyze_count') {
-							$all_usertable_stat{$db}{$tb}{$_} ||= 0;
+							$all_stat_user_tables{$db}{$tb}{$_} ||= 0;
 						}
-						$table_data = qq{<tr><th>$tb</th><td>$all_usertable_stat{$db}{$tb}{vacuum_count}</td><td>$all_usertable_stat{$db}{$tb}{autovacuum_count}</td><td>$all_usertable_stat{$db}{$tb}{analyze_count}</td><td>$all_usertable_stat{$db}{$tb}{autoanalyze_count}</td>};
+						$table_data = qq{<tr><th>$tb</th><td>$all_stat_user_tables{$db}{$tb}{vacuum_count}</td><td>$all_stat_user_tables{$db}{$tb}{autovacuum_count}</td><td>$all_stat_user_tables{$db}{$tb}{analyze_count}</td><td>$all_stat_user_tables{$db}{$tb}{autoanalyze_count}</td>};
 					} else  {
 						$has_table_data = 1;
 						foreach ('vacuum_count','autovacuum_count','analyze_count','autoanalyze_count') {
@@ -2470,9 +2605,9 @@ sub pg_stat_user_tables_report
 						$table_data = qq{<tr><th>$tb</th><td>$all_vacuum_stat{$db}{$tb}{vacuum_count}</td><td>$all_vacuum_stat{$db}{$tb}{autovacuum_count}</td><td>$all_vacuum_stat{$db}{$tb}{analyze_count}</td><td>$all_vacuum_stat{$db}{$tb}{autoanalyze_count}</td>};
 					}
 					foreach ('last_vacuum','last_autovacuum','last_analyze','last_autoanalyze') {
-						$all_usertable_stat{$db}{$tb}{$_} ||= '-';
+						$all_stat_user_tables{$db}{$tb}{$_} ||= '-';
 					}
-					$table_data .= qq{<td>$all_usertable_stat{$db}{$tb}{last_vacuum}</td><td>$all_usertable_stat{$db}{$tb}{last_autovacuum}</td><td>$all_usertable_stat{$db}{$tb}{last_analyze}</td><td>$all_usertable_stat{$db}{$tb}{last_autoanalyze}</td></tr>};
+					$table_data .= qq{<td>$all_stat_user_tables{$db}{$tb}{last_vacuum}</td><td>$all_stat_user_tables{$db}{$tb}{last_autovacuum}</td><td>$all_stat_user_tables{$db}{$tb}{last_analyze}</td><td>$all_stat_user_tables{$db}{$tb}{last_autoanalyze}</td></tr>};
 				}
 				if ($table_data) {
 					print $fhtable qq{$table_data};
@@ -2496,6 +2631,7 @@ sub pg_stat_user_tables_report
 			$fhtable->close;
 		}
 	}
+	%all_stat_user_tables = ();
 }
 
 # Compute statistics about index scan
@@ -2519,13 +2655,13 @@ sub pg_stat_user_indexes
 
 		# Get database statistics
 		(($data[7] - $start_vals{$data[1]}{$data[6]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[6]}[7]);
-		$all_userindex_stat{$data[1]}{$data[6]}{idx_scan} += $tmp_val;
+		$all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} += $tmp_val;
 
 		(($data[8] - $start_vals{$data[1]}{$data[6]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[6]}[8]);
-		$all_userindex_stat{$data[1]}{$data[6]}{idx_tup_read} += $tmp_val;
+		$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} += $tmp_val;
 
 		(($data[9] - $start_vals{$data[1]}{$data[6]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[6]}[9]);
-		$all_userindex_stat{$data[1]}{$data[6]}{idx_tup_fetch} += $tmp_val;
+		$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} += $tmp_val;
 
 		@{$start_vals{$data[1]}{$data[6]}} = ();
 		push(@{$start_vals{$data[1]}{$data[6]}}, @data);
@@ -2540,7 +2676,7 @@ sub pg_stat_user_indexes_report
 
 	return if ($NO_TB_STAT);
 
-	foreach my $db (keys %all_userindex_stat) {
+	foreach my $db (keys %all_stat_user_indexes) {
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^index-/);
 			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
@@ -2581,19 +2717,19 @@ sub pg_stat_user_indexes_report
 				<tbody>
 };
 			my $found_table_stat = 0;
-			foreach my $idx (sort keys %{$all_userindex_stat{$db}}) {
+			foreach my $idx (sort keys %{$all_stat_user_indexes{$db}}) {
 				next if ($idx eq 'all');
 				next if (($#INCLUDE_TB >= 0) && !grep(/^$idx$/, @INCLUDE_TB));
 				my $table_data = '';
 				if ($data_info{$id}{name} eq 'index-scan') {
-					if (!$all_userindex_stat{$db}{$idx}{idx_scan} && !$all_userindex_stat{$db}{$idx}{idx_tup_read} && !$all_userindex_stat{$db}{$idx}{idx_tup_fetch}) {
+					if (!$all_stat_user_indexes{$db}{$idx}{idx_scan} && !$all_stat_user_indexes{$db}{$idx}{idx_tup_read} && !$all_stat_user_indexes{$db}{$idx}{idx_tup_fetch}) {
 						next;
 					}
 					$found_table_stat = 1;
 					foreach ('idx_scan','idx_tup_read','idx_tup_fetch') {
-						$all_userindex_stat{$db}{$idx}{$_} ||= 0;
+						$all_stat_user_indexes{$db}{$idx}{$_} ||= 0;
 					}
-					$table_data = qq{<tr><th>$idx</th><td>$all_userindex_stat{$db}{$idx}{idx_scan}</td><td>$all_userindex_stat{$db}{$idx}{idx_tup_read}</td><td>$all_userindex_stat{$db}{$idx}{idx_tup_fetch}</td></tr>};
+					$table_data = qq{<tr><th>$idx</th><td>$all_stat_user_indexes{$db}{$idx}{idx_scan}</td><td>$all_stat_user_indexes{$db}{$idx}{idx_tup_read}</td><td>$all_stat_user_indexes{$db}{$idx}{idx_tup_fetch}</td></tr>};
 				}
 				if ($table_data) {
 					print $fhtable qq{$table_data} if ($table_data);
@@ -2617,6 +2753,7 @@ sub pg_stat_user_indexes_report
 			$fhtable->close;
 		}
 	}
+	%all_stat_user_tables = ();
 }
 
 # Compute stats for table I/O
@@ -2640,28 +2777,28 @@ sub pg_statio_user_tables
 		push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
 
 		(($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]);
-		$all_statio_usertable_stat{$data[0]}{$data[1]}{$data[4]}{heap_blks_read} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{heap_blks_read} = int($tmp_val/$interval);
 
 		(($data[6] - $start_vals{$data[1]}{$data[4]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[1]}{$data[4]}[6]);
-		$all_statio_usertable_stat{$data[0]}{$data[1]}{$data[4]}{heap_blks_hit} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{heap_blks_hit} = int($tmp_val/$interval);
 
 		(($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]);
-		$all_statio_usertable_stat{$data[0]}{$data[1]}{$data[4]}{idx_blks_read} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{idx_blks_read} = int($tmp_val/$interval);
 
 		(($data[8] - $start_vals{$data[1]}{$data[4]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[4]}[8]);
-		$all_statio_usertable_stat{$data[0]}{$data[1]}{$data[4]}{idx_blks_hit} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{idx_blks_hit} = int($tmp_val/$interval);
 
 		(($data[9] - $start_vals{$data[1]}{$data[4]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[4]}[9]);
-		$all_statio_usertable_stat{$data[0]}{$data[1]}{$data[4]}{toast_blks_read} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{toast_blks_read} = int($tmp_val/$interval);
 
 		(($data[10] - $start_vals{$data[1]}{$data[4]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[1]}{$data[4]}[10]);
-		$all_statio_usertable_stat{$data[0]}{$data[1]}{$data[4]}{toast_blks_hit} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{toast_blks_hit} = int($tmp_val/$interval);
 
 		(($data[11] - $start_vals{$data[1]}{$data[4]}[11]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[11] - $start_vals{$data[1]}{$data[4]}[11]);
-		$all_statio_usertable_stat{$data[0]}{$data[1]}{$data[4]}{tidx_blks_read} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{tidx_blks_read} = int($tmp_val/$interval);
 
 		(($data[12] - $start_vals{$data[1]}{$data[4]}[12]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[12] - $start_vals{$data[1]}{$data[4]}[12]);
-		$all_statio_usertable_stat{$data[0]}{$data[1]}{$data[4]}{tidx_blks_hit} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{tidx_blks_hit} = int($tmp_val/$interval);
 
 		@{$start_vals{$data[1]}{$data[4]}} = ();
 		push(@{$start_vals{$data[1]}{$data[4]}}, @data);
@@ -2679,29 +2816,25 @@ sub pg_statio_user_tables_report
 	my %is_used = ();
 	my %is_toast = ();
 	my %statio_usertable = ();
-	foreach my $t (sort {$a <=> $b} keys %all_statio_usertable_stat) {
+	foreach my $t (sort {$a <=> $b} keys %all_statio_user_tables) {
 		foreach my $db (@global_databases) {
-			foreach my $obj (keys %{ $all_statio_usertable_stat{$t}{$db} }) {
-				$statio_usertable{$db}{$obj}{heap_blks_read} .= '[' . $t . ',' . ($all_statio_usertable_stat{$t}{$db}{$obj}{heap_blks_read}||0) . '],';
-				$statio_usertable{$db}{$obj}{heap_blks_hit} .= '[' . $t . ',' . ($all_statio_usertable_stat{$t}{$db}{$obj}{heap_blks_hit}||0) . '],';
-				$statio_usertable{$db}{$obj}{idx_blks_read} .= '[' . $t . ',' . ($all_statio_usertable_stat{$t}{$db}{$obj}{idx_blks_read}||0) . '],';
-				$statio_usertable{$db}{$obj}{idx_blks_hit} .= '[' . $t . ',' . ($all_statio_usertable_stat{$t}{$db}{$obj}{idx_blks_hit}||0) . '],';
-				$statio_usertable{$db}{$obj}{toast_blks_read} .= '[' . $t . ',' . ($all_statio_usertable_stat{$t}{$db}{$obj}{toast_blks_read}||0) . '],';
-				$statio_usertable{$db}{$obj}{toast_blks_hit} .= '[' . $t . ',' . ($all_statio_usertable_stat{$t}{$db}{$obj}{toast_blks_hit}||0) . '],';
-				$statio_usertable{$db}{$obj}{tidx_blks_read} .= '[' . $t . ',' . ($all_statio_usertable_stat{$t}{$db}{$obj}{tidx_blks_read}||0) . '],';
-				$statio_usertable{$db}{$obj}{tidx_blks_hit} .= '[' . $t . ',' . ($all_statio_usertable_stat{$t}{$db}{$obj}{tidx_blks_hit}||0) . '],';
-				foreach my $k (keys %{ $statio_usertable{$db}{$obj} }) {
-					if ($statio_usertable{$db}{$obj}{$k}) {
-						$is_used{$db}{$obj}{is_used} += $statio_usertable{$db}{$obj}{$k};
-						if (($k =~ /^t/) && ($statio_usertable{$db}{$obj}{$k})) {
-							$is_toast{$db}{$obj}{is_toast}  = 1;
-						}
-					}
+			foreach my $obj (keys %{ $all_statio_user_tables{$t}{$db} }) {
+				$statio_usertable{$db}{$obj}{heap_blks_read} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_read}||0) . '],';
+				$statio_usertable{$db}{$obj}{heap_blks_hit} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_hit}||0) . '],';
+				$statio_usertable{$db}{$obj}{idx_blks_read} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_read}||0) . '],';
+				$statio_usertable{$db}{$obj}{idx_blks_hit} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_hit}||0) . '],';
+				$statio_usertable{$db}{$obj}{toast_blks_read} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_read}||0) . '],';
+				$statio_usertable{$db}{$obj}{toast_blks_hit} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_hit}||0) . '],';
+				$statio_usertable{$db}{$obj}{tidx_blks_read} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_read}||0) . '],';
+				$statio_usertable{$db}{$obj}{tidx_blks_hit} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_hit}||0) . '],';
+				$is_used{$db}{$obj}{is_used} += ($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_hit}||0);
+				if (!$is_toast{$db}{$obj}{is_toast}) {
+					$is_toast{$db}{$obj}{is_toast} += ($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_hit}||0);
 				}
 			}
 		}
 	}
-	%all_statio_usertable_stat = ();
+	%all_statio_user_tables = ();
 
 	foreach my $db (sort keys %statio_usertable) {
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
@@ -2758,11 +2891,11 @@ sub pg_relation_buffercache
 
 		$data[7] = 100 if ($data[7] > 100);
 		# date_trunc | datname | relname | buffers | relpages | buffered | buffers % | relation %
-		$all_buffercache_stat{$data[0]}{$data[1]}{$data[2]}{buffers}      = ($data[3] || 0);
-		$all_buffercache_stat{$data[0]}{$data[1]}{$data[2]}{pages}        = ($data[4] || 0);
-		$all_buffercache_stat{$data[0]}{$data[1]}{$data[2]}{buffered}     = ($data[5] || 0);
-		$all_buffercache_stat{$data[0]}{$data[1]}{$data[2]}{'buffers %'}  = ($data[6] || 0);
-		$all_buffercache_stat{$data[0]}{$data[1]}{$data[2]}{'relation %'} = ($data[7] || 0);
+		$all_relation_buffercache{$data[0]}{$data[1]}{$data[2]}{buffers}      = ($data[3] || 0);
+		$all_relation_buffercache{$data[0]}{$data[1]}{$data[2]}{pages}        = ($data[4] || 0);
+		$all_relation_buffercache{$data[0]}{$data[1]}{$data[2]}{buffered}     = ($data[5] || 0);
+		$all_relation_buffercache{$data[0]}{$data[1]}{$data[2]}{'buffers %'}  = ($data[6] || 0);
+		$all_relation_buffercache{$data[0]}{$data[1]}{$data[2]}{'relation %'} = ($data[7] || 0);
 
 	}
 	$curfh->close();
@@ -2779,23 +2912,23 @@ sub pg_relation_buffercache_report
 	my %to_show = ();
 	my %buffercache_stat = ();
 
-	foreach my $t (sort {$a <=> $b} keys %all_buffercache_stat) {
+	foreach my $t (sort {$a <=> $b} keys %all_relation_buffercache) {
 		foreach my $db (@global_databases) {
-			foreach my $obj ( keys %{$all_buffercache_stat{$t}{$db}} ) {
-				$rel_stat{$db}{$obj}{buffers}      .= '[' . $t . ',' . ($all_buffercache_stat{$t}{$db}{$obj}{buffers} || 0) . '],';
-				$buffercache_stat{$db}{$obj}{buffers} = ($all_buffercache_stat{$t}{$db}{$obj}{buffers} || 0);
-				$rel_stat{$db}{$obj}{pages}        .= '[' . $t . ',' . ($all_buffercache_stat{$t}{$db}{$obj}{pages} || 0) . '],';
-				$buffercache_stat{$db}{$obj}{pages} = ($all_buffercache_stat{$t}{$db}{$obj}{pages} || 0);
-				$rel_stat{$db}{$obj}{buffered}     .= '[' . $t . ',' . ($all_buffercache_stat{$t}{$db}{$obj}{buffered} || 0) . '],';
-				$buffercache_stat{$db}{$obj}{buffered} = ($all_buffercache_stat{$t}{$db}{$obj}{buffered} || 0);
-				$rel_stat{$db}{$obj}{'buffers %'}  .= '[' . $t . ',' . ($all_buffercache_stat{$t}{$db}{$obj}{'buffers %'} || 0) . '],';
-				$buffercache_stat{$db}{$obj}{'buffers %'} = ($all_buffercache_stat{$t}{$db}{$obj}{'buffers %'} || 0);
-				$rel_stat{$db}{$obj}{'relation %'} .= '[' . $t . ',' . ($all_buffercache_stat{$t}{$db}{$obj}{'relation %'} || 0) . '],';
-				$buffercache_stat{$db}{$obj}{'relation %'} = ($all_buffercache_stat{$t}{$db}{$obj}{'relation %'} || 0);
+			foreach my $obj ( keys %{$all_relation_buffercache{$t}{$db}} ) {
+				$rel_stat{$db}{$obj}{buffers}      .= '[' . $t . ',' . ($all_relation_buffercache{$t}{$db}{$obj}{buffers} || 0) . '],';
+				$buffercache_stat{$db}{$obj}{buffers} = ($all_relation_buffercache{$t}{$db}{$obj}{buffers} || 0);
+				$rel_stat{$db}{$obj}{pages}        .= '[' . $t . ',' . ($all_relation_buffercache{$t}{$db}{$obj}{pages} || 0) . '],';
+				$buffercache_stat{$db}{$obj}{pages} = ($all_relation_buffercache{$t}{$db}{$obj}{pages} || 0);
+				$rel_stat{$db}{$obj}{buffered}     .= '[' . $t . ',' . ($all_relation_buffercache{$t}{$db}{$obj}{buffered} || 0) . '],';
+				$buffercache_stat{$db}{$obj}{buffered} = ($all_relation_buffercache{$t}{$db}{$obj}{buffered} || 0);
+				$rel_stat{$db}{$obj}{'buffers %'}  .= '[' . $t . ',' . ($all_relation_buffercache{$t}{$db}{$obj}{'buffers %'} || 0) . '],';
+				$buffercache_stat{$db}{$obj}{'buffers %'} = ($all_relation_buffercache{$t}{$db}{$obj}{'buffers %'} || 0);
+				$rel_stat{$db}{$obj}{'relation %'} .= '[' . $t . ',' . ($all_relation_buffercache{$t}{$db}{$obj}{'relation %'} || 0) . '],';
+				$buffercache_stat{$db}{$obj}{'relation %'} = ($all_relation_buffercache{$t}{$db}{$obj}{'relation %'} || 0);
 			}
 		}
 	}
-	%all_buffercache_stat = ();
+	%all_relation_buffercache = ();
 
 	# Show list of object in the shared buffers
 	foreach my $db (keys %buffercache_stat) {
@@ -2930,10 +3063,10 @@ sub pg_statio_user_indexes
 		push(@{$start_vals{$data[1]}{$data[6]}}, @data) if ($#{$start_vals{$data[1]}{$data[6]}} < 0);
 
 		(($data[7] - $start_vals{$data[1]}{$data[6]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[6]}[7]);
-		$all_statio_userindex_stat{$data[0]}{$data[1]}{$data[6]}{idx_blks_read} = int($tmp_val/$interval);
+		$all_statio_all_indexes{$data[0]}{$data[1]}{$data[6]}{idx_blks_read} = int($tmp_val/$interval);
 
 		(($data[8] - $start_vals{$data[1]}{$data[6]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[6]}[8]);
-		$all_statio_userindex_stat{$data[0]}{$data[1]}{$data[6]}{idx_blks_hit} = int($tmp_val/$interval);
+		$all_statio_all_indexes{$data[0]}{$data[1]}{$data[6]}{idx_blks_hit} = int($tmp_val/$interval);
 
 		@{$start_vals{$data[1]}{$data[6]}} = ();
 		push(@{$start_vals{$data[1]}{$data[6]}}, @data);
@@ -2951,20 +3084,16 @@ sub pg_statio_user_indexes_report
 
 	my %statio_userindex = ();
 	my %is_used = ();
-	foreach my $t (sort {$a <=> $b} keys %all_statio_userindex_stat) {
+	foreach my $t (sort {$a <=> $b} keys %all_statio_all_indexes) {
 		foreach my $db (@global_databases) {
-			foreach my $obj (keys %{ $all_statio_userindex_stat{$t}{$db} }) {
-				$statio_userindex{$db}{$obj}{idx_blks_read} .= '[' . $t . ',' . ($all_statio_userindex_stat{$t}{$db}{$obj}{idx_blks_read}||0) . '],';
-				$statio_userindex{$db}{$obj}{idx_blks_hit} .= '[' . $t . ',' . ($all_statio_userindex_stat{$t}{$db}{$obj}{idx_blks_hit}||0) . '],';
-				foreach my $k (keys %{ $statio_userindex{$db}{$obj} }) {
-					if ($statio_userindex{$db}{$obj}{$k}) {
-						$is_used{$db}{$obj} += $statio_userindex{$db}{$obj}{$k};
-					}
-				}
+			foreach my $obj (keys %{ $all_statio_all_indexes{$t}{$db} }) {
+				$statio_userindex{$db}{$obj}{idx_blks_read} .= '[' . $t . ',' . ($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_read}||0) . '],';
+				$statio_userindex{$db}{$obj}{idx_blks_hit} .= '[' . $t . ',' . ($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_hit}||0) . '],';
+				$is_used{$db}{$obj} += ($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_hit}||0)+($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_read}||0);
 			}
 		}
 	}
-	%all_statio_userindex_stat = ();
+	%all_statio_all_indexes = ();
 
 	foreach my $db (sort keys %statio_userindex) {
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
@@ -3068,27 +3197,27 @@ sub pg_stat_bgwriter
 
 		push(@start_vals, @data) if ($#start_vals < 0);
 		(($data[1] - $start_vals[1]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[1] - $start_vals[1]);
-		$all_bgwriter_stat{$data[0]}{checkpoints_timed} = $tmp_val;
+		$all_stat_bgwriter{$data[0]}{checkpoints_timed} = $tmp_val;
 		(($data[2] - $start_vals[2]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[2] - $start_vals[2]);
-		$all_bgwriter_stat{$data[0]}{checkpoints_req} .= $tmp_val;
+		$all_stat_bgwriter{$data[0]}{checkpoints_req} .= $tmp_val;
 		my $id = 0;
 		if ($#data > 10) {
 			$id += 2;
 			(($data[3] - $start_vals[3]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3] - $start_vals[3]);
-			$all_bgwriter_stat{$data[0]}{checkpoint_write_time} .= $tmp_val;
+			$all_stat_bgwriter{$data[0]}{checkpoint_write_time} .= $tmp_val;
 			(($data[4] - $start_vals[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals[4]);
-			$all_bgwriter_stat{$data[0]}{checkpoint_sync_time} .= $tmp_val;
+			$all_stat_bgwriter{$data[0]}{checkpoint_sync_time} .= $tmp_val;
 		}
 		(($data[3+$id] - $start_vals[3+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3+$id] - $start_vals[3+$id]);
-		$all_bgwriter_stat{$data[0]}{buffers_checkpoint} .= sprintf("%.2f", $tmp_val/$interval);
+		$all_stat_bgwriter{$data[0]}{buffers_checkpoint} .= sprintf("%.2f", $tmp_val/$interval);
 		(($data[4+$id] - $start_vals[4+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4+$id] - $start_vals[4+$id]);
-		$all_bgwriter_stat{$data[0]}{buffers_clean} .= sprintf("%.2f", $tmp_val/$interval);
+		$all_stat_bgwriter{$data[0]}{buffers_clean} .= sprintf("%.2f", $tmp_val/$interval);
 		(($data[5+$id] - $start_vals[5+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5+$id] - $start_vals[5+$id]);
-		$all_bgwriter_stat{$data[0]}{maxwritten_clean} .= sprintf("%.2f", $tmp_val/$interval);
+		$all_stat_bgwriter{$data[0]}{maxwritten_clean} .= sprintf("%.2f", $tmp_val/$interval);
 		(($data[6+$id] - $start_vals[6+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6+$id] - $start_vals[6+$id]);
-		$all_bgwriter_stat{$data[0]}{buffers_backend} .= sprintf("%.2f", $tmp_val/$interval);
+		$all_stat_bgwriter{$data[0]}{buffers_backend} .= sprintf("%.2f", $tmp_val/$interval);
 		(($data[7+$id] - $start_vals[7+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7+$id] - $start_vals[7+$id]);
-		$all_bgwriter_stat{$data[0]}{buffers_backend_fsync} .= sprintf("%.2f", $tmp_val/$interval);
+		$all_stat_bgwriter{$data[0]}{buffers_backend_fsync} .= sprintf("%.2f", $tmp_val/$interval);
 		@start_vals = ();
 		push(@start_vals, @data);
 	}
@@ -3102,18 +3231,18 @@ sub pg_stat_bgwriter_report
 	my ($interval, $src_base, %data_info) = @_;
 
 	my %bgwriter_stat = ();
-	foreach my $t (sort {$a <=> $b} keys %all_bgwriter_stat) {
-		$bgwriter_stat{checkpoints_timed} .= '[' . $t . ',' . $all_bgwriter_stat{$t}{checkpoints_timed} . '],';
-		$bgwriter_stat{checkpoints_req} .= '[' . $t . ',' . $all_bgwriter_stat{$t}{checkpoints_req} . '],';
-		$bgwriter_stat{checkpoint_write_time} .= '[' . $t . ',' . $all_bgwriter_stat{$t}{checkpoint_write_time} . '],';
-		$bgwriter_stat{checkpoint_sync_time} .= '[' . $t . ',' . $all_bgwriter_stat{$t}{checkpoint_sync_time} . '],';
-		$bgwriter_stat{buffers_checkpoint} .= '[' . $t . ',' . $all_bgwriter_stat{$t}{buffers_checkpoint} . '],';
-		$bgwriter_stat{buffers_clean} .= '[' . $t . ',' . $all_bgwriter_stat{$t}{buffers_clean} . '],';
-		$bgwriter_stat{maxwritten_clean} .= '[' . $t . ',' . $all_bgwriter_stat{$t}{maxwritten_clean} . '],';
-		$bgwriter_stat{buffers_backend} .= '[' . $t . ',' . $all_bgwriter_stat{$t}{buffers_backend} . '],';
-		$bgwriter_stat{buffers_backend_fsync} .= '[' . $t . ',' . $all_bgwriter_stat{$t}{buffers_backend_fsync} . '],';
+	foreach my $t (sort {$a <=> $b} keys %all_stat_bgwriter) {
+		$bgwriter_stat{checkpoints_timed} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{checkpoints_timed} . '],';
+		$bgwriter_stat{checkpoints_req} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{checkpoints_req} . '],';
+		$bgwriter_stat{checkpoint_write_time} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{checkpoint_write_time} . '],';
+		$bgwriter_stat{checkpoint_sync_time} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{checkpoint_sync_time} . '],';
+		$bgwriter_stat{buffers_checkpoint} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{buffers_checkpoint} . '],';
+		$bgwriter_stat{buffers_clean} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{buffers_clean} . '],';
+		$bgwriter_stat{maxwritten_clean} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{maxwritten_clean} . '],';
+		$bgwriter_stat{buffers_backend} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{buffers_backend} . '],';
+		$bgwriter_stat{buffers_backend_fsync} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{buffers_backend_fsync} . '],';
 	}
-	%all_bgwriter_stat = ();
+	%all_stat_bgwriter = ();
 
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html", $src_base);
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
@@ -3158,17 +3287,17 @@ sub pg_stat_connections
 
 		push(@global_databases, $data[5]) if (!grep(/^$data[5]$/, @global_databases));
 
-		$all_connections_stat{$data[0]}{$data[5]}{total} = $data[1];
-		$all_connections_stat{$data[0]}{$data[5]}{active} = $data[2];
-		$all_connections_stat{$data[0]}{$data[5]}{waiting} = $data[3];
-		$all_connections_stat{$data[0]}{$data[5]}{idle_in_xact} = $data[4];
-		$all_connections_stat{$data[0]}{$data[5]}{idle} = ($data[1] - $data[2] - $data[4]);
+		$all_stat_connections{$data[0]}{$data[5]}{total} = $data[1];
+		$all_stat_connections{$data[0]}{$data[5]}{active} = $data[2];
+		$all_stat_connections{$data[0]}{$data[5]}{waiting} = $data[3];
+		$all_stat_connections{$data[0]}{$data[5]}{idle_in_xact} = $data[4];
+		$all_stat_connections{$data[0]}{$data[5]}{idle} = ($data[1] - $data[2] - $data[4]);
 
-		$all_connections_stat{$data[0]}{'all'}{total} += $data[1];
-		$all_connections_stat{$data[0]}{'all'}{active} += $data[2];
-		$all_connections_stat{$data[0]}{'all'}{waiting} += $data[3];
-		$all_connections_stat{$data[0]}{'all'}{idle_in_xact} += $data[4];
-		$all_connections_stat{$data[0]}{'all'}{idle} += ($data[1] - $data[2] - $data[4]);
+		$all_stat_connections{$data[0]}{'all'}{total} += $data[1];
+		$all_stat_connections{$data[0]}{'all'}{active} += $data[2];
+		$all_stat_connections{$data[0]}{'all'}{waiting} += $data[3];
+		$all_stat_connections{$data[0]}{'all'}{idle_in_xact} += $data[4];
+		$all_stat_connections{$data[0]}{'all'}{idle} += ($data[1] - $data[2] - $data[4]);
 	}
 	$curfh->close();
 }
@@ -3179,16 +3308,16 @@ sub pg_stat_connections_report
 	my ($interval, $src_base, %data_info) = @_;
 
 	my %connections_stat = ();
-	foreach my $time (sort {$a <=> $b} keys %all_connections_stat) {
+	foreach my $time (sort {$a <=> $b} keys %all_stat_connections) {
 		foreach my $db (@global_databases) {
-			$connections_stat{$db}{total} .= '[' . $time . ',' . ($all_connections_stat{$time}{$db}{total}||0) . '],';
-			$connections_stat{$db}{active} .= '[' . $time . ',' . ($all_connections_stat{$time}{$db}{active}||0) . '],';
-			$connections_stat{$db}{waiting} .= '[' . $time . ',' . ($all_connections_stat{$time}{$db}{waiting}||0) . '],';
-			$connections_stat{$db}{idle_in_xact} .= '[' . $time . ',' . ($all_connections_stat{$time}{$db}{idle_in_xact}||0) . '],';
-			$connections_stat{$db}{idle} .= '[' . $time . ',' . ($all_connections_stat{$time}{$db}{idle}||0) . '],';
+			$connections_stat{$db}{total} .= '[' . $time . ',' . ($all_stat_connections{$time}{$db}{total}||0) . '],';
+			$connections_stat{$db}{active} .= '[' . $time . ',' . ($all_stat_connections{$time}{$db}{active}||0) . '],';
+			$connections_stat{$db}{waiting} .= '[' . $time . ',' . ($all_stat_connections{$time}{$db}{waiting}||0) . '],';
+			$connections_stat{$db}{idle_in_xact} .= '[' . $time . ',' . ($all_stat_connections{$time}{$db}{idle_in_xact}||0) . '],';
+			$connections_stat{$db}{idle} .= '[' . $time . ',' . ($all_stat_connections{$time}{$db}{idle}||0) . '],';
 		}
 	}
-	%all_connections_stat = ();
+	%all_stat_connections = ();
 
 	my $id = &get_data_id('database-connections', %data_info);
 	foreach my $db (sort keys %connections_stat) {
@@ -3229,11 +3358,11 @@ sub pg_stat_user_functions
 		$data[4] = "$data[3].$data[4]";
 
 		(($data[5] - $start_vals[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals[5]);
-		$all_functions_stat{$data[1]}{$data[4]}{calls} += $tmp_val;
+		$all_stat_user_functions{$data[1]}{$data[4]}{calls} += $tmp_val;
 		(($data[6] - $start_vals[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals[6]);
-		$all_functions_stat{$data[1]}{$data[4]}{total_time} += $tmp_val;
+		$all_stat_user_functions{$data[1]}{$data[4]}{total_time} += $tmp_val;
 		(($data[7] - $start_vals[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals[7]);
-		$all_functions_stat{$data[1]}{$data[4]}{self_time} += $tmp_val;
+		$all_stat_user_functions{$data[1]}{$data[4]}{self_time} += $tmp_val;
 
 		@start_vals = ();
 		push(@start_vals, @data);
@@ -3247,7 +3376,7 @@ sub pg_stat_user_functions_report
 	my ($interval, $src_base, %data_info) = @_;
 
 	my $id = &get_data_id('database-functions', %data_info);
-	foreach my $db (keys %all_functions_stat) {
+	foreach my $db (keys %all_stat_user_functions) {
 		next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		my $colspan =  ' colspan="4"';
 		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-fct-$db.html", $src_base);
@@ -3277,15 +3406,15 @@ sub pg_stat_user_functions_report
 				<tbody>
 });
 			my $found_fct_stat = 0;
-			foreach my $fct (sort keys %{$all_functions_stat{$db}}) {
-				if (!$all_functions_stat{$db}{$fct}{calls} && !$all_functions_stat{$db}{$fct}{total_time} && !$all_functions_stat{$db}{$fct}{self_time}) {
+			foreach my $fct (sort keys %{$all_stat_user_functions{$db}}) {
+				if (!$all_stat_user_functions{$db}{$fct}{calls} && !$all_stat_user_functions{$db}{$fct}{total_time} && !$all_stat_user_functions{$db}{$fct}{self_time}) {
 					next;
 				}
 				$found_fct_stat = 1;
 				foreach ('calls','total_time','self_time') {
-					$all_functions_stat{$db}{$fct}{$_} ||= 0;
+					$all_stat_user_functions{$db}{$fct}{$_} ||= 0;
 				}
-				$dbfh->print( "<tr><th>$fct</th><td>$all_functions_stat{$db}{$fct}{calls}</td><td>" . &format_duration($all_functions_stat{$db}{$fct}{total_time}) . "</td><td>" . &format_duration($all_functions_stat{$db}{$fct}{self_time}) . "</td></tr>\n");
+				$dbfh->print( "<tr><th>$fct</th><td>$all_stat_user_functions{$db}{$fct}{calls}</td><td>" . &format_duration($all_stat_user_functions{$db}{$fct}{total_time}) . "</td><td>" . &format_duration($all_stat_user_functions{$db}{$fct}{self_time}) . "</td></tr>\n");
 			}
 			if (!$found_fct_stat) {
 				$dbfh->print( qq{<tr><td$colspan><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td></tr>} );
@@ -3324,7 +3453,7 @@ sub pg_stat_replication
 			my $name = $data[5];
 			$data[6] =~ s/"//g;
 			$name .= " - $data[6]" if ($data[6]);
-			$all_replication_stat{$data[0]}{master_location} = &getNumericalOffset($data[10]) - &getNumericalOffset($start_vals[10]) if (!$all_replication_stat{$data[0]}{master_location});
+			$all_stat_replication{$data[0]}{master_location} = &getNumericalOffset($data[10]) - &getNumericalOffset($start_vals[10]) if (!$all_stat_replication{$data[0]}{master_location});
 			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[14])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[14]));
 			$all_xlog_stat{$data[0]}{$name}{replay_location} = sprintf("%.2f", ($tmp_val/$interval));
 			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[11])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[11]));
@@ -3353,16 +3482,16 @@ sub pg_stat_replication_report
 	my ($interval, $src_base, %data_info) = @_;
 
 	my %xlog_stat = ();
-	foreach my $t (sort {$a <=> $b} keys %all_replication_stat) {
-		foreach my $name (sort {$a cmp $b} keys %{$all_replication_stat{$t}}) {
-			$xlog_stat{master_location} .= '[' . $t . ',' . ($all_replication_stat{$t}{master_location} || 0) . '],';
-			$xlog_stat{$name}{replay_location} .= '[' . $t . ',' . ($all_replication_stat{$t}{$name}{replay_location} || 0) . '],';
-			$xlog_stat{$name}{sent_location} .= '[' . $t . ',' . ($all_replication_stat{$t}{$name}{sent_location} || 0) . '],';
-			$xlog_stat{$name}{write_location} .= '[' . $t . ',' . ($all_replication_stat{$t}{$name}{write_location} || 0) . '],';
-			$xlog_stat{$name}{flush_location} .= '[' . $t . ',' . ($all_replication_stat{$t}{$name}{flush_location} || 0) . '],';
+	foreach my $t (sort {$a <=> $b} keys %all_stat_replication) {
+		foreach my $name (sort {$a cmp $b} keys %{$all_stat_replication{$t}}) {
+			$xlog_stat{master_location} .= '[' . $t . ',' . ($all_stat_replication{$t}{master_location} || 0) . '],';
+			$xlog_stat{$name}{replay_location} .= '[' . $t . ',' . ($all_stat_replication{$t}{$name}{replay_location} || 0) . '],';
+			$xlog_stat{$name}{sent_location} .= '[' . $t . ',' . ($all_stat_replication{$t}{$name}{sent_location} || 0) . '],';
+			$xlog_stat{$name}{write_location} .= '[' . $t . ',' . ($all_stat_replication{$t}{$name}{write_location} || 0) . '],';
+			$xlog_stat{$name}{flush_location} .= '[' . $t . ',' . ($all_stat_replication{$t}{$name}{flush_location} || 0) . '],';
 		}
 	}
-	%all_replication_stat = ();
+	%all_stat_replication = ();
 	if (!$CAPTURE) {
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html", $src_base);
@@ -3435,14 +3564,14 @@ sub pgbouncer_stats
 		next if ($data[1] eq 'pgbouncer');
 
 		# timestamp|database|user|cl_active|cl_waiting|sv_active|sv_idle|sv_used|sv_tested|sv_login|maxwait
-		$all_pgbouncer_stat{$data[0]}{$data[1]}{$data[2]}{cl_active} += ($data[3] || 0);
-		$all_pgbouncer_stat{$data[0]}{$data[1]}{$data[2]}{cl_waiting} += ($data[4] || 0);
-		$all_pgbouncer_stat{$data[0]}{$data[1]}{$data[2]}{sv_active} += ($data[5] || 0);
-		$all_pgbouncer_stat{$data[0]}{$data[1]}{$data[2]}{sv_idle} += ($data[6] || 0);
-		$all_pgbouncer_stat{$data[0]}{$data[1]}{$data[2]}{sv_used} += ($data[7] || 0);
-		$all_pgbouncer_stat{$data[0]}{$data[1]}{$data[2]}{sv_tested} += ($data[8] || 0);
-		$all_pgbouncer_stat{$data[0]}{$data[1]}{$data[2]}{sv_login} += ($data[9] || 0);
-		$all_pgbouncer_stat{$data[0]}{$data[1]}{$data[2]}{maxwait} += ($data[10] || 0);
+		$all_pgbouncer_stats{$data[0]}{$data[1]}{$data[2]}{cl_active} += ($data[3] || 0);
+		$all_pgbouncer_stats{$data[0]}{$data[1]}{$data[2]}{cl_waiting} += ($data[4] || 0);
+		$all_pgbouncer_stats{$data[0]}{$data[1]}{$data[2]}{sv_active} += ($data[5] || 0);
+		$all_pgbouncer_stats{$data[0]}{$data[1]}{$data[2]}{sv_idle} += ($data[6] || 0);
+		$all_pgbouncer_stats{$data[0]}{$data[1]}{$data[2]}{sv_used} += ($data[7] || 0);
+		$all_pgbouncer_stats{$data[0]}{$data[1]}{$data[2]}{sv_tested} += ($data[8] || 0);
+		$all_pgbouncer_stats{$data[0]}{$data[1]}{$data[2]}{sv_login} += ($data[9] || 0);
+		$all_pgbouncer_stats{$data[0]}{$data[1]}{$data[2]}{maxwait} += ($data[10] || 0);
 	}
 	$curfh->close();
 }
@@ -3454,25 +3583,25 @@ sub pgbouncer_stats_report
 
 	my %pgbouncer_stat = ();
 	my %total_pool = ();
-	foreach my $t (sort {$a <=> $b} keys %all_pgbouncer_stat) {
-		foreach my $db (keys %{$all_pgbouncer_stat{$t}}) {
-			foreach my $usr (keys %{$all_pgbouncer_stat{$t}{$db}}) {
-				$pgbouncer_stat{"$db/$usr"}{cl_active} .= '[' . $t . ',' . ($all_pgbouncer_stat{$t}{$db}{$usr}{cl_active} || 0) . '],';
-				$pgbouncer_stat{"$db/$usr"}{cl_waiting} .= '[' . $t . ',' . ($all_pgbouncer_stat{$t}{$db}{$usr}{cl_waiting} || 0) . '],';
-				$pgbouncer_stat{"$db/$usr"}{sv_active} .= '[' . $t . ',' . ($all_pgbouncer_stat{$t}{$db}{$usr}{sv_active} || 0) . '],';
-				$pgbouncer_stat{"$db/$usr"}{sv_idle} .= '[' . $t . ',' . ($all_pgbouncer_stat{$t}{$db}{$usr}{sv_idle} || 0) . '],';
-				$pgbouncer_stat{"$db/$usr"}{sv_used} .= '[' . $t . ',' . ($all_pgbouncer_stat{$t}{$db}{$usr}{sv_used} || 0) . '],';
-				$pgbouncer_stat{"$db/$usr"}{sv_tested} .= '[' . $t . ',' . ($all_pgbouncer_stat{$t}{$db}{$usr}{sv_tested} || 0) . '],';
-				$pgbouncer_stat{"$db/$usr"}{sv_login} .= '[' . $t . ',' . ($all_pgbouncer_stat{$t}{$db}{$usr}{sv_login} || 0) . '],';
-				$pgbouncer_stat{"$db/$usr"}{maxwait} .= '[' . $t . ',' . ($all_pgbouncer_stat{$t}{$db}{$usr}{maxwait} || 0) . '],';
-				$total_pool{$db}{cl_active} += $all_pgbouncer_stat{$t}{$db}{$usr}{cl_active};
-				$total_pool{$db}{cl_waiting} += $all_pgbouncer_stat{$t}{$db}{$usr}{cl_waiting};
-				$total_pool{$db}{sv_active} += $all_pgbouncer_stat{$t}{$db}{$usr}{sv_active};
-				$total_pool{$db}{sv_idle} += $all_pgbouncer_stat{$t}{$db}{$usr}{sv_idle};
-				$total_pool{$db}{sv_used} += $all_pgbouncer_stat{$t}{$db}{$usr}{sv_used};
-				$total_pool{$db}{sv_tested} += $all_pgbouncer_stat{$t}{$db}{$usr}{sv_tested};
-				$total_pool{$db}{sv_login} += $all_pgbouncer_stat{$t}{$db}{$usr}{sv_login};
-				$total_pool{$db}{maxwait} += $all_pgbouncer_stat{$t}{$db}{$usr}{maxwait};
+	foreach my $t (sort {$a <=> $b} keys %all_pgbouncer_stats) {
+		foreach my $db (keys %{$all_pgbouncer_stats{$t}}) {
+			foreach my $usr (keys %{$all_pgbouncer_stats{$t}{$db}}) {
+				$pgbouncer_stat{"$db/$usr"}{cl_active} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{cl_active} || 0) . '],';
+				$pgbouncer_stat{"$db/$usr"}{cl_waiting} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{cl_waiting} || 0) . '],';
+				$pgbouncer_stat{"$db/$usr"}{sv_active} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{sv_active} || 0) . '],';
+				$pgbouncer_stat{"$db/$usr"}{sv_idle} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{sv_idle} || 0) . '],';
+				$pgbouncer_stat{"$db/$usr"}{sv_used} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{sv_used} || 0) . '],';
+				$pgbouncer_stat{"$db/$usr"}{sv_tested} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{sv_tested} || 0) . '],';
+				$pgbouncer_stat{"$db/$usr"}{sv_login} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{sv_login} || 0) . '],';
+				$pgbouncer_stat{"$db/$usr"}{maxwait} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{maxwait} || 0) . '],';
+				$total_pool{$db}{cl_active} += $all_pgbouncer_stats{$t}{$db}{$usr}{cl_active};
+				$total_pool{$db}{cl_waiting} += $all_pgbouncer_stats{$t}{$db}{$usr}{cl_waiting};
+				$total_pool{$db}{sv_active} += $all_pgbouncer_stats{$t}{$db}{$usr}{sv_active};
+				$total_pool{$db}{sv_idle} += $all_pgbouncer_stats{$t}{$db}{$usr}{sv_idle};
+				$total_pool{$db}{sv_used} += $all_pgbouncer_stats{$t}{$db}{$usr}{sv_used};
+				$total_pool{$db}{sv_tested} += $all_pgbouncer_stats{$t}{$db}{$usr}{sv_tested};
+				$total_pool{$db}{sv_login} += $all_pgbouncer_stats{$t}{$db}{$usr}{sv_login};
+				$total_pool{$db}{maxwait} += $all_pgbouncer_stats{$t}{$db}{$usr}{maxwait};
 			}
 			$pgbouncer_stat{$db}{cl_active} .= '[' . $t . ',' . ($total_pool{$db}{cl_active} || 0) . '],';
 			$pgbouncer_stat{$db}{cl_waiting} .= '[' . $t . ',' . ($total_pool{$db}{cl_waiting} || 0) . '],';
@@ -3603,14 +3732,14 @@ sub pgbouncer_req_stats
 		next if ($data[1] eq 'pgbouncer');
 
 		# timestamp|database|total_requests|total_received|total_sent|total_query_time|avg_req|avg_recv|avg_sent|avg_query
-		$all_pgbouncer_req{$data[0]}{$data[1]}{total_requests} += $data[2];
-		$all_pgbouncer_req{$data[0]}{$data[1]}{total_received} += $data[3];
-		$all_pgbouncer_req{$data[0]}{$data[1]}{total_sent} += $data[4];
-		$all_pgbouncer_req{$data[0]}{$data[1]}{total_query_time} += $data[5];
-		$all_pgbouncer_req{$data[0]}{$data[1]}{avg_req} += $data[6];
-		$all_pgbouncer_req{$data[0]}{$data[1]}{avg_recv} += $data[7];
-		$all_pgbouncer_req{$data[0]}{$data[1]}{avg_sent} += $data[8];
-		$all_pgbouncer_req{$data[0]}{$data[1]}{avg_query} += $data[9];
+		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_requests} += $data[2];
+		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_received} += $data[3];
+		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_sent} += $data[4];
+		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_query_time} += $data[5];
+		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_req} += $data[6];
+		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_recv} += $data[7];
+		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_sent} += $data[8];
+		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_query} += $data[9];
 	}
 	$curfh->close();
 }
@@ -3621,10 +3750,10 @@ sub pgbouncer_req_stats_report
 	my ($interval, $src_base, %data_info) = @_;
 
 	my %pgbouncer_stat = ();
-	foreach my $t (keys %all_pgbouncer_req) {
-		foreach my $db (keys %{$all_pgbouncer_req{$t}}) {
-			foreach my $k (keys %{$all_pgbouncer_req{$t}{$db}}) {
-				$pgbouncer_stat{$db}{$k} .= '[' . $t . ',' . $all_pgbouncer_req{$t}{$db}{$k} . '],';
+	foreach my $t (keys %all_pgbouncer_req_stats) {
+		foreach my $db (keys %{$all_pgbouncer_req_stats{$t}}) {
+			foreach my $k (keys %{$all_pgbouncer_req_stats{$t}{$db}}) {
+				$pgbouncer_stat{$db}{$k} .= '[' . $t . ',' . $all_pgbouncer_req_stats{$t}{$db}{$k} . '],';
 			}
 		}
 	}
@@ -3664,12 +3793,12 @@ sub pg_class_size
 		# timestamp | dbname | nspname | relname | relkind | reltuples | relpages | relsize
 		my $size = $data[6]*8192;
 		$size = $data[7] if ($#data == 7);
-		$all_class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{size} = $size;
-		$all_class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{tuples} = $data[5];
+		$all_class_size{$data[1]}{$data[4]}{"$data[2].$data[3]"}{size} = $size;
+		$all_class_size{$data[1]}{$data[4]}{"$data[2].$data[3]"}{tuples} = $data[5];
 		if ($data[5] > 0) {
-			$all_class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{width} = sprintf("%.2f", $size/$data[5]);
+			$all_class_size{$data[1]}{$data[4]}{"$data[2].$data[3]"}{width} = sprintf("%.2f", $size/$data[5]);
 		} else {
-			$all_class_stat{$data[1]}{$data[4]}{"$data[2].$data[3]"}{width} = '-';
+			$all_class_size{$data[1]}{$data[4]}{"$data[2].$data[3]"}{width} = '-';
 		}
 	}
 	$curfh->close();
@@ -3682,12 +3811,12 @@ sub pg_class_size_report
 	my ($interval, $src_base, %data_info) = @_;
 
 	my %data = ();
-	foreach my $db (sort keys %all_class_stat) {
+	foreach my $db (sort keys %all_class_size) {
 		next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		foreach my $k (sort keys %RELKIND) {
 			# Count the number of object
-			if (exists $all_class_stat{$db}{$k}) {
-				$OVERALL_STATS{'class'}{$db}{$k} = scalar keys %{$all_class_stat{$db}{$k}};
+			if (exists $all_class_size{$db}{$k}) {
+				$OVERALL_STATS{'class'}{$db}{$k} = scalar keys %{$all_class_size{$db}{$k}};
 			} else {
 				$OVERALL_STATS{'class'}{$db}{$k} = 0;
 			}
@@ -3740,20 +3869,20 @@ sub pg_class_size_report
 				<tbody>
 };
 			my $found_table_stat = 0;
-			foreach my $k (sort keys %{$all_class_stat{$db}}) {
+			foreach my $k (sort keys %{$all_class_size{$db}}) {
 				next if (($k ne 't') && ($k ne 'r') && ($data_info{$id}{name} eq 'table-size'));
 				next if (($k ne 'i') && ($data_info{$id}{name} eq 'index-size'));
 				my $colspan = ' colspan="5"';
-				foreach my $tb (sort {$all_class_stat{$db}{$k}{$b}{size} <=> $all_class_stat{$db}{$k}{$a}{size} } keys %{$all_class_stat{$db}{$k}}) {
-					next if (!$all_class_stat{$db}{$k}{$tb}{size} && !$all_class_stat{$db}{$k}{$tb}{tuples});
+				foreach my $tb (sort {$all_class_size{$db}{$k}{$b}{size} <=> $all_class_size{$db}{$k}{$a}{size} } keys %{$all_class_size{$db}{$k}}) {
+					next if (!$all_class_size{$db}{$k}{$tb}{size} && !$all_class_size{$db}{$k}{$tb}{tuples});
 					next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
 					my $table_data = '';
 					if ($data_info{$id}{name} =~ /^(table|index)-size$/) {
 						$found_table_stat = 1;
 						foreach ('size','tuples','width') {
-							$all_class_stat{$db}{$k}{$tb}{$_} ||= 0;
+							$all_class_size{$db}{$k}{$tb}{$_} ||= 0;
 						}
-						$table_data = "<tr><th>$tb</th><td>" . &pretty_print_size($all_class_stat{$db}{$k}{$tb}{size}) . "</td><td>" . int($all_class_stat{$db}{$k}{$tb}{tuples}) . "</td><td>$all_class_stat{$db}{$k}{$tb}{width}</td></tr>\n";
+						$table_data = "<tr><th>$tb</th><td>" . &pretty_print_size($all_class_size{$db}{$k}{$tb}{size}) . "</td><td>" . int($all_class_size{$db}{$k}{$tb}{tuples}) . "</td><td>$all_class_size{$db}{$k}{$tb}{width}</td></tr>\n";
 					}
 					if ($table_data) {
 						print $fhtable qq{$table_data} if ($table_data);
@@ -3780,7 +3909,7 @@ sub pg_class_size_report
 		}
 	}
 	
-	%all_class_stat = ();
+	%all_class_size = ();
 }
 
 # Compute graphs of locks statistics
@@ -3797,7 +3926,7 @@ sub pg_stat_locks
 		# timestamp|database|label|(type|mode|granted)|count
 		$data[3] = 'granted' if ($data[3] eq 't');
 		$data[3] = 'waiting' if ($data[3] eq 'f');
-		$all_lock_stat{$data[0]}{$data[1]}{$data[2]}{$data[3]} += $data[4];
+		$all_stat_locks{$data[0]}{$data[1]}{$data[2]}{$data[3]} += $data[4];
 	}
 	$curfh->close();
 }
@@ -3809,17 +3938,17 @@ sub pg_stat_locks_report
 
 	my %locks_stat = ();
 	my %legends = ();
-	foreach my $t (keys %all_lock_stat) {
-		foreach my $db (keys %{$all_lock_stat{$t}}) {
-			foreach my $lbl (keys %{$all_lock_stat{$t}{$db}}) {
+	foreach my $t (keys %all_stat_locks) {
+		foreach my $db (keys %{$all_stat_locks{$t}}) {
+			foreach my $lbl (keys %{$all_stat_locks{$t}{$db}}) {
 				push(@{$legends{$db}{$lbl}}, 'waiting') if ( grep(/^waiting$/, @{$legends{$db}{$lbl}}) && (${$legends{$db}{$lbl}}[0] eq 'granted') );
 				foreach my $k (@{$legends{$db}{$lbl}}) {
-					$locks_stat{$db}{$lbl}{$k} .= '[' . $t . ',' . ($all_lock_stat{$t}{$db}{$lbl}{$k}||0) . '],';
+					$locks_stat{$db}{$lbl}{$k} .= '[' . $t . ',' . ($all_stat_locks{$t}{$db}{$lbl}{$k}||0) . '],';
 				}
 			}
 		}
 	}
-	%all_lock_stat = ();
+	%all_stat_locks = ();
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		foreach my $db (sort keys %locks_stat) {
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
@@ -3859,7 +3988,7 @@ sub pg_stat_unused_indexes
 
 	return if ($NO_TB_STAT);
 
-	my %all_unusedidx_stat = ();
+	my %all_stat_unused_indexes = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -3867,7 +3996,7 @@ sub pg_stat_unused_indexes
 		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | schemaname | relname | indexrelname | index_code
-		push(@{$all_unusedidx_stat{$data[1]}},  [ ($data[2], $data[3], $data[4], $data[5]) ] );
+		push(@{$all_stat_unused_indexes{$data[1]}},  [ ($data[2], $data[3], $data[4], $data[5]) ] );
 	}
 	$curfh->close();
 }
@@ -3880,7 +4009,7 @@ sub pg_stat_unused_indexes_report
 	return if ($NO_TB_STAT);
 
 	my $id = &get_data_id('unused-index', %data_info);
-	foreach my $db (sort keys %all_unusedidx_stat) {
+	foreach my $db (sort keys %all_stat_unused_indexes) {
 		next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		# Open filehandle to cluster file
 		my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
@@ -3911,7 +4040,7 @@ sub pg_stat_unused_indexes_report
 				</thead>
 				<tbody>
 };
-		foreach my $r (@{$all_unusedidx_stat{$db}}) {
+		foreach my $r (@{$all_stat_unused_indexes{$db}}) {
 			print $fhtable '<tr><td>', join('</td><td>', @$r), "</td></tr>\n";
 		}
 		print $fhtable qq{
@@ -3925,7 +4054,7 @@ sub pg_stat_unused_indexes_report
 };
 		$fhtable->close;
 	}
-	%all_unusedidx_stat = ();
+	%all_stat_unused_indexes = ();
 }
 
 # Compute statistics about redundant index
@@ -3935,7 +4064,7 @@ sub pg_stat_redundant_indexes
 
 	return if ($NO_TB_STAT);
 
-	my %all_redundantidx_stat = ();
+	my %all_stat_redundant_indexes = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -3945,7 +4074,7 @@ sub pg_stat_redundant_indexes
 		next if (grep(/\bWHERE\b/i, $data[2], $data[3]) == 1);
 
 		# timestamp | dbname | contained | containing
-		push(@{$all_redundantidx_stat{$data[1]}}, [ ($data[2], $data[3]) ] );
+		push(@{$all_stat_redundant_indexes{$data[1]}}, [ ($data[2], $data[3]) ] );
 	}
 	$curfh->close();
 }
@@ -3958,7 +4087,7 @@ sub pg_stat_redundant_indexes_report
 	return if ($NO_TB_STAT);
 
 	my $id = &get_data_id('redundant-index', %data_info);
-	foreach my $db (sort keys %all_redundantidx_stat) {
+	foreach my $db (sort keys %all_stat_redundant_indexes) {
 		next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		# Open filehandle to cluster file
 		my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
@@ -3987,7 +4116,7 @@ sub pg_stat_redundant_indexes_report
 				</thead>
 				<tbody>
 };
-		foreach my $r (@{$all_redundantidx_stat{$db}}) {
+		foreach my $r (@{$all_stat_redundant_indexes{$db}}) {
 			print $fhtable '<tr><td>', join('</td><td>', @$r), "</td></tr>\n";
 		}
 		print $fhtable qq{
@@ -4001,7 +4130,7 @@ sub pg_stat_redundant_indexes_report
 };
 		$fhtable->close;
 	}
-	%all_redundantidx_stat = ();
+	%all_stat_redundant_indexes = ();
 }
 
 # Compute statistics about missing index
@@ -4018,7 +4147,7 @@ sub pg_stat_missing_fkindexes
 		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | relname | ddl
-		push(@{$all_missingfkidx_stat{$data[1]}}, [ ($data[2], $data[3]) ] );
+		push(@{$all_stat_missing_fkindexes{$data[1]}}, [ ($data[2], $data[3]) ] );
 	}
 	$curfh->close();
 }
@@ -4031,7 +4160,7 @@ sub pg_stat_missing_fkindexes_report
 	return if ($NO_TB_STAT);
 
 	my $id = &get_data_id('missing-index', %data_info);
-	foreach my $db (sort keys %all_missingfkidx_stat) {
+	foreach my $db (sort keys %all_stat_missing_fkindexes) {
 		next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		# Open filehandle to cluster file
 		my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
@@ -4060,7 +4189,7 @@ sub pg_stat_missing_fkindexes_report
 				</thead>
 				<tbody>
 };
-		foreach my $r (@{$all_missingfkidx_stat{$db}}) {
+		foreach my $r (@{$all_stat_missing_fkindexes{$db}}) {
 			print $fhtable '<tr><td>', join('</td><td>', @$r), "</td></tr>\n";
 		}
 		print $fhtable qq{
@@ -4074,7 +4203,7 @@ sub pg_stat_missing_fkindexes_report
 };
 		$fhtable->close;
 	}
-	%all_missingfkidx_stat = ();
+	%all_stat_missing_fkindexes = ();
 }
 
 # Get relevant content of postgresql.conf
@@ -4253,7 +4382,7 @@ sub pg_hba_conf
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
 		$l =~ s/[\t\s]*#.*//;
-		$all_hba_conf{content} .= "$l\n";
+		$pg_hba_conf{content} .= "$l\n";
 	}
 	$curfh->close();
 }
@@ -4263,8 +4392,8 @@ sub pg_hba_conf_report
 {
 	my ($interval, $src_base, %data_info) = @_;
 
-	my $output = $all_hba_conf{content} || '';
-	%all_hba_conf = ();
+	my $output = $pg_hba_conf{content} || '';
+	%pg_hba_conf = ();
 	if (!$output) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
 	} else {
@@ -4310,7 +4439,7 @@ sub pg_ident_conf
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
 		$l =~ s/[\t\s]*#.*//;
-		$all_ident_conf{content} .= "$l\n";
+		$pg_ident_conf{content} .= "$l\n";
 	}
 	$curfh->close();
 }
@@ -4320,8 +4449,8 @@ sub pg_ident_conf_report
 {
 	my ($interval, $src_base, %data_info) = @_;
 
-	my $output = $all_ident_conf{content} || '';
-	%all_ident_conf = ();
+	my $output = $pg_ident_conf{content} || '';
+	%pg_ident_conf = ();
 	if (!$output) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
 	} else {
@@ -4360,7 +4489,7 @@ sub pg_settings
 {
 	my ($in_dir, $file) = @_;
 
-	my %all_settings_stat = ();
+	my %all_settings = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -4368,14 +4497,14 @@ sub pg_settings
 		next if (!&normalize_line(\@data));
 
 		# timestamp | label | setting | value
-		$all_settings_stat{$data[1]}{$data[2]}{value} = $data[3];
-		$all_settings_stat{$data[1]}{$data[2]}{unit} = '';
-		$all_settings_stat{$data[1]}{$data[2]}{bootval} = '';
-		$all_settings_stat{$data[1]}{$data[2]}{resetval} = '';
+		$all_settings{$data[1]}{$data[2]}{value} = $data[3];
+		$all_settings{$data[1]}{$data[2]}{unit} = '';
+		$all_settings{$data[1]}{$data[2]}{bootval} = '';
+		$all_settings{$data[1]}{$data[2]}{resetval} = '';
 		if ($#data >= 6) {
-			$all_settings_stat{$data[1]}{$data[2]}{unit} = $data[4];
-			$all_settings_stat{$data[1]}{$data[2]}{bootval} = $data[7];
-			$all_settings_stat{$data[1]}{$data[2]}{resetval} = $data[8];
+			$all_settings{$data[1]}{$data[2]}{unit} = $data[4];
+			$all_settings{$data[1]}{$data[2]}{bootval} = $data[7];
+			$all_settings{$data[1]}{$data[2]}{resetval} = $data[8];
 		}
 	}
 	$curfh->close();
@@ -4405,18 +4534,18 @@ sub pg_settings_report
 				<table class="table table-striped" id="$data_info{$id}{name}-table">
 					<tbody>
 };
-	foreach my $lbl (sort keys %all_settings_stat) {
+	foreach my $lbl (sort keys %all_settings) {
 		print $fhcluster "<tr><th colspan=\"4\">$lbl</th></tr>\n";
 		print $fhcluster "<tr><th>Name</th><th>Current</th><th>Unit</th><th>Reset val</th><th>Boot val</th></tr>\n";
-		foreach my $set (sort { lc($a) cmp lc($b) } keys %{$all_settings_stat{$lbl}}) {
-			print $fhcluster "<tr><td>$set</td><td>$all_settings_stat{$lbl}{$set}{value}</td><td>$all_settings_stat{$lbl}{$set}{unit}</td>";
-			if ($all_settings_stat{$lbl}{$set}{resetval}) {
-				print $fhcluster "<td>$all_settings_stat{$lbl}{$set}{resetval}</td>";
+		foreach my $set (sort { lc($a) cmp lc($b) } keys %{$all_settings{$lbl}}) {
+			print $fhcluster "<tr><td>$set</td><td>$all_settings{$lbl}{$set}{value}</td><td>$all_settings{$lbl}{$set}{unit}</td>";
+			if ($all_settings{$lbl}{$set}{resetval}) {
+				print $fhcluster "<td>$all_settings{$lbl}{$set}{resetval}</td>";
 			} else {
 				print $fhcluster "<td></td>";
 			}
-			if ($all_settings_stat{$lbl}{$set}{bootval}) {
-				print $fhcluster "<td>$all_settings_stat{$lbl}{$set}{bootval}</td>";
+			if ($all_settings{$lbl}{$set}{bootval}) {
+				print $fhcluster "<td>$all_settings{$lbl}{$set}{bootval}</td>";
 			} else {
 				print $fhcluster "<td></td>";
 			}
@@ -4435,7 +4564,7 @@ sub pg_settings_report
     </li>
 };
 	$fhcluster->close();
-	%all_settings_stat = ();
+	%all_settings = ();
 }
 
 # Get configuration from pg_db_role_setting
@@ -4443,7 +4572,7 @@ sub pg_db_role_setting
 {
 	my ($in_dir, $file) = @_;
 
-	my %all_role_settings_stat = ();
+	my %all_db_role_setting = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -4453,7 +4582,7 @@ sub pg_db_role_setting
 		# timestamp | database | role | settings
 		$data[1] ||= 'All';
 		$data[2] ||= 'All';
-		$all_role_settings_stat{$data[1]}{$data[2]} = $data[3];
+		$all_db_role_setting{$data[1]}{$data[2]} = $data[3];
 	}
 	$curfh->close();
 }
@@ -4483,9 +4612,9 @@ sub pg_db_role_setting_report
 					<tbody>
 };
 	print $fhcluster "<tr><th>Database</th><th>Role</th><th>Settings</th></tr>\n";
-	foreach my $lbl (sort keys %all_role_settings_stat) {
-		foreach my $set (sort { lc($a) cmp lc($b) } keys %{$all_role_settings_stat{$lbl}}) {
-			print $fhcluster "<tr><td>$lbl</td><td>$set</td><td>$all_role_settings_stat{$lbl}{$set}</td></tr>\n";
+	foreach my $lbl (sort keys %all_db_role_setting) {
+		foreach my $set (sort { lc($a) cmp lc($b) } keys %{$all_db_role_setting{$lbl}}) {
+			print $fhcluster "<tr><td>$lbl</td><td>$set</td><td>$all_db_role_setting{$lbl}{$set}</td></tr>\n";
 		}
 	}
 	print $fhcluster qq{
@@ -4500,7 +4629,7 @@ sub pg_db_role_setting_report
     </li>
 };
 	$fhcluster->close();
-	%all_role_settings_stat = ();
+	%all_db_role_setting = ();
 }
 
 
@@ -4517,10 +4646,10 @@ sub pg_database_buffercache
 		next if (!&normalize_line(\@data));
 
 		# date_trunc | datname | buffers | buffers % | database %
-		$all_shared_stat{$data[0]}{$data[1]}{shared_buffers_used} = ($data[3]||0);
-		$all_shared_stat{$data[0]}{$data[1]}{database_loaded} = ($data[4]||0);
-		$all_shared_stat{$data[0]}{'all'}{shared_buffers_used} += ($data[3]||0);
-		$all_shared_stat{$data[0]}{'all'}{database_loaded} += ($data[4]||0);
+		$all_database_buffercache{$data[0]}{$data[1]}{shared_buffers_used} = ($data[3]||0);
+		$all_database_buffercache{$data[0]}{$data[1]}{database_loaded} = ($data[4]||0);
+		$all_database_buffercache{$data[0]}{'all'}{shared_buffers_used} += ($data[3]||0);
+		$all_database_buffercache{$data[0]}{'all'}{database_loaded} += ($data[4]||0);
 	}
 	$curfh->close();
 }
@@ -4531,13 +4660,13 @@ sub pg_database_buffercache_report
 	my ($interval, $src_base, %data_info) = @_;
 
 	my %shared_stat = ();
-	foreach my $t (sort keys %all_shared_stat) {
+	foreach my $t (sort keys %all_database_buffercache) {
 		foreach my $db (@global_databases) {
-			$shared_stat{$db}{shared_buffers_used} .= '[' . $t . ',' . $all_shared_stat{$t}{$db}{shared_buffers_used} . '],';
-			$shared_stat{$db}{database_loaded} .= '[' . $t . ',' . $all_shared_stat{$t}{$db}{shared_buffers_used} . '],';
+			$shared_stat{$db}{shared_buffers_used} .= '[' . $t . ',' . $all_database_buffercache{$t}{$db}{shared_buffers_used} . '],';
+			$shared_stat{$db}{database_loaded} .= '[' . $t . ',' . $all_database_buffercache{$t}{$db}{shared_buffers_used} . '],';
 		}
 	}
-	%all_shared_stat = ();
+	%all_database_buffercache = ();
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html", $src_base);
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		if ($data_info{$id}{name} eq 'cluster-buffersused') {
@@ -4576,7 +4705,7 @@ sub pg_database_usagecount
 		next if (!&normalize_line(\@data));
 
 		# date_trunc | datname | usagecount | buffer | buffers %
-		$all_usagecount_stat{$data[0]}{$data[2]} += ($data[4]||0);
+		$all_database_usagecount{$data[0]}{$data[2]} += ($data[4]||0);
 	}
 	$curfh->close();
 }
@@ -4587,12 +4716,12 @@ sub pg_database_usagecount_report
 	my ($interval, $src_base, %data_info) = @_;
 
 	my %shared_stat = ();
-	foreach my $t (sort keys %all_usagecount_stat) {
-		foreach my $u (sort keys %{$all_usagecount_stat{$t}}) {
-			$shared_stat{$u}{usagecount} .= '[' . $t . ',' . $all_usagecount_stat{$t}{$u} . '],';
+	foreach my $t (sort keys %all_database_usagecount) {
+		foreach my $u (sort keys %{$all_database_usagecount{$t}}) {
+			$shared_stat{$u}{usagecount} .= '[' . $t . ',' . $all_database_usagecount{$t}{$u} . '],';
 		}
 	}
-	%all_usagecount_stat = ();
+	%all_database_usagecount = ();
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html", $src_base);
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		if ($data_info{$id}{name} eq 'cluster-usagecount') {
@@ -4620,7 +4749,7 @@ sub pg_database_isdirty
 		next if (!&normalize_line(\@data));
 
 		# date_trunc | datname | usagecount | isdirty | buffer | buffers %
-		$all_isdirty_stat{$data[0]}{$data[2]} += $data[5] if ($data[3] eq 't');
+		$all_database_isdirty{$data[0]}{$data[2]} += $data[5] if ($data[3] eq 't');
 	}
 	$curfh->close();
 }
@@ -4631,12 +4760,12 @@ sub pg_database_isdirty_report
 	my ($interval, $src_base, %data_info) = @_;
 
 	my %shared_stat = ();
-	foreach my $t (sort keys %all_isdirty_stat) {
-		foreach my $u (sort keys %{$all_isdirty_stat{$t}}) {
-			$shared_stat{$u}{usagecount} .= '[' . $t . ',' . $all_isdirty_stat{$t}{$u} . '],';
+	foreach my $t (sort keys %all_database_isdirty) {
+		foreach my $u (sort keys %{$all_database_isdirty{$t}}) {
+			$shared_stat{$u}{usagecount} .= '[' . $t . ',' . $all_database_isdirty{$t}{$u} . '],';
 		}
 	}
-	%all_isdirty_stat = ();
+	%all_database_isdirty = ();
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html", $src_base);
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		if ($data_info{$id}{name} eq 'cluster-isdirty') {
@@ -4670,17 +4799,17 @@ sub pg_stat_archiver
 		# Get archiver size statistics
 		my $tmp_val = '';
                 (($data[1] - $start_vals[1]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[1] - $start_vals[1]);
-		$all_archiver_stat{$data[0]}{archived_count} = $tmp_val;
+		$all_stat_archiver{$data[0]}{archived_count} = $tmp_val;
                 (($data[4] - $start_vals[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals[4]);
-		$all_archiver_stat{$data[0]}{failed_count} = $tmp_val;
-		$all_archiver_stat{$data[0]}{last_archived_wal} = $data[2];
+		$all_stat_archiver{$data[0]}{failed_count} = $tmp_val;
+		$all_stat_archiver{$data[0]}{last_archived_wal} = $data[2];
 		$data[3] =~ s/\..*//;
-		$all_archiver_stat{$data[0]}{last_archived_time} = $data[3];
-		$all_archiver_stat{$data[0]}{last_failed_wal} = $data[5];
+		$all_stat_archiver{$data[0]}{last_archived_time} = $data[3];
+		$all_stat_archiver{$data[0]}{last_failed_wal} = $data[5];
 		$data[6] =~ s/\..*//;
-		$all_archiver_stat{$data[0]}{last_failed_time} = $data[6];
+		$all_stat_archiver{$data[0]}{last_failed_time} = $data[6];
 		$data[7] =~ s/\..*//;
-		$all_archiver_stat{$data[0]}{stats_reset} = $data[7];
+		$all_stat_archiver{$data[0]}{stats_reset} = $data[7];
 
 		@start_vals = ();
 		push(@start_vals, @data);
@@ -4694,23 +4823,23 @@ sub pg_stat_archiver_report
 	my ($interval, $src_base, %data_info) = @_;
 
 	my %archiver_stat = ();
-	foreach my $t (sort {$a <=> $b} keys %all_archiver_stat) {
-		$archiver_stat{archived_count} .= '[' . $t . ',' . $all_archiver_stat{$t}{archived_count}. '],';
-		$archiver_stat{failed_count} .= '[' . $t . ',' . $all_archiver_stat{$t}{failed_count}. '],';
-		if (!$OVERALL_STATS{'archiver'}{last_archived_time} || ($all_archiver_stat{$t}{last_archived_time} gt $OVERALL_STATS{'archiver'}{last_archived_time})) {
-			$OVERALL_STATS{'archiver'}{last_archived_wal} = $all_archiver_stat{$t}{last_archived_wal};
-			$OVERALL_STATS{'archiver'}{last_archived_time} = $all_archiver_stat{$t}{last_archived_time};
+	foreach my $t (sort {$a <=> $b} keys %all_stat_archiver) {
+		$archiver_stat{archived_count} .= '[' . $t . ',' . $all_stat_archiver{$t}{archived_count}. '],';
+		$archiver_stat{failed_count} .= '[' . $t . ',' . $all_stat_archiver{$t}{failed_count}. '],';
+		if (!$OVERALL_STATS{'archiver'}{last_archived_time} || ($all_stat_archiver{$t}{last_archived_time} gt $OVERALL_STATS{'archiver'}{last_archived_time})) {
+			$OVERALL_STATS{'archiver'}{last_archived_wal} = $all_stat_archiver{$t}{last_archived_wal};
+			$OVERALL_STATS{'archiver'}{last_archived_time} = $all_stat_archiver{$t}{last_archived_time};
 		}
-		if (!$OVERALL_STATS{'archiver'}{last_failed_time} || ($all_archiver_stat{$t}{last_failed_time} gt $OVERALL_STATS{'archiver'}{last_failed_time})) {
-			$OVERALL_STATS{'archiver'}{last_failed_wal} = $all_archiver_stat{$t}{last_failed_wal};
-			$OVERALL_STATS{'archiver'}{last_failed_time} = $all_archiver_stat{$t}{last_failed_time};
+		if (!$OVERALL_STATS{'archiver'}{last_failed_time} || ($all_stat_archiver{$t}{last_failed_time} gt $OVERALL_STATS{'archiver'}{last_failed_time})) {
+			$OVERALL_STATS{'archiver'}{last_failed_wal} = $all_stat_archiver{$t}{last_failed_wal};
+			$OVERALL_STATS{'archiver'}{last_failed_time} = $all_stat_archiver{$t}{last_failed_time};
 		}
-		if (!$OVERALL_STATS{'archiver'}{stats_reset} || ($all_archiver_stat{$t}{stats_reset} gt $OVERALL_STATS{'archiver'}{stats_reset})) {
-			$OVERALL_STATS{'archiver'}{stats_reset} = $all_archiver_stat{$t}{stats_reset};
+		if (!$OVERALL_STATS{'archiver'}{stats_reset} || ($all_stat_archiver{$t}{stats_reset} gt $OVERALL_STATS{'archiver'}{stats_reset})) {
+			$OVERALL_STATS{'archiver'}{stats_reset} = $all_stat_archiver{$t}{stats_reset};
 		}
 
 	}
-	%all_archiver_stat = ();
+	%all_stat_archiver = ();
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		if ($data_info{$id}{name} eq 'cluster-archive') {
 			my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html", $src_base);
@@ -4725,7 +4854,7 @@ sub pg_stat_statements
 {
 	my ($in_dir, $file) = @_;
 
-	my %all_statement_stat = ();
+	my %all_stat_statements = ();
 	my $total_val = 0;
 	my @start_vals = ();
 	my $has_temp = 0;
@@ -4749,32 +4878,32 @@ sub pg_stat_statements
 		$id++ if ($#data == 20);
 		next if (!$data[$id]);
 
-		$all_statement_stat{$data[2]}{$data[$id]}{calls} += ($data[$id+1] || 0);
-		$all_statement_stat{$data[2]}{$data[$id]}{total_time} += ($data[$id+2] || 0);
-		$all_statement_stat{$data[2]}{$data[$id]}{rows} += ($data[$id+3] || 0);
+		$all_stat_statements{$data[2]}{$data[$id]}{calls} += ($data[$id+1] || 0);
+		$all_stat_statements{$data[2]}{$data[$id]}{total_time} += ($data[$id+2] || 0);
+		$all_stat_statements{$data[2]}{$data[$id]}{rows} += ($data[$id+3] || 0);
 		if ($#data > 6) {
-			$all_statement_stat{$data[2]}{$data[$id]}{shared_blks_hit} += $data[$id+4];
-			$all_statement_stat{$data[2]}{$data[$id]}{shared_blks_read} += $data[$id+5];
+			$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_hit} += $data[$id+4];
+			$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_read} += $data[$id+5];
 			if ($#data < 18) {
-				$all_statement_stat{$data[2]}{$data[$id]}{shared_blks_written} += $data[$id+6];
-				$all_statement_stat{$data[2]}{$data[$id]}{local_blks_hit} += $data[$id+7];
-				$all_statement_stat{$data[2]}{$data[$id]}{local_blks_read} += $data[$id+8];
-				$all_statement_stat{$data[2]}{$data[$id]}{local_blks_written} += $data[$id+9];
-				$all_statement_stat{$data[2]}{$data[$id]}{temp_blks_read} += $data[$id+10];
-				$all_statement_stat{$data[2]}{$data[$id]}{temp_blks_written} += $data[$id+11];
-				$all_statement_stat{$data[2]}{has_temp} = 1;
+				$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_written} += $data[$id+6];
+				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_hit} += $data[$id+7];
+				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_read} += $data[$id+8];
+				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_written} += $data[$id+9];
+				$all_stat_statements{$data[2]}{$data[$id]}{temp_blks_read} += $data[$id+10];
+				$all_stat_statements{$data[2]}{$data[$id]}{temp_blks_written} += $data[$id+11];
+				$all_stat_statements{$data[2]}{has_temp} = 1;
 			} else {
-				$all_statement_stat{$data[2]}{$data[$id]}{shared_blks_dirtied} += ($data[$id+6]*8192);
-				$all_statement_stat{$data[2]}{$data[$id]}{shared_blks_written} += $data[$id+7];
-				$all_statement_stat{$data[2]}{$data[$id]}{local_blks_hit} += $data[$id+8];
-				$all_statement_stat{$data[2]}{$data[$id]}{local_blks_read} += $data[$id+9];
-				$all_statement_stat{$data[2]}{$data[$id]}{local_blks_dirtied} += $data[$id+10];
-				$all_statement_stat{$data[2]}{$data[$id]}{local_blks_written} += $data[$id+11];
-				$all_statement_stat{$data[2]}{$data[$id]}{temp_blks_read} += ($data[$id+12]*8192);
-				$all_statement_stat{$data[2]}{$data[$id]}{temp_blks_written} += ($data[$id+13]*8192);
-				$all_statement_stat{$data[2]}{$data[$id]}{blk_read_time} += $data[$id+14];
-				$all_statement_stat{$data[2]}{$data[$id]}{blk_write_time} += $data[$id+15];
-				$all_statement_stat{$data[2]}{has_temp} = 2;
+				$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_dirtied} += ($data[$id+6]*8192);
+				$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_written} += $data[$id+7];
+				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_hit} += $data[$id+8];
+				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_read} += $data[$id+9];
+				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_dirtied} += $data[$id+10];
+				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_written} += $data[$id+11];
+				$all_stat_statements{$data[2]}{$data[$id]}{temp_blks_read} += ($data[$id+12]*8192);
+				$all_stat_statements{$data[2]}{$data[$id]}{temp_blks_written} += ($data[$id+13]*8192);
+				$all_stat_statements{$data[2]}{$data[$id]}{blk_read_time} += $data[$id+14];
+				$all_stat_statements{$data[2]}{$data[$id]}{blk_write_time} += $data[$id+15];
+				$all_stat_statements{$data[2]}{has_temp} = 2;
 			}
 		}
 
@@ -4788,13 +4917,13 @@ sub pg_stat_statements_report
 	my ($interval, $src_base, %data_info) = @_;
 
 	my $id = &get_data_id('database-queries', %data_info);
-	foreach my $db (keys %all_statement_stat) {
+	foreach my $db (keys %all_stat_statements) {
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		my $header = '';
-		if ($all_statement_stat{$db}{has_temp}) {
+		if ($all_stat_statements{$db}{has_temp}) {
 			$header = qq{<th>Temp read</th><th>Temp write</th>};
 		}
-		if ($all_statement_stat{$db}{has_temp} == 2) {
+		if ($all_stat_statements{$db}{has_temp} == 2) {
 			$header .= qq{<th>Shared dirtied</th>};
 		}
 		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-queries-$db.html", $src_base);
@@ -4825,18 +4954,18 @@ sub pg_stat_statements_report
 				</thead>
 				<tbody>
 });
-			foreach my $q (sort {$all_statement_stat{$db}{$b}{total_time} <=> $all_statement_stat{$db}{$a}{total_time}} keys %{$all_statement_stat{$db}}) {
+			foreach my $q (sort {$all_stat_statements{$db}{$b}{total_time} <=> $all_stat_statements{$db}{$a}{total_time}} keys %{$all_stat_statements{$db}}) {
 				next if ($q eq 'has_temp');
 				my $additional_cols = '';
-				if ($all_statement_stat{$db}{has_temp}) {
-					$additional_cols = "<td>" . &pretty_print_size($all_statement_stat{$db}{$q}{temp_blks_read}) . "</td><td>" .  &pretty_print_size($all_statement_stat{$db}{$q}{temp_blks_written}) . "</td>";
+				if ($all_stat_statements{$db}{has_temp}) {
+					$additional_cols = "<td>" . &pretty_print_size($all_stat_statements{$db}{$q}{temp_blks_read}) . "</td><td>" .  &pretty_print_size($all_stat_statements{$db}{$q}{temp_blks_written}) . "</td>";
 				}
-				if ($all_statement_stat{$db}{has_temp} == 2) {
-					$additional_cols .= "<td>" . &pretty_print_size($all_statement_stat{$db}{$q}{shared_blks_dirtied}) . "</td>";
+				if ($all_stat_statements{$db}{has_temp} == 2) {
+					$additional_cols .= "<td>" . &pretty_print_size($all_stat_statements{$db}{$q}{shared_blks_dirtied}) . "</td>";
 				}
 				my $query = $q;
 				$query =~ s/#SMCLN#/;/g;
-				$dbfh->print( "<tr><th width=\"50%\">$query</th><td>$all_statement_stat{$db}{$q}{calls}</td><td>" . &format_duration(int($all_statement_stat{$db}{$q}{total_time}/($all_statement_stat{$db}{$q}{calls}||1))) . "</td><td>" . &format_duration($all_statement_stat{$db}{$q}{total_time}) . "</td><td>$all_statement_stat{$db}{$q}{rows}</td>$additional_cols</tr>\n");
+				$dbfh->print( "<tr><th width=\"50%\">$query</th><td>$all_stat_statements{$db}{$q}{calls}</td><td>" . &format_duration(int($all_stat_statements{$db}{$q}{total_time}/($all_stat_statements{$db}{$q}{calls}||1))) . "</td><td>" . &format_duration($all_stat_statements{$db}{$q}{total_time}) . "</td><td>$all_stat_statements{$db}{$q}{rows}</td>$additional_cols</tr>\n");
 			}
 			$dbfh->print( qq{
 				</tbody>
@@ -4851,7 +4980,7 @@ sub pg_stat_statements_report
 });
 		$dbfh->close();
 	}
-	%all_statement_stat = ();
+	%all_stat_statements = ();
 
 }
 
@@ -4918,9 +5047,9 @@ sub generate_html_index
 	}
 
 	&html_header($fh, $src_base);
-	
+
 	# Compute global statistics for home page dashboard
-	my %overall_database_stats = ();
+	my %overall_stat_databases = ();
 	if (exists $OVERALL_STATS{'cluster'}) {
 		$OVERALL_STATS{'cluster'}{'blks_hit'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'blks_read'} ||= 0;
@@ -4936,47 +5065,47 @@ sub generate_html_index
 			next if (($#INCLUDE_DB >= 0) && !grep(/^$db$/, @INCLUDE_DB));
 			if (exists $OVERALL_STATS{'database'}{$db}{'size'}) {
 				$OVERALL_STATS{'cluster'}{'size'} += $OVERALL_STATS{'database'}{$db}{'size'};
-				if (!exists $overall_database_stats{'size'} || $OVERALL_STATS{'database'}{$db}{'size'} > $overall_database_stats{'size'}[1]) {
-					@{$overall_database_stats{'size'}} = ($db, $OVERALL_STATS{'database'}{$db}{'size'});
+				if (!exists $overall_stat_databases{'size'} || $OVERALL_STATS{'database'}{$db}{'size'} > $overall_stat_databases{'size'}[1]) {
+					@{$overall_stat_databases{'size'}} = ($db, $OVERALL_STATS{'database'}{$db}{'size'});
 				}
 			}
 			if (exists $OVERALL_STATS{'database'}{$db}{'nbackend'}) {
-				if (!exists $overall_database_stats{'nbackend'} || $OVERALL_STATS{'database'}{$db}{'nbackend'} > $overall_database_stats{'nbackend'}[1]) {
-					@{$overall_database_stats{'nbackend'}} = ($db, $OVERALL_STATS{'database'}{$db}{'nbackend'});
+				if (!exists $overall_stat_databases{'nbackend'} || $OVERALL_STATS{'database'}{$db}{'nbackend'} > $overall_stat_databases{'nbackend'}[1]) {
+					@{$overall_stat_databases{'nbackend'}} = ($db, $OVERALL_STATS{'database'}{$db}{'nbackend'});
 				}
 			}
 			if (exists $OVERALL_STATS{'database'}{$db}{'returned'}) {
-				if (!exists $overall_database_stats{'returned'} || $OVERALL_STATS{'database'}{$db}{'returned'} > $overall_database_stats{'returned'}[1]) {
-					@{$overall_database_stats{'returned'}} = ($db, $OVERALL_STATS{'database'}{$db}{'returned'});
+				if (!exists $overall_stat_databases{'returned'} || $OVERALL_STATS{'database'}{$db}{'returned'} > $overall_stat_databases{'returned'}[1]) {
+					@{$overall_stat_databases{'returned'}} = ($db, $OVERALL_STATS{'database'}{$db}{'returned'});
 				}
 			}
 			if (exists $OVERALL_STATS{'database'}{$db}{'temp_files'}) {
-				if (!exists $overall_database_stats{'temp_files'} || $OVERALL_STATS{'database'}{$db} {'temp_files'} > $overall_database_stats{'temp_files'}[1]) {
-					@{$overall_database_stats{'temp_files'}} = ($db, $OVERALL_STATS{'database'}{$db}{'temp_files'});
+				if (!exists $overall_stat_databases{'temp_files'} || $OVERALL_STATS{'database'}{$db} {'temp_files'} > $overall_stat_databases{'temp_files'}[1]) {
+					@{$overall_stat_databases{'temp_files'}} = ($db, $OVERALL_STATS{'database'}{$db}{'temp_files'});
 				}
 			}
 			if (exists $OVERALL_STATS{'database'}{$db}{'temp_bytes'}) {
-				if (!exists $overall_database_stats{'temp_bytes'} || $OVERALL_STATS{'database'}{$db}{'temp_bytes'} > $overall_database_stats{'temp_bytes'}[1]) {
-					@{$overall_database_stats{'temp_bytes'}} = ($db, $OVERALL_STATS{'database'}{$db}{'temp_bytes'});
+				if (!exists $overall_stat_databases{'temp_bytes'} || $OVERALL_STATS{'database'}{$db}{'temp_bytes'} > $overall_stat_databases{'temp_bytes'}[1]) {
+					@{$overall_stat_databases{'temp_bytes'}} = ($db, $OVERALL_STATS{'database'}{$db}{'temp_bytes'});
 				}
 			}
 			if (exists $OVERALL_STATS{'database'}{$db}{'deadlocks'}) {
-				if (!exists $overall_database_stats{'deadlocks'} || $OVERALL_STATS{'database'}{$db}{'deadlocks'} > $overall_database_stats{'deadlocks'}[1]) {
-					@{$overall_database_stats{'deadlocks'}} = ($db, $OVERALL_STATS{'database'}{$db}{'deadlocks'});
+				if (!exists $overall_stat_databases{'deadlocks'} || $OVERALL_STATS{'database'}{$db}{'deadlocks'} > $overall_stat_databases{'deadlocks'}[1]) {
+					@{$overall_stat_databases{'deadlocks'}} = ($db, $OVERALL_STATS{'database'}{$db}{'deadlocks'});
 				}
 			}
 			if (exists $OVERALL_STATS{'database'}{$db}{'cache_ratio'}) {
-				if (!exists $overall_database_stats{'cache_ratio'} || $OVERALL_STATS{'database'}{$db}{'cache_ratio'} < $overall_database_stats{'cache_ratio'}[1]) {
-					@{$overall_database_stats{'cache_ratio'}} = ($db, $OVERALL_STATS{'database'}{$db}{'cache_ratio'});
+				if (!exists $overall_stat_databases{'cache_ratio'} || $OVERALL_STATS{'database'}{$db}{'cache_ratio'} < $overall_stat_databases{'cache_ratio'}[1]) {
+					@{$overall_stat_databases{'cache_ratio'}} = ($db, $OVERALL_STATS{'database'}{$db}{'cache_ratio'});
 				}
 			}
 		}
-		@{$overall_database_stats{'size'}} = ('unknown', 0) if (!exists $overall_database_stats{'size'});
-		if (exists $overall_database_stats{'size'}) {
-			$overall_database_stats{'size'}[1] = &pretty_print_size($overall_database_stats{'size'}[1]);
+		@{$overall_stat_databases{'size'}} = ('unknown', 0) if (!exists $overall_stat_databases{'size'});
+		if (exists $overall_stat_databases{'size'}) {
+			$overall_stat_databases{'size'}[1] = &pretty_print_size($overall_stat_databases{'size'}[1]);
 		}
-		if (exists $overall_database_stats{'temp_bytes'}) {
-			$overall_database_stats{'temp_bytes'}[1] = &pretty_print_size($overall_database_stats{'temp_bytes'}[1]);
+		if (exists $overall_stat_databases{'temp_bytes'}) {
+			$overall_stat_databases{'temp_bytes'}[1] = &pretty_print_size($overall_stat_databases{'temp_bytes'}[1]);
 		}
 	}
 
@@ -5017,8 +5146,7 @@ sub generate_html_index
 	print $fh <<EOF;
 <ul id="slides">
 <li class="slide active-slide" id="home-slide">
-
-    <div id="home"><br/><br/><br/></div>
+    <div id="home"><br/><br/><br/><br/></div>
 EOF
 	my $tz = ((0-$STATS_TIMEZONE)*3600);
 	if (exists $OVERALL_STATS{'start_date'}) {
@@ -5033,6 +5161,7 @@ EOF
 	}
 	my $sar_start_date = gmtime($OVERALL_STATS{'sar_start_date'}||0) || 'Unknown start date';
 	my $sar_end_date = gmtime($OVERALL_STATS{'sar_end_date'}||0) || 'Unknown end date';
+
 	if (exists $OVERALL_STATS{'cluster'}) {
 		$OVERALL_STATS{'cluster'}{'size'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'nbackend'} ||= 0;
@@ -5105,39 +5234,39 @@ EOF
 		<ul>
 		<li></li>
 EOF
-		if (exists $overall_database_stats{'size'}) {
+		if (exists $overall_stat_databases{'size'}) {
 			print $fh <<EOF;
-		<li><span class="figure">$overall_database_stats{'size'}[1]</span> <span class="figure-label">Largest database</span><br/><span class="figure-date">($overall_database_stats{'size'}[0])</span></li>
+		<li><span class="figure">$overall_stat_databases{'size'}[1]</span> <span class="figure-label">Largest database</span><br/><span class="figure-date">($overall_stat_databases{'size'}[0])</span></li>
 EOF
 		}
-		if (exists $overall_database_stats{'nbackend'}) {
+		if (exists $overall_stat_databases{'nbackend'}) {
 			print $fh <<EOF;
-		<li><span class="figure">$overall_database_stats{'nbackend'}[1]</span> <span class="figure-label">Most connections</span><br/><span class="figure-date">($overall_database_stats{'nbackend'}[0])</span></li>
+		<li><span class="figure">$overall_stat_databases{'nbackend'}[1]</span> <span class="figure-label">Most connections</span><br/><span class="figure-date">($overall_stat_databases{'nbackend'}[0])</span></li>
 EOF
 		}
-		if (exists $overall_database_stats{'returned'}) {
-			print $fh qq{<li><span class="figure">$overall_database_stats{'returned'}[1]</span> <span class="figure-label">Most tuples returned</span><br/><span class="figure-date">($overall_database_stats{'returned'}[0])</span></li>
+		if (exists $overall_stat_databases{'returned'}) {
+			print $fh qq{<li><span class="figure">$overall_stat_databases{'returned'}[1]</span> <span class="figure-label">Most tuples returned</span><br/><span class="figure-date">($overall_stat_databases{'returned'}[0])</span></li>
 };
 		}
-		if (exists $overall_database_stats{'cache_ratio'}) {
-			push(@{$overall_database_stats{'cache_ratio'}}, '-', '-') if ($#{$overall_database_stats{'cache_ratio'}} < 0);
+		if (exists $overall_stat_databases{'cache_ratio'}) {
+			push(@{$overall_stat_databases{'cache_ratio'}}, '-', '-') if ($#{$overall_stat_databases{'cache_ratio'}} < 0);
 			print $fh <<EOF;
-		<li><span class="figure">$overall_database_stats{'cache_ratio'}[1]%</span> <span class="figure-label">Worst cache utilization</span><br/><span class="figure-date">($overall_database_stats{'cache_ratio'}[0])</span></li>
+		<li><span class="figure">$overall_stat_databases{'cache_ratio'}[1]%</span> <span class="figure-label">Worst cache utilization</span><br/><span class="figure-date">($overall_stat_databases{'cache_ratio'}[0])</span></li>
 EOF
 		}
-		if (exists $overall_database_stats{'temp_files'} && $overall_database_stats{'temp_files'}[1]) {
+		if (exists $overall_stat_databases{'temp_files'} && $overall_stat_databases{'temp_files'}[1]) {
 			print $fh <<EOF;
-		<li><span class="figure">$overall_database_stats{'temp_files'}[1]</span> <span class="figure-label">Most temporary files</span><br/><span class="figure-date">($overall_database_stats{'temp_files'}[0])</span></li>
+		<li><span class="figure">$overall_stat_databases{'temp_files'}[1]</span> <span class="figure-label">Most temporary files</span><br/><span class="figure-date">($overall_stat_databases{'temp_files'}[0])</span></li>
 EOF
 		}
-		if (exists $overall_database_stats{'temp_bytes'} && $overall_database_stats{'temp_bytes'}[1]) {
+		if (exists $overall_stat_databases{'temp_bytes'} && $overall_stat_databases{'temp_bytes'}[1]) {
 			print $fh <<EOF;
-		<li><span class="figure">$overall_database_stats{'temp_bytes'}[1]</span> <span class="figure-label">Most temporary bytes</span><br/><span class="figure-date">($overall_database_stats{'temp_bytes'}[0])</span></li>
+		<li><span class="figure">$overall_stat_databases{'temp_bytes'}[1]</span> <span class="figure-label">Most temporary bytes</span><br/><span class="figure-date">($overall_stat_databases{'temp_bytes'}[0])</span></li>
 EOF
 		}
-		if (exists $overall_database_stats{'deadlocks'} && $overall_database_stats{'deadlocks'}[1]) {
+		if (exists $overall_stat_databases{'deadlocks'} && $overall_stat_databases{'deadlocks'}[1]) {
 			print $fh <<EOF;
-		<li><span class="figure">$overall_database_stats{'deadlocks'}[1]</span> <span class="figure-label">Most deadlocks</span><br/><span class="figure-date">($overall_database_stats{'deadlocks'}[0])</span></li>
+		<li><span class="figure">$overall_stat_databases{'deadlocks'}[1]</span> <span class="figure-label">Most deadlocks</span><br/><span class="figure-date">($overall_stat_databases{'deadlocks'}[0])</span></li>
 EOF
 		}
 		print $fh <<EOF;
@@ -5179,6 +5308,7 @@ EOF
 	print $fh <<EOF;
       </div>
 EOF
+
 	if (exists $OVERALL_STATS{'archiver'}) {
 		my $archiver_infos = '';
 		if (exists $OVERALL_STATS{'archiver'}{last_archived_wal}) {
@@ -5211,9 +5341,8 @@ EOF
               </div>
             </div><!--/span-->
 EOF
-
-
 	}
+
 	if (exists $sysinfo{PGVERSION}) {
 		print $fh <<EOF;
 
@@ -5275,7 +5404,7 @@ EOF
 
 EOF
 
-	if ( (-e "$in_dir/sysinfo.txt") || (-e "$in_dir/sysinfo.txt.gz") ) {
+	if ( (-e "$in_dir/sysinfo.txt") || (-e "$in_dir/sysinfo.txt.gz") || (-e "$in_dir/sys_cache.bin") ) {
 		print $fh <<EOF;
 <li class="slide" id="info-slide">
 
@@ -5671,7 +5800,7 @@ AAAASUVORK5CYII=';
           <ul class="nav navbar-nav">
               <li id="menu-home" class="dropdown"><a href="index.html#home">Home</a></li>
 };
-	if ( (-e "$in_dir/sysinfo.txt") || (-e "$in_dir/sysinfo.txt.gz") ) {
+	if ( (-e "$in_dir/sysinfo.txt") || (-e "$in_dir/sysinfo.txt.gz") || (-e "$in_dir/sys_cache.bin") ) {
 		$menu_str .= qq{
               <li id="menu-info" class="dropdown"><a href="index.html#info">SysInfo</a></li>
 };
@@ -5942,7 +6071,7 @@ AAAASUVORK5CYII=';
 		   <a href="#" tabindex="-1">$db </a>
 		      <ul class="dropdown-menu">
 };
-		if ( (-e "$in_dir/sysinfo.txt") || (-e "$in_dir/sysinfo.txt.gz") ) {
+		if ( (-e "$in_dir/sysinfo.txt") || (-e "$in_dir/sysinfo.txt.gz") || (-e "$in_dir/sys_cache.bin") ) {
 			$menu_str .= qq{
 		      <li id="menu-database-info"><a href="database-$db.html#database-info">Database info</a></li>
 };
@@ -6801,7 +6930,7 @@ sub compute_rw_device_report
 				$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'device-read_write', $data_info, $n, $devices_stat{$n}{'rd_sec/s'}, $devices_stat{$n}{'wr_sec/s'}) );
 			} elsif ($data_info->{name} eq 'system-tpsdevice') {
 				$devices_stat{$n}{'tps'} =~ s/,$//;
-				$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'device-tpsdevice', $data_info, $n, $devices_stat{$n}{'tps'}) );
+				$DEVFH{$n}->print( &flotr2_linegraph_array($IDX++, 'device-tps', $data_info, $n, $devices_stat{$n}{'tps'}) );
 			}
 		}
 	}
@@ -7893,7 +8022,6 @@ sub flotr2_linegraph
 	$active = ' active-slide' if ($infos->{active});
 
 	my $description = $infos->{description} || '';
-print STDERR "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE $divid : $title - $description\n" if (!$title);
 	my $str = '';
 	if (($divid !~ /\+$/) && ($divid !~ /^statio-/)) {
 		$str = qq{
@@ -8408,48 +8536,58 @@ sub get_data_directories
 	return @work_dirs;
 }
 
-# Initialise global variables storing statistics
-sub clear_stats
+# Initialise global variables storing PostgreSQL statistics
+sub clear_db_stats
 {
-	%OVERALL_STATS   = ();
+	print "DEBUG: Cleaning memory from PostgreSQL statistics storages\n" if ($DEBUG);
+	%global_infos = ();
 	@global_databases = ();
 	@global_tbspnames = ();
-	%all_database_stat = ();
-	%all_conflict_stat = ();
-	%all_dbsize_stat = ();
-	%all_tablespace_stat = ();
+	%all_stat_database = ();
+	%all_stat_database_conflicts = ();
+	%all_database_size = ();
+	%all_tablespace_size = ();
 	%all_vacuum_stat = ();
-	%all_usertable_stat = ();
-	%all_userindex_stat = ();
-	%all_statio_usertable_stat = ();
-	%all_buffercache_stat = ();
-	%all_statio_userindex_stat = ();
+	%all_stat_user_tables = ();
+	%all_stat_user_indexes = ();
+	%all_statio_user_tables = ();
+	%all_relation_buffercache = ();
+	%all_statio_all_indexes = ();
 	%all_xlog_stat = ();
-	%all_bgwriter_stat = ();
-	%all_connections_stat = ();
-	%all_functions_stat = ();
-	%all_replication_stat = ();
-	%all_pgbouncer_stat = ();
+	%all_stat_bgwriter = ();
+	%all_stat_connections = ();
+	%all_stat_user_functions = ();
+	%all_stat_replication = ();
+	%all_pgbouncer_stats = ();
 	%all_pgbouncer_ini = ();
-	%all_pgbouncer_req = ();
-	%all_class_stat = ();
-	%all_lock_stat = ();
-	%all_unusedidx_stat = ();
-	%all_redundantidx_stat = ();
-	%all_missingfkidx_stat = ();
+	%all_pgbouncer_req_stats = ();
+	%all_class_size = ();
+	%all_stat_locks = ();
+	%all_stat_unused_indexes = ();
+	%all_stat_redundant_indexes = ();
+	%all_stat_missing_fkindexes = ();
 	%all_postgresql_conf = ();
 	%all_recovery_conf = ();
 	%all_postgresql_auto_conf = ();
-	%all_hba_conf = ();
-	%all_ident_conf = ();
-	%all_settings_stat = ();
-	%all_role_settings_stat = ();
-	%all_shared_stat = ();
-	%all_usagecount_stat = ();
-	%all_isdirty_stat = ();
-	%all_archiver_stat = ();
-	%all_statement_stat = ();
+	%pg_hba_conf = ();
+	%pg_ident_conf = ();
+	%all_settings = ();
+	%all_db_role_setting = ();
+	%all_database_buffercache = ();
+	%all_database_usagecount = ();
+	%all_database_isdirty = ();
+	%all_stat_archiver = ();
+	%all_stat_statements = ();
+}
 
+
+# Initialise global variables storing statistics
+sub clear_stats
+{
+	&clear_db_stats();
+
+	print "DEBUG: Cleaning memory from all statistics storages\n" if ($DEBUG);
+	%OVERALL_STATS = ();
 	%sar_cpu_stat = ();
 	%sar_load_stat = ();
 	%sar_process_stat = ();
@@ -8467,52 +8605,69 @@ sub clear_stats
 }
 
 # Dump relevant memory to file for incremental use
-sub dump_as_binary
+sub dump_pg_binary
 {
-        my $outfile = shift();
+        my ($in_dir, $outfile) = @_;
 
-	my $lfh = new IO::File ">$outfile";
+	my $lfh = new IO::File ">$in_dir/$outfile";
 	if (not defined $lfh) {
-		die "FATAL: can't write to $outfile, $!\n";
+		die "FATAL: can't write to $in_dir/$outfile, $!\n";
 	}
+	my %global_infos = ('interval' => $INTERVAL, 'in_dir' => $in_dir);
         store_fd({
+		'global_infos' => \%global_infos,
 		'global_databases' => \@global_databases,
 		'global_tbspnames' => \@global_tbspnames,
-		'all_database_stat' => \%all_database_stat,
-		'all_conflict_stat' => \%all_conflict_stat,
-		'all_dbsize_stat' => \%all_dbsize_stat,
-		'all_tablespace_stat' => \%all_tablespace_stat,
+		'all_stat_database' => \%all_stat_database,
+		'all_stat_database_conflicts' => \%all_stat_database_conflicts,
+		'all_database_size' => \%all_database_size,
+		'all_tablespace_size' => \%all_tablespace_size,
 		'all_vacuum_stat' => \%all_vacuum_stat,
-		'all_usertable_stat' => \%all_usertable_stat,
-		'all_userindex_stat' => \%all_userindex_stat,
-		'all_statio_usertable_stat' => \%all_statio_usertable_stat,
-		'all_buffercache_stat' => \%all_buffercache_stat,
-		'all_statio_userindex_stat' => \%all_statio_userindex_stat,
+		'all_stat_user_tables' => \%all_stat_user_tables,
+		'all_stat_user_indexes' => \%all_stat_user_indexes,
+		'all_statio_user_tables' => \%all_statio_user_tables,
+		'all_relation_buffercache' => \%all_relation_buffercache,
+		'all_statio_all_indexes' => \%all_statio_all_indexes,
 		'all_xlog_stat' => \%all_xlog_stat,
-		'all_bgwriter_stat' => \%all_bgwriter_stat,
-		'all_connections_stat' => \%all_connections_stat,
-		'all_functions_stat' => \%all_functions_stat,
-		'all_replication_stat' => \%all_replication_stat,
-		'all_pgbouncer_stat' => \%all_pgbouncer_stat,
+		'all_stat_bgwriter' => \%all_stat_bgwriter,
+		'all_stat_connections' => \%all_stat_connections,
+		'all_stat_user_functions' => \%all_stat_user_functions,
+		'all_stat_replication' => \%all_stat_replication,
+		'all_pgbouncer_stats' => \%all_pgbouncer_stats,
 		'all_pgbouncer_ini' => \%all_pgbouncer_ini,
-		'all_pgbouncer_req' => \%all_pgbouncer_req,
-		'all_class_stat' => \%all_class_stat,
-		'all_lock_stat' => \%all_lock_stat,
-		'all_unusedidx_stat' => \%all_unusedidx_stat,
-		'all_redundantidx_stat' => \%all_redundantidx_stat,
-		'all_missingfkidx_stat' => \%all_missingfkidx_stat,
+		'all_pgbouncer_req_stats' => \%all_pgbouncer_req_stats,
+		'all_class_size' => \%all_class_size,
+		'all_stat_locks' => \%all_stat_locks,
+		'all_stat_unused_indexes' => \%all_stat_unused_indexes,
+		'all_stat_redundant_indexes' => \%all_stat_redundant_indexes,
+		'all_stat_missing_fkindexes' => \%all_stat_missing_fkindexes,
 		'all_postgresql_conf' => \%all_postgresql_conf,
 		'all_recovery_conf' => \%all_recovery_conf,
 		'all_postgresql_auto_conf' => \%all_postgresql_auto_conf,
-		'all_hba_conf' => \%all_hba_conf,
-		'all_ident_conf' => \%all_ident_conf,
-		'all_settings_stat' => \%all_settings_stat,
-		'all_role_settings_stat' => \%all_role_settings_stat,
-		'all_shared_stat' => \%all_shared_stat,
-		'all_usagecount_stat' => \%all_usagecount_stat,
-		'all_isdirty_stat' => \%all_isdirty_stat,
-		'all_archiver_stat' => \%all_archiver_stat,
-		'all_statement_stat' => \%all_statement_stat,
+		'pg_hba_conf' => \%pg_hba_conf,
+		'pg_ident_conf' => \%pg_ident_conf,
+		'all_settings' => \%all_settings,
+		'all_db_role_setting' => \%all_db_role_setting,
+		'all_database_buffercache' => \%all_database_buffercache,
+		'all_database_usagecount' => \%all_database_usagecount,
+		'all_database_isdirty' => \%all_database_isdirty,
+		'all_stat_archiver' => \%all_stat_archiver,
+		'all_stat_statements' => \%all_stat_statements,
+        }, $lfh) || die ("Couldn't save binary data to «$in_dir/$outfile»!\n");
+	$lfh->close;
+}
+
+# Dump memory from sar statistics to file for incremental use
+sub dump_sar_binary
+{
+        my ($in_dir, $outfile) = @_;
+
+	my $lfh = new IO::File ">$in_dir/$outfile";
+	if (not defined $lfh) {
+		die "FATAL: can't write to $in_dir/$outfile, $!\n";
+	}
+        store_fd({
+		'global_infos' => \%global_infos,
 		'sar_cpu_stat' => \%sar_cpu_stat,
 		'sar_load_stat' => \%sar_load_stat,
 		'sar_process_stat' => \%sar_process_stat,
@@ -8526,36 +8681,108 @@ sub dump_as_binary
 		'sar_util_devices_stat' => \%sar_util_devices_stat,
 		'sar_networks_stat' => \%sar_networks_stat,
 		'sar_neterror_stat' => \%sar_neterror_stat,
-        }, $lfh) || die ("Couldn't save binary data to «$outfile»!\n");
+        }, $lfh) || die ("Couldn't save binary data to «$in_dir/$outfile»!\n");
+	$lfh->close;
+}
+
+# Dump memory from system information to file for incremental use
+sub dump_sys_binary
+{
+        my ($in_dir, $outfile) = @_;
+
+	my $lfh = new IO::File ">$in_dir/$outfile";
+	if (not defined $lfh) {
+		die "FATAL: can't write to $in_dir/$outfile, $!\n";
+	}
+        store_fd({
+		'sysinfo' => \%sysinfo,
+        }, $lfh) || die ("Couldn't save binary data to «$in_dir/$outfile»!\n");
 	$lfh->close;
 }
 
 
-# Dump relevant memory to file for incremental use
-sub load_binary
+# Load statistics from pg cache into memory
+sub load_pg_binary
 {
-        my $outfile = shift();
+        my ($in_dir, $infile) = @_;
 
-	my $lfh = new IO::File "<$outfile";
+	my $lfh = new IO::File "<$in_dir/$infile";
 	if (not defined $lfh) {
-		die "FATAL: can't write to $outfile, $!\n";
+		die "FATAL: can't write to $in_dir/$infile, $!\n";
 	}
 	my %stats = %{ fd_retrieve($lfh) };
 	$lfh->close();
 
+	# Setting global information
+	my %_global_infos = %{$stats{global_infos}} ;
+	foreach my $inf (keys %_global_infos) {
+		if ($_global_infos{$inf} =~ /ARRAY/) {
+			push(@{$inf}, @{$_global_infos{$inf}});
+		} else {
+			$global_infos{$inf} = $_global_infos{$inf};
+		}
+	}
+	delete $stats{global_infos};
+
+	# Look for database and tablespace
 	my @_global_databases = @{$stats{global_databases}};
 	my @_global_tbspnames = @{$stats{global_tbspnames}};
-
-	delete $stats{OVERALL_STATS};
-	# Look for database and tablespace
 	foreach my $d (@{$stats{global_databases}}) {
 		push(@global_databases, $d) if (!grep(/^$d$/, @global_databases));
 	}
+
 	delete $stats{global_databases};
 	foreach my $d (@{$stats{global_tbspnames}}) {
 		push(@global_tbspnames, $d) if (!grep(/^$d$/, @global_databases));
 	}
 	delete $stats{global_tbspnames};
+
+	# Load other storages
+	foreach my $m (keys %stats) {
+		foreach my $t (keys %{$stats{$m}}) {
+			if ($stats{$m}{$t} =~ /HASH/) {
+				foreach my $d (keys %{$stats{$m}{$t}}) {
+					if ($stats{$m}{$t}{$d} =~ /HASH/) {
+						foreach my $k (keys %{$stats{$m}{$t}{$d}}) {
+							${$m}{$t}{$d}{$k} = $stats{$m}{$t}{$d}{$k};
+						}
+					} elsif ($stats{$m}{$t}{$d} =~ /ARRAY/) {
+						push(@{${$m}{$t}{$d}}, @{$stats{$m}{$t}{$d}});
+					} else {
+						${$m}{$t}{$d} = $stats{$m}{$t}{$d};
+					}
+				}
+			} elsif ($stats{$m}{$t} =~ /ARRAY/) {
+				push(@{${$m}{$t}}, @{$stats{$m}{$t}});
+			} else {
+				${$m}{$t} = $stats{$m}{$t};
+			}
+		}
+	}
+}
+
+# Load statistics from sar cache into memory
+sub load_sar_binary
+{
+        my ($in_dir, $infile) = @_;
+
+	my $lfh = new IO::File "<$in_dir/$infile";
+	if (not defined $lfh) {
+		die "FATAL: can't write to $in_dir/$infile, $!\n";
+	}
+	my %stats = %{ fd_retrieve($lfh) };
+	$lfh->close();
+
+	# Setting global information
+	my %_global_infos = %{$stats{global_infos}} ;
+	foreach my $inf (keys %_global_infos) {
+		if ($_global_infos{$inf} =~ /ARRAY/) {
+			push(@{$inf}, @{$_global_infos{$inf}});
+		} else {
+			$global_infos{$inf} = $_global_infos{$inf};
+		}
+	}
+	delete $stats{global_infos};
 
 	# Load other storages
 	foreach my $m (keys %stats) {
@@ -8571,8 +8798,45 @@ sub load_binary
 			}
 		}
 	}
-
 }
+
+# Load statistics from sysinfo cache into memory
+sub load_sys_binary
+{
+        my ($in_dir, $infile) = @_;
+
+	my $lfh = new IO::File "<$in_dir/$infile";
+	if (not defined $lfh) {
+		die "FATAL: can't write to $in_dir/$infile, $!\n";
+	}
+	my %stats = %{ fd_retrieve($lfh) };
+	$lfh->close();
+	my %_sysinfo = %{$stats{sysinfo}};
+
+	# Load other storages
+	foreach my $s (keys %_sysinfo) {
+		if ($_sysinfo{$s} =~ /HASH/) {
+			foreach my $n (keys %{$_sysinfo{$s}}) {
+				if ($_sysinfo{$s}{$n} =~ /HASH/) {
+					foreach my $k (keys %{$_sysinfo{$s}{$n}}) {
+						$sysinfo{$s}{$n}{$k} = $_sysinfo{$s}{$n}{$k};
+					}
+				} elsif ($_sysinfo{$s}{$n} =~ /ARRAY/) {
+					foreach my $k (@{$_sysinfo{$s}{$n}}) {
+						push(@{$sysinfo{$s}{$n}}, $k);
+					}
+				} else {
+					$sysinfo{$s}{$n} = $_sysinfo{$s}{$n};
+				}
+			}
+		} elsif ($_sysinfo{$s} =~ /ARRAY/) {
+			foreach my $k (@{$_sysinfo{$s}}) {
+				push(@{$sysinfo{$s}}, $k);
+			}
+		}
+	}
+}
+
 
 __DATA__
 
