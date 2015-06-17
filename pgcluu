@@ -111,6 +111,49 @@ our %all_database_isdirty = ();
 our %all_stat_archiver = ();
 our %all_stat_statements = ();
 
+# Names of the variables that need to be saved as binary file
+our @pg_to_be_stored = (
+	'global_infos',
+	'global_databases',
+	'global_tbspnames',
+	'all_stat_database',
+	'all_stat_database_conflicts',
+	'all_database_size',
+	'all_tablespace_size',
+	'all_vacuum_stat',
+	'all_stat_user_tables',
+	'all_stat_user_indexes',
+	'all_statio_user_tables',
+	'all_relation_buffercache',
+	'all_statio_all_indexes',
+	'all_xlog_stat',
+	'all_stat_bgwriter',
+	'all_stat_connections',
+	'all_stat_user_functions',
+	'all_stat_replication',
+	'all_pgbouncer_stats',
+	'all_pgbouncer_ini',
+	'all_pgbouncer_req_stats',
+	'all_class_size',
+	'all_stat_locks',
+	'all_stat_unused_indexes',
+	'all_stat_redundant_indexes',
+	'all_stat_missing_fkindexes',
+	'all_postgresql_conf',
+	'all_recovery_conf',
+	'all_postgresql_auto_conf',
+	'pg_hba_conf',
+	'pg_ident_conf',
+	'all_settings',
+	'all_db_role_setting',
+	'all_database_buffercache',
+	'all_database_usagecount',
+	'all_database_isdirty',
+	'all_stat_archiver',
+	'all_stat_statements',
+);
+
+# Names of sar variables that need to be saved as binary file
 our %sar_cpu_stat = ();
 our %sar_load_stat = ();
 our %sar_process_stat = ();
@@ -124,6 +167,24 @@ our %sar_rw_devices_stat = ();
 our %sar_util_devices_stat = ();
 our %sar_networks_stat = ();
 our %sar_neterror_stat = ();
+
+our @sar_to_be_stored = (
+	'global_infos',
+	'sar_cpu_stat',
+	'sar_load_stat',
+	'sar_process_stat',
+	'sar_context_stat',
+	'sar_memory_stat',
+	'sar_swap_stat',
+	'sar_pageswap_stat',
+	'sar_block_stat',
+	'sar_srvtime_stat',
+	'sar_rw_devices_stat',
+	'sar_util_devices_stat',
+	'sar_networks_stat',
+	'sar_neterror_stat'
+);
+
 our %sysinfo   = (); # Hash used to store system information
 
 # Store default timestamp
@@ -944,17 +1005,26 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 	my $in_dir = "$INPUT_DIR/$WORK_DIRS[$dx]";
 	$OUTPUT_DIR = "$ORIG_OUTPUT_DIR/$WORK_DIRS[$dx]";
 
+	# Check if we have binary file in the directory
+	my @binfiles = ();
+	if (-d "$in_dir") {
+		opendir(IDIR, "$in_dir") || die "FATAL: can't opendir $in_dir: $!";
+		@binfiles = grep { /^all_.*\.bin$/ } readdir(IDIR);
+		closedir(IDIR);
+	}
+
 	# With cache mode look if the input directory already has cache files
-	if ( $CACHE && (-e "$in_dir/pg_cache.bin" || -e "$in_dir/sar_cache.bin") ) {
+	if ( $CACHE && ($#binfiles >= 0) ) {
 		print "DEBUG: directory $in_dir has already been cached, skip it.\n" if ($DEBUG);
 		next;
 	}
 
 	# Set default sysstat file to read (binary or text format)
 	# an extract the disk devices and network interfaces list
+	# if there's no binary files
 	my $sar_file = '';
 	my $sadc_file = '';
-	if (!$DISABLE_SAR) {
+	if (!$DISABLE_SAR && ($#binfiles < 0) ) {
 		($sar_file, $sadc_file) = &set_sysstat_file($in_dir);
 		@DEVICE_LIST = &get_device_list($sar_file, $sadc_file);
 		@IFACE_LIST = &get_interface_list($sar_file, $sadc_file);
@@ -994,7 +1064,8 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 		}
 
 		my @statistics_build = ();
-		if (!-e "$in_dir/pg_cache.bin") {
+		if ($#binfiles == -1) {
+
 			# Check if there is csv file in the input directory
 			print "DEBUG: looking for CSV file into directory $in_dir/\n" if ($DEBUG);
 			opendir(IDIR, "$in_dir") || die "FATAL: can't opendir $in_dir: $!";
@@ -1013,14 +1084,13 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			print "DEBUG: autodetected interval value $INTERVAL\n" if ($DEBUG);
 
 			# Enable capture mode if all data file are not present
-			if (!-e "$in_dir/pg_stat_connections.csv") {
+			if (!-e "$in_dir/pg_stat_connections.csv" && !-e "$in_dir/pg_stat_connections.csv.gz") {
 				$CAPTURE = 1;
 				print "DEBUG: detecting capture mode, enabling it.\n" if ($DEBUG);
 				if ($CACHE) {
 					die "FATAL: caching mode can not be used on a capture repository.\n";
 				}
 			}
-
 
 			# Loop over CSV files and graphics definition to generate reports
 			print "DEBUG: Building PostgreSQL statistics from CSV files\n" if ($DEBUG);
@@ -1049,29 +1119,35 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			}
 
 			if ($CACHE) {
-				print "DEBUG: Generating PostgreSQL statistics cache into $in_dir/pg_cache.bin.\n" if ($DEBUG);
+				print "DEBUG: Generating PostgreSQL statistics files cache into $in_dir/\n" if ($DEBUG);
 				%global_infos = ('interval' => $INTERVAL, 'in_dir' => $in_dir);
-				&dump_pg_binary($in_dir, "pg_cache.bin");
+				&dump_pg_binary($in_dir);
 			}
 
 		} else {
 
 			# Load statistics from cache files
-			print "DEBUG: Loading PostgreSQL statistics from cache file $in_dir/pg_cache.bin\n" if ($DEBUG);
-			&load_pg_binary($in_dir, "pg_cache.bin");
-			my $prev_val = 0;
-			my $dt = 0;
-			foreach $dt (sort {$a <=> $b} keys %all_stat_database) {
-				if ($prev_val) {
-					$dt = ($dt - $prev_val)/1000;
-					last if ($dt > 0);
+			print "DEBUG: Loading PostgreSQL statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
+			&load_pg_binary($in_dir);
+
+			# Try to find the interval related to these statistics
+			if ($global_infos{interval}) {
+				$INTERVAL = $global_infos{interval};
+			} else {
+				my $prev_val = 0;
+				my $dt = 0;
+				foreach $dt (sort {$a <=> $b} keys %all_stat_database) {
+					if ($prev_val) {
+						$dt = ($dt - $prev_val)/1000;
+						last if ($dt > 0);
+					}
+					$prev_val = $dt;
 				}
-				$prev_val = $dt;
+				if ( (length($dt) >= 2) && ($dt =~ /([1234])$/) ) {
+					$dt -= $1;
+				}
+				$INTERVAL = $dt if ($dt);
 			}
-			if ( (length($dt) >= 2) && ($dt =~ /([1234])$/) ) {
-				$dt -= $1;
-			}
-			$INTERVAL = $dt if ($dt);
 
 		}
 		
@@ -1140,7 +1216,8 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 	if (!$DISABLE_SAR) {
 
 		# Build sar statistics if a cache file is not present
-		if (!-e "$in_dir/sar_cache.bin") {
+		if ($#binfiles == -1) {
+
 			if (-f "$sadc_file") {
 				print "DEBUG: looking for sadc binary data file $sadc_file\n" if ($DEBUG);
 				foreach my $id (sort keys %SAR_GRAPH_INFOS) {
@@ -1154,18 +1231,20 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			}
 
 			if ($CACHE) {
-				print "DEBUG: Generating sar statistics cache into $in_dir/sar_cache.bin.\n" if ($DEBUG);
+				print "DEBUG: Generating sar statistics files cache into $in_dir.\n" if ($DEBUG);
 				%global_infos = ('interval' => $INTERVAL, 'in_dir' => $in_dir);
 				push(@{$global_infos{DEVICE_LIST}}, @DEVICE_LIST);
 				push(@{$global_infos{IFACE_LIST}}, @IFACE_LIST);
-				&dump_sar_binary($in_dir, "sar_cache.bin");
+				&dump_sar_binary($in_dir);
 			}
+
 		} else {
+
 			#Load statistics from cache files
 			@DEVICE_LIST = ();
 			@IFACE_LIST = ();
-			print "DEBUG: Loading Sar statistics from cache file $in_dir/sar_cache.bin\n" if ($DEBUG);
-			&load_sar_binary($in_dir, "sar_cache.bin");
+			print "DEBUG: Loading Sar statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
+			&load_sar_binary($in_dir);
 		}
 
 		if (!$CACHE) {
@@ -1204,6 +1283,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 	}
 
 	if (!$CACHE) {
+
 		if ($OUTPUT_DIR) {
 
 			# Terminate all database statistic file
@@ -1221,7 +1301,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 			# Generate main index
 			&generate_html_index($in_dir, $src_base);
-			my $menu = &generate_html_menu($in_dir);
+			my $menu = &generate_html_menu($in_dir, $OUTPUT_DIR);
 			print "DEBUG: Inserting menu into all html files.\n" if ($DEBUG);
 			opendir(ODIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
 			my @files = grep { /\.html$/ } readdir(ODIR);
@@ -1249,7 +1329,7 @@ $menu
 		}
 
 	# In cache mode if the --clean	option is enable we need to remove data file
-	} elsif ($CLEAN && (-e "$in_dir/pg_cache.bin" || -e "$in_dir/sar_cache.bin")) {
+	} elsif ($CLEAN && $CACHE) {
 		print "DEBUG: removing all csv and data files from $in_dir.\n" if ($DEBUG);
 		opendir(DIR, "$in_dir") || die "FATAL: can't opendir $in_dir: $!";
 		my @file_list = grep { !/^.*\.bin$/ && -f "$in_dir/$_"; } readdir(DIR);
@@ -1349,7 +1429,7 @@ sub set_sysstat_file
 		} elsif (-f "$input_dir/sar_stats.dat.gz") {
 			$sar_file = "$input_dir/" . 'sar_stats.dat.gz';
 		}
-		if (!$sadc_file && !$sar_file && !-e"$input_dir/sar_cache.bin") {
+		if (!$sadc_file && !$sar_file) {
 			print STDERR "WARNING: No sar data file found. Consider using -S or --disable-sar command\nline option or use -i / -I option to set the path to the data file.\nContinuing normally without reporting sar statistics.\n";
 			$DISABLE_SAR = 1;
 			return;
@@ -1753,7 +1833,6 @@ sub compute_postgresql_stat
 sub compute_postgresql_report
 {
 	my ($file, $src_base, %data_info) = @_;
-
 
 	# Compute graphs following the data file
 	my $fctname = $file;
@@ -3492,6 +3571,8 @@ sub pg_stat_replication_report
 		}
 	}
 	%all_stat_replication = ();
+	return if (scalar keys %xlog_stat == 0);
+
 	if (!$CAPTURE) {
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html", $src_base);
@@ -3750,7 +3831,7 @@ sub pgbouncer_req_stats_report
 	my ($interval, $src_base, %data_info) = @_;
 
 	my %pgbouncer_stat = ();
-	foreach my $t (keys %all_pgbouncer_req_stats) {
+	foreach my $t (sort {$a <=> $b} keys %all_pgbouncer_req_stats) {
 		foreach my $db (keys %{$all_pgbouncer_req_stats{$t}}) {
 			foreach my $k (keys %{$all_pgbouncer_req_stats{$t}{$db}}) {
 				$pgbouncer_stat{$db}{$k} .= '[' . $t . ',' . $all_pgbouncer_req_stats{$t}{$db}{$k} . '],';
@@ -4229,6 +4310,8 @@ sub postgresql_conf_report
 
 	my $output = $all_postgresql_conf{content} || '';
 	%all_postgresql_conf = ();
+	return if (!$output);
+
 	if (!$output) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
 	} else {
@@ -4284,6 +4367,8 @@ sub recovery_conf_report
 
 	my $output = $all_recovery_conf{content} || '';
 	%all_recovery_conf = ();
+	return if (!$output);
+
 	if (!$output) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
 	} else {
@@ -4339,6 +4424,8 @@ sub postgresql_auto_conf_report
 
 	my $output = $all_postgresql_auto_conf{content} || '';
 	%all_postgresql_auto_conf = ();
+	return if (!$output);
+
 	if (!$output) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
 	} else {
@@ -4394,6 +4481,8 @@ sub pg_hba_conf_report
 
 	my $output = $pg_hba_conf{content} || '';
 	%pg_hba_conf = ();
+	return if (!$output);
+
 	if (!$output) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
 	} else {
@@ -4451,6 +4540,8 @@ sub pg_ident_conf_report
 
 	my $output = $pg_ident_conf{content} || '';
 	%pg_ident_conf = ();
+	return if (!$output);
+
 	if (!$output) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
 	} else {
@@ -4514,6 +4605,8 @@ sub pg_settings
 sub pg_settings_report
 {
 	my ($interval, $src_base, %data_info) = @_;
+
+	return if (scalar keys %all_settings == 0);
 
 	my $id = &get_data_id('cluster-settings', %data_info);
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html", $src_base);
@@ -4592,6 +4685,8 @@ sub pg_db_role_setting_report
 {
 	my ($interval, $src_base, %data_info) = @_;
 
+	return if (scalar keys %all_db_role_setting == 0);
+
 	my $id = &get_data_id('cluster-dbrolesetting', %data_info);
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html", $src_base);
 	print $fhcluster qq{
@@ -4662,8 +4757,8 @@ sub pg_database_buffercache_report
 	my %shared_stat = ();
 	foreach my $t (sort keys %all_database_buffercache) {
 		foreach my $db (@global_databases) {
-			$shared_stat{$db}{shared_buffers_used} .= '[' . $t . ',' . $all_database_buffercache{$t}{$db}{shared_buffers_used} . '],';
-			$shared_stat{$db}{database_loaded} .= '[' . $t . ',' . $all_database_buffercache{$t}{$db}{shared_buffers_used} . '],';
+			$shared_stat{$db}{shared_buffers_used} .= '[' . $t . ',' . ($all_database_buffercache{$t}{$db}{shared_buffers_used}||0) . '],';
+			$shared_stat{$db}{database_loaded} .= '[' . $t . ',' . ($all_database_buffercache{$t}{$db}{shared_buffers_used}||0) . '],';
 		}
 	}
 	%all_database_buffercache = ();
@@ -5686,7 +5781,7 @@ sub html_footer
 
 sub generate_html_menu
 {
-	my $in_dir = shift;
+	my ($in_dir, $out_dir) = @_;
 
         my $date = localtime(time);
 
@@ -5805,55 +5900,6 @@ AAAASUVORK5CYII=';
               <li id="menu-info" class="dropdown"><a href="index.html#info">SysInfo</a></li>
 };
 	}
-	my $disable_pgconf = '';
-	my $disable_recoveryconf = '';
-	my $disable_alterconf = '';
-	my $disable_pgsettings = '';
-	my $disable_pghba = '';
-	my $disable_pgident = '';
-	my $disable_pgbouncer = '';
-	my $disable_pgdb_role_setting = '';
-	my $disable_conf = ' disabled';
-	if (!-e "$in_dir/postgresql.conf" || -z "$in_dir/postgresql.conf") {
-		$disable_pgconf = ' class="disabled"';
-	} else {
-		$disable_conf = '';
-	}
-	if (!-e "$in_dir/postgresql.auto.conf" || -z "$in_dir/postgresql.auto.conf") {
-		$disable_alterconf = ' class="disabled"';
-	} else {
-		$disable_conf = '';
-	}
-	if (!-e "$in_dir/recovery.conf" || -z "$in_dir/recovery.conf") {
-		$disable_recoveryconf = ' class="disabled"';
-	} else {
-		$disable_conf = '';
-	}
-	if (!-e "$in_dir/pg_hba.conf" || -z "$in_dir/pg_hba.conf") {
-		$disable_pghba = ' class="disabled"';
-	} else {
-		$disable_conf = '';
-	}
-	if (!-e "$in_dir/pg_ident.conf" || -z "$in_dir/pg_ident.conf") {
-		$disable_pgident = ' class="disabled"';
-	} else {
-		$disable_conf = '';
-	}
-	if (!-e "$in_dir/pg_settings.csv" || -z "$in_dir/pg_settings.csv") {
-		$disable_pgsettings = ' class="disabled"';
-	} else {
-		$disable_conf = '';
-	}
-	if (!-e "$in_dir/pg_db_role_setting.csv" || -z "$in_dir/pg_db_role_setting.csv") {
-		$disable_pgdb_role_setting = ' class="disabled"';
-	} else {
-		$disable_conf = '';
-	}
-	if (!-e "$in_dir/pgbouncer.ini" || -z "$in_dir/pgbouncer.ini") {
-		$disable_pgbouncer = ' class="disabled"';
-	} else {
-		$disable_conf = '';
-	}
 
 	opendir(ODIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
 	my @database_list = grep { !/^database-(all|queries-.*).html$/ && s/^database-(.*)\.html$/$1/; } readdir(ODIR);
@@ -5888,6 +5934,15 @@ AAAASUVORK5CYII=';
 		my $disable_canceled = ' class="disabled"';
 		my $disable_replication = ' class="disabled"';
 		my $disable_allrepli = ' disabled';
+		my $disable_conf = ' disabled';
+		my $disable_pgconf = ' class="disabled"';
+		my $disable_alterconf = ' class="disabled"';
+		my $disable_recoveryconf = ' class="disabled"';
+		my $disable_pghba = ' class="disabled"';
+		my $disable_pgident = ' class="disabled"';
+		my $disable_pgsettings = ' class="disabled"';
+		my $disable_pgdb_role_setting = ' class="disabled"';
+		my $disable_pgbouncer = ' class="disabled"';
 		if (open(IN, "$OUTPUT_DIR/cluster.html")) {
 			while (<IN>) {
 				if (/<div id="cluster-size">/) {
@@ -5952,6 +6007,30 @@ AAAASUVORK5CYII=';
 				} elsif (/<div id="cluster-replication">/) {
 					$disable_replication = "";
 					$disable_allrepli = "";
+				} elsif (/<div id="cluster-pgconf">/) {
+					$disable_conf = '';
+					$disable_pgconf = '';
+				} elsif (/<div id="cluster-settings">/) {
+					$disable_conf = '';
+					$disable_pgsettings = '';
+				} elsif (/<div id="cluster-dbrolesetting">/) {
+					$disable_conf = '';
+					$disable_pgdb_role_setting = '';
+				} elsif (/<div id="cluster-alterconf">/) {
+					$disable_conf = '';
+					$disable_alterconf = '';
+				} elsif (/<div id="cluster-recoveryconf">/) {
+					$disable_conf = '';
+					$disable_recoveryconf = '';
+				} elsif (/<div id="cluster-pghba">/) {
+					$disable_conf = '';
+					$disable_pghba = '';
+				} elsif (/<div id="cluster-pgident">/) {
+					$disable_conf = '';
+					$disable_pgident = ''
+				} elsif (/<div id="cluster-pgbouncer">/) {
+					$disable_conf = '';
+					$disable_pgbouncer = '';
 				}
 			}
 			close(IN);
@@ -8540,67 +8619,29 @@ sub get_data_directories
 sub clear_db_stats
 {
 	print "DEBUG: Cleaning memory from PostgreSQL statistics storages\n" if ($DEBUG);
-	%global_infos = ();
-	@global_databases = ();
-	@global_tbspnames = ();
-	%all_stat_database = ();
-	%all_stat_database_conflicts = ();
-	%all_database_size = ();
-	%all_tablespace_size = ();
-	%all_vacuum_stat = ();
-	%all_stat_user_tables = ();
-	%all_stat_user_indexes = ();
-	%all_statio_user_tables = ();
-	%all_relation_buffercache = ();
-	%all_statio_all_indexes = ();
-	%all_xlog_stat = ();
-	%all_stat_bgwriter = ();
-	%all_stat_connections = ();
-	%all_stat_user_functions = ();
-	%all_stat_replication = ();
-	%all_pgbouncer_stats = ();
-	%all_pgbouncer_ini = ();
-	%all_pgbouncer_req_stats = ();
-	%all_class_size = ();
-	%all_stat_locks = ();
-	%all_stat_unused_indexes = ();
-	%all_stat_redundant_indexes = ();
-	%all_stat_missing_fkindexes = ();
-	%all_postgresql_conf = ();
-	%all_recovery_conf = ();
-	%all_postgresql_auto_conf = ();
-	%pg_hba_conf = ();
-	%pg_ident_conf = ();
-	%all_settings = ();
-	%all_db_role_setting = ();
-	%all_database_buffercache = ();
-	%all_database_usagecount = ();
-	%all_database_isdirty = ();
-	%all_stat_archiver = ();
-	%all_stat_statements = ();
+
+	foreach my $name (@pg_to_be_stored) {
+		if (grep(/^$name$/, 'global_databases', 'global_tbspnames', )) {
+			@{$name} = ();
+		} else {
+			%{$name} = ();
+		}
+	}		
 }
 
 
 # Initialise global variables storing statistics
 sub clear_stats
 {
+	# Clean PostgreSQL statistics
 	&clear_db_stats();
 
 	print "DEBUG: Cleaning memory from all statistics storages\n" if ($DEBUG);
 	%OVERALL_STATS = ();
-	%sar_cpu_stat = ();
-	%sar_load_stat = ();
-	%sar_process_stat = ();
-	%sar_context_stat = ();
-	%sar_memory_stat = ();
-	%sar_swap_stat = ();
-	%sar_pageswap_stat = ();
-	%sar_block_stat = ();
-	%sar_srvtime_stat = ();
-	%sar_rw_devices_stat = ();
-	%sar_util_devices_stat = ();
-	%sar_networks_stat = ();
-	%sar_neterror_stat = ();
+	%sysinfo = ();
+	foreach my $name (@sar_to_be_stored) {
+		%{$name} = ();
+	}		
 
 }
 
@@ -8609,52 +8650,18 @@ sub dump_pg_binary
 {
         my ($in_dir, $outfile) = @_;
 
-	my $lfh = new IO::File ">$in_dir/$outfile";
-	if (not defined $lfh) {
-		die "FATAL: can't write to $in_dir/$outfile, $!\n";
+	foreach my $name (@pg_to_be_stored) {
+		my $lfh = new IO::File ">$in_dir/$name.bin";
+		if (not defined $lfh) {
+			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
+		}
+		if (grep(/^$name$/, 'global_databases', 'global_tbspnames', )) {
+			store_fd({ $name => \@{$name} }, $lfh) || die ("Couldn't save binary data to \"$in_dir/$name.bin\"!\n");
+		} else {
+			store_fd({ $name => \%{$name} }, $lfh) || die ("Couldn't save binary data to \"$in_dir/$name.bin\"!\n");
+		}
+		$lfh->close;
 	}
-	my %global_infos = ('interval' => $INTERVAL, 'in_dir' => $in_dir);
-        store_fd({
-		'global_infos' => \%global_infos,
-		'global_databases' => \@global_databases,
-		'global_tbspnames' => \@global_tbspnames,
-		'all_stat_database' => \%all_stat_database,
-		'all_stat_database_conflicts' => \%all_stat_database_conflicts,
-		'all_database_size' => \%all_database_size,
-		'all_tablespace_size' => \%all_tablespace_size,
-		'all_vacuum_stat' => \%all_vacuum_stat,
-		'all_stat_user_tables' => \%all_stat_user_tables,
-		'all_stat_user_indexes' => \%all_stat_user_indexes,
-		'all_statio_user_tables' => \%all_statio_user_tables,
-		'all_relation_buffercache' => \%all_relation_buffercache,
-		'all_statio_all_indexes' => \%all_statio_all_indexes,
-		'all_xlog_stat' => \%all_xlog_stat,
-		'all_stat_bgwriter' => \%all_stat_bgwriter,
-		'all_stat_connections' => \%all_stat_connections,
-		'all_stat_user_functions' => \%all_stat_user_functions,
-		'all_stat_replication' => \%all_stat_replication,
-		'all_pgbouncer_stats' => \%all_pgbouncer_stats,
-		'all_pgbouncer_ini' => \%all_pgbouncer_ini,
-		'all_pgbouncer_req_stats' => \%all_pgbouncer_req_stats,
-		'all_class_size' => \%all_class_size,
-		'all_stat_locks' => \%all_stat_locks,
-		'all_stat_unused_indexes' => \%all_stat_unused_indexes,
-		'all_stat_redundant_indexes' => \%all_stat_redundant_indexes,
-		'all_stat_missing_fkindexes' => \%all_stat_missing_fkindexes,
-		'all_postgresql_conf' => \%all_postgresql_conf,
-		'all_recovery_conf' => \%all_recovery_conf,
-		'all_postgresql_auto_conf' => \%all_postgresql_auto_conf,
-		'pg_hba_conf' => \%pg_hba_conf,
-		'pg_ident_conf' => \%pg_ident_conf,
-		'all_settings' => \%all_settings,
-		'all_db_role_setting' => \%all_db_role_setting,
-		'all_database_buffercache' => \%all_database_buffercache,
-		'all_database_usagecount' => \%all_database_usagecount,
-		'all_database_isdirty' => \%all_database_isdirty,
-		'all_stat_archiver' => \%all_stat_archiver,
-		'all_stat_statements' => \%all_stat_statements,
-        }, $lfh) || die ("Couldn't save binary data to «$in_dir/$outfile»!\n");
-	$lfh->close;
 }
 
 # Dump memory from sar statistics to file for incremental use
@@ -8662,27 +8669,14 @@ sub dump_sar_binary
 {
         my ($in_dir, $outfile) = @_;
 
-	my $lfh = new IO::File ">$in_dir/$outfile";
-	if (not defined $lfh) {
-		die "FATAL: can't write to $in_dir/$outfile, $!\n";
+	foreach my $name (@sar_to_be_stored) {
+		my $lfh = new IO::File ">$in_dir/$name.bin";
+		if (not defined $lfh) {
+			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
+		}
+		store_fd({ $name => \%{$name} }, $lfh) || die ("Couldn't save binary data to \"$in_dir/$name.bin\"!\n");
+		$lfh->close;
 	}
-        store_fd({
-		'global_infos' => \%global_infos,
-		'sar_cpu_stat' => \%sar_cpu_stat,
-		'sar_load_stat' => \%sar_load_stat,
-		'sar_process_stat' => \%sar_process_stat,
-		'sar_context_stat' => \%sar_context_stat,
-		'sar_memory_stat' => \%sar_memory_stat,
-		'sar_swap_stat' => \%sar_swap_stat,
-		'sar_pageswap_stat' => \%sar_pageswap_stat,
-		'sar_block_stat' => \%sar_block_stat,
-		'sar_srvtime_stat' => \%sar_srvtime_stat,
-		'sar_rw_devices_stat' => \%sar_rw_devices_stat,
-		'sar_util_devices_stat' => \%sar_util_devices_stat,
-		'sar_networks_stat' => \%sar_networks_stat,
-		'sar_neterror_stat' => \%sar_neterror_stat,
-        }, $lfh) || die ("Couldn't save binary data to «$in_dir/$outfile»!\n");
-	$lfh->close;
 }
 
 # Dump memory from system information to file for incremental use
@@ -8704,58 +8698,61 @@ sub dump_sys_binary
 # Load statistics from pg cache into memory
 sub load_pg_binary
 {
-        my ($in_dir, $infile) = @_;
+        my ($in_dir) = @_;
 
-	my $lfh = new IO::File "<$in_dir/$infile";
-	if (not defined $lfh) {
-		die "FATAL: can't write to $in_dir/$infile, $!\n";
-	}
-	my %stats = %{ fd_retrieve($lfh) };
-	$lfh->close();
+	foreach my $name (@pg_to_be_stored) {
 
-	# Setting global information
-	my %_global_infos = %{$stats{global_infos}} ;
-	foreach my $inf (keys %_global_infos) {
-		if ($_global_infos{$inf} =~ /ARRAY/) {
-			push(@{$inf}, @{$_global_infos{$inf}});
-		} else {
-			$global_infos{$inf} = $_global_infos{$inf};
+		my $lfh = new IO::File "<$in_dir/$name.bin";
+		if (not defined $lfh) {
+			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
 		}
-	}
-	delete $stats{global_infos};
+		my %stats = %{ fd_retrieve($lfh) };
+		$lfh->close();
 
-	# Look for database and tablespace
-	my @_global_databases = @{$stats{global_databases}};
-	my @_global_tbspnames = @{$stats{global_tbspnames}};
-	foreach my $d (@{$stats{global_databases}}) {
-		push(@global_databases, $d) if (!grep(/^$d$/, @global_databases));
-	}
+		# Setting global information
+		if ($name eq 'global_infos') {
 
-	delete $stats{global_databases};
-	foreach my $d (@{$stats{global_tbspnames}}) {
-		push(@global_tbspnames, $d) if (!grep(/^$d$/, @global_databases));
-	}
-	delete $stats{global_tbspnames};
+			my %_global_infos = %{$stats{global_infos}} ;
+				foreach my $inf (keys %_global_infos) {
+				if ($_global_infos{$inf} =~ /ARRAY/) {
+					push(@{$inf}, @{$_global_infos{$inf}});
+				} else {
+					$global_infos{$inf} = $_global_infos{$inf};
+				}
+			}
+			delete $stats{global_infos};
 
-	# Load other storages
-	foreach my $m (keys %stats) {
-		foreach my $t (keys %{$stats{$m}}) {
-			if ($stats{$m}{$t} =~ /HASH/) {
-				foreach my $d (keys %{$stats{$m}{$t}}) {
-					if ($stats{$m}{$t}{$d} =~ /HASH/) {
-						foreach my $k (keys %{$stats{$m}{$t}{$d}}) {
-							${$m}{$t}{$d}{$k} = $stats{$m}{$t}{$d}{$k};
+		} elsif (grep(/^$name$/, 'global_databases', 'global_tbspnames', )) {
+
+			# Look for database and tablespace
+			foreach my $d (@{$stats{$name}}) {
+				push(@{$name}, $d) if (!grep(/^$d$/, @{$name}));
+			}
+			delete $stats{$name};
+
+		} else {
+
+			# Load other storages
+			foreach my $m (keys %stats) {
+				foreach my $t (keys %{$stats{$m}}) {
+					if ($stats{$m}{$t} =~ /HASH/) {
+						foreach my $d (keys %{$stats{$m}{$t}}) {
+							if ($stats{$m}{$t}{$d} =~ /HASH/) {
+								foreach my $k (keys %{$stats{$m}{$t}{$d}}) {
+									${$m}{$t}{$d}{$k} = $stats{$m}{$t}{$d}{$k};
+								}
+							} elsif ($stats{$m}{$t}{$d} =~ /ARRAY/) {
+								push(@{${$m}{$t}{$d}}, @{$stats{$m}{$t}{$d}});
+							} else {
+								${$m}{$t}{$d} = $stats{$m}{$t}{$d};
+							}
 						}
-					} elsif ($stats{$m}{$t}{$d} =~ /ARRAY/) {
-						push(@{${$m}{$t}{$d}}, @{$stats{$m}{$t}{$d}});
+					} elsif ($stats{$m}{$t} =~ /ARRAY/) {
+						push(@{${$m}{$t}}, @{$stats{$m}{$t}});
 					} else {
-						${$m}{$t}{$d} = $stats{$m}{$t}{$d};
+						${$m}{$t} = $stats{$m}{$t};
 					}
 				}
-			} elsif ($stats{$m}{$t} =~ /ARRAY/) {
-				push(@{${$m}{$t}}, @{$stats{$m}{$t}});
-			} else {
-				${$m}{$t} = $stats{$m}{$t};
 			}
 		}
 	}
@@ -8764,36 +8761,44 @@ sub load_pg_binary
 # Load statistics from sar cache into memory
 sub load_sar_binary
 {
-        my ($in_dir, $infile) = @_;
+        my ($in_dir) = @_;
 
-	my $lfh = new IO::File "<$in_dir/$infile";
-	if (not defined $lfh) {
-		die "FATAL: can't write to $in_dir/$infile, $!\n";
-	}
-	my %stats = %{ fd_retrieve($lfh) };
-	$lfh->close();
+	foreach my $name (@sar_to_be_stored) {
 
-	# Setting global information
-	my %_global_infos = %{$stats{global_infos}} ;
-	foreach my $inf (keys %_global_infos) {
-		if ($_global_infos{$inf} =~ /ARRAY/) {
-			push(@{$inf}, @{$_global_infos{$inf}});
-		} else {
-			$global_infos{$inf} = $_global_infos{$inf};
+		my $lfh = new IO::File "<$in_dir/$name.bin";
+		if (not defined $lfh) {
+			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
 		}
-	}
-	delete $stats{global_infos};
+		my %stats = %{ fd_retrieve($lfh) };
+		$lfh->close();
+		# Setting global information
+		if ($name eq 'global_infos') {
 
-	# Load other storages
-	foreach my $m (keys %stats) {
-		foreach my $t (keys %{$stats{$m}}) {
-			foreach my $d (keys %{$stats{$m}{$t}}) {
-				if ($stats{$m}{$t}{$d} =~ /HASH/) {
-					foreach my $k (keys %{$stats{$m}{$t}{$d}}) {
-						${$m}{$t}{$d}{$k} = $stats{$m}{$t}{$d}{$k};
-					}
+			# Setting global information
+			my %_global_infos = %{$stats{global_infos}} ;
+			foreach my $inf (keys %_global_infos) {
+				if ($_global_infos{$inf} =~ /ARRAY/) {
+					push(@{$inf}, @{$_global_infos{$inf}});
 				} else {
-					${$m}{$t}{$d} = $stats{$m}{$t}{$d};
+					$global_infos{$inf} = $_global_infos{$inf};
+				}
+			}
+			delete $stats{global_infos};
+
+		} else {
+
+			# Load other sar storages
+			foreach my $m (keys %stats) {
+				foreach my $t (keys %{$stats{$m}}) {
+					foreach my $d (keys %{$stats{$m}{$t}}) {
+						if ($stats{$m}{$t}{$d} =~ /HASH/) {
+							foreach my $k (keys %{$stats{$m}{$t}{$d}}) {
+								${$m}{$t}{$d}{$k} = $stats{$m}{$t}{$d}{$k};
+							}
+						} else {
+							${$m}{$t}{$d} = $stats{$m}{$t}{$d};
+						}
+					}
 				}
 			}
 		}
