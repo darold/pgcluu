@@ -6136,11 +6136,13 @@ AAAASUVORK5CYII=';
 	if ($CAPTURE) {
 		@database_list = ();
 	} else {
-		$menu_str .= qq{
+		if ($#database_list >= 0) {
+			$menu_str .= qq{
               <li id="menu-database" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">Databases <b class="caret"></b></a>
                 <ul class="dropdown-menu">
 };
+		}
 	}
 
 	foreach my $db (sort @database_list) {
