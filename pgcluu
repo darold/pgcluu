@@ -2189,7 +2189,7 @@ sub pg_stat_database_report
 			if ($has_temp && ($data_info{$id}{name} eq 'database-deadlocks')) {
 				print $fhcluster &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
 			}
-			if ($has_conflict && ($data_info{$id}{name} eq 'custer-canceled_queries')) {
+			if ($has_conflict && ($data_info{$id}{name} eq 'database-canceled_queries')) {
 				print $fhcluster &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
 			}
 			$fhcluster->close();
