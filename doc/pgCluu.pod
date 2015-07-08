@@ -146,8 +146,8 @@ options:
   -V, --version            Show pgcluu_collectd version and exit.
   -W, --password=pass      database password.
   -z, --compress           force compression of rotated data files.
-  --included-db=DATABASE   do not collect statistics for the comma separated list
-                           of database name. 
+  --included-db=DATABASE   collect statistics only for those databases present
+                           in a comma separated list of database names.
   --list-metric            list available metrics actions that can be performed.
   --sysinfo                get operating system information and exit (sysinfo.txt).
   --no-sysinfo             do not collect operating system information at all. 
