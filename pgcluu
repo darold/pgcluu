@@ -3533,20 +3533,23 @@ sub pg_stat_replication
 			$data[6] =~ s/"//g;
 			$name .= " - $data[6]" if ($data[6]);
 			$all_stat_replication{$data[0]}{master_location} = &getNumericalOffset($data[10]) - &getNumericalOffset($start_vals[10]) if (!$all_stat_replication{$data[0]}{master_location});
-			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[14])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[14]));
-			$all_xlog_stat{$data[0]}{$name}{replay_location} = sprintf("%.2f", ($tmp_val/$interval));
-			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[11])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[11]));
-			$all_xlog_stat{$data[0]}{$name}{sent_location} = sprintf("%.2f", ($tmp_val/$interval));
-			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[12])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[12]));
-			$all_xlog_stat{$data[0]}{$name}{write_location} = sprintf("%.2f", ($tmp_val/$interval));
-			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[13])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[13]));
-			$all_xlog_stat{$data[0]}{$name}{flush_location} = sprintf("%.2f", ($tmp_val/$interval));
 			if ($CAPTURE) {
-				$all_xlog_stat{$data[0]}{$name}{master_location} = ($data[10] || 0);
-				$all_xlog_stat{$data[0]}{$name}{replay_location} = ($data[14] || 0);
-				$all_xlog_stat{$data[0]}{$name}{sent_location} = ($data[11] || 0);
-				$all_xlog_stat{$data[0]}{$name}{write_location} = ($data[12] || 0);
-				$all_xlog_stat{$data[0]}{$name}{flush_location} = ($data[13] || 0);
+				$all_stat_replication{$data[0]}{master_location} = ($data[10] || 0);
+			}
+			next if (!$data[14] && !$data[11] && !$data[12] && !$data[13]);
+			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[14])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[14]));
+			$all_stat_replication{$data[0]}{$name}{replay_location} = sprintf("%.2f", ($tmp_val/$interval));
+			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[11])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[11]));
+			$all_stat_replication{$data[0]}{$name}{sent_location} = sprintf("%.2f", ($tmp_val/$interval));
+			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[12])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[12]));
+			$all_stat_replication{$data[0]}{$name}{write_location} = sprintf("%.2f", ($tmp_val/$interval));
+			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[13])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[13]));
+			$all_stat_replication{$data[0]}{$name}{flush_location} = sprintf("%.2f", ($tmp_val/$interval));
+			if ($CAPTURE) {
+				$all_stat_replication{$data[0]}{$name}{replay_location} = ($data[14] || 0);
+				$all_stat_replication{$data[0]}{$name}{sent_location} = ($data[11] || 0);
+				$all_stat_replication{$data[0]}{$name}{write_location} = ($data[12] || 0);
+				$all_stat_replication{$data[0]}{$name}{flush_location} = ($data[13] || 0);
 			}
 			@start_vals = ();
 			push(@start_vals, @data);
@@ -3563,7 +3566,11 @@ sub pg_stat_replication_report
 	my %xlog_stat = ();
 	foreach my $t (sort {$a <=> $b} keys %all_stat_replication) {
 		foreach my $name (sort {$a cmp $b} keys %{$all_stat_replication{$t}}) {
-			$xlog_stat{master_location} .= '[' . $t . ',' . ($all_stat_replication{$t}{master_location} || 0) . '],';
+			if ($name eq 'master_location') {
+				$all_stat_replication{$t}{master_location} ||= 0;
+				$xlog_stat{master_location} .= '[' . $t . ',' . sprintf("%0.2f", ($all_stat_replication{$t}{master_location}/$interval)) . '],';
+				next;
+			}
 			$xlog_stat{$name}{replay_location} .= '[' . $t . ',' . ($all_stat_replication{$t}{$name}{replay_location} || 0) . '],';
 			$xlog_stat{$name}{sent_location} .= '[' . $t . ',' . ($all_stat_replication{$t}{$name}{sent_location} || 0) . '],';
 			$xlog_stat{$name}{write_location} .= '[' . $t . ',' . ($all_stat_replication{$t}{$name}{write_location} || 0) . '],';
@@ -5921,6 +5928,7 @@ AAAASUVORK5CYII=';
 		my $disable_tempfile_bytes = ' class="disabled"';
 		my $disable_temporary = ' disabled';
 		my $disable_wal = ' disabled';
+		my $disable_xlog_files = ' class="disabled"';
 		my $disable_xlog = ' class="disabled"';
 		my $disable_checkpoints = ' class="disabled"';
 		my $disable_checkpointwrite = ' class="disabled"';
@@ -5975,6 +5983,9 @@ AAAASUVORK5CYII=';
 					$disable_tempfile_bytes = "";
 					$disable_temporary = "";
 				} elsif (/<div id="cluster-xlog_files">/) {
+					$disable_xlog_files = '';
+					$disable_wal = '';
+				} elsif (/<div id="cluster-xlog">/) {
 					$disable_xlog = '';
 					$disable_wal = '';
 				} elsif (/<div id="cluster-checkpoints">/) {
@@ -6082,7 +6093,8 @@ AAAASUVORK5CYII=';
 			<li id="menu-walcheckpoint" class="dropdown-submenu$disable_wal">
 			   <a href="#" tabindex="-1">Wal / Checkpoint </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-cluster-xlog_files"$disable_xlog><a href="cluster.html#cluster-xlog_files">Wal files</a></li>
+			      <li id="menu-cluster-xlog_files"$disable_xlog_files><a href="cluster.html#cluster-xlog_files">Wal files</a></li>
+			      <li id="menu-cluster-xlog"$disable_xlog><a href="cluster.html#cluster-xlog">Wal bytes written</a></li>
 			      <li id="menu-cluster-checkpoints"$disable_checkpoints><a href="cluster.html#cluster-checkpoints">Checkpoints counter</a></li>
 			      <li id="menu-cluster-checkpoints_time"$disable_checkpointwrite><a href="cluster.html#cluster-checkpoints">Checkpoints write time</a></li>
 			      <li id="menu-cluster-archive"$disable_archive><a href="cluster.html#cluster-archive">Archiver stats</a></li>
