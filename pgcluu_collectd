@@ -1808,8 +1808,8 @@ sub dump_pgdatabase_size
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), datid, datname, pg_database_size(datid) AS size " .
-		"FROM pg_stat_database %s " .
-		"ORDER BY datname", $db_limit
+		"FROM pg_stat_database " .
+		"ORDER BY datname"
 	);
 
 	return $sql;
