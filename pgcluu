@@ -4956,7 +4956,6 @@ sub pg_stat_statements
 {
 	my ($in_dir, $file) = @_;
 
-	my %all_stat_statements = ();
 	my $total_val = 0;
 	my @start_vals = ();
 	my $has_temp = 0;
