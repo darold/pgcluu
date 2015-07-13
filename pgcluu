@@ -4976,7 +4976,7 @@ sub pg_stat_statements
 		# timestamp | userid | datname | query | calls | total_time | rows | shared_blks_hit | shared_blks_read | shared_blks_dirtied | shared_blks_written | local_blks_hit | local_blks_read | local_blks_dirtied | local_blks_written | temp_blks_read | temp_blks_written | blk_read_time | blk_write_time |
 
 		my $id = 3;
-		$id++ if ($#data == 20);
+		#$id++ if ($#data == 20);
 		next if (!$data[$id]);
 
 		$all_stat_statements{$data[2]}{$data[$id]}{calls} += ($data[$id+1] || 0);
@@ -4992,7 +4992,9 @@ sub pg_stat_statements
 				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_written} += $data[$id+9];
 				$all_stat_statements{$data[2]}{$data[$id]}{temp_blks_read} += $data[$id+10];
 				$all_stat_statements{$data[2]}{$data[$id]}{temp_blks_written} += $data[$id+11];
-				$all_stat_statements{$data[2]}{has_temp} = 1;
+				# This is just a flag, the total_time key is not used but must exists to not generate
+				# error on use of unitialised value later. This is ugly but useful
+				$all_stat_statements{$data[2]}{has_temp}{total_time} = 1;
 			} else {
 				$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_dirtied} += ($data[$id+6]*8192);
 				$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_written} += $data[$id+7];
@@ -5004,7 +5006,9 @@ sub pg_stat_statements
 				$all_stat_statements{$data[2]}{$data[$id]}{temp_blks_written} += ($data[$id+13]*8192);
 				$all_stat_statements{$data[2]}{$data[$id]}{blk_read_time} += $data[$id+14];
 				$all_stat_statements{$data[2]}{$data[$id]}{blk_write_time} += $data[$id+15];
-				$all_stat_statements{$data[2]}{has_temp} = 2;
+				# This is just a flag, the total_time key is not used but must exists to not generate
+				# error on use of unitialised value later. This is ugly but useful
+				$all_stat_statements{$data[2]}{has_temp}{total_time} = 2;
 			}
 		}
 
@@ -5021,10 +5025,10 @@ sub pg_stat_statements_report
 	foreach my $db (keys %all_stat_statements) {
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 		my $header = '';
-		if ($all_stat_statements{$db}{has_temp}) {
+		if (exists $all_stat_statements{$db}{has_temp}) {
 			$header = qq{<th>Temp read</th><th>Temp write</th>};
 		}
-		if ($all_stat_statements{$db}{has_temp} == 2) {
+		if ($all_stat_statements{$db}{has_temp}{total_time} == 2) {
 			$header .= qq{<th>Shared dirtied</th>};
 		}
 		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-queries-$db.html", $src_base);
@@ -5058,10 +5062,10 @@ sub pg_stat_statements_report
 			foreach my $q (sort {$all_stat_statements{$db}{$b}{total_time} <=> $all_stat_statements{$db}{$a}{total_time}} keys %{$all_stat_statements{$db}}) {
 				next if ($q eq 'has_temp');
 				my $additional_cols = '';
-				if ($all_stat_statements{$db}{has_temp}) {
+				if (exists $all_stat_statements{$db}{has_temp}) {
 					$additional_cols = "<td>" . &pretty_print_size($all_stat_statements{$db}{$q}{temp_blks_read}) . "</td><td>" .  &pretty_print_size($all_stat_statements{$db}{$q}{temp_blks_written}) . "</td>";
 				}
-				if ($all_stat_statements{$db}{has_temp} == 2) {
+				if ($all_stat_statements{$db}{has_temp}{total_time} == 2) {
 					$additional_cols .= "<td>" . &pretty_print_size($all_stat_statements{$db}{$q}{shared_blks_dirtied}) . "</td>";
 				}
 				my $query = $q;
