@@ -5232,8 +5232,8 @@ sub generate_html_index
 		@{$overall_system_stats{read}} = ('unknown', 0) if (!exists $overall_system_stats{read});
 		@{$overall_system_stats{write}} = ('unknown', 0) if (!exists $overall_system_stats{write});
 		@{$overall_system_stats{tps}} = ('unknown', 0) if (!exists $overall_system_stats{tps});
-		$overall_system_stats{read}[1] = &pretty_print_size(($overall_system_stats{read}[1]||0)*512);
-		$overall_system_stats{write}[1] = &pretty_print_size(($overall_system_stats{write}[1]||0)*512);
+		$overall_system_stats{read}[1] = &pretty_print_size($overall_system_stats{read}[1]);
+		$overall_system_stats{write}[1] = &pretty_print_size($overall_system_stats{write}[1]);
 		$overall_system_stats{tps}[1] = ($overall_system_stats{tps}[1]||0);
 
 		$overall_system_stats{kbcached} =  &pretty_print_size($OVERALL_STATS{'system'}{'kbcached'}[1]||0);
