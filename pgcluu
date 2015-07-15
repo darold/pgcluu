@@ -3809,9 +3809,6 @@ sub pgbouncer_req_stats
 {
 	my ($in_dir, $file) = @_;
 
-	my %pgbouncer_stat = ();
-	my %all_stat = ();
-	my %total_count = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -4076,7 +4073,6 @@ sub pg_stat_unused_indexes
 
 	return if ($NO_TB_STAT);
 
-	my %all_stat_unused_indexes = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -4152,7 +4148,6 @@ sub pg_stat_redundant_indexes
 
 	return if ($NO_TB_STAT);
 
-	my %all_stat_redundant_indexes = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -4587,7 +4582,6 @@ sub pg_settings
 {
 	my ($in_dir, $file) = @_;
 
-	my %all_settings = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -4672,7 +4666,6 @@ sub pg_db_role_setting
 {
 	my ($in_dir, $file) = @_;
 
-	my %all_db_role_setting = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -4740,7 +4733,6 @@ sub pg_database_buffercache
 {
 	my ($in_dir, $file) = @_;
 
-	my %all_stat = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
