@@ -5224,12 +5224,17 @@ sub generate_html_index
 				if (! exists $overall_system_stats{write} || ($overall_system_stats{write}[1] < $OVERALL_STATS{'system'}{'devices'}{$d}{write})) {
 					@{$overall_system_stats{write}} = ($d, $OVERALL_STATS{'system'}{'devices'}{$d}{write});
 				}
+				if (! exists $overall_system_stats{tps} || ($overall_system_stats{tps}[1] < $OVERALL_STATS{'system'}{'devices'}{$d}{tps})) {
+					@{$overall_system_stats{tps}} = ($d, $OVERALL_STATS{'system'}{'devices'}{$d}{tps});
+				}
 			}
 		}
 		@{$overall_system_stats{read}} = ('unknown', 0) if (!exists $overall_system_stats{read});
 		@{$overall_system_stats{write}} = ('unknown', 0) if (!exists $overall_system_stats{write});
+		@{$overall_system_stats{tps}} = ('unknown', 0) if (!exists $overall_system_stats{tps});
 		$overall_system_stats{read}[1] = &pretty_print_size(($overall_system_stats{read}[1]||0)*512);
 		$overall_system_stats{write}[1] = &pretty_print_size(($overall_system_stats{write}[1]||0)*512);
+		$overall_system_stats{tps}[1] = ($overall_system_stats{tps}[1]||0);
 
 		$overall_system_stats{kbcached} =  &pretty_print_size($OVERALL_STATS{'system'}{'kbcached'}[1]||0);
 		$overall_system_stats{bread} =  &pretty_print_size($OVERALL_STATS{'system'}{'bread'}[1]||0);
@@ -5397,6 +5402,7 @@ EOF
 		<li><span class="figure">$OVERALL_STATS{'system'}{'svctm'}[1]</span> <span class="figure-label">Highest device service time</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'svctm'}[0])</span></li>
 		<li><span class="figure">$overall_system_stats{read}[0]</span> <span class="figure-label">Most read device</span><br/><span class="figure-date"> ($overall_system_stats{read}[1])</span></li>
 		<li><span class="figure">$overall_system_stats{write}[0]</span> <span class="figure-label">Most written device</span><br/><span class="figure-date">($overall_system_stats{write}[1])</span></li>
+		<li><span class="figure">$overall_system_stats{tps}[0]</span> <span class="figure-label">Highest tps on device</span><br/><span class="figure-date">($overall_system_stats{tps}[1])</span></li>
 		</ul>
 		</div>
               </div>
@@ -7003,7 +7009,7 @@ sub compute_rw_device_report
 				$devices_stat{$dev}{'wr_sec/s'} .= '[' . $t . ',' . $sar_rw_devices_stat{$t}{$dev}{'wr_sec/s'} . '],';
 			} elsif ($data_info->{name} eq 'system-tpsdevice') {
 				$devices_stat{$dev}{'tps'}      .= '[' . $t . ',' . $sar_rw_devices_stat{$t}{$dev}{'tps'} . '],';
-				$OVERALL_STATS{'system'}{'devices'}{$dev}{tps} += $sar_rw_devices_stat{$t}{$dev}{'tps'};
+				$OVERALL_STATS{'system'}{'devices'}{$dev}{tps} = $sar_rw_devices_stat{$t}{$dev}{'tps'} if (!$OVERALL_STATS{'system'}{'devices'}{$dev}{tps} || ($OVERALL_STATS{'system'}{'devices'}{$dev}{tps} < $sar_rw_devices_stat{$t}{$dev}{'tps'}));
 			}
 		}
 	}
