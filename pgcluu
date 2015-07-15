@@ -4739,11 +4739,11 @@ sub pg_database_buffercache
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
 
-		# date_trunc | datname | buffers | buffers % | database %
-		$all_database_buffercache{$data[0]}{$data[1]}{shared_buffers_used} = ($data[3]||0);
-		$all_database_buffercache{$data[0]}{$data[1]}{database_loaded} = ($data[4]||0);
-		$all_database_buffercache{$data[0]}{'all'}{shared_buffers_used} += ($data[3]||0);
-		$all_database_buffercache{$data[0]}{'all'}{database_loaded} += ($data[4]||0);
+		# date_trunc | datname | buffers | buffered | buffers % | database %
+		$all_database_buffercache{$data[0]}{$data[1]}{shared_buffers_used} = ($data[4]||0);
+		$all_database_buffercache{$data[0]}{$data[1]}{database_loaded} = ($data[5]||0);
+		$all_database_buffercache{$data[0]}{'all'}{shared_buffers_used} += ($data[4]||0);
+		$all_database_buffercache{$data[0]}{'all'}{database_loaded} += ($data[5]||0);
 	}
 	$curfh->close();
 }
@@ -4757,7 +4757,7 @@ sub pg_database_buffercache_report
 	foreach my $t (sort keys %all_database_buffercache) {
 		foreach my $db (@global_databases) {
 			$shared_stat{$db}{shared_buffers_used} .= '[' . $t . ',' . ($all_database_buffercache{$t}{$db}{shared_buffers_used}||0) . '],';
-			$shared_stat{$db}{database_loaded} .= '[' . $t . ',' . ($all_database_buffercache{$t}{$db}{shared_buffers_used}||0) . '],';
+			$shared_stat{$db}{database_loaded} .= '[' . $t . ',' . ($all_database_buffercache{$t}{$db}{database_loaded}||0) . '],';
 		}
 	}
 	%all_database_buffercache = ();
