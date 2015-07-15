@@ -6994,8 +6994,8 @@ sub compute_rw_device_report
 	my $src_base = shift();
 
 	my %devices_stat = ();
-	foreach my $t (sort {$a <=> $b} keys %sar_srvtime_stat) {
-		foreach my $dev (keys %{$sar_srvtime_stat{$t}}) {
+	foreach my $t (sort {$a <=> $b} keys %sar_rw_devices_stat) {
+		foreach my $dev (keys %{$sar_rw_devices_stat{$t}}) {
 			if ($data_info->{name} eq 'system-device') { 
 				$OVERALL_STATS{'system'}{'devices'}{$dev}{read} += $sar_rw_devices_stat{$t}{$dev}{'rd_sec/s'};
 				$OVERALL_STATS{'system'}{'devices'}{$dev}{write} += $sar_rw_devices_stat{$t}{$dev}{'wr_sec/s'};
