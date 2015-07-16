@@ -5165,9 +5165,9 @@ sub generate_html_index
 		}
 		foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
 			next if ($db eq 'all');
+			$OVERALL_STATS{'cluster'}{'size'} += $OVERALL_STATS{'database'}{$db}{'size'};
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 			if (exists $OVERALL_STATS{'database'}{$db}{'size'}) {
-				$OVERALL_STATS{'cluster'}{'size'} += $OVERALL_STATS{'database'}{$db}{'size'};
 				if (!exists $overall_stat_databases{'size'} || $OVERALL_STATS{'database'}{$db}{'size'} > $overall_stat_databases{'size'}[1]) {
 					@{$overall_stat_databases{'size'}} = ($db, $OVERALL_STATS{'database'}{$db}{'size'});
 				}
