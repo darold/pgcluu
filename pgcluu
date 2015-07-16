@@ -2352,6 +2352,7 @@ sub pg_database_size_report
 					<tr><th>Database Name</th><th>Size</th></tr>
 };
 		foreach my $db (sort keys %{$OVERALL_STATS{'database'}}) {
+                        next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			my $dbsize = &pretty_print_size($OVERALL_STATS{'database'}{$db}{size});
 			print $fhcluster "<tr><td>$db</td><td>$dbsize</td></tr>\n";
 		}
@@ -3177,7 +3178,7 @@ sub pg_statio_user_indexes_report
 	foreach my $db (sort keys %statio_userindex) {
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^statio-/);
-			next if (exists $is_used{$db});
+			next if (!exists $is_used{$db});
 			next if (($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			# Open filehandle to cluster file
 			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
