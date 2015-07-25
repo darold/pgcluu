@@ -5065,10 +5065,10 @@ sub pg_stat_statements_report
 				next if ($q eq 'has_temp');
 				my $additional_cols = '';
 				if (exists $all_stat_statements{$db}{has_temp}) {
-					$additional_cols = "<td>" .  &pretty_print_size($all_stat_statements{$db}{$q}{temp_blks_written}) . "</td>";
+					$additional_cols = "<td>" .  &pretty_print_number($all_stat_statements{$db}{$q}{temp_blks_written}) . "</td>";
 				}
 				if ($all_stat_statements{$db}{has_temp}{total_time} >= 2) {
-					$additional_cols .= "<td>" . &pretty_print_size($all_stat_statements{$db}{$q}{shared_blks_read}) . "</td><td>" . &pretty_print_size($all_stat_statements{$db}{$q}{shared_blks_hit}) . "</td><td>" . &pretty_print_size($all_stat_statements{$db}{$q}{shared_blks_dirtied}) . "</td><td>" . &pretty_print_size($all_stat_statements{$db}{$q}{shared_blks_written}) . "</td>";
+					$additional_cols .= "<td>" . &pretty_print_number($all_stat_statements{$db}{$q}{shared_blks_read}) . "</td><td>" . &pretty_print_number($all_stat_statements{$db}{$q}{shared_blks_hit}) . "</td><td>" . &pretty_print_number($all_stat_statements{$db}{$q}{shared_blks_dirtied}) . "</td><td>" . &pretty_print_number($all_stat_statements{$db}{$q}{shared_blks_written}) . "</td>";
 				}
 				if ($all_stat_statements{$db}{has_temp}{total_time} == 3) {
 					$additional_cols .= "<td>" . sprintf("%0.2d", ($all_stat_statements{$db}{$q}{blk_read_time}+$all_stat_statements{$db}{$q}{blk_write_time})/($all_stat_statements{$db}{$q}{calls}||1)) . "</td>";
@@ -5144,6 +5144,31 @@ sub pretty_print_size
         }
 
         return $val;
+}
+
+sub pretty_print_number
+{
+        my $val = shift;
+        return 0 if (!$val);
+
+	if ($val >= 1000000000000000) {
+		$val = ($val / 1000000000000000);
+		$val = sprintf("%0.2f", $val) . " P";
+	} elsif ($val >= 1000000000000) {
+		$val = ($val / 1000000000000);
+		$val = sprintf("%0.2f", $val) . " T";
+	} elsif ($val >= 1000000000) {
+		$val = ($val / 1000000000);
+		$val = sprintf("%0.2f", $val) . " G";
+	} elsif ($val >= 1000000) {
+		$val = ($val / 1000000);
+		$val = sprintf("%0.2f", $val) . " M";
+	} elsif ($val >= 1000) {
+		$val = ($val / 1000);
+		$val = sprintf("%0.2f", $val) . " K";
+	}
+
+	return $val;
 }
 
 sub generate_html_index
