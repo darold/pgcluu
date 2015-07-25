@@ -2433,6 +2433,10 @@ sub pg_tablespace_size_report
 		print $fhcluster &flotr2_linegraph_hash($IDX++, 'tablespace-cluster-size', \%{$data_info{$id}}, 'all', %data);
 		print $fhcluster  $print_after;
 	} else {
+		my $header = '<tr><th>Tablespace Name</th><th>Location</th><th>Size</th></tr>';
+		if (scalar keys %{$OVERALL_STATS{'tablespace'}} == 0) {
+			$header = qq{<td><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td>};
+		}
 		$data_info{$id}{title} =~ s/\%s/all/;
 		print $fhcluster qq{
 <li class="slide" id="tablespace-cluster-size-slide">
@@ -2449,7 +2453,7 @@ sub pg_tablespace_size_report
 			<div class="span11">
 				<table class="table table-striped" id="$data_info{$id}{name}-table">
 					<tbody>
-					<tr><th>Tablespace Name</th><th>Location</th><th>Size</th></tr>
+					$header
 };
 		foreach my $tbsp (sort keys %{$OVERALL_STATS{'tablespace'}}) {
 			my $tbsize = &pretty_print_size($OVERALL_STATS{'tablespace'}{$tbsp}{size});
