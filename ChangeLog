@@ -1,3 +1,95 @@
+2015-07-25 - Version 2.4 released
+
+This release is a maintenance release that fix some issues. There's also some
+new interesting reports:
+
+  * Transfers per second (read/write/both) on all devices from sar -b
+  * Transfers per second for each device from sar -d .
+  * Number of tasks created per second
+  * Number of context switches per seconds.
+  * Improve pg_stat_statement report by adding all shared block stats
+    and read/write I/O timing per query when track_io_timing is enabled.
+  * Add device with highest tps on overall system information.
+
+and useful features:
+
+  * Add --capture mode to pgcluu_collectd to be be able to build a snapshot of
+    the PostgreSQL instance and exit. pgCluu will automatically adapt the report
+    to this capture mode. It will use a temporary directory /tmp/pgcluu_capture
+    to generate a tarball /tmp/pgcluu_capture.tar.gz containing the capture.
+  * Add pgCluu logo and ico to the html output.
+  * Add --charset option to be able to change the html charset, default: utf8.
+  * Allow regular expression in database list available in reports, for example:
+    with --db-only "p.*", only database beginning with p will be reported.
+  * Allow pgcluu to parse and compute statistics from gzip compressed files.
+  * pgcluu will not stop anymore if the sar file is not found, it will only
+    show a warning message and continue.
+
+This release also adds -r | --rotate-daily and -R | --rotate-hourly options to
+pgcluu_collectd be able to rotate statistic files on a daily or hourly basis.
+You can use -z or --compress option to compress rotated data files. Thanks to
+Euler Taveira de Oliveira for the feature request.
+
+There also some code relative to next coming major release that will be used
+to allow a full incremental mode and a temporal navigation into the collected
+statistics from a CGI program. This code enable caching (option -C or --cache)
+by dumping statistics stored in memory into binary files. With those files, data
+files can be removed (automatically with option -c or --clean) and report can
+be build later from them. This is not really useful now but this s the first
+stage to build incremental and cumulative reports.
+
+Here are the complete list of bug fixes in this release:
+
+  - Fix pretty print number format when units are blocks and not sizes.
+  - Do not apply database list restriction on total cluster size calculation.
+  - Fix Statistics about I/O on Indexes.
+  - Rewrite some parts of the overall system statistics for better performances.
+  - Fix bug in overall stat for Most read/written device, they was multiplied
+    by 512 (size of a block) twice.
+  - Fix system report of r/w and tps per devices.
+  - Fix wrong report of pg_buffercache statistics.
+  - Remove some global variables with local redeclaration.
+  - Fix use of uninitialized value during build of pg_stat_statement report.
+  - Fix Statements statistics not available because a local var is used during
+    computation. Thanks to Michel Meyer for the patch.
+  - Fix uninitialized value and wrong overall reports in Home menu. Thanks to
+    Assem Bayahi for the report.
+  - Remove garbage from last commit.
+  - Fix replication lag statistics report and add new report about
+    "Number of xlog data written per second."
+  - Fix documentation about --included-db
+  - Fix pgcluu_collectd crash when --no-database is used and the psql command
+    is not available. Thanks to Ronan Dunklau for the report.
+  - Fix call to cluster canceled queries statistics.
+  - Fix menu when no database are found.
+  - Fix start/end date and path to sar file in incremental and capture mode.
+  - Separate load of statistics from report builder.
+  - Make paths internally relative into output directory especially for
+    incremental facilities.
+  - Fix several issue that prevented configuration files to be copied into the
+    output directory.
+  - Allow white space in db's names. Thanks to Nicolas Thauvin for the report.
+  - Fix wrongly disabled temporary files menu.
+  - Fix database list with character - inside the name
+  - Fix replication and checkpoint report and corresponding menus disabled.
+    Thanks to Zsolt for the report.
+  - Fix a print on undefined value when a device is mounted after the first
+    execution of pgcluu. Thanks to Ezequiel Mina for the report.
+  - Add timezone option for perl localtime() and fix mixed formated tabs. Thanks
+    to David Cramblett for the patch.
+  - Add missing information into usage about -w | --password option.
+  - Fix for sar command when ssh not in use. Thanks to David Cramblett for the
+    patch.
+  - Make error message during first connection more explicit. Thanks to Gregoire
+    Pineau for the report.
+  - Be sure that interval is always != 0 to avoid illegal division by zero.
+    Thanks to Gregoire Pineau for the report.
+  - Fix control character in substitution regex.
+  - Fix error message for $OUTPUT_DIR not being empty should not use $INPUT_DIR.
+    Thanks to Matthew Musgrove for the patch.
+  - Fix limit reports to the database when --only-db is used. Thanks to Bianca
+    Santana Espichicoquez for the report.
+
 2015-02-06 - Version 2.3 released
 
 This release is a maintenance release that fix some issues. There's also a new
