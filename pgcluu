@@ -23,7 +23,7 @@ use POSIX qw(locale_h sys_wait_h ceil);
 setlocale(LC_ALL, 'C');
 use Storable qw(store_fd fd_retrieve);
 
-$VERSION = '2.3';
+$VERSION = '2.4';
 $PROGRAM = 'pgCluu';
 
 my $OUTPUT_DIR      = '';
@@ -5691,6 +5691,10 @@ EOF
             <li><span class="figure">$sysinfo{SYSTEM}{'kernel.shmall'}</span> <span class="figure-label">kernel.shmall</span></li>
 EOF
 		}
+                my @df_infos = ();
+                push(@df_infos, @{$sysinfo{DF}}) if (exists $sysinfo{DF});
+                my @mount_infos = ();
+                push(@mount_infos, @{$sysinfo{MOUNT}}) if (exists $sysinfo{MOUNT});
 		print $fh <<EOF;
 		</ul>
 		</div>
@@ -5712,13 +5716,13 @@ EOF
 		<li>
 		<table>
 		<tr><th>Filesystem</th><th>Size</th><th>Used</th><th>Free</th><th>Use%</th><th>Mount</th></tr>
-		@{$sysinfo{DF}}
+		@df_infos
 		</table>
 		</li>
 		<li>
 		<table>
 		<tr><th>Filesystem</th><th>Mount</th><th>type</th><th>Options</th></tr>
-		@{$sysinfo{MOUNT}}
+		@mount_infos
 		</table>
 		</li>
 		</ul>
