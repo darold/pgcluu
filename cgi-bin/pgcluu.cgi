@@ -3453,7 +3453,7 @@ sub pgbouncer_ini
 	while (my $l = <$curfh>) {
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
-		$l =~ s/[\t\s]*#.*//;
+		$l =~ s/\s*#.*//;
 		$all_pgbouncer_ini{content} .= "$l\n";
 	}
 	$curfh->close();
@@ -4034,7 +4034,7 @@ sub postgresql_conf
 	while (my $l = <$curfh>) {
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
-		$l =~ s/[\t\s]*#.*//;
+		$l =~ s/\s*#.*//;
 		$all_postgresql_conf{content} .= "$l\n";
 	}
 	$curfh->close();
@@ -4094,7 +4094,7 @@ sub recovery_conf
 	while (my $l = <$curfh>) {
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
-		$l =~ s/[\t\s]*#.*//;
+		$l =~ s/\s*#.*//;
 		$all_recovery_conf{content} .= "$l\n";
 	}
 	$curfh->close();
@@ -4154,7 +4154,7 @@ sub postgresql_auto_conf
 	while (my $l = <$curfh>) {
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
-		$l =~ s/[\t\s]*#.*//;
+		$l =~ s/\s*#.*//;
 		$all_postgresql_auto_conf{content} .= "$l\n";
 	}
 	$curfh->close();
@@ -4214,7 +4214,7 @@ sub pg_hba_conf
 	while (my $l = <$curfh>) {
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
-		$l =~ s/[\t\s]*#.*//;
+		$l =~ s/\s*#.*//;
 		$pg_hba_conf{content} .= "$l\n";
 	}
 	$curfh->close();
@@ -4276,7 +4276,7 @@ sub pg_ident_conf
 	while (my $l = <$curfh>) {
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
-		$l =~ s/[\t\s]*#.*//;
+		$l =~ s/\s*#.*//;
 		$pg_ident_conf{content} .= "$l\n";
 	}
 	$curfh->close();

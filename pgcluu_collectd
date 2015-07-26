@@ -417,7 +417,7 @@ if (-f $PIDFILE) {
 # Check excluded times
 if ($SKIP_HOURS) {
 	my $tmp = $SKIP_HOURS;
-	my @timerange = split(/[\s\t]+/, $tmp);
+	my @timerange = split(/\s+/, $tmp);
 	foreach $tmp (@timerange) {
 		next if (!$tmp);
 		if ($tmp =~ m#(\d{2}):(\d{2})-(\d{2}):(\d{2})#) {
