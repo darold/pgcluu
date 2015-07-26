@@ -89,21 +89,21 @@ ul#slides li div div {
 }
 .key-figures li {
 	list-style-type: none;
-	margin-bottom: 1em;
+	margin-bottom: 0.5em;
 }
 .figure {
 	font-weight: bold;
-	font-size: 1.1em;
+	font-size: 1.0em;
 	color:#c43c35;
 }
 .figure-label {
 	color: #666;
+	font-size: 0.9em;
 }
 .figure-date {
 	color: #333;
 	font-size: 0.8em;
 }
-
 .mouse-figures {
 	font-weight: bold;
 	font-size: 1.0em;
