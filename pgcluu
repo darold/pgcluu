@@ -3432,7 +3432,7 @@ sub pg_stat_user_functions
 {
 	my ($in_dir, $file) = @_;
 
-	my @start_vals = ();
+	my %start_vals = ();
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
@@ -3441,19 +3441,20 @@ sub pg_stat_user_functions
 		next if (!&normalize_line(\@data));
 
 		# timestamp | datname | funcid | schemaname | funcname | calls | total_time | self_time
-		push(@start_vals, @data) if ($#start_vals < 0);
-
 		$data[4] = "$data[3].$data[4]";
 
-		(($data[5] - $start_vals[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals[5]);
+		push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
+
+		(($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]);
 		$all_stat_user_functions{$data[1]}{$data[4]}{calls} += $tmp_val;
-		(($data[6] - $start_vals[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals[6]);
+		(($data[6] - $start_vals{$data[1]}{$data[4]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[1]}{$data[4]}[6]);
 		$all_stat_user_functions{$data[1]}{$data[4]}{total_time} += $tmp_val;
-		(($data[7] - $start_vals[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals[7]);
+		(($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]);
 		$all_stat_user_functions{$data[1]}{$data[4]}{self_time} += $tmp_val;
 
-		@start_vals = ();
-		push(@start_vals, @data);
+		@{$start_vals{$data[1]}{$data[4]}} = ();
+		push(@{$start_vals{$data[1]}{$data[4]}}, @data);
+
 	}
 	$curfh->close();
 }
