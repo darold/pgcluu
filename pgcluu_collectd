@@ -395,9 +395,6 @@ if ($USE_SSH && !$DBHOST) {
 # List metrics and associated SQL commands, then exit
 if ($LIST_METRIC) {
 
-	# Detect PostgreSQL version
-	&fetch_version();
-
 	print "List of available metrics:\n\n";
 	foreach my $c (sort {$a cmp $b} keys %METRICS_COMMANDS) {
 		next if (($c =~ /^(user|all)_/) && ($c !~ /^$STAT_TYPE/)); 
