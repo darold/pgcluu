@@ -3547,15 +3547,30 @@ sub pg_stat_replication
 				$all_stat_replication{$data[0]}{master_location} = &getNumericalOffset($data[10]);
 			}
 
-			next if (!$data[14] && !$data[11] && !$data[12] && !$data[13]);
-			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[14])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[14]));
-			$all_stat_replication{$data[0]}{$name}{replay_location} = sprintf("%.2f", ($tmp_val/$interval));
-			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[11])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[11]));
-			$all_stat_replication{$data[0]}{$name}{sent_location} = sprintf("%.2f", ($tmp_val/$interval));
-			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[12])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[12]));
-			$all_stat_replication{$data[0]}{$name}{write_location} = sprintf("%.2f", ($tmp_val/$interval));
-			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[13])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[13]));
-			$all_stat_replication{$data[0]}{$name}{flush_location} = sprintf("%.2f", ($tmp_val/$interval));
+			if (!$data[14]) {
+				$all_stat_replication{$data[0]}{$name}{replay_location} = 0;
+			} else {
+				((&getNumericalOffset($data[10]) - &getNumericalOffset($data[14])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[14]));
+				$all_stat_replication{$data[0]}{$name}{replay_location} = sprintf("%.2f", ($tmp_val/$interval));
+			}
+			if (!$data[11]) {
+				$all_stat_replication{$data[0]}{$name}{sent_location} = 0;
+			} else {
+				((&getNumericalOffset($data[10]) - &getNumericalOffset($data[11])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[11]));
+				$all_stat_replication{$data[0]}{$name}{sent_location} = sprintf("%.2f", ($tmp_val/$interval));
+			}
+			if (!$data[12]) {
+				$all_stat_replication{$data[0]}{$name}{write_location} = 0;
+			} else {
+				((&getNumericalOffset($data[10]) - &getNumericalOffset($data[12])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[12]));
+				$all_stat_replication{$data[0]}{$name}{write_location} = sprintf("%.2f", ($tmp_val/$interval));
+			}
+			if (!$data[12]) {
+				$all_stat_replication{$data[0]}{$name}{flush_location} = 0;
+			} else {
+				((&getNumericalOffset($data[10]) - &getNumericalOffset($data[13])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[13]));
+				$all_stat_replication{$data[0]}{$name}{flush_location} = sprintf("%.2f", ($tmp_val/$interval));
+			}
 			if ($CAPTURE) {
 				$all_stat_replication{$data[0]}{$name}{replay_location} = ($data[14] || 0);
 				$all_stat_replication{$data[0]}{$name}{sent_location} = ($data[11] || 0);
