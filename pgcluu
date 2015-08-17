@@ -3528,7 +3528,6 @@ sub pg_stat_replication
 {
 	my ($in_dir, $file, $interval) = @_;
 
-	my @start_vals = ();
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
@@ -3538,14 +3537,16 @@ sub pg_stat_replication
 		# timestamp | pid | usesysid | usename | application_name | client_addr | client_hostname | client_port | backend_start | state | master_location | sent_location | write_location | flush_location | replay_location | sync_priority | sync_state
 		# Do not care about BACKUP and pg_basebackup connection
 		if ( (uc($data[9]) eq 'STREAMING') || (uc($data[4]) eq 'WALRECEIVER') ) {
-			push(@start_vals, @data) if ($#start_vals < 0);
 			my $name = $data[5];
 			$data[6] =~ s/"//g;
 			$name .= " - $data[6]" if ($data[6]);
-			$all_stat_replication{$data[0]}{master_location} = &getNumericalOffset($data[10]) - &getNumericalOffset($start_vals[10]) if (!$all_stat_replication{$data[0]}{master_location});
+
 			if ($CAPTURE) {
 				$all_stat_replication{$data[0]}{master_location} = ($data[10] || 0);
+			} else {
+				$all_stat_replication{$data[0]}{master_location} = &getNumericalOffset($data[10]);
 			}
+
 			next if (!$data[14] && !$data[11] && !$data[12] && !$data[13]);
 			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[14])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[14]));
 			$all_stat_replication{$data[0]}{$name}{replay_location} = sprintf("%.2f", ($tmp_val/$interval));
@@ -3561,8 +3562,6 @@ sub pg_stat_replication
 				$all_stat_replication{$data[0]}{$name}{write_location} = ($data[12] || 0);
 				$all_stat_replication{$data[0]}{$name}{flush_location} = ($data[13] || 0);
 			}
-			@start_vals = ();
-			push(@start_vals, @data);
 		}
 	}
 	$curfh->close();
@@ -8474,6 +8473,8 @@ EOF
 sub getNumericalOffset
 {
 	my $stringofs = shift;
+
+	return 0 if (!$stringofs);
 
 	my @pieces = split /\//, $stringofs;
 	die "Invalid offset: $stringofs" unless ($#pieces == 1);
