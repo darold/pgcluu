@@ -990,7 +990,13 @@ if ($CACHE) {
 # In normal mode we will just compute statistics from the input directory.
 # All working directories will be added to the @WORK_DIRS array
 ####
-my @WORK_DIRS = &get_data_directories();
+my @WORK_DIRS = ();
+# Set working dir to - to mark that it is not used, by this way we will only parse sar file
+if (!$INPUT_DIR && ($SAR_INPUT_FILE || $SADC_INPUT_FILE)) {
+	push(@WORK_DIRS, '-');
+} else {
+	@WORK_DIRS = &get_data_directories();
+}
 
 ####
 # Now we will look over each statistics directories to compute stats
@@ -998,12 +1004,15 @@ my @WORK_DIRS = &get_data_directories();
 my $ORIG_OUTPUT_DIR = $OUTPUT_DIR;
 foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
-
 	# Reset global variables before processing a new work dir
 	&clear_stats();
 
 	my $in_dir = "$INPUT_DIR/$WORK_DIRS[$dx]";
-	$OUTPUT_DIR = "$ORIG_OUTPUT_DIR/$WORK_DIRS[$dx]";
+	if ($WORK_DIRS[$dx] ne '-') {
+		$OUTPUT_DIR = "$ORIG_OUTPUT_DIR/$WORK_DIRS[$dx]";
+	} else {
+		$OUTPUT_DIR = "$ORIG_OUTPUT_DIR";
+	}
 
 	# Check if we have binary file in the directory
 	my @binfiles = ();
@@ -1051,6 +1060,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 	# Defined the backward level where ressources files are stored
 	my $src_base = $WORK_DIRS[$dx];
 	$src_base =~ s/\d+/../g;
+	$src_base = '' if ($WORK_DIRS[$dx] eq '-');
 
 	# parse SQL stats files
 	if (-d "$in_dir") {
