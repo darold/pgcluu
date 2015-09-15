@@ -1595,7 +1595,7 @@ sub dump_pgstatreplication
 		"SELECT date_trunc('seconds', now()), %s, usesysid, usename, " .
 		"application_name, client_addr, client_hostname, client_port, " .
 		"date_trunc('seconds', backend_start) AS backend_start, state, " .
-		"pg_current_xlog_location() AS master_location, " .
+		"(CASE WHEN pg_is_in_recovery() THEN NULL ELSE pg_current_xlog_location() END) AS master_location, " .
 		"sent_location, write_location, flush_location, replay_location, " .
 		"sync_priority, " .
 		"sync_state " .
