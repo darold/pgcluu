@@ -98,6 +98,7 @@ our %all_postgresql_auto_conf = ();
 our %pg_hba_conf = ();
 our %pg_ident_conf = ();
 our %all_settings = ();
+our %all_nondefault_settings = ();
 our %all_db_role_setting = ();
 our %all_database_buffercache = ();
 our %all_database_usagecount = ();
@@ -139,6 +140,7 @@ our @pg_to_be_stored = (
 	'pg_hba_conf',
 	'pg_ident_conf',
 	'all_settings',
+	'all_nondefault_settings',
 	'all_db_role_setting',
 	'all_database_buffercache',
 	'all_database_usagecount',
@@ -636,6 +638,17 @@ my %DB_GRAPH_INFOS = (
 			'legends' => ['Settings'],
 			'active' => 1,
 			'menu' => 'PostgreSQL settings',
+		},
+	},
+	'pg_nondefault_settings.csv' => {
+		'1' => {
+			'name' =>  'cluster-nondefault-settings',
+			'title' => 'PostgreSQL Non Default Settings',
+			'description' => 'Non default configuration directives and values defined in pg_settings.',
+			'ylabel' => 'Number',
+			'legends' => ['Settings'],
+			'active' => 1,
+			'menu' => 'PostgreSQL non default settings',
 		},
 	},
 	'pg_db_role_setting.csv' => {
@@ -4435,6 +4448,90 @@ sub pg_settings_report
 </ul>
 };
 
+}
+
+# Get non default configuration from pg_settings
+sub pg_nondefault_settings
+{
+	my ($in_dir, $file) = @_;
+
+	# Load data from file
+	my $curfh = open_filehdl("$in_dir/$file");
+	while (<$curfh>) {
+		my @data = split(/;/);
+		next if (!&normalize_line(\@data));
+
+		# timestamp | label | setting | value
+		$all_nondefault_settings{$data[1]}{$data[2]}{value} = $data[3];
+		$all_nondefault_settings{$data[1]}{$data[2]}{unit} = '';
+		$all_nondefault_settings{$data[1]}{$data[2]}{bootval} = '';
+		$all_nondefault_settings{$data[1]}{$data[2]}{resetval} = '';
+		if ($#data >= 6) {
+			$all_nondefault_settings{$data[1]}{$data[2]}{unit} = $data[4];
+			$all_nondefault_settings{$data[1]}{$data[2]}{bootval} = $data[7];
+			$all_nondefault_settings{$data[1]}{$data[2]}{resetval} = $data[8];
+		}
+	}
+	$curfh->close();
+}
+
+# Show non default configuration from pg_settings
+sub pg_nondefault_settings_report
+{
+	my ($interval, $src_base, %data_info) = @_;
+
+	return if (scalar keys %all_nondefault_settings == 0);
+
+	my $id = &get_data_id('cluster-nondefault-settings', %data_info);
+	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html", $src_base);
+	print $fhcluster qq{
+<li style="display: none;" class="slide" id="cluster-nondefault-settings-slide">
+      <div id="cluster-nondefault-settings"><br><br><br><br></div>
+
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="$data_info{$id}{name}-report">
+			<div class="span11">
+				<table class="table table-striped" id="$data_info{$id}{name}-table">
+					<tbody>
+};
+	foreach my $lbl (sort keys %all_nondefault_settings) {
+		print $fhcluster "<tr><th colspan=\"4\">$lbl</th></tr>\n";
+		print $fhcluster "<tr><th>Name</th><th>Current</th><th>Unit</th><th>Reset val</th><th>Boot val</th></tr>\n";
+		foreach my $set (sort { lc($a) cmp lc($b) } keys %{$all_nondefault_settings{$lbl}}) {
+			print $fhcluster "<tr><td>$set</td><td>$all_nondefault_settings{$lbl}{$set}{value}</td><td>$all_nondefault_settings{$lbl}{$set}{unit}</td>";
+			if ($all_nondefault_settings{$lbl}{$set}{resetval}) {
+				print $fhcluster "<td>$all_nondefault_settings{$lbl}{$set}{resetval}</td>";
+			} else {
+				print $fhcluster "<td></td>";
+			}
+			if ($all_nondefault_settings{$lbl}{$set}{bootval}) {
+				print $fhcluster "<td>$all_nondefault_settings{$lbl}{$set}{bootval}</td>";
+			} else {
+				print $fhcluster "<td></td>";
+			}
+			print $fhcluster "</tr>\n";
+		}
+	}
+	print $fhcluster qq{
+					</tbody>
+				</table>
+			</div>
+		</div>
+		</div>
+	    </div>
+	    </div>
+	</div>
+    </li>
+};
+	$fhcluster->close();
+	%all_nondefault_settings = ();
 }
 
 # Get configuration from pg_db_role_setting
