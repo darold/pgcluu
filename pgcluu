@@ -357,7 +357,9 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'database-connections',
 			'title' => 'Connections by type on %s database',
+			'all_title' => 'Global connections by type',
 			'description' => 'Connections by type including idle ones.',
+			'all_description' => 'Global connections by type including idle ones.',
 			'ylabel' => 'Number of connections',
 			'legends' => ['Active','Idle','Idle in xact', 'Waiting for a lock'],
 		},
@@ -4132,7 +4134,6 @@ sub pg_stat_unused_indexes
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | schemaname | relname | indexrelname | index_code
 		push(@{$all_stat_unused_indexes{$data[1]}},  [ ($data[2], $data[3], $data[4], $data[5]) ] );
@@ -4207,7 +4208,7 @@ sub pg_stat_redundant_indexes
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalize_line(\@data));
+
 		# Do not report indexes when one is partial and not the oher one
 		next if (grep(/\bWHERE\b/i, $data[2], $data[3]) == 1);
 
@@ -4282,7 +4283,6 @@ sub pg_stat_missing_fkindexes
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
-		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | relname | ddl
 		push(@{$all_stat_missing_fkindexes{$data[1]}}, [ ($data[2], $data[3]) ] );
@@ -8242,6 +8242,7 @@ sub flotr2_linegraph
 	} else {
 		$divid =~ s/\+$//;
 	}
+print STDERR "ZZZZZZZZZZZZZZZZZZZZZZZZZ $divid\n" if (!$title);
 	$str .= qq{
       <div class="row">
             <div class="col-md-12">
