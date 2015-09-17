@@ -4697,7 +4697,7 @@ sub pg_settings_report
 					<tbody>
 };
 	foreach my $lbl (sort keys %all_settings) {
-		print $fhcluster "<tr><th colspan=\"4\">$lbl</th></tr>\n";
+		print $fhcluster "<tr><th colspan=\"5\">$lbl</th></tr>\n";
 		print $fhcluster "<tr><th>Name</th><th>Current</th><th>Unit</th><th>Reset val</th><th>Boot val</th></tr>\n";
 		foreach my $set (sort { lc($a) cmp lc($b) } keys %{$all_settings{$lbl}}) {
 			print $fhcluster "<tr><td>$set</td><td>$all_settings{$lbl}{$set}{value}</td><td>$all_settings{$lbl}{$set}{unit}</td>";
@@ -4781,7 +4781,7 @@ sub pg_nondefault_settings_report
 					<tbody>
 };
 	foreach my $lbl (sort keys %all_nondefault_settings) {
-		print $fhcluster "<tr><th colspan=\"4\">$lbl</th></tr>\n";
+		print $fhcluster "<tr><th colspan=\"5\">$lbl</th></tr>\n";
 		print $fhcluster "<tr><th>Name</th><th>Current</th><th>Unit</th><th>Reset val</th><th>Boot val</th></tr>\n";
 		foreach my $set (sort { lc($a) cmp lc($b) } keys %{$all_nondefault_settings{$lbl}}) {
 			print $fhcluster "<tr><td>$set</td><td>$all_nondefault_settings{$lbl}{$set}{value}</td><td>$all_nondefault_settings{$lbl}{$set}{unit}</td>";
