@@ -201,20 +201,26 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'database-backends',
 			'title' => 'Connections on %s database',
+			'all_title' => 'Global connections',
 			'description' => 'Number of clients connected to a database.',
+			'all_description' => 'Global number of clients connected.',
 			'ylabel' => 'Connections',
 			'legends' => ['backends'],
 		},
 		'2' => {
 			'name' =>  'database-read_write_query',
 			'title' => 'Affected tuples per operation on %s database',
+			'all_title' => 'Global affected tuples per operation',
 			'ylabel' => 'Tuples',
 			'description' => 'Affected rows on databases grouped by statement family.',
+			'all_description' => 'Global affected rows grouped by statement family.',
 		},
 		'3' => {
 			'name' =>  'database-cache_ratio',
 			'title' => 'Cache hit/miss ratio on %s database',
+			'all_title' => 'Global cache hit/miss ratio',
 			'description' => 'Per database cache hit/miss ratio.',
+			'all_description' => 'Global cache hit/miss ratio.',
 			'ylabel' => 'Blocks per second',
 			'legends' => ['Cache hit','Cache miss','hit/miss ratio'],
 			'y2label' => 'Percentage',
@@ -222,7 +228,9 @@ my %DB_GRAPH_INFOS = (
 		'4' => {
 			'name' =>  'database-commits_rollbacks',
 			'title' => 'Commits/Rollbacks per second on %s database',
+			'all_title' => 'Global Commits/Rollbacks per second',
 			'description' => 'Number of commits / rollbacks per second and number of backends per database.',
+			'all_description' => 'Global number of commits / rollbacks per second and number of backends.',
 			'ylabel' => 'Transaction/sec',
 			'legends' => ['commit','rollback','backends'],
 			'y2label' => 'Number of backend',
@@ -230,42 +238,54 @@ my %DB_GRAPH_INFOS = (
 		'5' => {
 			'name' =>  'database-write_ratio',
 			'title' => 'Write ratio on %s database',
+			'all_title' => 'Global Write ratio',
 			'description' => 'Write ratio on databases excluding templates and postgres.',
+			'all_description' => 'Global write ratio, excluding templates and postgres databases.',
 			'ylabel' => 'Write queries per second',
 			'legends' => ['Insert','Update','Delete'],
 		},
 		'6' => {
 			'name' =>  'database-read_ratio',
 			'title' => 'Read tuples on %s database',
+			'all_title' => 'Global read tuples',
 			'description' => 'Show entries returned from the index and live rows fetched from the tables. The latter will be less if any dead or not-yet-committed rows are fetched using the index.',
+			'all_description' => 'Show entries returned from the index and live rows fetched from the tables. The latter will be less if any dead or not-yet-committed rows are fetched using the index.',
 			'ylabel' => 'Tuples per second',
 			'legends' => ['Table (returned)','Index (fetched)'],
 		},
 		'7' => {
 			'name' =>  'database-deadlocks',
 			'title' => 'Number of deadlocks on %s database',
+			'all_title' => 'Global number of deadlocks',
 			'description' => 'Number of deadlocks detected in this database.',
+			'all_description' => 'Global number of deadlocks detected.',
 			'ylabel' => 'Number of deadlocks',
 			'legends' => ['deadlocks'],
 		},
 		'8' => {
 			'name' =>  'database-canceled_queries',
 			'title' => 'Number of canceled queries on %s database',
+			'all_title' => 'Global number of canceled queries',
 			'description' => 'Number of queries canceled due to conflicts with recovery in this database. [Conflicts occur only on standby servers]',
+			'all_description' => 'Global number of queries canceled due to conflicts with recovery. [Conflicts occur only on standby servers]',
 			'ylabel' => 'Number of queries canceled',
 			'legends' => ['conflicts'],
 		},
 		'9' => {
 			'name' =>  'database-temporary_files',
 			'title' => 'Number of temporary files on %s database',
+			'all_title' => 'Global number of temporary files',
 			'description' => 'Number of temporary files created by queries per database.',
+			'all_description' => 'Global number of temporary files created by queries.',
 			'ylabel' => 'Number of files',
 			'legends' => ['temporary files'],
 		},
 		'10' => {
 			'name' =>  'database-temporary_bytes',
 			'title' => 'Size of temporary data on %s database',
+			'all_title' => 'Global size of temporary data',
 			'description' => 'Amount of data written to temporary files created by queries per database.',
+			'all_description' => 'Global amount of data written to temporary files created by queries.',
 			'ylabel' => 'Size per seconde',
 			'legends' => ['temporary data'],
 		},
@@ -729,7 +749,9 @@ my %SAR_GRAPH_INFOS = (
 	'1' => {
 		'name' =>  'system-cpu',
 		'title' => 'CPU %s utilization',
+		'all_title' => 'Global CPU utilization',
 		'description' => 'Percentage of CPU utilization that occurred while executing at the system level (kernel), the user level (application) and the percentage of time that the CPU or CPUs were idle during which the system had an outstanding disk I/O request.',
+		'all_description' => 'Percentage of CPU utilization that occurred while executing at the system level (kernel), the user level (application) and the percentage of time that the CPU or CPUs were idle during which the system had an outstanding disk I/O request.',
 		'ylabel' => 'Percentage',
 		'legends' => ['Total','System','User','Iowait'],
 		'active' => 1,
@@ -7769,6 +7791,7 @@ sub flotr2_linegraph_array
 	my @legend = ();
 	my $data2 = '';
 	my $id = 1;
+    my $description = $infos->{description} || '';
 	for (my $i = 0; $i <= $#data; $i++) {
 		next if (!$data[$i]);
 		$data[$i] ||= '';
@@ -7784,12 +7807,16 @@ sub flotr2_linegraph_array
 		}
 		$id++;
 	}
-	if ($title ne '') {
+	if ($title eq 'all') {
+		$title = $infos->{all_title};
+		$description = $infos->{all_description};
+    }
+	elsif ($title ne '') {
 		$title = sprintf($infos->{title}, $title);
 	} else {
 		$title = $infos->{title};
 	}
-	return &flotr2_linegraph($buttonid, $divid, $infos, $title, \@data, \@legend);
+	return &flotr2_linegraph($buttonid, $divid, $infos, $title, $description, \@data, \@legend);
 }
 
 sub flotr2_linegraph_hash
@@ -7799,6 +7826,7 @@ sub flotr2_linegraph_hash
 	my @legend = ();
 	my @data = ();
 	my $i = 1;
+    my $description = $infos->{description} || '';
 	foreach my $id (sort keys %data_h) {
 		$data_h{$id} ||= '';
 		my $color = '';
@@ -7815,12 +7843,12 @@ sub flotr2_linegraph_hash
 		$title = $infos->{title};
 	}
 
-	return &flotr2_linegraph($buttonid, $divid, $infos, $title, \@data, \@legend);
+	return &flotr2_linegraph($buttonid, $divid, $infos, $title, $description, \@data, \@legend);
 }
 
 sub flotr2_linegraph
 {
-	my ($buttonid, $divid, $infos, $title, $data, $legend) = @_;
+	my ($buttonid, $divid, $infos, $title, $description, $data, $legend) = @_;
 	my $ylabel = $infos->{ylabel} || '';
 	my $type = '';
 	if ($ylabel =~ /size/i) {
@@ -7829,7 +7857,6 @@ sub flotr2_linegraph
 		$type = 'mduration';
 		$ylabel =~ s/m(duration)/$1/i;
 	}
-	my $description = $infos->{description} || '';
 	my $str = '';
 	if (($divid !~ /\+$/) && ($divid !~ /^statio-/)) {
 		$str = qq{
