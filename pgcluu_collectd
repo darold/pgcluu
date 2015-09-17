@@ -251,6 +251,12 @@ my %METRICS_COMMANDS = (
 		'repeat'  => 1,
 		'override'  => 1,
 	},
+	'pg_nondefault_settings_stats' => {
+		'output' => 'pg_nondefault_settings.csv',
+		'command' => 'dump_nondefault_pgsettings',
+		'repeat'  => 1,
+		'override'  => 1,
+	},
 	'pg_db_role_setting_stats' => {
 		'output' => 'pg_db_role_setting.csv',
 		'command' => 'dump_pgdbrolesetting',
@@ -988,6 +994,7 @@ sub verify_action
 		foreach my $m (keys %METRICS_COMMANDS) {
 			delete $METRICS_COMMANDS{$m} if (($m ne 'configuration_stats') &&
 							 ($m ne 'pg_settings_stats') &&
+							 ($m ne 'pg_nondefault_settings_stats') &&
 							 ($m ne 'pg_db_role_setting_stats') &&
 							 ($m ne 'tablespace_size_stats') &&
 							 ($m ne 'database_size_stats') &&
@@ -2051,6 +2058,26 @@ sub dump_pgsettings
 		"SELECT date_trunc('seconds', now()), category, name, " .
 		" setting, %s, context, source, %s, %s " .
 		"FROM pg_settings " . 
+		"ORDER BY category,name",
+		&backend_minimum_version(8, 2) ? "unit" : "''::text as unit",
+		&backend_minimum_version(8, 4) ? "boot_val" : "''::text as boot_val",
+		&backend_minimum_version(8, 4) ? "reset_val" : "''::text as reset_val"
+	);
+
+	return $sql;
+}
+
+####
+# Get PostgreSQL non default settings
+####
+sub dump_nondefault_pgsettings
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), category, name, " .
+		" setting, %s, context, source, %s, %s " .
+		"FROM pg_settings " .
+        "WHERE source != 'default' AND source != 'override' " .
 		"ORDER BY category,name",
 		&backend_minimum_version(8, 2) ? "unit" : "''::text as unit",
 		&backend_minimum_version(8, 4) ? "boot_val" : "''::text as boot_val",
