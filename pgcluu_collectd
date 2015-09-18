@@ -1976,6 +1976,9 @@ sub get_triggers
 {
 	my $database = shift;
 
+    # we can only detect internal triggers since pg 9.0
+    return 0 if (! &backend_minimum_version(9,0));
+
 	my $LOCAL_PSQL_PROG = $PSQL_PROG;
 	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
 		if ($database !~ /^[a-z0-9\_\-]+$/i) {
@@ -2010,8 +2013,9 @@ sub dump_unusedindexes
 		"FROM pg_stat_user_indexes " .
 		"INNER JOIN pg_index ON pg_index.indexrelid = pg_stat_user_indexes.indexrelid " .
 		"WHERE NOT indexrelname ILIKE 'fki%' " .
-		"AND NOT indexrelname ILIKE 'pk%' " .
-		"AND indisunique = FALSE AND idx_scan = 0 " .
+		"AND NOT indisprimary " .
+		"AND NOT indisunique AND idx_scan = 0 " .
+        (&backend_minimum_version(9,1) ? "AND NOT indisexclusion " : "") .
 		"ORDER BY schemaname, relname, indexrelname"
 	);
 
