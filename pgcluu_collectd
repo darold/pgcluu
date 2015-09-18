@@ -2010,8 +2010,9 @@ sub dump_unusedindexes
 		"FROM pg_stat_user_indexes " .
 		"INNER JOIN pg_index ON pg_index.indexrelid = pg_stat_user_indexes.indexrelid " .
 		"WHERE NOT indexrelname ILIKE 'fki%' " .
-		"AND NOT indexrelname ILIKE 'pk%' " .
-		"AND indisunique = FALSE AND idx_scan = 0 " .
+		"AND NOT indisprimary " .
+		"AND NOT indisunique AND idx_scan = 0 " .
+        (&backend_minimum_version(9,1) ? "AND NOT indisexclusion " : "") .
 		"ORDER BY schemaname, relname, indexrelname"
 	);
 
