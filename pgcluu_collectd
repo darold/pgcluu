@@ -1976,6 +1976,9 @@ sub get_triggers
 {
 	my $database = shift;
 
+    # we can only detect internal triggers since pg 9.0
+    return 0 if (! &backend_minimum_version(9,0));
+
 	my $LOCAL_PSQL_PROG = $PSQL_PROG;
 	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
 		if ($database !~ /^[a-z0-9\_\-]+$/i) {
