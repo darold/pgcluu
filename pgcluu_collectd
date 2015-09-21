@@ -239,6 +239,12 @@ my %METRICS_COMMANDS = (
 		'repeat'  => 1,
 		'override'  => 1,
 	},
+	'invalid_indexes_stats' => {
+		'output' => 'pg_stat_invalid_indexes.csv',
+		'command' => 'dump_invalidindexes',
+		'repeat'  => 1,
+		'override'  => 1,
+	},
 	'missing_fkindexes_stats' => {
 		'output' => 'pg_stat_missing_fkindexes.csv',
 		'command' => 'dump_missingfkindexes',
@@ -1024,6 +1030,7 @@ sub verify_action
 	if (!&backend_minimum_version(8, 4)) {
 		delete $METRICS_COMMANDS{'functions_stats'};
 		delete $METRICS_COMMANDS{'redundant_indexes_stats'};
+		delete $METRICS_COMMANDS{'invalid_indexes_stats'};
 		delete $METRICS_COMMANDS{'missing_fkindexes_stats'};
 	}
 	if (!&backend_minimum_version(8, 1)) {
@@ -2051,6 +2058,25 @@ sub dump_redundantindexes
 
 	return $sql;
 }
+
+####
+# Get invalid indexes in a database
+####
+sub dump_invalidindexes
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), current_database(), " .
+		"schemaname, relname, indexrelname, pg_get_indexdef(pg_stat_user_indexes.indexrelid) " .
+		"FROM pg_stat_user_indexes " .
+		"INNER JOIN pg_index ON pg_index.indexrelid = pg_stat_user_indexes.indexrelid " .
+		"WHERE NOT pg_index.indisvalid " .
+		"ORDER BY schemaname, relname, indexrelname"
+	);
+
+	return $sql;
+}
+
 
 ####
 # Get PostgreSQL settings
