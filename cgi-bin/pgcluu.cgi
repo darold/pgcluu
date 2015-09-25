@@ -52,7 +52,8 @@ our @IFACE_LIST     = ();
 my @GRAPH_COLORS    = ('#6e9dc9', '#f4ab3a', '#ac7fa8', '#8dbd0f'); 
 my $ZCAT_PROG       = '/bin/zcat';
 my $INTERVAL        = 1;
-my $CACHE = 0;
+my $CACHE           = 0;
+my $MAX_INDEXES     = 5;
 
 my %RELKIND = (
 	'r' => 'tables',
@@ -91,6 +92,7 @@ our %all_class_size = ();
 our %all_stat_locks = ();
 our %all_stat_unused_indexes = ();
 our %all_stat_redundant_indexes = ();
+our %all_stat_count_indexes = ();
 our %all_stat_missing_fkindexes = ();
 our %all_postgresql_conf = ();
 our %all_recovery_conf = ();
@@ -133,6 +135,7 @@ our @pg_to_be_stored = (
 	'all_stat_locks',
 	'all_stat_unused_indexes',
 	'all_stat_redundant_indexes',
+	'all_stat_count_indexes',
 	'all_stat_missing_fkindexes',
 	'all_postgresql_conf',
 	'all_recovery_conf',
@@ -462,6 +465,26 @@ my %DB_GRAPH_INFOS = (
 			'legends' => ['Redundant index'],
 			'active' => 1,
 			'menu' => 'Redundant indexes',
+		},
+	},
+	'pg_stat_count_indexes.csv' => {
+		'1' => {
+			'name' =>  'zero-index',
+			'title' => 'Tables without indexes on %s',
+			'description' => 'List of tables without indexes.',
+			'ylabel' => 'Number',
+			'legends' => ['No indexes'],
+			'active' => 1,
+			'menu' => 'Tables without index',
+		},
+		'2' => {
+			'name' =>  'count-index',
+			'title' => 'Tables with lot of indexes on %s',
+			'description' => 'List of tables with lot of indexes.',
+			'ylabel' => 'Number',
+			'legends' => ['Indexes count'],
+			'active' => 1,
+			'menu' => "Table with more than $MAX_INDEXES Indexes",
 		},
 	},
 	'pg_stat_missing_fkindexes.csv' => {
@@ -4064,6 +4087,121 @@ sub pg_stat_missing_fkindexes_report
 	%all_stat_missing_fkindexes = ();
 }
 
+# Compute statistics about indexes count
+sub pg_stat_count_indexes
+{
+	my ($in_dir, $file) = @_;
+
+	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
+
+	# Load data from file
+	my $curfh = open_filehdl("$in_dir/$file");
+	while (<$curfh>) {
+		my @data = split(/;/);
+
+		next if (($#INCLUDE_DB >= 0) && (!grep($data[1] =~ /^$_$/, @INCLUDE_DB)));
+
+		# timestamp | dbname | schema | table | count
+		$all_stat_count_indexes{$data[1]}{$data[2]}{$data[3]} = $data[4];
+	}
+	$curfh->close();
+}
+
+# Compute report about table without indexes or with too many indexes
+sub pg_stat_count_indexes_report
+{
+	my ($interval, $src_base, $db, %data_info) = @_;
+
+	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
+
+	return if (!$db);
+
+	foreach my $db (sort keys %all_stat_count_indexes) {
+		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
+		my $id = &get_data_id('count-index', %data_info);
+		# Open filehandle to cluster file
+		print qq{
+<ul id="slides">
+<li class="slide active-slide" id="$data_info{$id}{name}-slide">
+      <div id="$data_info{$id}{name}"><br/><br/><br/><br/></div>
+<div class="row">
+    <div class="col-md-12">
+      <div class="panel panel-default">
+      <div class="panel-heading">
+	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+	<p>$data_info{$id}{description}</p>
+      </div>
+      <div class="panel-body">
+	<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+		<div class="span11">
+			<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
+				<thead>
+					<tr>
+					<th>Schema</th>
+					<th>table</th>
+					<th>Number of indexes</th>
+					</tr>
+				</thead>
+				<tbody>
+};
+		foreach my $s (sort keys %{$all_stat_count_indexes{$db}}) {
+			foreach my $t (sort keys %{$all_stat_count_indexes{$db}{$s}}) {
+				next if ($all_stat_count_indexes{$db}{$s}{$t} > $MAX_INDEXES);
+				print "<tr><td>$s</td><td>$t</td><td>$all_stat_count_indexes{$db}{$s}{$t}</td></tr>\n";
+			}
+		}
+		print qq{
+				</tbody>
+			</table>
+		</div>
+	</div>
+	</div>
+    </div>
+</div>
+};
+
+		$id = &get_data_id('zero-index', %data_info);
+		print qq{
+<div class="row">
+    <div class="col-md-12">
+      <div class="panel panel-default">
+      <div class="panel-heading">
+	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+	<p>$data_info{$id}{description}</p>
+      </div>
+      <div class="panel-body">
+	<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+		<div class="span11">
+			<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
+				<thead>
+					<tr>
+					<th>Schema</th>
+					<th>table</th>
+					</tr>
+				</thead>
+				<tbody>
+};
+		foreach my $s (sort keys %{$all_stat_count_indexes{$db}}) {
+			foreach my $t (sort keys %{$all_stat_count_indexes{$db}{$s}}) {
+				next if ($all_stat_count_indexes{$db}{$s}{$t} > 0);
+				print "<tr><td>$s</td><td>$t</td></tr>\n";
+			}
+		}
+		print qq{
+				</tbody>
+			</table>
+		</div>
+	</div>
+	</div>
+    </div>
+</div>
+</li>
+</ul>
+};
+	}
+	%all_stat_count_indexes = ();
+}
+
 # Get relevant content of postgresql.conf
 sub postgresql_conf
 {
@@ -6104,6 +6242,11 @@ AAAASUVORK5CYII=';
 			      <li id="menu-$data_info{$id}{name}"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=$data_info{$id}{name}&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">$data_info{$id}{menu}</a></li>
 };
 		}
+		%data_info = %{$DB_GRAPH_INFOS{'pg_stat_count_indexes.csv'}};
+		my $idx = &get_data_id('count-index', %data_info);
+		$idx_str .= qq{
+			      <li id="menu-$data_info{$idx}{name}"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=$data_info{$idx}{name}&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Number of indexes</a></li>
+};
 		my $disable_idx = ' disabled';
 		$disable_idx = '' if ($idx_str);
 		$menu_str .= qq{
