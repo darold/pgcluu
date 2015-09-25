@@ -930,6 +930,9 @@ sub get_initial_info
 	# Store PG version into sysinfo file
 	&fetch_version(1);
 
+	# Store PG uptime into sysinfo file
+	&get_uptime(1);
+
 	# Collect general information about each database
 	if (!$NO_SYSINFO && ($#alldbs > -1)) {
 		my @extensions = ();
@@ -1199,6 +1202,37 @@ sub get_databases
 
 	return @dbs;
 }
+
+####
+# Get postmater uptime
+####
+sub get_uptime
+{
+	my $save = shift;
+
+	my $uptime = `$PSQL_PROG -c "SELECT pg_postmaster_start_time();"`;
+	if ($? != 0) {
+		&dprint("FATAL: psql error.\n");
+		# remove the pidfile
+		if (-f $PIDFILE) {
+			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
+		}
+		exit 0;
+	}
+	chomp($uptime);
+
+	if (!$NO_SYSINFO && $save) {
+		unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
+			&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
+			exit 1;
+		}
+		print OUT "[PGUPTIME]\n";
+		print OUT "$uptime\n";
+		close(OUT);
+	}
+	return $uptime;
+}
+
 
 ####
 # Retrieve schemas for a given database.

@@ -5263,6 +5263,7 @@ EOF
 			$extensions_info = qq{<li><span class="figure">$extnum</span> <span class="figure-label">Extensions ($extlist)</span></li>};
 		}
 		$sysinfo{PGVERSION}{'full_version'} ||= '';
+		$sysinfo{PGVERSION}{'uptime'} ||= '';
 		my $database_number = scalar keys %{$OVERALL_STATS{'database'}};
 		$OVERALL_STATS{'cluster'}{'size'} ||= '-';
 		$OVERALL_STATS{'cluster'}{'nbackend'} ||= '-';
@@ -5424,6 +5425,7 @@ EOF
 		print <<EOF;
 
 <span class="figure-label">$sysinfo{PGVERSION}{'full_version'}</span>
+<span class="figure-label">Up since $sysinfo{PGVERSION}{'uptime'}</span>
 EOF
 	}
 	print <<EOF;
@@ -8368,6 +8370,9 @@ sub read_sysinfo
 				$sysinfo{$section}{major} = '';
 				$sysinfo{$section}{minor} = '';
 			}
+		}
+		if ($section eq 'PGUPTIME') {
+			$sysinfo{PGVERSION}{uptime} = $l;
 		}
 		if ($section eq 'EXTENSION') {
 			my ($db, @vals) = split(/[=,]+/, $l);

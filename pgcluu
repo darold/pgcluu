@@ -5519,6 +5519,7 @@ EOF
 			$extensions_info = qq{<li><span class="figure">$extnum</span> <span class="figure-label">Extensions ($extlist)</span></li>};
 		}
 		$sysinfo{PGVERSION}{'full_version'} ||= '';
+		$sysinfo{PGVERSION}{'uptime'} ||= '';
 		my $database_number = scalar keys %{$OVERALL_STATS{'database'}};
 		$OVERALL_STATS{'cluster'}{'size'} ||= '-';
 		$OVERALL_STATS{'cluster'}{'nbackend'} ||= '-';
@@ -5681,7 +5682,8 @@ EOF
 	if (exists $sysinfo{PGVERSION}) {
 		print $fh <<EOF;
 
-<span class="figure-label">$sysinfo{PGVERSION}{'full_version'}</span>
+<li><span class="figure-label">$sysinfo{PGVERSION}{'full_version'}</span></li>
+<li><span class="figure-label">Up since $sysinfo{PGVERSION}{'uptime'}</span></li>
 EOF
 	}
 	print $fh <<EOF;
@@ -8754,13 +8756,15 @@ sub read_sysinfo
 				$sysinfo{$section}{minor} = '';
 			}
 		}
+		if ($section eq 'PGUPTIME') {
+			$sysinfo{PGVERSION}{uptime} = $l;
+		}
 		if ($section eq 'EXTENSION') {
 			my ($db, @vals) = split(/[=,]+/, $l);
 			push(@{$sysinfo{$section}{$db}}, @vals);
 			foreach my $e (@vals) {
 				push(@{$OVERALL_STATS{'cluster'}{'extensions'}}, $e) if (!grep(/^$e$/, @{$OVERALL_STATS{'cluster'}{'extensions'}}));
 			}
-
 		}
 		if ($section eq 'SCHEMA') {
 			my ($db, @vals) = split(/[=,]+/, $l);
