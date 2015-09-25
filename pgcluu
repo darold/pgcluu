@@ -3353,6 +3353,8 @@ sub pg_stat_bgwriter
 		$all_stat_bgwriter{$data[0]}{buffers_backend} .= sprintf("%.2f", $tmp_val/$interval);
 		(($data[7+$id] - $start_vals[7+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7+$id] - $start_vals[7+$id]);
 		$all_stat_bgwriter{$data[0]}{buffers_backend_fsync} .= sprintf("%.2f", $tmp_val/$interval);
+		$OVERALL_STATS{'bgwriter'}{stats_reset} = $data[-1];
+
 		@start_vals = ();
 		push(@start_vals, @data);
 	}
@@ -5515,6 +5517,11 @@ EOF
 		$OVERALL_STATS{'cluster'}{'nbackend'} ||= '-';
 		$OVERALL_STATS{'cluster'}{'returned'} ||= '-';
 		$OVERALL_STATS{'cluster'}{'cache_ratio'} ||= '-';
+		my $bgwriter_reset = '';
+		if (exists $OVERALL_STATS{'bgwriter'}{stats_reset}) {
+			$OVERALL_STATS{'bgwriter'}{stats_reset} =~ s/[+\-]\d+$//;
+			$bgwriter_reset = "<li><span class=\"figure\"> $OVERALL_STATS{bgwriter}{stats_reset}</span> <span class=\"figure-label\">Last bgwriter stats reset</span></li>";
+		}
 		my $cluster_size = &pretty_print_size($OVERALL_STATS{'cluster'}{'size'});
 		print $fh <<EOF;
       <div class="row">
@@ -5536,6 +5543,7 @@ EOF
 		$temp_file_info
 		$deadlock_info
 		$extensions_info
+		$bgwriter_reset
 		</ul>
 		</div>
               </div>
