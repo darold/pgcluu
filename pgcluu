@@ -1817,8 +1817,11 @@ sub write_database_info
 	$schlist = ' (' . $schlist . ')' if ($schlist);
 	my $procount = $#{$sysinfo{PROCEDURE}{$db}} + 1;
 	my $trigcount = $sysinfo{TRIGGER}{$db} || 0;
-	my $last_vacuum = $OVERALL_STATS{$db}{last_vacuum} || '-';
-	my $last_analyze = $OVERALL_STATS{$db}{last_analyze} || '-';
+	my $last_vacuum = $OVERALL_STATS{'database'}{$db}{last_vacuum} || '-';
+	my $last_analyze = $OVERALL_STATS{'database'}{$db}{last_analyze} || '-';
+	my $last_autovacuum = $OVERALL_STATS{'database'}{$db}{last_autovacuum} || '-';
+	my $last_autoanalyze = $OVERALL_STATS{'database'}{$db}{last_autoanalyze} || '-';
+	my $last_reset = $OVERALL_STATS{'database'}{$db}{'stat_reset'} || '';
 
 	my $objects_count = '';
 	foreach my $k (sort keys %RELKIND) {
@@ -1846,6 +1849,9 @@ sub write_database_info
 	        <li><span class="figure">$nsch</span> <span class="figure-label">Schemas$schlist</span></li>
 	        <li><span class="figure">$last_vacuum</span> <span class="figure-label">Last manual vacuum</span></li>
 	        <li><span class="figure">$last_analyze</span> <span class="figure-label">Last manual analyze</span></li>
+	        <li><span class="figure">$last_autovacuum</span> <span class="figure-label">Last auto vacuum</span></li>
+	        <li><span class="figure">$last_autoanalyze</span> <span class="figure-label">Last auto analyze</span></li>
+	        <li><span class="figure">$last_reset</span> <span class="figure-label">Last database stats reset</span></li>
 	        <li><span class="figure">$procount</span> <span class="figure-label">Stored procedures</span></li>
 	        <li><span class="figure">$trigcount</span> <span class="figure-label">Triggers</span></li>
 		$objects_count
@@ -1965,11 +1971,12 @@ sub pg_stat_database
 		$all_stat_database{$data[0]}{$data[2]}{xact_rollback} = $tmp_val;
 		$all_stat_database{$data[0]}{all}{xact_rollback} += $tmp_val;
 
-		# Gather number of canceled queries
+		# Gather number of canceled queries and stat reset
 		if ($#data >= 13) {
 			(($data[13] - $start_vals{$data[2]}[13]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[13] - $start_vals{$data[2]}[13]);
 			$all_stat_database{$data[0]}{$data[2]}{canceled_queries} = $tmp_val;
 			$all_stat_database{$data[0]}{all}{canceled_queries} += $tmp_val;
+			$OVERALL_STATS{'database'}{$data[2]}{'stat_reset'} = $data[14] if (!exists $OVERALL_STATS{'database'}{$data[2]}{'stat_reset'} || ($OVERALL_STATS{'database'}{$data[2]}{'stat_reset'} lt $data[14]));
 		}
 
 		# Gather number of temporary data and deadlock
@@ -2538,10 +2545,10 @@ sub pg_stat_user_tables
 
 		# timestamp | dbname | relid | schemaname | relname | seq_scan | seq_tup_read | idx_scan | idx_tup_fetch | n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | last_vacuum | last_autovacuum | last_analyze | last_autoanalyze | vacuum_count | autovacuum_count | analyze_count | autoanalyze_count
 
-		$OVERALL_STATS{$data[1]}{last_vacuum} = $data[15] if (!$OVERALL_STATS{$data[1]}{last_vacuum} || ($data[15] gt $OVERALL_STATS{$data[1]}{last_vacuum}));
-		$OVERALL_STATS{$data[1]}{last_autovacuum} = $data[16] if (!$OVERALL_STATS{$data[1]}{last_autovacuum} || ($data[16] gt $OVERALL_STATS{$data[1]}{last_autovacuum}));
-		$OVERALL_STATS{$data[1]}{last_analyze} = $data[17] if (!$OVERALL_STATS{$data[1]}{last_analyze} || ($data[17] gt $OVERALL_STATS{$data[1]}{last_analyze}));
-		$OVERALL_STATS{$data[1]}{last_autoanalyze} = $data[18] if (!$OVERALL_STATS{$data[1]}{last_autoanalyze} || ($data[18] gt $OVERALL_STATS{$data[1]}{last_autoanalyze}));
+		$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} = $data[15] if (!$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} || ($data[15] gt $OVERALL_STATS{'database'}{$data[1]}{last_vacuum}));
+		$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} = $data[16] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} || ($data[16] gt $OVERALL_STATS{'database'}{$data[1]}{last_autovacuum}));
+		$OVERALL_STATS{'database'}{$data[1]}{last_analyze} = $data[17] if (!$OVERALL_STATS{'database'}{$data[1]}{last_analyze} || ($data[17] gt $OVERALL_STATS{'database'}{$data[1]}{last_analyze}));
+		$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} = $data[18] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} || ($data[18] gt $OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze}));
 
 		$data[4] = "$data[3].$data[4]";
 		push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
@@ -3353,7 +3360,7 @@ sub pg_stat_bgwriter
 		$all_stat_bgwriter{$data[0]}{buffers_backend} .= sprintf("%.2f", $tmp_val/$interval);
 		(($data[7+$id] - $start_vals[7+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7+$id] - $start_vals[7+$id]);
 		$all_stat_bgwriter{$data[0]}{buffers_backend_fsync} .= sprintf("%.2f", $tmp_val/$interval);
-		$OVERALL_STATS{'bgwriter'}{stats_reset} = $data[-1];
+		$OVERALL_STATS{'bgwriter'}{stats_reset} = $data[-1] if (!exists $OVERALL_STATS{'bgwriter'}{stats_reset} || ($OVERALL_STATS{'bgwriter'}{stats_reset} lt $data[-1]));
 
 		@start_vals = ();
 		push(@start_vals, @data);
@@ -5519,8 +5526,7 @@ EOF
 		$OVERALL_STATS{'cluster'}{'cache_ratio'} ||= '-';
 		my $bgwriter_reset = '';
 		if (exists $OVERALL_STATS{'bgwriter'}{stats_reset}) {
-			$OVERALL_STATS{'bgwriter'}{stats_reset} =~ s/[+\-]\d+$//;
-			$bgwriter_reset = "<li><span class=\"figure\"> $OVERALL_STATS{bgwriter}{stats_reset}</span> <span class=\"figure-label\">Last bgwriter stats reset</span></li>";
+			$bgwriter_reset = "<li><span class=\"figure\"> $OVERALL_STATS{'bgwriter'}{stats_reset}</span> <span class=\"figure-label\">Last bgwriter stats reset</span></li>";
 		}
 		my $cluster_size = &pretty_print_size($OVERALL_STATS{'cluster'}{'size'});
 		print $fh <<EOF;

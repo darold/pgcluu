@@ -1557,9 +1557,11 @@ sub write_database_info
 	$schlist = ' (' . $schlist . ')' if ($schlist);
 	my $procount = $#{$sysinfo{PROCEDURE}{$db}} + 1;
 	my $trigcount = $sysinfo{TRIGGER}{$db} || 0;
-	my $last_vacuum = $OVERALL_STATS{$db}{last_vacuum} || '-';
-	my $last_analyze = $OVERALL_STATS{$db}{last_analyze} || '-';
-
+	my $last_vacuum = $OVERALL_STATS{'database'}{$db}{last_vacuum} || '-';
+	my $last_analyze = $OVERALL_STATS{'database'}{$db}{last_analyze} || '-';
+	my $last_autovacuum = $OVERALL_STATS{'database'}{$db}{last_autovacuum} || '-';
+	my $last_autoanalyze = $OVERALL_STATS{'database'}{$db}{last_autoanalyze} || '-';
+	my $last_reset = $OVERALL_STATS{'database'}{$db}{'stat_reset'} || '';
 
 	my $objects_count = '';
 	foreach my $k (sort keys %RELKIND) {
@@ -1585,6 +1587,9 @@ sub write_database_info
 	        <li><span class="figure">$nsch</span> <span class="figure-label">Schemas$schlist</span></li>
 	        <li><span class="figure">$last_vacuum</span> <span class="figure-label">Last manual vacuum</span></li>
 	        <li><span class="figure">$last_analyze</span> <span class="figure-label">Last manual analyze</span></li>
+	        <li><span class="figure">$last_autovacuum</span> <span class="figure-label">Last auto vacuum</span></li>
+	        <li><span class="figure">$last_autoanalyze</span> <span class="figure-label">Last auto analyze</span></li>
+	        <li><span class="figure">$last_reset</span> <span class="figure-label">Last database stat reset</span></li>
 	        <li><span class="figure">$procount</span> <span class="figure-label">Stored procedures</span></li>
 	        <li><span class="figure">$trigcount</span> <span class="figure-label">Triggers</span></li>
 		$objects_count
@@ -1763,6 +1768,7 @@ sub pg_stat_database
 			} else {
 				$OVERALL_STATS{'cluster'}{canceled_queries} += $tmp_val;
 				$OVERALL_STATS{'database'}{$data[2]}{canceled_queries} += $tmp_val;
+				$OVERALL_STATS{'database'}{$data[2]}{'stat_reset'} = $data[14] if (!exists $OVERALL_STATS{'database'}{$data[2]}{'stat_reset'} || ($OVERALL_STATS{'database'}{$data[2]}{'stat_reset'} lt $data[14]));
 			}
 		}
 
@@ -2257,10 +2263,10 @@ sub pg_stat_user_tables
 		# timestamp | dbname | relid | schemaname | relname | seq_scan | seq_tup_read | idx_scan | idx_tup_fetch | n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | last_vacuum | last_autovacuum | last_analyze | last_autoanalyze | vacuum_count | autovacuum_count | analyze_count | autoanalyze_count
 
 		if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') ) {
-			$OVERALL_STATS{$data[1]}{last_vacuum} = $data[15] if (!$OVERALL_STATS{$data[1]}{last_vacuum} || ($data[15] gt $OVERALL_STATS{$data[1]}{last_vacuum}));
-			$OVERALL_STATS{$data[1]}{last_autovacuum} = $data[16] if (!$OVERALL_STATS{$data[1]}{last_autovacuum} || ($data[16] gt $OVERALL_STATS{$data[1]}{last_autovacuum}));
-			$OVERALL_STATS{$data[1]}{last_analyze} = $data[17] if (!$OVERALL_STATS{$data[1]}{last_analyze} || ($data[17] gt $OVERALL_STATS{$data[1]}{last_analyze}));
-			$OVERALL_STATS{$data[1]}{last_autoanalyze} = $data[18] if (!$OVERALL_STATS{$data[1]}{last_autoanalyze} || ($data[18] gt $OVERALL_STATS{$data[1]}{last_autoanalyze}));
+			$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} = $data[15] if (!$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} || ($data[15] gt $OVERALL_STATS{'database'}{$data[1]}{last_vacuum}));
+			$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} = $data[16] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} || ($data[16] gt $OVERALL_STATS{'database'}{$data[1]}{last_autovacuum}));
+			$OVERALL_STATS{'database'}{$data[1]}{last_analyze} = $data[17] if (!$OVERALL_STATS{'database'}{$data[1]}{last_analyze} || ($data[17] gt $OVERALL_STATS{'database'}{$data[1]}{last_analyze}));
+			$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} = $data[18] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} || ($data[18] gt $OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze}));
 		} else {
 
 			next if (($#INCLUDE_DB >= 0) && (!grep($data[1] =~ /^$_$/, @INCLUDE_DB)));
@@ -3039,6 +3045,7 @@ sub pg_stat_bgwriter
 		$all_stat_bgwriter{$data[0]}{buffers_backend} .= sprintf("%.2f", $tmp_val/$interval);
 		(($data[7+$id] - $start_vals[7+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7+$id] - $start_vals[7+$id]);
 		$all_stat_bgwriter{$data[0]}{buffers_backend_fsync} .= sprintf("%.2f", $tmp_val/$interval);
+		$OVERALL_STATS{'bgwriter'}{stats_reset} = $data[-1] if (!exists $OVERALL_STATS{'bgwriter'}{stats_reset} || ($OVERALL_STATS{'bgwriter'}{stats_reset} lt $data[-1]));
 		@start_vals = ();
 		push(@start_vals, @data);
 	}
@@ -4483,8 +4490,7 @@ sub pg_nondefault_settings_report
 	return if (scalar keys %all_nondefault_settings == 0);
 
 	my $id = &get_data_id('cluster-nondefault-settings', %data_info);
-	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html", $src_base);
-	print $fhcluster qq{
+	print qq{
 <li style="display: none;" class="slide" id="cluster-nondefault-settings-slide">
       <div id="cluster-nondefault-settings"><br><br><br><br></div>
 
@@ -4502,24 +4508,24 @@ sub pg_nondefault_settings_report
 					<tbody>
 };
 	foreach my $lbl (sort keys %all_nondefault_settings) {
-		print $fhcluster "<tr><th colspan=\"5\">$lbl</th></tr>\n";
-		print $fhcluster "<tr><th>Name</th><th>Current</th><th>Unit</th><th>Reset val</th><th>Boot val</th></tr>\n";
+		print "<tr><th colspan=\"5\">$lbl</th></tr>\n";
+		print "<tr><th>Name</th><th>Current</th><th>Unit</th><th>Reset val</th><th>Boot val</th></tr>\n";
 		foreach my $set (sort { lc($a) cmp lc($b) } keys %{$all_nondefault_settings{$lbl}}) {
-			print $fhcluster "<tr><td>$set</td><td>$all_nondefault_settings{$lbl}{$set}{value}</td><td>$all_nondefault_settings{$lbl}{$set}{unit}</td>";
+			print "<tr><td>$set</td><td>$all_nondefault_settings{$lbl}{$set}{value}</td><td>$all_nondefault_settings{$lbl}{$set}{unit}</td>";
 			if ($all_nondefault_settings{$lbl}{$set}{resetval}) {
-				print $fhcluster "<td>$all_nondefault_settings{$lbl}{$set}{resetval}</td>";
+				print "<td>$all_nondefault_settings{$lbl}{$set}{resetval}</td>";
 			} else {
-				print $fhcluster "<td></td>";
+				print "<td></td>";
 			}
 			if ($all_nondefault_settings{$lbl}{$set}{bootval}) {
-				print $fhcluster "<td>$all_nondefault_settings{$lbl}{$set}{bootval}</td>";
+				print "<td>$all_nondefault_settings{$lbl}{$set}{bootval}</td>";
 			} else {
-				print $fhcluster "<td></td>";
+				print "<td></td>";
 			}
-			print $fhcluster "</tr>\n";
+			print "</tr>\n";
 		}
 	}
-	print $fhcluster qq{
+	print qq{
 					</tbody>
 				</table>
 			</div>
@@ -4530,7 +4536,6 @@ sub pg_nondefault_settings_report
 	</div>
     </li>
 };
-	$fhcluster->close();
 	%all_nondefault_settings = ();
 }
 
@@ -5263,6 +5268,10 @@ EOF
 		$OVERALL_STATS{'cluster'}{'nbackend'} ||= '-';
 		$OVERALL_STATS{'cluster'}{'returned'} ||= '-';
 		$OVERALL_STATS{'cluster'}{'cache_ratio'} ||= '-';
+		my $bgwriter_reset = '';
+		if (exists $OVERALL_STATS{'bgwriter'}{stats_reset}) {
+			$bgwriter_reset = "<li><span class=\"figure\"> $OVERALL_STATS{'bgwriter'}{stats_reset}</span> <span class=\"figure-label\">Last bgwriter stats reset</span></li>";
+		}
 		my $cluster_size = &pretty_print_size($OVERALL_STATS{'cluster'}{'size'});
 		print <<EOF;
       <div class="row">
@@ -5284,6 +5293,7 @@ EOF
 		$temp_file_info
 		$deadlock_info
 		$extensions_info
+		$bgwriter_reset
 		</ul>
 		</div>
               </div>
