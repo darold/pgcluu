@@ -5740,6 +5740,7 @@ EOF
 EOF
 
 	if ( (-e "$in_dir/sysinfo.txt") || (-e "$in_dir/sysinfo.txt.gz") || (-e "$in_dir/sys_cache.bin") ) {
+		$sysinfo{UPTIME}{'uptime'} = '-' if (!exists $sysinfo{UPTIME}{'uptime'});
 		print $fh <<EOF;
 <li class="slide" id="info-slide">
 
@@ -5754,6 +5755,7 @@ EOF
 		<div class="key-figures">
 		<ul>
 		<li></li>
+	      <li><span class="figure">$sysinfo{UPTIME}{'uptime'}</span> <span class="figure-label">Uptime</span></li>
 	      <li><span class="figure">$sysinfo{KERNEL}{'hostname'}</span> <span class="figure-label">Hostname</span></li>
 	      <li><span class="figure">$sysinfo{KERNEL}{'kernel'}</span> <span class="figure-label">Kernel</span></li>
 	      <li><span class="figure">$sysinfo{KERNEL}{'arch'}</span> <span class="figure-label">Arch</span></li>
@@ -8687,6 +8689,13 @@ sub read_sysinfo
 			$sysinfo{$section}{'hostname'} = $kinf[1];
 			$sysinfo{$section}{'kernel'} = "$kinf[0] $kinf[2] $kinf[3] $kinf[4]";
 			$sysinfo{$section}{'arch'} = "$kinf[-2] $kinf[-1]";
+		}
+		if ($section eq 'UPTIME') {
+			$sysinfo{$section}{'all'} = $l;
+			if ($l =~ /\s*([^,]+), (.*)/) {
+				$sysinfo{$section}{'uptime'} = $1;
+				$sysinfo{$section}{'infos'} = $2;
+			}
 		}
 		if ($section eq 'RELEASE') {
 			my ($key, $val) = split(/=/, $l);

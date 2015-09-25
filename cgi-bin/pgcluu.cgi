@@ -5516,6 +5516,8 @@ EOF
 
 sub show_sysinfo
 {
+	$sysinfo{UPTIME}{'uptime'} = '-' if (!exists $sysinfo{UPTIME}{'uptime'});
+
 	print <<EOF;
 <ul id="slides">
 <li class="slide active-slide" id="info-slide">
@@ -5531,14 +5533,15 @@ sub show_sysinfo
 		<div class="key-figures">
 		<ul>
 		<li></li>
-	      <li><span class="figure">$sysinfo{KERNEL}{'hostname'}</span> <span class="figure-label">Hostname</span></li>
-	      <li><span class="figure">$sysinfo{KERNEL}{'kernel'}</span> <span class="figure-label">Kernel</span></li>
-	      <li><span class="figure">$sysinfo{KERNEL}{'arch'}</span> <span class="figure-label">Arch</span></li>
-	      <li><span class="figure">$sysinfo{RELEASE}{'name'}</span> <span class="figure-label">Distribution</span></li>
+		<li><span class="figure">$sysinfo{UPTIME}{'uptime'}</span> <span class="figure-label">Uptime</span></li>
+		<li><span class="figure">$sysinfo{KERNEL}{'hostname'}</span> <span class="figure-label">Hostname</span></li>
+		<li><span class="figure">$sysinfo{KERNEL}{'kernel'}</span> <span class="figure-label">Kernel</span></li>
+		<li><span class="figure">$sysinfo{KERNEL}{'arch'}</span> <span class="figure-label">Arch</span></li>
+		<li><span class="figure">$sysinfo{RELEASE}{'name'}</span> <span class="figure-label">Distribution</span></li>
 EOF
 		if ($sysinfo{RELEASE}{'version'}) {
 			print <<EOF;
-	      <li><span class="figure">$sysinfo{RELEASE}{'version'}</span> <span class="figure-label">Version</span></li>
+		<li><span class="figure">$sysinfo{RELEASE}{'version'}</span> <span class="figure-label">Version</span></li>
 EOF
 		}
 		print "<li>\n";
@@ -8301,6 +8304,13 @@ sub read_sysinfo
 			$sysinfo{$section}{'hostname'} = $kinf[1];
 			$sysinfo{$section}{'kernel'} = "$kinf[0] $kinf[2] $kinf[3] $kinf[4]";
 			$sysinfo{$section}{'arch'} = "$kinf[-2] $kinf[-1]";
+		}
+		if ($section eq 'UPTIME') {
+			$sysinfo{$section}{'all'} = $l;
+			if ($l =~ /\s*([^,]+), (.*)/) {
+				$sysinfo{$section}{'uptime'} = $1;
+				$sysinfo{$section}{'infos'} = $2;
+			}
 		}
 		if ($section eq 'RELEASE') {
 			my ($key, $val) = split(/=/, $l);

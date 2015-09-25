@@ -1362,10 +1362,16 @@ sub grab_os_information
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 	$ret = `$cmd`;
 	push(@system, "/sys/kernel/mm/transparent_hugepage/khugepaged/defrag: " . $ret);
+	# Look at uptime informations
+	$cmd = 'uptime 2>/dev/null';
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my $uptime = `$cmd`;
 	print OUT "[CPU]\n";
 	print OUT @cpuinfo;
 	print OUT "[KERNEL]\n";
 	print OUT $kernel_info;
+	print OUT "[UPTIME]\n";
+	print OUT $uptime;
 	print OUT "[MEMORY]\n";
 	print OUT @meminfo;
 	print OUT "[DF]\n";
