@@ -251,6 +251,12 @@ my %METRICS_COMMANDS = (
 		'repeat'  => 1,
 		'override'  => 1,
 	},
+	'count_indexes_stats' => {
+		'output' => 'pg_stat_count_indexes.csv',
+		'command' => 'dump_count_indexes',
+		'repeat'  => 1,
+		'override'  => 1,
+	},
 	'pg_settings_stats' => {
 		'output' => 'pg_settings.csv',
 		'command' => 'dump_pgsettings',
@@ -2093,7 +2099,7 @@ sub dump_redundantindexes
 		"    ORDER BY array_to_string(indkey,'+') DESC) " . 
 		") AS tmp " . 
 		"WHERE (colindexbackward LIKE (colindex || '+%') OR colindexbackward = colindex) " .
-		"  AND (is_unique_backward <> is_unique)" 
+		"  AND (is_unique_backward <> is_unique) AND NOT is_unique" 
 	);
 
 	return $sql;
@@ -2116,6 +2122,27 @@ sub dump_invalidindexes
 
 	return $sql;
 }
+
+####
+# Get table without indexes
+####
+sub dump_count_indexes
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), current_database(), " .
+		"pg_stat_user_tables.schemaname, pg_stat_user_tables.relname, " .
+		"count(pg_stat_user_indexes.indexrelid) as number_of_indexes " .
+		"FROM pg_stat_user_tables " .
+		"lEFT JOIN pg_stat_user_indexes ON pg_stat_user_indexes.schemaname = pg_stat_user_tables.schemaname " .
+		"AND pg_stat_user_indexes.relname = pg_stat_user_tables.relname " .
+		"GROUP BY pg_stat_user_tables.schemaname, pg_stat_user_tables.relname " .
+		"ORDER BY pg_stat_user_tables.schemaname, pg_stat_user_tables.relname "
+	);
+
+	return $sql;
+}
+
 
 
 ####
