@@ -4144,11 +4144,16 @@ sub pg_stat_count_indexes_report
 				</thead>
 				<tbody>
 };
+		my $found = 0;
 		foreach my $s (sort keys %{$all_stat_count_indexes{$db}}) {
 			foreach my $t (sort keys %{$all_stat_count_indexes{$db}{$s}}) {
-				next if ($all_stat_count_indexes{$db}{$s}{$t} > $MAX_INDEXES);
+				next if ($all_stat_count_indexes{$db}{$s}{$t} < $MAX_INDEXES);
 				print "<tr><td>$s</td><td>$t</td><td>$all_stat_count_indexes{$db}{$s}{$t}</td></tr>\n";
+				$found = 1;
 			}
+		}
+		if (!$found) {
+			print $fhtable '<tr><td colspan="3"><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td></tr>';
 		}
 		print qq{
 				</tbody>
@@ -4181,12 +4186,17 @@ sub pg_stat_count_indexes_report
 				</thead>
 				<tbody>
 };
+		my $found = 0;
 		foreach my $s (sort keys %{$all_stat_count_indexes{$db}}) {
 			foreach my $t (sort keys %{$all_stat_count_indexes{$db}{$s}}) {
 				next if ($all_stat_count_indexes{$db}{$s}{$t} > 0);
 				print "<tr><td>$s</td><td>$t</td></tr>\n";
+				$found = 1;
 			}
 		}
+                if (!$found) {
+                        print $fhtable '<tr><td colspan="2"><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td></tr>';
+                }
 		print qq{
 				</tbody>
 			</table>
