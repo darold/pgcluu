@@ -77,6 +77,7 @@ our %all_tablespace_size = ();
 our %all_vacuum_stat = ();
 our %all_stat_user_tables = ();
 our %all_stat_user_indexes = ();
+our %all_stat_invalid_indexes = ();
 our %all_statio_user_tables = ();
 our %all_relation_buffercache = ();
 our %all_statio_all_indexes = ();
@@ -120,6 +121,7 @@ our @pg_to_be_stored = (
 	'all_vacuum_stat',
 	'all_stat_user_tables',
 	'all_stat_user_indexes',
+	'all_stat_invalid_indexes',
 	'all_statio_user_tables',
 	'all_relation_buffercache',
 	'all_statio_all_indexes',
@@ -779,6 +781,17 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'Statements statistics',
 		}
 	},
+	'pg_stat_invalid_indexes.csv' => {
+		'1' => {
+			'name' =>  'index-invalid',
+			'title' => 'Invalid indexes on %s',
+			'description' => 'List of invalid indexes during concurrency build.',
+			'ylabel' => 'Number',
+			'legends' => ['Invalid index'],
+			'active' => 1,
+			'menu' => 'Invalid Indexes',
+		},
+	},
 );
 
 my %SAR_GRAPH_INFOS = (
@@ -931,7 +944,7 @@ sub read_conf
 	# Defined the backward level where ressources files are stored
 	$src_base = '';
 	#$INPUT_DIR = '/data/file_data/data/data_pgcluu_demo';
-	$INPUT_DIR = '/home/git/pgcluu/test2';
+	$INPUT_DIR = '/home/git/pgcluu/data1';
 	$RSC_BASE = '.';
 
 	@INCLUDE_DB = ('[^p].*');
@@ -2625,8 +2638,97 @@ sub pg_stat_user_indexes_report
 </ul>
 };
 	}
-	%all_stat_user_tables = ();
+	%all_stat_user_indexes = ();
 }
+
+# Compute statistics about invalid index
+sub pg_stat_invalid_indexes
+{
+	my ($in_dir, $file) = @_;
+
+	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
+
+	my %start_vals = ();
+	my $tmp_val = 0;
+	# Load data from file
+	my $curfh = open_filehdl("$in_dir/$file");
+	while (<$curfh>) {
+		my @data = split(/;/);
+		next if (!&normalize_line(\@data));
+
+		# timestamp | dbname | schemaname | relname | indexrelname | index_definition
+		$all_stat_invalid_indexes{$data[1]}{$data[2]}{$data[3]}{$data[4]} = $data[5];
+	}
+	$curfh->close();
+}
+
+# Compute report about invalid index
+sub pg_stat_invalid_indexes_report
+{
+	my ($interval, $src_base, $db, %data_info) = @_;
+
+	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
+
+	return if (!$db);
+
+	foreach my $id (sort {$a <=> $b} keys %data_info) {
+		next if ($id ne $ID_ACTION);
+		next if ($data_info{$id}{name} ne 'index-invalid');
+
+		my $table_header = '';
+		my $colspan =  ' colspan="4"';
+		print qq{
+<ul id="slides">
+<div class="row">
+    <div class="col-md-12">
+      <div class="panel panel-default">
+      <div class="panel-heading">
+	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+	<p>$data_info{$id}{description}</p>
+      </div>
+      <div class="panel-body">
+	<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+		<div class="span11">
+			<table class="table table-striped sortable" id="$db-$data_info{$id}{name}-table">
+				<thead>
+					<tr>
+					<th>Schema</th>
+					<th>Table</th>
+					<th>Index name</th>
+					<th>Index definition</th>
+					</tr>
+				</thead>
+				<tbody>
+};
+		my $found_stat = 0;
+		foreach my $sch (sort keys %{$all_stat_invalid_indexes{$db}}) {
+			foreach my $tb (sort keys %{$all_stat_invalid_indexes{$db}{$sch}}) {
+				next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
+				$found_stat = 1;
+				foreach my $idx (sort keys %{$all_stat_invalid_indexes{$db}{$sch}{$tb}}) {
+					print qq{<tr><th>$sch</th><td>$tb</td><td>$idx</td><td>$all_stat_invalid_indexes{$db}{$sch}{$tb}{$idx}</td></tr>};
+				}
+			}
+		}
+		if (!$found_stat) {
+			print qq{<tr><td$colspan><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td></tr>};
+		}
+		print qq{
+				</tbody>
+			</table>
+		</div>
+	</div>
+};
+		# Terminate cluster statistics file
+		print qq{
+	</div>
+    </div>
+</div>
+};
+	}
+	%all_stat_invalid_indexes = ();
+}
+
 
 # Compute stats for table I/O
 sub pg_statio_user_tables
@@ -6211,6 +6313,13 @@ AAAASUVORK5CYII=';
 };
 		}
 		%data_info = %{$DB_GRAPH_INFOS{'pg_class_size.csv'}};
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			next if ($data_info{$id}{name} !~ /^index-/);
+			$idx_str .= qq{
+			      <li id="menu-$data_info{$id}{name}"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=$data_info{$id}{name}&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">$data_info{$id}{menu}</a></li>
+};
+		}
+		%data_info = %{$DB_GRAPH_INFOS{'pg_stat_invalid_indexes.csv'}};
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^index-/);
 			$idx_str .= qq{
