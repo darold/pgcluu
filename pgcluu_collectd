@@ -299,6 +299,12 @@ my %METRICS_COMMANDS = (
 		'output' => '',
 		'command' => 'get_configuration_files',
 	},
+	'object_size' => {
+		'output' => 'pg_stat_objectsize.csv',
+		'command' => 'dump_pgstatobjectsize',
+		'repeat'  => 1,
+		'override' => 1,
+	},
 );
 
 # Process command line options and look for an action keyword. There
@@ -2358,6 +2364,29 @@ sub dump_pgstatarchiver
 		"SELECT date_trunc('seconds', now()), archived_count, last_archived_wal, " .
 		"last_archived_time, failed_count, last_failed_wal, last_failed_time, stats_reset " . 
 		"FROM pg_stat_archiver"
+	);
+
+	return $sql;
+}
+
+####
+# Get information about object size
+####
+sub dump_pgstatobjectsize
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), current_database(), n.nspname, c.relname, " .
+		"  CASE c.relkind WHEN 'r' THEN 'table' WHEN 'm' THEN 'materialized view' WHEN 'i' THEN 'index' WHEN 's' THEN 'special' WHEN 'f' THEN 'foreign table' END, " .
+		"  pg_catalog.pg_size_pretty(pg_catalog.pg_table_size(c.oid)) " .
+		"FROM pg_catalog.pg_class c " .
+		"     LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace " .
+		"WHERE c.relkind IN ('r','m','f','i') " .
+		"      AND n.nspname <> 'pg_catalog' " .
+		"      AND n.nspname <> 'information_schema' " .
+		"      AND n.nspname !~ '^pg_toast' " .
+		"  AND pg_catalog.pg_table_is_visible(c.oid) " .
+		"ORDER BY pg_catalog.pg_table_size(c.oid)"
 	);
 
 	return $sql;
