@@ -1603,6 +1603,7 @@ sub write_database_info
 	foreach my $k (sort keys %RELKIND) {
 	        $objects_count .= qq{<li><span class="figure">$OVERALL_STATS{'class'}{$db}{$k}</span> <span class="figure-label">} . lcfirst($RELKIND{$k}) . qq{</span></li>} if (exists $OVERALL_STATS{'class'}{$db}{$k});
 	}
+	$OVERALL_STATS{database}{$db}{invalid_indexes} ||= 0;
 	my $dbsize = &pretty_print_size($OVERALL_STATS{'database'}{$db}{'size'});
 	print qq{
 <ul id="slides">
@@ -1620,6 +1621,7 @@ sub write_database_info
 		<li></li>
 	        <li><span class="figure">$dbsize</span> <span class="figure-label">Total size</span></li>
 	        <li><span class="figure">$next</span> <span class="figure-label">Installed extensions$extlist</span></li>
+	        <li><span class="figure">$OVERALL_STATS{database}{$db}{invalid_indexes}</span> <span class="figure-label">Invalid indexes</span></li>
 	        <li><span class="figure">$nsch</span> <span class="figure-label">Schemas$schlist</span></li>
 	        <li><span class="figure">$last_vacuum</span> <span class="figure-label">Last manual vacuum</span></li>
 	        <li><span class="figure">$last_analyze</span> <span class="figure-label">Last manual analyze</span></li>
@@ -2646,8 +2648,6 @@ sub pg_stat_invalid_indexes
 {
 	my ($in_dir, $file) = @_;
 
-	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
-
 	my %start_vals = ();
 	my $tmp_val = 0;
 	# Load data from file
@@ -2658,6 +2658,9 @@ sub pg_stat_invalid_indexes
 
 		# timestamp | dbname | schemaname | relname | indexrelname | index_definition
 		$all_stat_invalid_indexes{$data[1]}{$data[2]}{$data[3]}{$data[4]} = $data[5];
+		$OVERALL_STATS{'database'}{$data[1]}{invalid_indexes}++;
+		$OVERALL_STATS{'cluster'}{invalid_indexes}++;
+		push(@{$OVERALL_STATS{'cluster'}{invalid_indexes_db}}, $data[1]) if (!grep(/^$data[1]$/, @{$OVERALL_STATS{'cluster'}{invalid_indexes_db}}));
 	}
 	$curfh->close();
 }
@@ -5514,6 +5517,11 @@ EOF
 			$bgwriter_reset = "<li><span class=\"figure\"> $OVERALL_STATS{'bgwriter'}{stats_reset}</span> <span class=\"figure-label\">Last bgwriter stats reset</span></li>";
 		}
 		my $cluster_size = &pretty_print_size($OVERALL_STATS{'cluster'}{'size'});
+		$OVERALL_STATS{'cluster'}{invalid_indexes} ||= 0;
+		my $invalid_dblist = '';
+		if (exists $OVERALL_STATS{'cluster'}{invalid_indexes_db}) {
+			$invalid_dblist = ' (' . join(', ', @{$OVERALL_STATS{'cluster'}{invalid_indexes_db}}) . ')';
+		}
 		print <<EOF;
       <div class="row">
             <div class="col-md-$numcol">
@@ -5531,6 +5539,7 @@ EOF
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'nbackend'}</span> <span class="figure-label">Connections</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'returned'}</span> <span class="figure-label">Tuples returned</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'cache_ratio'}</span> <span class="figure-label">Hit cache ratio</span></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'invalid_indexes'}</span> <span class="figure-label">Invalid indexes$invalid_dblist</span></li>
 		$temp_file_info
 		$deadlock_info
 		$extensions_info
