@@ -9,7 +9,7 @@
 # Author: Gilles Darold
 # Copyright: (C) 2012-2015 Gilles Darold - All rights reserved.
 #------------------------------------------------------------------------------
-use vars qw($VERSION $PROGRAM);
+use vars qw($VERSION $PROGRAM $CONFIG_FILE);
 
 use strict qw(vars);
 use warnings;
@@ -25,6 +25,7 @@ use Storable qw(store_fd fd_retrieve);
 
 $VERSION = '3.0';
 $PROGRAM = 'pgCluu';
+$CONFIG_FILE = 'pgcluu.conf';
 
 my $SADF_PROG       = '/usr/bin/sadf';
 my $DISABLE_SAR     = 0;
@@ -941,30 +942,34 @@ my @database_list = ();
 
 sub read_conf
 {
-	# Defined the backward level where ressources files are stored
-	$src_base = '';
-	#$INPUT_DIR = '/data/file_data/data/data_pgcluu_demo';
-	$INPUT_DIR = '/home/git/pgcluu/data1';
-	$RSC_BASE = '.';
 
-	@INCLUDE_DB = ('[^p].*');
-
-        #$BEGIN = '2014-02-27 13:00:00';
-        #$END = '2014-02-27 14:00:00';
-
-	if (!$BEGIN) {
-#		$BEGIN = '2015-06-11 19:00:00';
-#		$END = '2015-06-11 22:00:00';
+	unless(open(IN, $CONFIG_FILE)) {
+		die "ERROR: can not read configuration file $CONFIG_FILE, $!\n";
 	}
 
-	my @tbs_opts;
-	foreach (@tbs_opts) {
-		push(@INCLUDE_TB, split(/[,]+/, $_));
+	while (my $l = <IN>) {
+		chomp($l);
+		$l =~ s/\r//gs;
+
+		my ($var, @vals) = split(/[\s]+/, $l);
+		if ($var eq 'INPUT_DIR') {
+			if (-d $vals[0]) {
+				$INPUT_DIR = $vals[0];
+			} else {
+				die "ERROR: can not find input directory, $vals[0]\n";
+			}
+		} elsif ($var eq 'RSC_BASE') {
+			$RSC_BASE = $vals[0];
+		} elsif ($var eq 'INCLUDE_DB') {
+			push(@INCLUDE_DB, @vals);
+		} elsif ($var eq 'INCLUDE_TB') {
+			push(@INCLUDE_TB, @vals);
+		} elsif ($var eq 'INCLUDE_IFACE') {
+			push(@INCLUDE_IFACE, @vals);
+		}
 	}
-	my @net_opts;
-	foreach (@net_opts) {
-		push(@INCLUDE_IFACE, split(/[,]+/, $_));
-	}
+	# Defined the default backward level where ressources files are stored
+	$RSC_BASE ||= '.';
 
 	# Check start/end date time
 	if ($BEGIN) {
