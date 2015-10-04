@@ -9004,7 +9004,7 @@ sub read_sysinfo
 		}
 		if ($section eq 'SYSTEM') {
 			my ($key, $val) = split(/\s*[=:]\s+/, $l);
-			$sysinfo{$section}{$key} = $val if ($key) and ($val);
+			$sysinfo{$section}{$key} = $val if ($key);
 		}
 		if ($section eq 'PGVERSION') {
 			$sysinfo{$section}{full_version} = $l;
