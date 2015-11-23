@@ -1786,9 +1786,8 @@ sub pg_stat_database
 		if ($data[3]) {
 			$all_stat_database{$data[0]}{$data[2]}{nbackend} = $data[3];
 			$all_stat_database{$data[0]}{all}{nbackend} += $data[3];
-		} else {
-			$OVERALL_STATS{'cluster'}{nbackend} += $tmp_val;
-			$OVERALL_STATS{'database'}{$data[2]}{nbackend} += $tmp_val;
+			$OVERALL_STATS{'cluster'}{nbackend} += $data[3];
+			$OVERALL_STATS{'database'}{$data[2]}{nbackend} += $data[3];
 		}
 
 		# Gather number of committed transaction
