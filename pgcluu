@@ -2055,6 +2055,7 @@ sub pg_stat_database_report
 		foreach my $db (@global_databases) {
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 			foreach my $k (qw(insert returned fetched update delete blks_read blks_hit nbackend xact_commit xact_rollback canceled_queries deadlocks temp_files temp_bytes)) {
+				next if ($db eq 'all');
 				$all_stat_database{$time}{$db}{$k} ||= 0;
 				$OVERALL_STATS{'cluster'}{$k} += $all_stat_database{$time}{$db}{$k};
 				$OVERALL_STATS{'database'}{$db}{$k} += $all_stat_database{$time}{$db}{$k};
@@ -2398,6 +2399,7 @@ sub pg_database_size_report
 	foreach my $t (sort {$a <=> $b} keys %all_database_size) {
 		foreach my $db (@global_databases) {
 			$database_stat{$db}{size} .= '[' . $t . ',' . ($all_database_size{$t}{$db} || 0) . '],';
+			next if ($db eq 'all');
 			$OVERALL_STATS{'database'}{$db}{'size'} = $all_database_size{$t}{$db};
 			$OVERALL_STATS{'start_date'} = $t if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} gt $t));
 			$OVERALL_STATS{'end_date'} = $t if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} lt $t));
