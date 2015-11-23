@@ -5914,6 +5914,7 @@ EOF
 	       <ul>
 	       <li></li>
 	       <li><span class="figure-label">$sysinfo{PGVERSION}{'full_version'}</span></li>
+		$uptime
 	       </ul>
 	       </div>
 	      </div>
