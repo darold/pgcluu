@@ -950,6 +950,7 @@ sub read_conf
 	while (my $l = <IN>) {
 		chomp($l);
 		$l =~ s/\r//gs;
+		next if (!$l);
 
 		my ($var, @vals) = split(/[\s]+/, $l);
 		if ($var eq 'INPUT_DIR') {
@@ -1073,13 +1074,6 @@ foreach my $db (keys %{$sysinfo{EXTENSION}}) {
 ####
 &html_header();
 
-#### Show empty data
-if ($#WORK_DIRS < 0) {
-	&wrong_date_selection();
-	&html_footer();
-	exit 0;
-}
-
 #### Show about page and exit
 if ($ACTION eq 'about') {
 	&show_about();
@@ -1087,6 +1081,15 @@ if ($ACTION eq 'about') {
 	exit 0;
 }
 
+#### Show empty data
+if ($#WORK_DIRS < 0) {
+	&wrong_date_selection();
+	&html_footer();
+	exit 0;
+}
+
+
+#### Show system related information
 if ($ACTION eq 'sysinfo') {
 	&show_sysinfo($in_dir);
 	&html_footer();
@@ -1953,9 +1956,9 @@ sub pg_stat_database_report
 					$database_stat{$db}{delete} =~ s/,$//;
 				}
 				if ($db ne 'all') {
-					print &flotr2_linegraph_array($IDX++, 'database-write_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{insert}, $database_stat{$db}{update}, $database_stat{$db}{delete});
+					print &jqplot_linegraph_array($IDX++, 'database-write_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{insert}, $database_stat{$db}{update}, $database_stat{$db}{delete});
 				} else {
-					print &flotr2_linegraph_array($IDX++, 'cluster-write_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{insert}, $database_stat{$db}{update}, $database_stat{$db}{delete});
+					print &jqplot_linegraph_array($IDX++, 'cluster-write_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{insert}, $database_stat{$db}{update}, $database_stat{$db}{delete});
 				}
 
 			} elsif ($data_info{$id}{name} eq 'database-read_ratio') {
@@ -1965,9 +1968,9 @@ sub pg_stat_database_report
 					$database_stat{$db}{fetched} =~ s/,$//;
 				}
 				if ($db ne 'all') {
-					print &flotr2_linegraph_array($IDX++, 'database-read_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{returned}, $database_stat{$db}{fetched});
+					print &jqplot_linegraph_array($IDX++, 'database-read_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{returned}, $database_stat{$db}{fetched});
 				} else {
-					print &flotr2_linegraph_array($IDX++, 'cluster-read_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{returned}, $database_stat{$db}{fetched});
+					print &jqplot_linegraph_array($IDX++, 'cluster-read_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{returned}, $database_stat{$db}{fetched});
 				}
 
 			} elsif ($data_info{$id}{name} eq 'database-read_write_query') {
@@ -1978,9 +1981,9 @@ sub pg_stat_database_report
 						$data{$t} = sprintf("%0.2f", $total_query_type{$db}{$t}*100/$total_query_type{$db}{'all'});
 					}
 					if ($db ne 'all') {
-						print &flotr2_piegraph($IDX++, 'database-read_write_query', \%{$data_info{$id}}, $db, %data);
+						print &jqplot_piegraph($IDX++, 'database-read_write_query', \%{$data_info{$id}}, $db, %data);
 					} else {
-						print &flotr2_piegraph($IDX++, 'cluster-read_write_query', \%{$data_info{$id}}, $db, %data);
+						print &jqplot_piegraph($IDX++, 'cluster-read_write_query', \%{$data_info{$id}}, $db, %data);
 					}
 				}
 
@@ -1989,9 +1992,9 @@ sub pg_stat_database_report
 				$database_stat{$db}{blks_read} =~ s/,$//;
 				$database_stat{$db}{blks_hit} =~ s/,$//;
 				if ($db ne 'all') {
-					print &flotr2_linegraph_array($IDX++, 'database-cache_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{blks_hit}, $database_stat{$db}{blks_read}, $database_stat{$db}{ratio_hit_miss});
+					print &jqplot_linegraph_array($IDX++, 'database-cache_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{blks_hit}, $database_stat{$db}{blks_read}, $database_stat{$db}{ratio_hit_miss});
 				} else {
-					print &flotr2_linegraph_array($IDX++, 'cluster-cache_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{blks_hit}, $database_stat{$db}{blks_read}, $database_stat{$db}{ratio_hit_miss});
+					print &jqplot_linegraph_array($IDX++, 'cluster-cache_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{blks_hit}, $database_stat{$db}{blks_read}, $database_stat{$db}{ratio_hit_miss});
 				}
 				delete $database_stat{$db}{blks_hit};
 				delete $database_stat{$db}{blks_read};
@@ -2003,9 +2006,9 @@ sub pg_stat_database_report
 				$database_stat{$db}{xact_rollback} =~ s/,$//;
 				$database_stat{$db}{nbackend} =~ s/,$//;
 				if ($db ne 'all') {
-					print &flotr2_linegraph_array($IDX++, 'database-commits_rollbacks', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_commit}, $database_stat{$db}{xact_rollback}, $database_stat{$db}{nbackend});
+					print &jqplot_linegraph_array($IDX++, 'database-commits_rollbacks', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_commit}, $database_stat{$db}{xact_rollback}, $database_stat{$db}{nbackend});
 				} else {
-					print &flotr2_linegraph_array($IDX++, 'cluster-commits_rollbacks', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_commit}, $database_stat{$db}{xact_rollback}, $database_stat{$db}{nbackend});
+					print &jqplot_linegraph_array($IDX++, 'cluster-commits_rollbacks', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_commit}, $database_stat{$db}{xact_rollback}, $database_stat{$db}{nbackend});
 				}
 				delete $database_stat{$db}{xact_commit};
 				delete $database_stat{$db}{xact_rollback};
@@ -2025,7 +2028,7 @@ sub pg_stat_database_report
 				$database_stat{$db}{nbackend} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{nbackend};
 				if (($db ne 'all') && ($DATABASE ne 'all')) {
-					print &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{nbackend});
+					print &jqplot_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{nbackend});
 				}
 				delete $database_stat{$db}{nbackend};
 
@@ -2034,7 +2037,7 @@ sub pg_stat_database_report
 				$database_stat{$db}{canceled_queries} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{canceled_queries};
 				if (($db ne 'all') && ($DATABASE ne 'all')) {
-					print &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{canceled_queries});
+					print &jqplot_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{canceled_queries});
 				}
 				delete $database_stat{$db}{canceled_queries};
 
@@ -2042,7 +2045,7 @@ sub pg_stat_database_report
 				$database_stat{$db}{deadlocks} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{deadlocks};
 				if (($db ne 'all') && ($DATABASE ne 'all')) {
-					print &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{deadlocks});
+					print &jqplot_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{deadlocks});
 				}
 				delete $database_stat{$db}{deadlocks};
 
@@ -2051,7 +2054,7 @@ sub pg_stat_database_report
 				$database_stat{$db}{temp_files} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{temp_files};
 				if (($db ne 'all') && ($DATABASE ne 'all')) {
-					print &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{temp_files});
+					print &jqplot_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{temp_files});
 				}
 				delete $database_stat{$db}{temp_files};
 
@@ -2060,7 +2063,7 @@ sub pg_stat_database_report
 				$database_stat{$db}{temp_bytes} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{temp_bytes};
 				if (($db ne 'all') && ($DATABASE ne 'all')) {
-					print &flotr2_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{temp_bytes});
+					print &jqplot_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{temp_bytes});
 				}
 				delete $database_stat{$db}{temp_bytes};
 
@@ -2070,19 +2073,19 @@ sub pg_stat_database_report
 			my $name = $data_info{$id}{name};
 			$name =~ s/^database/cluster/;
 			if ($has_temp && ($data_info{$id}{name} eq 'database-temporary_files')) {
-				print &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
+				print &jqplot_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
 			}
 			if ($has_temp && ($data_info{$id}{name} eq 'database-temporary_bytes')) {
-				print &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
+				print &jqplot_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
 			}
 			if ($data_info{$id}{name} eq 'database-backends') {
-				print &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
+				print &jqplot_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
 			}
 			if ($has_temp && ($data_info{$id}{name} eq 'database-deadlocks')) {
-				print &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
+				print &jqplot_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
 			}
 			if ($has_conflict && ($data_info{$id}{name} eq 'database-canceled_queries')) {
-				print &flotr2_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
+				print &jqplot_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
 			}
 		}
 	}
@@ -2160,9 +2163,9 @@ sub pg_stat_database_conflicts_report
 			$conflict_type{deadlock} =  sprintf("%0.2f", ($all_stat_database_conflicts{$db}{'deadlock'}*100)/$total);
 		}
 		if (($db ne 'all') && ($DATABASE ne 'all') && ($ACTION !~ /^cluster/)) {
-			print &flotr2_piegraph($IDX++, 'database-conflicts', \%{$data_info{$id}}, $db, %conflict_type);
+			print &jqplot_piegraph($IDX++, 'database-conflicts', \%{$data_info{$id}}, $db, %conflict_type);
 		} elsif (($db eq 'all') && ($DATABASE eq 'all')) {
-			print &flotr2_piegraph($IDX++, 'cluster-conflicts', \%{$data_info{$id}}, $db, %conflict_type);
+			print &jqplot_piegraph($IDX++, 'cluster-conflicts', \%{$data_info{$id}}, $db, %conflict_type);
 		}
 	}
 	%all_stat_database_conflicts = ();
@@ -2218,13 +2221,13 @@ sub pg_database_size_report
 		$database_stat{$db}{size} =~ s/,$//;
 		$data{$db} = $database_stat{$db}{size};
 		if (($db ne 'all') && ($DATABASE ne 'all') && ($ACTION !~ /^cluster/)) {
-			print &flotr2_linegraph_array($IDX++, 'database-size', \%{$data_info{$id}}, $db, $database_stat{$db}{size});
+			print &jqplot_linegraph_array($IDX++, 'database-size', \%{$data_info{$id}}, $db, $database_stat{$db}{size});
 		}
 		delete $database_stat{$db}{size};
 	}
 
 	if ($ACTION eq 'cluster-size') {
-		print &flotr2_linegraph_hash($IDX++, 'cluster-size', \%{$data_info{$id}}, 'all', %data);
+		print &jqplot_linegraph_hash($IDX++, 'cluster-size', \%{$data_info{$id}}, 'all', %data);
 	}
 
 }
@@ -2281,12 +2284,12 @@ sub pg_tablespace_size_report
 		if ($tbsp ne 'all') {
 			my $location = "$tbsp";
 			$location .= " ($tablespace_stat{$tbsp}{location})" if ($tablespace_stat{$tbsp}{location});
-			$print_after .= &flotr2_linegraph_array($IDX++, 'tablespace-size+', \%{$data_info{$id}}, $location, $tablespace_stat{$tbsp}{size});
+			$print_after .= &jqplot_linegraph_array($IDX++, 'tablespace-size+', \%{$data_info{$id}}, $location, $tablespace_stat{$tbsp}{size});
 		}
 	}
 	%all_tablespace_size = ();
 
-	print &flotr2_linegraph_hash($IDX++, 'tablespace-size', \%{$data_info{$id}}, 'all', %data);
+	print &jqplot_linegraph_hash($IDX++, 'tablespace-size', \%{$data_info{$id}}, 'all', %data);
 	print $print_after;
 }
 
@@ -2837,7 +2840,7 @@ sub pg_statio_user_tables_report
 				$statio_usertable{$db}{$tb}{idx_blks_read} = $statio_usertable{$db}{$tb}{tidx_blks_read};
 				$statio_usertable{$db}{$tb}{idx_blks_hit} = $statio_usertable{$db}{$tb}{tidx_blks_hit};
 			}
-			print &flotr2_linegraph_array($IDX++, 'statio-table', \%{$data_info{$id}}, $tb, $statio_usertable{$db}{$tb}{heap_blks_read},$statio_usertable{$db}{$tb}{heap_blks_hit},$statio_usertable{$db}{$tb}{idx_blks_read},$statio_usertable{$db}{$tb}{idx_blks_hit});
+			print &jqplot_linegraph_array($IDX++, 'statio-table', \%{$data_info{$id}}, $tb, $statio_usertable{$db}{$tb}{heap_blks_read},$statio_usertable{$db}{$tb}{heap_blks_hit},$statio_usertable{$db}{$tb}{idx_blks_read},$statio_usertable{$db}{$tb}{idx_blks_hit});
 			delete $statio_usertable{$db}{$tb};
 			$rank++;
 		}
@@ -2992,7 +2995,7 @@ sub pg_relation_buffercache_report
 				foreach ('buffers','pages','buffered','buffers %','relation %') {
 					$rel_stat{$db}{$rel}{$_} =~ s/,$//;
 				}
-				print &flotr2_linegraph_array($IDX++, 'statio-buffercache', \%{$data_info{$id}}, $rel, $rel_stat{$db}{$rel}{buffered},$rel_stat{$db}{$rel}{'relation %'});
+				print &jqplot_linegraph_array($IDX++, 'statio-buffercache', \%{$data_info{$id}}, $rel, $rel_stat{$db}{$rel}{buffered},$rel_stat{$db}{$rel}{'relation %'});
 			}
 		} else {
 			print &empty_dataset('statio-buffercache', \%{$data_info{$id}}, 'on');
@@ -3069,7 +3072,7 @@ sub pg_statio_user_indexes_report
 			foreach ('idx_blks_read','idx_blks_hit') {
 				$statio_userindex{$db}{$tb}{$_} =~ s/,$//;
 			}
-			print &flotr2_linegraph_array($IDX++, 'statio-index', \%{$data_info{$id}}, $tb, $statio_userindex{$db}{$tb}{idx_blks_read},$statio_userindex{$db}{$tb}{idx_blks_hit});
+			print &jqplot_linegraph_array($IDX++, 'statio-index', \%{$data_info{$id}}, $tb, $statio_userindex{$db}{$tb}{idx_blks_read},$statio_userindex{$db}{$tb}{idx_blks_hit});
 			delete $statio_userindex{$db}{$tb};
 			$rank++;
 		}
@@ -3132,9 +3135,9 @@ sub pg_xlog_stat_report
 		$xlog_stat{total} =~ s/,$//;
 		if (exists $xlog_stat{recycled}) {
 			push(@{$data_info{$id}{legends}}, 'recycled', 'written', 'max_wal');
-			print &flotr2_linegraph_array($IDX++, 'cluster-xlog_files', \%{$data_info{$id}}, '', $xlog_stat{total}, $xlog_stat{recycled}, $xlog_stat{written}, $xlog_stat{max_wal});
+			print &jqplot_linegraph_array($IDX++, 'cluster-xlog_files', \%{$data_info{$id}}, '', $xlog_stat{total}, $xlog_stat{recycled}, $xlog_stat{written}, $xlog_stat{max_wal});
 		} else {
-			print &flotr2_linegraph_array($IDX++, 'cluster-xlog_files', \%{$data_info{$id}}, '', $xlog_stat{total});
+			print &jqplot_linegraph_array($IDX++, 'cluster-xlog_files', \%{$data_info{$id}}, '', $xlog_stat{total});
 		}
 	}
 }
@@ -3215,22 +3218,22 @@ sub pg_stat_bgwriter_report
 		if ($data_info{$id}{name} eq 'database-checkpoints') {
 			$bgwriter_stat{checkpoints_timed} =~ s/,$//;
 			$bgwriter_stat{checkpoints_req} =~ s/,$//;
-			print &flotr2_linegraph_array($IDX++, 'cluster-checkpoints', \%{$data_info{$id}}, '', $bgwriter_stat{checkpoints_timed}, $bgwriter_stat{checkpoints_req});
+			print &jqplot_linegraph_array($IDX++, 'cluster-checkpoints', \%{$data_info{$id}}, '', $bgwriter_stat{checkpoints_timed}, $bgwriter_stat{checkpoints_req});
 		} elsif ($data_info{$id}{name} eq 'database-checkpoints_time') {
 			if (exists $bgwriter_stat{checkpoint_write_time}) {
 				$bgwriter_stat{checkpoint_sync_time} =~ s/,$//;
 				$bgwriter_stat{checkpoint_write_time} =~ s/,$//;
-				print &flotr2_linegraph_array($IDX++, 'cluster-checkpoints_time', \%{$data_info{$id}}, '', $bgwriter_stat{checkpoint_write_time}, $bgwriter_stat{checkpoint_sync_time});
+				print &jqplot_linegraph_array($IDX++, 'cluster-checkpoints_time', \%{$data_info{$id}}, '', $bgwriter_stat{checkpoint_write_time}, $bgwriter_stat{checkpoint_sync_time});
 			}
 		} elsif ($data_info{$id}{name} eq 'database-bgwriter') {
 			$bgwriter_stat{buffers_checkpoint} =~ s/,$//;
 			$bgwriter_stat{buffers_clean} =~ s/,$//;
 			$bgwriter_stat{buffers_backend} =~ s/,$//;
-			print &flotr2_linegraph_array($IDX++, 'cluster-bgwriter', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean}, $bgwriter_stat{buffers_backend}, $bgwriter_stat{maxwritten_clean});
+			print &jqplot_linegraph_array($IDX++, 'cluster-bgwriter', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean}, $bgwriter_stat{buffers_backend}, $bgwriter_stat{maxwritten_clean});
 		} elsif ($data_info{$id}{name} eq 'database-bgwriter_count') {
 			$bgwriter_stat{maxwritten_clean} =~ s/,$//;
 			$bgwriter_stat{buffers_backend_fsync} =~ s/,$//;
-			print &flotr2_linegraph_array($IDX++, 'cluster-bgwriter_count', \%{$data_info{$id}}, '',  $bgwriter_stat{maxwritten_clean}, $bgwriter_stat{buffers_backend_fsync});
+			print &jqplot_linegraph_array($IDX++, 'cluster-bgwriter_count', \%{$data_info{$id}}, '',  $bgwriter_stat{maxwritten_clean}, $bgwriter_stat{buffers_backend_fsync});
 		}
 	}
 }
@@ -3301,9 +3304,9 @@ sub pg_stat_connections_report
 			$connections_stat{$db}{idle_in_xact} =~ s/,$//;
 			$connections_stat{$db}{idle} =~ s/,$//;
 			if ($db ne 'all') {
-				print &flotr2_linegraph_array($IDX++, 'database-connections', \%{$data_info{$id}}, $db, $connections_stat{$db}{active}, $connections_stat{$db}{idle}, $connections_stat{$db}{idle_in_xact}, $connections_stat{$db}{waiting});
+				print &jqplot_linegraph_array($IDX++, 'database-connections', \%{$data_info{$id}}, $db, $connections_stat{$db}{active}, $connections_stat{$db}{idle}, $connections_stat{$db}{idle_in_xact}, $connections_stat{$db}{waiting});
 			} else {
-				print &flotr2_linegraph_array($IDX++, 'cluster-connections', \%{$data_info{$id}}, 'all', $connections_stat{$db}{active}, $connections_stat{$db}{idle}, $connections_stat{$db}{idle_in_xact}, $connections_stat{$db}{waiting});
+				print &jqplot_linegraph_array($IDX++, 'cluster-connections', \%{$data_info{$id}}, 'all', $connections_stat{$db}{active}, $connections_stat{$db}{idle}, $connections_stat{$db}{idle_in_xact}, $connections_stat{$db}{waiting});
 			}
 		}
 	} else {
@@ -3482,7 +3485,7 @@ sub pg_stat_replication_report
 		next if ($data_info{$id}{name} ne $REAL_ACTION);
 		if (exists $xlog_stat{master_location} && ($data_info{$id}{name} eq 'database-xlog')) {
 			$xlog_stat{master_location} =~ s/,$//;
-			print &flotr2_linegraph_array($IDX++, 'cluster-xlog', \%{$data_info{$id}}, '', $xlog_stat{master_location});
+			print &jqplot_linegraph_array($IDX++, 'cluster-xlog', \%{$data_info{$id}}, '', $xlog_stat{master_location});
 			delete $xlog_stat{master_location};
 
 		} elsif ($data_info{$id}{name} eq 'database-replication') {
@@ -3492,7 +3495,7 @@ sub pg_stat_replication_report
 				$xlog_stat{$host}{write_location} =~ s/,$//;
 				$xlog_stat{$host}{flush_location} =~ s/,$//;
 				$xlog_stat{$host}{replay_location} =~ s/,$//;
-				print &flotr2_linegraph_array($IDX++, 'cluster-replication', \%{$data_info{$id}}, $host, $xlog_stat{$host}{sent_location}, $xlog_stat{$host}{write_location}, $xlog_stat{$host}{replay_location});
+				print &jqplot_linegraph_array($IDX++, 'cluster-replication', \%{$data_info{$id}}, $host, $xlog_stat{$host}{sent_location}, $xlog_stat{$host}{write_location}, $xlog_stat{$host}{replay_location});
 			}
 		}
 	}
@@ -3597,7 +3600,7 @@ sub pgbouncer_stats_report
 				$pgbouncer_stat{$db}{sv_idle} =~ s/,$//;
 				$pgbouncer_stat{$db}{sv_used} =~ s/,$//;
 				$pgbouncer_stat{$db}{maxwait} =~ s/,$//;
-				print &flotr2_linegraph_array($IDX++, 'pgbouncer-connections', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{cl_active}, $pgbouncer_stat{$db}{cl_waiting}, $pgbouncer_stat{$db}{sv_active}, $pgbouncer_stat{$db}{sv_idle},$pgbouncer_stat{$db}{sv_used}, $pgbouncer_stat{$db}{maxwait});
+				print &jqplot_linegraph_array($IDX++, 'pgbouncer-connections', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{cl_active}, $pgbouncer_stat{$db}{cl_waiting}, $pgbouncer_stat{$db}{sv_active}, $pgbouncer_stat{$db}{sv_idle},$pgbouncer_stat{$db}{sv_used}, $pgbouncer_stat{$db}{maxwait});
 				foreach my $pool (sort {$a cmp $b} keys %pgbouncer_stat) {
 					next if ($pool !~ /^$db\//);
 					$pgbouncer_stat{$pool}{cl_active} =~ s/,$//;
@@ -3606,7 +3609,7 @@ sub pgbouncer_stats_report
 					$pgbouncer_stat{$pool}{sv_idle} =~ s/,$//;
 					$pgbouncer_stat{$pool}{sv_used} =~ s/,$//;
 					$pgbouncer_stat{$pool}{maxwait} =~ s/,$//;
-					print &flotr2_linegraph_array($IDX++, 'pgbouncer-connections+', \%{$data_info{$id}}, $pool, $pgbouncer_stat{$pool}{cl_active}, $pgbouncer_stat{$pool}{cl_waiting}, $pgbouncer_stat{$pool}{sv_active}, $pgbouncer_stat{$pool}{sv_idle},$pgbouncer_stat{$pool}{sv_used}, $pgbouncer_stat{$pool}{maxwait});
+					print &jqplot_linegraph_array($IDX++, 'pgbouncer-connections+', \%{$data_info{$id}}, $pool, $pgbouncer_stat{$pool}{cl_active}, $pgbouncer_stat{$pool}{cl_waiting}, $pgbouncer_stat{$pool}{sv_active}, $pgbouncer_stat{$pool}{sv_idle},$pgbouncer_stat{$pool}{sv_used}, $pgbouncer_stat{$pool}{maxwait});
 				}
 				print "</li>\n";
 			}
@@ -3726,10 +3729,10 @@ sub pgbouncer_req_stats_report
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 			if ($data_info{$id}{name} eq 'pgbouncer-duration') {
 				$pgbouncer_stat{$db}{avg_query} =~ s/,$//;
-				print &flotr2_linegraph_array($IDX++, 'pgbouncer-duration', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_query});
+				print &jqplot_linegraph_array($IDX++, 'pgbouncer-duration', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_query});
 			} elsif ($data_info{$id}{name} eq 'pgbouncer-number') {
 				$pgbouncer_stat{$db}{avg_req} =~ s/,$//;
-				print &flotr2_linegraph_array($IDX++, 'pgbouncer-number', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_req});
+				print &jqplot_linegraph_array($IDX++, 'pgbouncer-number', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_req});
 			}
 		}
 	}
@@ -3939,21 +3942,21 @@ sub pg_stat_locks_report
 				push(@{$data_info{$id}{legends}}, $k);
 				push(@graph_data, $locks_stat{$db}{lock_type}{$k});
 			}
-			print &flotr2_linegraph_array($IDX++, 'database-lock-types', \%{$data_info{$id}}, $db, @graph_data);
+			print &jqplot_linegraph_array($IDX++, 'database-lock-types', \%{$data_info{$id}}, $db, @graph_data);
 		} elsif ($data_info{$id}{name} eq 'database-lock-modes') {
 			foreach my $k (sort keys %{$locks_stat{$db}{lock_mode}}) {
 				$locks_stat{$db}{lock_mode}{$k} =~ s/,$//;
 				push(@{$data_info{$id}{legends}}, $k);
 				push(@graph_data, $locks_stat{$db}{lock_mode}{$k});
 			}
-			print &flotr2_linegraph_array($IDX++, 'database-lock-modes', \%{$data_info{$id}}, $db, @graph_data);
+			print &jqplot_linegraph_array($IDX++, 'database-lock-modes', \%{$data_info{$id}}, $db, @graph_data);
 		} elsif ($data_info{$id}{name} eq 'database-lock-granted') {
 			foreach my $k (sort keys %{$locks_stat{$db}{lock_granted}}) {
 				$locks_stat{$db}{lock_granted}{$k} =~ s/,$//;
 				push(@{$data_info{$id}{legends}}, $k);
 				push(@graph_data, $locks_stat{$db}{lock_granted}{$k});
 			}
-			print &flotr2_linegraph_array($IDX++, 'database-lock-granted', \%{$data_info{$id}}, $db, @graph_data);
+			print &jqplot_linegraph_array($IDX++, 'database-lock-granted', \%{$data_info{$id}}, $db, @graph_data);
 		}
 	}
 }
@@ -4914,7 +4917,7 @@ sub pg_database_buffercache_report
 				$shared_stat{$db}{shared_buffers_used} =~ s/,$//;
 				push(@graph_data, $shared_stat{$db}{shared_buffers_used});
 			}
-			print &flotr2_linegraph_array($IDX++, 'cluster-buffersused', \%{$data_info{$id}}, '', @graph_data);
+			print &jqplot_linegraph_array($IDX++, 'cluster-buffersused', \%{$data_info{$id}}, '', @graph_data);
 		} elsif ($data_info{$id}{name} eq 'database-databaseloaded') {
 			my @graph_data = ();
 			foreach my $db (sort keys %shared_stat) {
@@ -4924,7 +4927,7 @@ sub pg_database_buffercache_report
 				$shared_stat{$db}{database_loaded} =~ s/,$//;
 				push(@graph_data, $shared_stat{$db}{database_loaded});
 			}
-			print &flotr2_linegraph_array($IDX++, 'cluster-databaseloaded', \%{$data_info{$id}}, '', @graph_data);
+			print &jqplot_linegraph_array($IDX++, 'cluster-databaseloaded', \%{$data_info{$id}}, '', @graph_data);
 		}
 	}
 }
@@ -4971,7 +4974,7 @@ sub pg_database_usagecount_report
 				$shared_stat{$u}{usagecount} =~ s/,$//;
 				push(@graph_data, $shared_stat{$u}{usagecount});
 			}
-			print &flotr2_linegraph_array($IDX++, 'cluster-usagecount', \%{$data_info{$id}}, '', @graph_data);
+			print &jqplot_linegraph_array($IDX++, 'cluster-usagecount', \%{$data_info{$id}}, '', @graph_data);
 		}
 	}
 }
@@ -5017,7 +5020,7 @@ sub pg_database_isdirty_report
 				$shared_stat{$u}{usagecount} =~ s/,$//;
 				push(@graph_data, $shared_stat{$u}{usagecount});
 			}
-			print &flotr2_linegraph_array($IDX++, 'cluster-isdirty', \%{$data_info{$id}}, '', @graph_data);
+			print &jqplot_linegraph_array($IDX++, 'cluster-isdirty', \%{$data_info{$id}}, '', @graph_data);
 		}
 	}
 }
@@ -5089,7 +5092,7 @@ sub pg_stat_archiver_report
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		next if ($id ne $ID_ACTION);
 		if ($data_info{$id}{name} eq 'database-archive') {
-			print &flotr2_linegraph_array($IDX++, 'cluster-archive', \%{$data_info{$id}}, '', $archiver_stat{archived_count}, $archiver_stat{failed_count});
+			print &jqplot_linegraph_array($IDX++, 'cluster-archive', \%{$data_info{$id}}, '', $archiver_stat{archived_count}, $archiver_stat{failed_count});
 		}
 	}
 }
@@ -6005,24 +6008,33 @@ gFJG04FnRsAnYDuwyRlIq9UjNgu1Uof0OkYlfKMuKCuZA/8B+QsSxkN8YYwAAAAASUVORK5CYII=
     <link rel="shortcut icon" href="$pgcluu_ico" />
 
     <title>$PROGRAM</title>
-    <!-- Bootstrap core CSS -->
-    <link href="$RSC_BASE/bootstrap.min.css" rel="stylesheet">
-    <!-- FontAwesome CSS -->
-    <link href="$RSC_BASE/font-awesome.min.css" rel="stylesheet">
-    <!-- Custom styles for this template -->
+
+<link href="$RSC_BASE/jquery.jqplot.min.css" rel="stylesheet">
+ <script type="text/javascript" src="$RSC_BASE/jquery.min.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/jquery.jqplot.min.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/jqplot.pieRenderer.min.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/jqplot.barRenderer.min.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/jqplot.dateAxisRenderer.min.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/jqplot.canvasTextRenderer.min.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/jqplot.categoryAxisRenderer.min.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/jqplot.canvasAxisTickRenderer.min.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/jqplot.highlighter.min.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/jqplot.highlighter.min.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/jqplot.cursor.min.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/jqplot.pointLabels.min.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/bean.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/underscore.js"></script>
+ <link href="$RSC_BASE/bootstrap.css" rel="stylesheet">
+ <link href="$RSC_BASE/fontawesome.css" rel="stylesheet">
+ <script type="text/javascript" src="$RSC_BASE/bootstrap.js"></script>
+
     <link href="$RSC_BASE/pgcluu.css" rel="stylesheet">
-    <!-- Datetime picker -->
     <link href="$RSC_BASE/datetimepicker.css" rel="stylesheet">
-    <script src="$RSC_BASE/jquery.min.js"></script>
-    <script src="$RSC_BASE/bootstrap.min.js"></script>
     <script src="$RSC_BASE/pgcluu.js"></script>
+    <script src="$RSC_BASE/pgcluu_slide_cgi.js"></script>
     <script src="$RSC_BASE/sorttable.js"></script>
     <script src="$RSC_BASE/bootstrap-datetimepicker.js"></script>
-    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
-    <!--[if lt IE 9]>
-      <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
-      <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
-    <![endif]-->
+
 </head>
 
 <body>
@@ -6573,19 +6585,87 @@ AAAASUVORK5CYII=';
 
 	$menu_str .= qq{
               <li id="menu-about" class="dropdown"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=about&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">About</a></li>
-              <li id="menu-enddate"class="pull-right"><br><br><span style="color: white;">End date:</span> <input size="16" type="text" value="$end_date" id="end-date" readonly class="form_datetime"></li>
-              <li id="menu-startdate" class="pull-right"><br><br><span style="color: white;">Start date:</span> <input size="16" type="text" value="$begin_date" id="start-date" readonly class="form_datetime"></div></li>
+              <li id="menu-time" class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown">Time selector <b class="caret"></b></a>
+                <ul class="dropdown-menu">
+		  <li id="menu-time-year"><a href="" onclick="custom_date('year'); return false;">Year</a></li>
+		  <li id="menu-time-month"><a href="" onclick="custom_date('month'); return false;">Month</a></li>
+		  <li id="menu-time-week"><a href="" onclick="custom_date('week');; return false;">Week</a></li>
+		  <li id="menu-time-day"><a href="" onclick="custom_date('day');; return false;">Day</a></li>
+		  <li id="menu-time-backward"><a href="" onclick="go_backward(); return false;">Backward</a></li>
+		  <li id="menu-time-forward"><a href="" onclick="go_forward(); return false;">Forward</a></li>
+		</ul>
+	      </li>
+          </ul>
+        </div><!--/.nav-collapse -->
+
+        <div class="navbar-collapse collapse pull-right">
+          <ul class="nav navbar-nav">
+              <li id="menu-time" class="dropdown" style="color: #ffffff;">
+		<table><tr><td>
+                Start: <input size="16" type="text" value="$begin_date" id="start-date" readonly class="form_datepick">
+		</td><td>
+                End: <input size="16" type="text" value="$end_date" id="end-date" readonly class="form_datepick">
+		</td><td>
+		 <a href="" onclick="document.location.href='$SCRIPT_NAME?db=$DATABASE&dev=$DEVICE&action=$ACTION&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;"><i class="fa fa-refresh fa-2x" style="color: #ffffff; position: top;"></i></a>
+		</td></tr></table>
+	      </li>
           </ul>
         </div><!--/.nav-collapse -->
       </div>
     </div>
 <script type="text/javascript">
-    \$(".form_datetime").datetimepicker({
+\$(document).ready(function () {
+    \$(".form_datepick").datetimepicker({
         format: "yyyy-mm-dd hh:ii",
         autoclose: true,
         todayBtn: true,
         pickerPosition: "bottom-left"
     });
+});
+
+  function custom_date( kind ) {
+    var fromDate = new Date()
+    var toDate = new Date();
+
+    switch(kind) {
+      case 'year':
+          fromDate.setYear(fromDate.getYear() + 1900 - 1);
+        break;
+        case 'month':
+          fromDate.setMonth(fromDate.getMonth() - 1);
+        break;
+        case 'week':
+          fromDate.setDate(fromDate.getDate() - 7);
+        break;
+        case 'day':
+          fromDate.setDate(fromDate.getDate() - 1);
+        break;
+    }
+    document.getElementById('start-date').value = (new Date(fromDate)).toISOString().slice(0,16).replace(/T/g," ");
+    document.getElementById('end-date').value = (new Date(toDate)).toISOString().slice(0,16).replace(/T/g," ");
+  }
+
+  function go_forward() {
+    var fromDate = new Date(document.getElementByœId('start-date').value);
+    var toDate   = new Date(document.getElementById('end-date').value);
+    var delta    = toDate - fromDate;
+    fromDate += delta;
+    toDate   += delta;
+    document.getElementById('start-date').value = (new Date(fromDate)).toISOString().slice(0,16).replace(/T/g," ");
+    document.getElementById('end-date').value = (new Date(toDate)).toISOString().slice(0,16).replace(/T/g," ");
+  };
+
+  function go_backward() {
+    var fromDate = new Date(document.getElementById('start-date').value);
+    var toDate   = new Date(document.getElementById('end-date').value);
+    var delta    = toDate - fromDate;
+    fromDate -= delta;
+    toDate   -= delta;
+    document.getElementById('start-date').value = (new Date(fromDate)).toISOString().slice(0,16).replace(/T/g," ");
+    document.getElementById('end-date').value = (new Date(toDate)).toISOString().slice(0,16).replace(/T/g," ");
+  };
+
 </script>            
 
 };
@@ -6679,7 +6759,7 @@ sub compute_cpu_report
 		$cpu_stat{'all'}{iowait} =~ s/,$//;
 		$cpu_stat{'all'}{idle} =~ s/,$//;
 
-		print &flotr2_linegraph_array($IDX++, 'system-cpu', $data_info, 'all', $cpu_stat{'all'}{total}, $cpu_stat{'all'}{system}, $cpu_stat{'all'}{user}, $cpu_stat{'all'}{iowait});
+		print &jqplot_linegraph_array($IDX++, 'system-cpu', $data_info, 'all', $cpu_stat{'all'}{total}, $cpu_stat{'all'}{system}, $cpu_stat{'all'}{user}, $cpu_stat{'all'}{iowait});
 	}
 
 }
@@ -6725,7 +6805,7 @@ sub compute_load_report
 		$load_stat{'ldavg-1'} =~ s/,$//;
 		$load_stat{'ldavg-5'} =~ s/,$//;
 		$load_stat{'ldavg-15'} =~ s/,$//;
-		print &flotr2_linegraph_array($IDX++, 'system-load', $data_info, '', $load_stat{'ldavg-1'}, $load_stat{'ldavg-5'}, $load_stat{'ldavg-15'});
+		print &jqplot_linegraph_array($IDX++, 'system-load', $data_info, '', $load_stat{'ldavg-1'}, $load_stat{'ldavg-5'}, $load_stat{'ldavg-15'});
 	}
 }
 
@@ -6766,10 +6846,10 @@ sub compute_process_report
 	if (scalar keys %process_stat > 0) {
 		if ($data_info->{name} eq 'system-process') {
 			$process_stat{'plist-sz'} =~ s/,$//;
-			print &flotr2_linegraph_array($IDX++, 'system-process', $data_info, '', $process_stat{'plist-sz'});
+			print &jqplot_linegraph_array($IDX++, 'system-process', $data_info, '', $process_stat{'plist-sz'});
 		} elsif ($data_info->{name} eq 'system-runqueue') {
 			$process_stat{'runq-sz'} =~ s/,$//;
-			print &flotr2_linegraph_array($IDX++, 'system-runqueue', $data_info, '', $process_stat{'runq-sz'});
+			print &jqplot_linegraph_array($IDX++, 'system-runqueue', $data_info, '', $process_stat{'runq-sz'});
 		}
 	}
 }
@@ -6814,10 +6894,10 @@ sub compute_context_report
 	if (scalar keys %context_stat > 0) {
 		if ($data_info->{name} eq 'system-cswch') {
 			$context_stat{'cswch'} =~ s/,$//;
-			print &flotr2_linegraph_array($IDX++, 'system-cswch', $data_info, '', $context_stat{'cswch'});
+			print &jqplot_linegraph_array($IDX++, 'system-cswch', $data_info, '', $context_stat{'cswch'});
 		} elsif ($data_info->{name} eq 'system-pcrea') {
 			$context_stat{'pcrea'} =~ s/,$//;
-			print &flotr2_linegraph_array($IDX++, 'system-pcrea', $data_info, '', $context_stat{'pcrea'});
+			print &jqplot_linegraph_array($IDX++, 'system-pcrea', $data_info, '', $context_stat{'pcrea'});
 		}
 	}
 }
@@ -6862,7 +6942,7 @@ sub compute_memory_report
 		$memory_stat{'kbcached'} =~ s/,$//;
 		$memory_stat{'kbbuffers'} =~ s/,$//;
 		$memory_stat{'kbmemfree'} =~ s/,$//;
-		print &flotr2_linegraph_array($IDX++, 'system-memory', $data_info, '', $memory_stat{'kbcached'}, $memory_stat{'kbbuffers'}, $memory_stat{'kbmemfree'});
+		print &jqplot_linegraph_array($IDX++, 'system-memory', $data_info, '', $memory_stat{'kbcached'}, $memory_stat{'kbbuffers'}, $memory_stat{'kbmemfree'});
 	}
 }
 
@@ -6907,7 +6987,7 @@ sub compute_swap_report
 	if (scalar keys %swap_stat > 0) {
 		$swap_stat{'pswpin/s'} =~ s/,$//;
 		$swap_stat{'pswpout/s'} =~ s/,$//;
-		print &flotr2_linegraph_array($IDX++, 'system-swap', $data_info, '', $swap_stat{'pswpin/s'}, $swap_stat{'pswpout/s'});
+		print &jqplot_linegraph_array($IDX++, 'system-swap', $data_info, '', $swap_stat{'pswpin/s'}, $swap_stat{'pswpout/s'});
 	}
 }
 
@@ -6959,7 +7039,7 @@ sub compute_page_report
 		$pageswap_stat{'pgpgin/s'} =~ s/,$//;
 		$pageswap_stat{'pgpgout/s'} =~ s/,$//;
 		$pageswap_stat{'majflt/s'} =~ s/,$//;
-		print &flotr2_linegraph_array($IDX++, 'system-page', $data_info, '', $pageswap_stat{'pgpgin/s'}, $pageswap_stat{'pgpgout/s'}, $pageswap_stat{'majflt/s'});
+		print &jqplot_linegraph_array($IDX++, 'system-page', $data_info, '', $pageswap_stat{'pgpgin/s'}, $pageswap_stat{'pgpgout/s'}, $pageswap_stat{'majflt/s'});
 	}
 }
 
@@ -7011,12 +7091,12 @@ sub compute_block_report
 			%sar_block_stat = ();
 			$block_stat{'bread/s'} =~ s/,$//;
 			$block_stat{'bwrtn/s'} =~ s/,$//;
-			print &flotr2_linegraph_array($IDX++, 'system-block', $data_info, '', $block_stat{'bread/s'}, $block_stat{'bwrtn/s'});
+			print &jqplot_linegraph_array($IDX++, 'system-block', $data_info, '', $block_stat{'bread/s'}, $block_stat{'bwrtn/s'});
 		} elsif ($data_info->{name} eq 'system-tps') {
 			$block_stat{'tps'} =~ s/,$//;
 			$block_stat{'rtps'} =~ s/,$//;
 			$block_stat{'wtps'} =~ s/,$//;
-			print &flotr2_linegraph_array($IDX++, 'system-tps', $data_info, '', $block_stat{'tps'}, $block_stat{'rtps'}, $block_stat{'wtps'});
+			print &jqplot_linegraph_array($IDX++, 'system-tps', $data_info, '', $block_stat{'tps'}, $block_stat{'rtps'}, $block_stat{'wtps'});
 		}
 	}
 }
@@ -7067,7 +7147,7 @@ sub compute_srvtime_report
 		foreach my $n (sort { $a cmp $b } keys %srvtime_stat) {
 			$srvtime_stat{$n}{'await'} =~ s/,$//;
 			$srvtime_stat{$n}{'svctm'} =~ s/,$//;
-			print &flotr2_linegraph_array($IDX++, 'system-srvtime', $data_info, $n, $srvtime_stat{$n}{'svctm'}, $srvtime_stat{$n}{'await'});
+			print &jqplot_linegraph_array($IDX++, 'system-srvtime', $data_info, $n, $srvtime_stat{$n}{'svctm'}, $srvtime_stat{$n}{'await'});
 		}
 	}
 }
@@ -7124,10 +7204,10 @@ sub compute_rw_device_report
 			if ($data_info->{name} eq 'system-rwdevice') { 
 				$devices_stat{$n}{'rd_sec/s'} =~ s/,$//;
 				$devices_stat{$n}{'wr_sec/s'} =~ s/,$//;
-				print &flotr2_linegraph_array($IDX++, 'system-rwdevice', $data_info, $n, $devices_stat{$n}{'rd_sec/s'}, $devices_stat{$n}{'wr_sec/s'});
+				print &jqplot_linegraph_array($IDX++, 'system-rwdevice', $data_info, $n, $devices_stat{$n}{'rd_sec/s'}, $devices_stat{$n}{'wr_sec/s'});
 			} elsif ($data_info->{name} eq 'system-tpsdevice') {
 				$devices_stat{$n}{'tps'} =~ s/,$//;
-				print &flotr2_linegraph_array($IDX++, 'system-tpsdevice', $data_info, $n, $devices_stat{$n}{'tps'});
+				print &jqplot_linegraph_array($IDX++, 'system-tpsdevice', $data_info, $n, $devices_stat{$n}{'tps'});
 			}
 		}
 	}
@@ -7169,7 +7249,7 @@ sub compute_util_device_report
 	if (scalar keys %devices_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
 			$devices_stat{$n}{'%util'} =~ s/,$//;
-			print &flotr2_linegraph_array($IDX++, 'system-cpudevice', $data_info, $n, $devices_stat{$n}{'%util'});
+			print &jqplot_linegraph_array($IDX++, 'system-cpudevice', $data_info, $n, $devices_stat{$n}{'%util'});
 		}
 	}
 }
@@ -7214,7 +7294,7 @@ sub compute_network_report
 		foreach my $n (sort { $a cmp $b } keys %networks_stat) {
 			$networks_stat{$n}{'rxkB/s'} =~ s/,$//;
 			$networks_stat{$n}{'txkB/s'} =~ s/,$//;
-			print &flotr2_linegraph_array($IDX++, 'network-utilization', $data_info, $n, $networks_stat{$n}{'rxkB/s'}, $networks_stat{$n}{'txkB/s'});
+			print &jqplot_linegraph_array($IDX++, 'network-utilization', $data_info, $n, $networks_stat{$n}{'rxkB/s'}, $networks_stat{$n}{'txkB/s'});
 		}
 	}
 }
@@ -7260,7 +7340,7 @@ sub compute_network_error_report
 			$errors_stat{$n}{'rxerr/s'} =~ s/,$//;
 			$errors_stat{$n}{'txerr/s'} =~ s/,$//;
 			$errors_stat{$n}{'coll/s'} =~ s/,$//;
-			print &flotr2_linegraph_array($IDX++, 'network-error', $data_info, $n, $errors_stat{$n}{'rxerr/s'}, $errors_stat{$n}{'txerr/s'}, $errors_stat{$n}{'coll/s'});
+			print &jqplot_linegraph_array($IDX++, 'network-error', $data_info, $n, $errors_stat{$n}{'rxerr/s'}, $errors_stat{$n}{'txerr/s'}, $errors_stat{$n}{'coll/s'});
 		}
 	}
 }
@@ -8162,57 +8242,41 @@ sub convert_sar_time
 	return 0;
 }
 
-sub flotr2_linegraph_array
+sub jqplot_linegraph_array
 {
 	my ($buttonid, $divid, $infos, $title, @data) = @_;
 
 	my @legend = ();
-	my $data2 = '';
-	my $id = 1;
-    my $description = $infos->{description} || '';
+	my $description = $infos->{description} || '';
+
 	for (my $i = 0; $i <= $#data; $i++) {
-		next if (!$data[$i]);
-		$data[$i] ||= '';
-		$data[$i] = "var d$id = [$data[$i]];\n";
-		my $color = '';
-		if ($GRAPH_COLORS[$i]) {
-			$color = ", color: \"$GRAPH_COLORS[$i]\"";
-		}
-		if ($infos->{y2label} && ($i == $#data)) {
-			push(@legend, "{ data: d$id, label: \"" . ($infos->{legends}[$i] || '') . "\"$color, yaxis: 2 },\n");
-		} else {
-			push(@legend, "{ data: d$id, label: \"" . ($infos->{legends}[$i] || '') . "\"$color, mouse:{track:true} },\n");
-		}
-		$id++;
+		push(@legend, $infos->{legends}[$i] || '');
 	}
 	if ($title eq 'all') {
 		$title = $infos->{all_title};
 		$description = $infos->{all_description};
-    }
+	}
 	elsif ($title ne '') {
 		$title = sprintf($infos->{title}, $title);
 	} else {
 		$title = $infos->{title};
 	}
-	return &flotr2_linegraph($buttonid, $divid, $infos, $title, $description, \@data, \@legend);
+	return &jqplot_linegraph($buttonid, $divid, $infos, $title, $description, \@data, \@legend);
 }
 
-sub flotr2_linegraph_hash
+sub jqplot_linegraph_hash
 {
 	my ($buttonid, $divid, $infos, $title, %data_h) = @_;
 
 	my @legend = ();
 	my @data = ();
 	my $i = 1;
-    my $description = $infos->{description} || '';
+	my $description = $infos->{description} || '';
+
 	foreach my $id (sort keys %data_h) {
 		$data_h{$id} ||= '';
-		my $color = '';
-		if ($GRAPH_COLORS[$i]) {
-			$color = ", color: \"$GRAPH_COLORS[$i]\"";
-		}
-		push(@data, "var d$i = [$data_h{$id}];\n");
-		push(@legend, "{ data: d$i, label: \"$id\"$color, mouse:{track:true} },\n");
+		push(@data, $data_h{$id});
+		push(@legend, $id);
 		$i++;
 	}
 	if ($title ne '') {
@@ -8221,20 +8285,14 @@ sub flotr2_linegraph_hash
 		$title = $infos->{title};
 	}
 
-	return &flotr2_linegraph($buttonid, $divid, $infos, $title, $description, \@data, \@legend);
+	return &jqplot_linegraph($buttonid, $divid, $infos, $title, $description, \@data, \@legend);
 }
 
-sub flotr2_linegraph
+sub jqplot_linegraph
 {
 	my ($buttonid, $divid, $infos, $title, $description, $data, $legend) = @_;
+
 	my $ylabel = $infos->{ylabel} || '';
-	my $type = '';
-	if ($ylabel =~ /size/i) {
-		$type = 'size';
-	} elsif ($ylabel =~ /mduration/i) {
-		$type = 'mduration';
-		$ylabel =~ s/m(duration)/$1/i;
-	}
 	my $str = '';
 	if (($divid !~ /\+$/) && ($divid !~ /^statio-/)) {
 		$str = qq{
@@ -8255,180 +8313,76 @@ sub flotr2_linegraph
               </div>
               <div class="panel-body">
 };
-	my $yaxis2 = '';
-	if ($infos->{y2label}) {
-		my $color = '';
-		if ($GRAPH_COLORS[$#{$data}]) {
-			$color = ", color: \"$GRAPH_COLORS[$#{$data}]\"";
-		}
-		my $y2label = $infos->{y2label} || '';
-		$yaxis2 = "y2axis: { mode: \"normal\", title: \"$y2label\", min: 0$color },";
-	}
+	my $y2label = $infos->{y2label} || "''";
 
-	my $dateTracker_lblopts = '';
 	my $dateTracker_dataopts = '';
+        my $options_series = '';
 	my $has_data = 0;
 	if ($#{$data} >= 0) {
 		for (my $i = 0; $i <= $#{$legend}; $i++) {
 			next if (!$legend->[$i]);
 			if ($legend->[$i] =~ /label: "([^"]+)"/) {
-				$dateTracker_lblopts .= "'$1',";
+				if (($i == $#{$legend}) && $infos->{y2label}) {
+					$options_series .= "{ label: \"$1\", color: \"$GRAPH_COLORS[$i]\", yaxis: 'y2axis' },";
+				} else {
+					$options_series .= "{ label: \"$1\", color: \"$GRAPH_COLORS[$i]\" },";
+				}
+			} else {
+				$options_series .= "{ label: \"$legend->[$i]\", color: \"$GRAPH_COLORS[$i]\" },";
 			}
 		}
-		$dateTracker_lblopts =~ s/,$//;
-		$dateTracker_lblopts = "[$dateTracker_lblopts]";
 
 		for (my $i = 0; $i <= $#{$data}; $i++) {
 			next if (!$data->[$i]);
-			if ($data->[$i] =~ /var (d\d+) =/) {
-				$dateTracker_dataopts .= "$1,";
-				$has_data = 1;
-			}
+			$data->[$i] = "var graph_${buttonid}_d$i = [$data->[$i]];\n";
+			$dateTracker_dataopts .= "graph_${buttonid}_d$i,";
+			$has_data = 1;
 		}
 		$dateTracker_dataopts =~ s/,$//;
 		$dateTracker_dataopts = "[$dateTracker_dataopts]";
 	}
 
 	my $cssgraph = 'linegraph';
-	my $write_buttons = "write_buttons($buttonid);";
-	my $hnoTicks = 20;
-	my $vnoTicks = 10;
 	if ($divid =~ /^table-/) {
 		$cssgraph = 'smallgraph';
-		$write_buttons = '';
-		$hnoTicks = 15;
-		$vnoTicks = 4;
 	}
-
 	if ($has_data) {
 		$str .= <<EOF;
-<div id="$divid$buttonid" class="$cssgraph"></div>
+<div id="$divid$buttonid" class="jqplot-graph $cssgraph"></div>
 <script type="text/javascript">
-(function mouse_zoom(container) {
-
-    $write_buttons
+/* <![CDATA[ */
 @$data
-    var options = {
-        xaxis: {
-	    tickDecimals: 0,
-	    noTicks: $hnoTicks,
-	    mode: "time",
-	    labelsAngle: 45
-        },
-        yaxis: {
-            mode: "normal",
-	    noTicks: $vnoTicks,
-            title: "$ylabel",
-	    tickFormatter: function(val){ return pretty_print_number(val,'$type') },
+var series_arr = [ $options_series ];
 
-        },
-	$yaxis2
-        selection: {
-            mode: "x",
-            fps: 30
-        },
-        title: "$title",
-        legend: {
-            position: "nw",
-            backgroundColor: "#D2E8FF",
-            backgroundOpacity: 0.4
-        },
-	mouse: {
-	    track: true,
-	    trackFormatter: function(obj){ return dateTracker(obj,'$type',$dateTracker_lblopts,$dateTracker_dataopts) },
-	    relative: true,
-	    sensibility: 5,
-	    trackDecimals: 2,
-	    lineColor: 'purple',
-        },
-        crosshair: {
-            mode: 'x',
-            color: '#000000',
-            hideCursor: false,
-        },
-        HtmlText: false,
-    };
-
-    function drawGraph(opts) {
-        var o = Flotr._.extend(Flotr._.clone(options), opts );
-        return Flotr.draw(
-        	container,
-        	[
-@$legend
-    		],
-    		o
-    	);
-    }
-
-    var graph = drawGraph();
-    Flotr.EventAdapter.observe(container, "flotr:select", function(area) {
-        f = drawGraph({
-            xaxis: {
-            mode: "time",
-            labelsAngle: 45,
-                min: area.x1,
-                max: area.x2
-            },
-            yaxis: {
-                min: area.y1,
-                max: area.y2,
-		tickFormatter: function(val){ return pretty_print_number(val,'$type') },
-            }
-        });
-    });
-    Flotr.EventAdapter.observe(container, "flotr:click", function() {
-        drawGraph();
-    });
-    document.getElementById('reset$buttonid').onclick = function() {
-      graph.download.restoreCanvas();
-    };
-    document.getElementById('download$buttonid').onclick = function() {
-	if (Flotr.isIE && Flotr.isIE < 9) {
-		alert(browser_warning);
-	}
-      graph.download.saveImage('$IMG_FORMAT');
-    };
-    document.getElementById('toimage$buttonid').onclick = function() {
-	if (Flotr.isIE && Flotr.isIE < 9) {
-		alert(browser_warning);
-	}
-      graph.download.saveImage('$IMG_FORMAT', null, null, true);
-    };
-
-})(document.getElementById("$divid$buttonid"));
+create_download_button($buttonid, 'btn');
+var graph_${buttonid} = create_linegraph('$divid$buttonid', '$title', '$ylabel', series_arr, $dateTracker_dataopts, $y2label);
+add_download_button_event($buttonid, '$divid$buttonid');
+/* ]]> */
 </script>
-EOF
-	} else {
-		$str .= '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
-	}
-	$str .= qq{
               </div>
               </div>
-            </div><!--/span-->
+            </div>
       </div>
-};
-	$str .= qq{
-</li>
+EOF
+	}
+	if ($divid !~ /^(pgbouncer|tablespace|statio)/) {
+		$str .= qq{
+  </li>
 </ul>
-} if ($divid !~ /^(pgbouncer|tablespace|statio)/);
+};
+	}
 
 	return $str;
-
 }
 
-sub flotr2_piegraph
+sub jqplot_piegraph
 {
 	my ($buttonid, $divid, $infos, $title, %data) = @_;
 
-	my @datadef = ();
-	my @contdef = ();
-	my $i = 1;
-	foreach my $k (sort keys %data) {
-		push(@datadef, "var d$i = [ [0,$data{$k}] ];\n");
-		push(@contdef, "{ data: d$i, label: \"$k\" },\n");
-		$i++;
-	}
-
+        my $datadef = '';
+        foreach my $k (sort keys %data) {
+                $datadef .= "['$k', $data{$k}],";
+        }
 	if ($title ne '') {
 		$title = sprintf($infos->{title}, $title);
 	} else {
@@ -8450,69 +8404,21 @@ sub flotr2_piegraph
 
 };
 
-	if ($#datadef >= 0) {
+	if ($datadef) {
 		$str .= <<EOF;
-<div id="$divid$buttonid" class="piegraph"></div>
+<div id="$divid$buttonid" class="jqplot-graph piegraph"></div>
 <script type="text/javascript">
-(function basic_pie(container) {
+/* <![CDATA[ */
+var data_${buttonid} = [ $datadef ];
 
-    write_buttons($buttonid);
-
-    @datadef
-    var graph = Flotr.draw(container, [
-    @contdef
-    ], {
-        title: "$title",
-        HtmlText: false,
-        grid: {
-            verticalLines: false,
-            horizontalLines: false,
-	    backgroundColor: '#ffffff',
-	    outline: '',
-        },
-        xaxis: {
-            showLabels: false
-        },
-        yaxis: {
-            showLabels: false
-        },
-        pie: {
-            show: true,
-	    explode: 6
-        },
-        mouse: {
-            track: true,
-	    trackFormatter: function(obj){ return pieTracker(obj) },
-	    relative: true
-        },
-        legend: {
-            position: "sw",
-            backgroundColor: "#D2E8FF",
-	    backgroundOpacity: 0.4
-        }
-    });
-    document.getElementById('reset$buttonid').onclick = function() {
-      graph.download.restoreCanvas();
-    };
-    document.getElementById('download$buttonid').onclick = function(){
-	if (Flotr.isIE && Flotr.isIE < 9) {
-		alert(browser_warning);
-	}
-      graph.download.saveImage('$IMG_FORMAT');
-    };
-    document.getElementById('toimage$buttonid').onclick = function() {
-	if (Flotr.isIE && Flotr.isIE < 9) {
-		alert(browser_warning);
-	}
-      graph.download.saveImage('$IMG_FORMAT', null, null, true);
-    };
-
-
-})(document.getElementById("$divid$buttonid"));
+create_download_button($buttonid, 'btn');
+var graph_$buttonid = create_piechart('$divid$buttonid', '$title', data_${buttonid});
+add_download_button_event($buttonid, '$divid$buttonid');
+/* ]]> */
 </script>
 EOF
 	} else {
-		$str .= '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
+		$str .= '<div class="jqplot-graph piegraph"><blockquote><b>NO DATASET</b></blockquote></div>';
 	}
 	$str .= qq{
               </div>
@@ -8977,7 +8883,6 @@ sub load_sys_binary
 		}
 	}
 }
-
 
 sub empty_dataset
 {

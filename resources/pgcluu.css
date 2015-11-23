@@ -45,7 +45,7 @@ ul#slides li div div {
 	background:#FFFFFF;
 	border:4px double white;
 	padding:0 10px;
-        margin: 35px auto;
+	margin: 35px auto;
 	/*css3*/
 	border-radius:10px;
 	-moz-border-radius:10px;
@@ -61,7 +61,7 @@ ul#slides li div div {
         background:#FFFFFF;
         border:4px double white;
         padding:0 10px;
-        margin:30px 0 30px 0;
+        margin: 35px auto;
         border-radius:10px;
         -moz-border-radius:10px;
         -webkit-border-radius:10px;
@@ -79,7 +79,7 @@ ul#slides li div div {
 
 .panel { background-color: #f5f5f5;}
 .panel-body { background-color: #ffffff; font-size: 1.2em;}
-.panel-body a {	margin: 5px; }
+.panel-body a {        margin: 5px; }
 .panel-footer { background-color: #f5f5f5}
 .panel-height { height: 300px}
 .panel-xlheight { height: 450px}
@@ -169,4 +169,40 @@ ul#slides li div div {
     width: 50%; /* 6 columns */
   }
 }
+
+.jqplot-graph { color: #ac1316; z-index: 99;}
+.jqplot-target {
+    position: relative;
+    color: #333;
+    font-size: 1.2em;
+}
+
+.jqplot-highlighter-tooltip {
+    border: 0px;
+    font-size: 1.0em;
+    white-space: nowrap;
+    font-weight: bold;
+    margin: 5px;
+    padding: 5px;
+    color:#ffffff;
+    background: #5f5555;
+    border:1px solid #5f5555;
+    border:1px solid rgba(0, 0, 0, 0.2);
+    -webkit-border-radius:6px;
+    -moz-border-radius:6px;
+    border-radius:6px;
+    -webkit-box-shadow:0 5px 10px rgba(0, 0, 0, 0.2);
+    -moz-box-shadow:0 5px 10px rgba(0, 0, 0, 0.2);
+    box-shadow:0 5px 10px rgba(0, 0, 0, 0.2);
+}
+
+ .jqplot-title {
+    font-size: 1.1em;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    margin: 0;
+    padding: 0;
+    color: #5f5555;
+ }
+
 
