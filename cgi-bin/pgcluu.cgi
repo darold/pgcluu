@@ -1862,6 +1862,143 @@ sub pg_stat_database
 }
 
 # Compute graphs of database statistics
+sub set_overall_stat_from_binary
+{
+	foreach my $time (sort {$a <=> $b} keys %all_stat_database) {
+		foreach my $db (@global_databases) {
+			next if (($db eq 'all') || (($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB))));
+
+			foreach my $k (qw(insert returned fetched update delete blks_read blks_hit nbackend xact_commit xact_rollback canceled_queries deadlocks temp_files temp_bytes)) {
+				$OVERALL_STATS{'cluster'}{$k} += $all_stat_database{$time}{$db}{$k};
+				$OVERALL_STATS{'database'}{$db}{$k} += $all_stat_database{$time}{$db}{$k};
+
+			}
+			$OVERALL_STATS{'start_date'} = $time if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} gt $time));
+			$OVERALL_STATS{'end_date'} = $time if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} lt $time));
+
+		}
+	}
+	foreach my $time (sort {$a <=> $b} keys %all_database_size) {
+		foreach my $db (@global_databases) {
+			next if (($db eq 'all') || (($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB))));
+			$OVERALL_STATS{'database'}{$db}{'size'} = $all_database_size{$time}{$db};
+			$OVERALL_STATS{'start_date'} = $time if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} gt $time));
+			$OVERALL_STATS{'end_date'} = $time if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} lt $time));
+		}
+	}
+	foreach my $time (sort {$a <=> $b} keys %sar_cpu_stat) {
+                # Skip unwanted lines
+                next if ($BEGIN && ($time < $BEGIN));
+                next if ($END   && ($time > $END));
+
+		if (!exists $OVERALL_STATS{'system'}{'cpu'} || ($OVERALL_STATS{'system'}{'cpu'}[1] < $sar_cpu_stat{$time}{'all'}{total})) {
+			@{$OVERALL_STATS{'system'}{'cpu'}} = ($time, $sar_cpu_stat{$time}{'all'}{total});
+		}
+		$OVERALL_STATS{'sar_start_date'} = $time if (!$OVERALL_STATS{'sar_start_date'} || ($OVERALL_STATS{'sar_start_date'} gt $time));
+		$OVERALL_STATS{'sar_end_date'} = $time if (!$OVERALL_STATS{'sar_end_date'} || ($OVERALL_STATS{'sar_end_date'} lt $time));
+	}
+	foreach my $time (sort {$a <=> $b} keys %sar_load_stat) {
+                # Skip unwanted lines
+                next if ($BEGIN && ($time < $BEGIN));
+                next if ($END   && ($time > $END));
+
+		if (!exists $OVERALL_STATS{'system'}{'load'} || ($OVERALL_STATS{'system'}{'load'}[1] < $sar_load_stat{$time}{'ldavg-1'})) {
+			@{$OVERALL_STATS{'system'}{'load'}} = ($time, $sar_load_stat{$time}{'ldavg-1'});
+		}
+	}
+	foreach my $time (sort {$a <=> $b} keys %sar_process_stat) {
+                # Skip unwanted lines
+                next if ($BEGIN && ($time < $BEGIN));
+                next if ($END   && ($time > $END));
+
+		if (!exists $OVERALL_STATS{'system'}{'process'} || ($OVERALL_STATS{'system'}{'process'}[1] < $sar_process_stat{$time}{'plist-sz'})) {
+			@{$OVERALL_STATS{'system'}{'process'}} = ($time, $sar_process_stat{$time}{'plist-sz'});
+		}
+	}
+	foreach my $time (sort {$a <=> $b} keys %sar_context_stat) {
+                # Skip unwanted lines
+                next if ($BEGIN && ($time < $BEGIN));
+                next if ($END   && ($time > $END));
+
+		if (!exists $OVERALL_STATS{'system'}{'cswch'} || ($OVERALL_STATS{'system'}{'cswch'}[1] < $sar_context_stat{$time}{'cswch'})) {
+			@{$OVERALL_STATS{'system'}{'cswch'}} = ($time, $sar_context_stat{$time}{'cswch'});
+		}
+	}
+	foreach my $time (sort {$a <=> $b} keys %sar_memory_stat) {
+                # Skip unwanted lines
+                next if ($BEGIN && ($time < $BEGIN));
+                next if ($END   && ($time > $END));
+
+		if (!exists $OVERALL_STATS{'system'}{'kbcached'} || ($OVERALL_STATS{'system'}{'kbcached'}[1] > $sar_memory_stat{$time}{'kbcached'})) {
+			@{$OVERALL_STATS{'system'}{'kbcached'}} = ($time, $sar_memory_stat{$time}{'kbcached'});
+		}
+	}
+	foreach my $time (sort {$a <=> $b} keys %sar_swap_stat) {
+                # Skip unwanted lines
+                next if ($BEGIN && ($time < $BEGIN));
+                next if ($END   && ($time > $END));
+
+		if (!exists $OVERALL_STATS{'system'}{'pswpin'} || ($OVERALL_STATS{'system'}{'pswpin'}[1] < $sar_swap_stat{$time}{'pswpin'})) {
+			@{$OVERALL_STATS{'system'}{'pswpin'}} = ($time, $sar_swap_stat{$time}{'pswpin'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'pswpout'} || ($OVERALL_STATS{'system'}{'pswpout'}[1] < $sar_swap_stat{$time}{'pswpout'})) {
+			@{$OVERALL_STATS{'system'}{'pswpout'}} = ($time, $sar_swap_stat{$time}{'pswpout'});
+		}
+	}
+
+	foreach my $time (sort {$a <=> $b} keys %sar_pageswap_stat) {
+                # Skip unwanted lines
+                next if ($BEGIN && ($time < $BEGIN));
+                next if ($END   && ($time > $END));
+
+		if (!exists $OVERALL_STATS{'system'}{'pgpgin'} || ($OVERALL_STATS{'system'}{'pgpgin'}[1] < $sar_pageswap_stat{$time}{'pgpgin'})) {
+			@{$OVERALL_STATS{'system'}{'pgpgin'}} = ($time, $sar_pageswap_stat{$time}{'pgpgin'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'pgpgout'} || ($OVERALL_STATS{'system'}{'pgpgout'}[1] < $sar_pageswap_stat{$time}{'pgpgout'})) {
+			@{$OVERALL_STATS{'system'}{'pgpgout'}} = ($time, $sar_pageswap_stat{$time}{'pgpgout'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'majflt'} || ($OVERALL_STATS{'system'}{'majflt'}[1] < $sar_pageswap_stat{$time}{'majflt'})) {
+			@{$OVERALL_STATS{'system'}{'majflt'}} = ($time, $sar_pageswap_stat{$time}{'majflt'});
+		}
+	}
+	foreach my $time (sort {$a <=> $b} keys %sar_block_stat) {
+                # Skip unwanted lines
+                next if ($BEGIN && ($time < $BEGIN));
+                next if ($END   && ($time > $END));
+
+		if (!exists $OVERALL_STATS{'system'}{'bread'} || ($OVERALL_STATS{'system'}{'bread'}[1] < $sar_block_stat{$time}{'bread'})) {
+			@{$OVERALL_STATS{'system'}{'bread'}} = ($time, $sar_block_stat{$time}{'bread'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'bwrite'} || ($OVERALL_STATS{'system'}{'bwrite'}[1] < $sar_block_stat{$time}{'bwrite'})) {
+			@{$OVERALL_STATS{'system'}{'bwrite'}} = ($time, $sar_block_stat{$time}{'bwrite'});
+		}
+	}
+	foreach my $time (sort {$a <=> $b} keys %sar_srvtime_stat) {
+                # Skip unwanted lines
+                next if ($BEGIN && ($time < $BEGIN));
+                next if ($END   && ($time > $END));
+		foreach my $dev (keys %{ $sar_srvtime_stat{$time} } ) {
+			next if ($DEVICE && ($dev ne $DEVICE));
+			if (!exists $OVERALL_STATS{'system'}{'svctm'} || ($OVERALL_STATS{'system'}{'svctm'}[1] < $sar_srvtime_stat{$time}{$dev}{'svctm'})) {
+				@{$OVERALL_STATS{'system'}{'svctm'}} = ($time, $sar_srvtime_stat{$time}{$dev}{'svctm'}, $dev);
+			}
+		}
+	}
+	foreach my $time (sort {$a <=> $b} keys %sar_rw_devices_stat) {
+                # Skip unwanted lines
+                next if ($BEGIN && ($time < $BEGIN));
+                next if ($END   && ($time > $END));
+		foreach my $dev (keys %{ $sar_rw_devices_stat{$time} } ) {
+			next if ($DEVICE && ($dev ne $DEVICE));
+			$OVERALL_STATS{'system'}{'devices'}{$dev}{read} += $sar_rw_devices_stat{$time}{$dev}{'rd_sec/s'} || 0;
+			$OVERALL_STATS{'system'}{'devices'}{$dev}{write} += $sar_rw_devices_stat{$time}{$dev}{'wr_sec/s'} || 0;
+			$OVERALL_STATS{'system'}{'devices'}{$dev}{tps} = $sar_rw_devices_stat{$time}{$dev}{'tps'} if (!$OVERALL_STATS{'system'}{'devices'}{$dev}{tps} || ($OVERALL_STATS{'system'}{'devices'}{$dev}{tps} < $sar_rw_devices_stat{$time}{$dev}{'tps'}));
+		}
+	}
+
+}
+
+# Compute graphs of database statistics
 sub pg_stat_database_report
 {
 	my ($interval, $src_base, $db_glob, %data_info) = @_;
@@ -5689,9 +5826,20 @@ EOF
 		my $uptime = '';
 		$uptime = "<span class=\"figure-label\">Up since $sysinfo{PGVERSION}{'uptime'}</span>" if ($sysinfo{PGVERSION}{'uptime'});
 		print <<EOF;
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-body">
+               <div class="key-figures">
+               <ul>
+               <li></li>
+               <li><span class="figure-label">$sysinfo{PGVERSION}{'full_version'}</span></li>
+		$uptime
+               </ul>
+               </div>
+              </div>
+              </div>
+            </div><!--/span-->
 
-<span class="figure-label">$sysinfo{PGVERSION}{'full_version'}</span>
-$uptime
 EOF
 	}
 	print <<EOF;
@@ -8839,6 +8987,9 @@ sub load_pg_binary
 			}
 		}
 	}
+	# Compute overall statistics with binary file as they
+	# are normally computed when reading data files.
+	set_overall_stat_from_binary();
 }
 
 # Load statistics from sar cache into memory
