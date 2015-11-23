@@ -3153,7 +3153,7 @@ sub pg_stat_bgwriter
 {
 	my ($in_dir, $file, $interval) = @_;
 
-	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
+	return if ( $ACTION eq 'database-info' );
 
 	my @start_vals = ();
 	my %total_count = ();
@@ -3164,6 +3164,9 @@ sub pg_stat_bgwriter
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
 
+		$OVERALL_STATS{'bgwriter'}{stats_reset} = $data[-1] if (!exists $OVERALL_STATS{'bgwriter'}{stats_reset} || ($OVERALL_STATS{'bgwriter'}{stats_reset} lt $data[-1]));
+
+		next if ($ACTION eq 'home');
 		push(@start_vals, @data) if ($#start_vals < 0);
 		(($data[1] - $start_vals[1]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[1] - $start_vals[1]);
 		$all_stat_bgwriter{$data[0]}{checkpoints_timed} = $tmp_val;
@@ -3187,7 +3190,6 @@ sub pg_stat_bgwriter
 		$all_stat_bgwriter{$data[0]}{buffers_backend} .= sprintf("%.2f", $tmp_val/$interval);
 		(($data[7+$id] - $start_vals[7+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7+$id] - $start_vals[7+$id]);
 		$all_stat_bgwriter{$data[0]}{buffers_backend_fsync} .= sprintf("%.2f", $tmp_val/$interval);
-		$OVERALL_STATS{'bgwriter'}{stats_reset} = $data[-1] if (!exists $OVERALL_STATS{'bgwriter'}{stats_reset} || ($OVERALL_STATS{'bgwriter'}{stats_reset} lt $data[-1]));
 		@start_vals = ();
 		push(@start_vals, @data);
 	}
