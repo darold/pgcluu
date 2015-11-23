@@ -1002,29 +1002,30 @@ sub read_conf
 			$e_year = $1;
 			$e_hour = sprintf("%02d", $4);
 			$e_min = sprintf("%02d", $5);
-			$e_sec = '59';
+			$e_sec = '00';
 		} elsif ($END =~ /^(\d{4})-(\d+)-(\d+)$/) {
 			$END = &timegm_nocheck(0, 0, 0, $3, $2 - 1, $1 - 1900) * 1000;
 			$e_day = printf("%02d", 3);
 			$e_month = sprintf("%02d", $2);
 			$e_year = $1;
-			$e_hour = '23';
-			$e_min = '59';
-			$e_sec = '59';
+			$e_hour = '00';
+			$e_min = '00';
+			$e_sec = '00';
 		} else {
 			die "FATAL: bad format for ending datetime, should be yyyy-mm-dd hh:mm:ss\n";
 		}
 	}
-
 }
 
+####
+# Read configuration file
+####
 &read_conf();
 
-####
-# Look into subdirectories to find daily and hourly data files.
-####
-my @WORK_DIRS = &get_data_directories();
 
+####
+# Set default report date to today
+####
 if (!$o_year) {
 	($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
 	$o_year += 1900;
@@ -1035,6 +1036,11 @@ if (!$e_year) {
 	$e_year += 1900;
 	$e_month++;
 }
+
+####
+# Look into subdirectories to find daily and hourly data files.
+####
+my @WORK_DIRS = &get_data_directories();
 
 ####
 # Start to look for devices and database to build the menu
@@ -4247,7 +4253,7 @@ sub pg_stat_count_indexes_report
       <div class="panel-body">
 	<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
 		<div class="span11">
-			<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
+			<table class="table table-striped sortable" id="$db-$data_info{$id}{name}-table">
 				<thead>
 					<tr>
 					<th>Schema</th>
@@ -5679,10 +5685,12 @@ EOF
 	}
 
 	if (exists $sysinfo{PGVERSION}) {
+		my $uptime = '';
+		$uptime = "<span class=\"figure-label\">Up since $sysinfo{PGVERSION}{'uptime'}</span>" if ($sysinfo{PGVERSION}{'uptime'});
 		print <<EOF;
 
 <span class="figure-label">$sysinfo{PGVERSION}{'full_version'}</span>
-<span class="figure-label">Up since $sysinfo{PGVERSION}{'uptime'}</span>
+$uptime
 EOF
 	}
 	print <<EOF;
@@ -5777,13 +5785,50 @@ sub show_sysinfo
 {
 	$sysinfo{UPTIME}{'uptime'} = '-' if (!exists $sysinfo{UPTIME}{'uptime'});
 
+	my $release_version = '';
+	if ($sysinfo{RELEASE}{'version'}) {
+		$release_version = qq{<li><span class="figure">$sysinfo{RELEASE}{'version'}</span> <span class="figure-label">Version</span></li>};
+	}
+	my $sysctl_info = '';
+	my $hugepage_info = '';
+	foreach my $k (sort keys %{$sysinfo{SYSTEM}}) {
+		next if ($k =~ /^kernel/);
+		if ($k =~ /transparent_hugepage/) {
+			my $k2 = $k;
+			$k2 =~ s/\/sys\/kernel\/mm\/transparent_hugepage\///;
+			$sysinfo{SYSTEM}{$k} =~ s/.*\[(.*)\].*/$1/;
+			$hugepage_info .= <<EOF;
+		<li><span class="figure-label" data-toggle="tooltip" data-placement="top" title="$k">$k2</span> <span class="figure">$sysinfo{SYSTEM}{$k}</span></li>
+EOF
+		} else {
+			$sysctl_info .= "<li><span class=\"figure-label\">$k</span> <span class=\"figure\">$sysinfo{SYSTEM}{$k}</span></li>\n";
+		}
+	}
+	my $core_info = '';
+	if (exists $sysinfo{CPU}{'cpu cores'}) {
+		my $nsockets = $sysinfo{CPU}{'processor'}/($sysinfo{CPU}{'cpu cores'}||1);
+		$core_info = qq{
+		<li><span class="figure">$nsockets</span> <span class="figure-label">Sockets</span></li>
+		<li><span class="figure">$sysinfo{CPU}{'cpu cores'}</span> <span class="figure-label">Cores per CPU</span></li>
+};
+	}
+	if ($hugepage_info) {
+		$hugepage_info .= <<EOF;
+               <span class="figure-label"><b>/sys/kernel/mm/transparent_hugepage/</b></span>
+               <ul>
+               <li></li>
+                $hugepage_info
+                </ul>
+EOF
+	}
+
 	print <<EOF;
 <ul id="slides">
 <li class="slide active-slide" id="info-slide">
 
 	<div id="info"><br/><br/><br/></div>
 	<div class="row">
-            <div class="col-md-4">
+            <div class="col-md-3">
               <div class="panel panel-default">
               <div class="panel-heading">
               <i class="fa fa-desktop fa-2x pull-left fa-border"></i><h2>System</h2>
@@ -5797,44 +5842,31 @@ sub show_sysinfo
 		<li><span class="figure">$sysinfo{KERNEL}{'kernel'}</span> <span class="figure-label">Kernel</span></li>
 		<li><span class="figure">$sysinfo{KERNEL}{'arch'}</span> <span class="figure-label">Arch</span></li>
 		<li><span class="figure">$sysinfo{RELEASE}{'name'}</span> <span class="figure-label">Distribution</span></li>
-EOF
-		if ($sysinfo{RELEASE}{'version'}) {
-			print <<EOF;
-		<li><span class="figure">$sysinfo{RELEASE}{'version'}</span> <span class="figure-label">Version</span></li>
-EOF
-		}
-		print "<li>\n";
-		foreach my $k (sort keys %{$sysinfo{SYSTEM}}) {
-			next if ($k =~ /^kernel/);
-			if ($k =~ /transparent_hugepage/) {
-				my $k2 = $k;
-				$k2 =~ s/\/sys\/kernel\/mm\//.../;
-				$sysinfo{SYSTEM}{$k} =~ s/.*\[(.*)\].*/$1/;
-				print <<EOF;
-                <span class="figure-label" data-toggle="tooltip" data-placement="top" title="$k">$k2</span> <span class="figure">$sysinfo{SYSTEM}{$k}</span><br>
-EOF
-			} else {
-				print <<EOF;
-                <span class="figure-label">$k</span> <span class="figure">$sysinfo{SYSTEM}{$k}</span><br>
-EOF
-			}
-		}
-		print "</li>\n";
-		my $core_info = '';
-		if (exists $sysinfo{CPU}{'cpu cores'}) {
-			my $nsockets = $sysinfo{CPU}{'processor'}/($sysinfo{CPU}{'cpu cores'}||1);
-			$core_info = qq{
-	      <li><span class="figure">$nsockets</span> <span class="figure-label">Sockets</span></li>
-	      <li><span class="figure">$sysinfo{CPU}{'cpu cores'}</span> <span class="figure-label">Cores per CPU</span></li>
-};
-		}
-		print <<EOF;
-		</ul>
-		</div>
+		$release_version
+               </ul>
+               </div>
               </div>
               </div>
             </div><!--/span-->
-            <div class="col-md-4">
+
+            <div class="col-md-3">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="fa fa-desktop fa-2x pull-left fa-border"></i><h2>Kernel</h2>
+              </div>
+              <div class="panel-body panel-xlheight">
+                <div class="key-figures">
+		$hugepage_info
+                <span class="figure-label"><b>sysctl parameters</b></span>
+                <ul>
+                <li></li>
+                $sysctl_info
+                </ul>
+                </div>
+              </div>
+              </div>
+            </div><!--/span-->
+            <div class="col-md-3">
               <div class="panel panel-default">
               <div class="panel-heading">
               <i class="fa fa-tachometer fa-2x pull-left fa-border"></i><h2>CPU</h2>
@@ -5853,13 +5885,14 @@ EOF
               </div>
               </div>
             </div><!--/span-->
-            <div class="col-md-4">
+            <div class="col-md-3">
               <div class="panel panel-default">
               <div class="panel-heading">
               <i class="fa fa-tasks fa-2x pull-left fa-border"></i><h2>Memory</h2>
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
+		 <span class="figure-label"><b>Memory information</b></span>
 		<ul>
 		<li></li>
 	      <li><span class="figure">$sysinfo{MEMORY}{'memtotal'}</span> <span class="figure-label">Total memory</span></li>
@@ -5884,6 +5917,10 @@ EOF
 		  $sysinfo{SYSTEM}{'kernel.shmmax'} = pretty_print_size($sysinfo{SYSTEM}{'kernel.shmmax'});
 		  $sysinfo{SYSTEM}{'kernel.shmall'} = pretty_print_size($sysinfo{SYSTEM}{'kernel.shmall'} * 1024 * 4);
 		  print <<EOF;
+                </ul>
+                <span class="figure-label"><b>sysctl parameters</b></span>
+                <ul>
+                <li></li>
             <li><span class="figure">$sysinfo{SYSTEM}{'kernel.shmmax'}</span> <span class="figure-label">kernel.shmmax</span></li>
             <li><span class="figure">$sysinfo{SYSTEM}{'kernel.shmall'}</span> <span class="figure-label">kernel.shmall</span></li>
 EOF
@@ -8522,7 +8559,7 @@ sub read_sysinfo
 		}
 		if ($section eq 'SYSTEM') {
 			my ($key, $val) = split(/\s*[=:]\s+/, $l);
-			$sysinfo{$section}{$key} = $val if ($key);
+			$sysinfo{$section}{$key} = $val if ($key && defined $val);
 		}
 		if ($section eq 'PGVERSION') {
 			$sysinfo{$section}{full_version} = $l;
@@ -8650,8 +8687,9 @@ sub get_data_directories
 		}
 
 	} else {
+		# REMOVED: only incremental mode is supported in CGI mode.
 		# we are not in incremental mode only first level directory will be proceed
-		push(@work_dirs, '.');
+		# push(@work_dirs, '.');
 	}
 
 	return @work_dirs;
