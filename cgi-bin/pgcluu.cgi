@@ -5836,6 +5836,7 @@ EOF
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
+		<span class="figure-label"><b>OS information</b></span>
 		<ul>
 		<li></li>
 		<li><span class="figure">$sysinfo{UPTIME}{'uptime'}</span> <span class="figure-label">Uptime</span></li>
@@ -5874,6 +5875,7 @@ EOF
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
+		<span class="figure-label"><b>CPUs information</b></span>
 		<ul>
 		<li></li>
 	      <li><span class="figure">$sysinfo{CPU}{'model name'}</span></li>

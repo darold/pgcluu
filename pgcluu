@@ -5616,7 +5616,7 @@ sub generate_html_index
 				}
 			}
 			if (exists $OVERALL_STATS{'database'}{$db}{'nbackend'}) {
-				if (!exists $overall_stat_databases{'nbackend'} || $OVERALL_STATS{'database'}{$db}{'nbackend'} > $overall_stat_databases{'nbackend'}[1]) {
+				if (!exists $overall_stat_databases{'nbackend'} || ($OVERALL_STATS{'database'}{$db}{'nbackend'} > $overall_stat_databases{'nbackend'}[1])) {
 					@{$overall_stat_databases{'nbackend'}} = ($db, $OVERALL_STATS{'database'}{$db}{'nbackend'});
 				}
 			}
@@ -6064,6 +6064,7 @@ EOF
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
+              <span class="figure-label"><b>OS information</b></span>
 		<ul>
 		<li></li>
 	      <li><span class="figure">$sysinfo{UPTIME}{'uptime'}</span> <span class="figure-label">Uptime</span></li>
@@ -6104,6 +6105,7 @@ EOF
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
+              <span class="figure-label"><b>CPUs information</b></span>
 		<ul>
 		<li></li>
 	      <li><span class="figure">$sysinfo{CPU}{'model name'}</span></li>
@@ -9068,7 +9070,7 @@ sub dump_pg_binary
 		if (not defined $lfh) {
 			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
 		}
-		if (grep(/^$name$/, 'global_databases', 'global_tbspnames', )) {
+		if (grep(/^$name$/, 'global_databases', 'global_tbspnames')) {
 			store_fd({ $name => \@{$name} }, $lfh) || die ("Couldn't save binary data to \"$in_dir/$name.bin\"!\n");
 		} else {
 			store_fd({ $name => \%{$name} }, $lfh) || die ("Couldn't save binary data to \"$in_dir/$name.bin\"!\n");
@@ -11762,7 +11764,7 @@ ul#slides li div div {
 .jqplot-target {
     position: relative;
     color: #333;
-    font-size: 1.2em;
+    font-size: 0.8em;
 }
 
 .jqplot-highlighter-tooltip {
