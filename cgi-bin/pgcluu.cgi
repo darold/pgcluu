@@ -6219,7 +6219,7 @@ gFJG04FnRsAnYDuwyRlIq9UjNgu1Uof0OkYlfKMuKCuZA/8B+QsSxkN8YYwAAAAASUVORK5CYII=
     <link href="$RSC_BASE/pgcluu.css" rel="stylesheet">
     <link href="$RSC_BASE/datetimepicker.css" rel="stylesheet">
     <script src="$RSC_BASE/pgcluu.js"></script>
-    <script src="$RSC_BASE/pgcluu_slide_cgi.js"></script>
+    <script src="$RSC_BASE/pgcluu_slide.js"></script>
     <script src="$RSC_BASE/sorttable.js"></script>
     <script src="$RSC_BASE/bootstrap-datetimepicker.js"></script>
 
