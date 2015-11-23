@@ -8631,7 +8631,6 @@ sub flotr2_linegraph
 	} else {
 		$divid =~ s/\+$//;
 	}
-print STDERR "ZZZZZZZZZZZZZZZZZZZZZZZZZ $divid\n" if (!$title);
 	$str .= qq{
       <div class="row">
             <div class="col-md-12">
