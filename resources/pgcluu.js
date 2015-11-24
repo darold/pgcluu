@@ -48,7 +48,8 @@ function create_linegraph (divid, charttitle, ylabel, arr_series, lineseries) {
         },
         legend: {
             show: true,
-            location: 'nw',
+	    placement: 'outside',
+	    location:'e'
         },
         cursor:{
             show: true,
