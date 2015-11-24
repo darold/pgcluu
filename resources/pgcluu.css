@@ -32,12 +32,6 @@ ul#slides li div div {
         border:4px double white;
         padding:0 10px;
         margin: 35px auto;
-        border-radius:10px;
-        -moz-border-radius:10px;
-        -webkit-border-radius:10px;
-        box-shadow:3px 3px 6px 2px #A9A9A9;
-        -moz-box-shadow:3px 3px 6px 2px #A9A9A9;
-        -webkit-box-shadow:3px 3px 6px #A9A9A9;
 }
 .piegraph {
 	width : 500px;
@@ -46,13 +40,6 @@ ul#slides li div div {
 	border:4px double white;
 	padding:0 10px;
 	margin: 35px auto;
-	/*css3*/
-	border-radius:10px;
-	-moz-border-radius:10px;
-	-webkit-border-radius:10px;
-	box-shadow:3px 3px 6px 2px #A9A9A9;
-	-moz-box-shadow:3px 3px 6px 2px #A9A9A9;
-	-webkit-box-shadow:3px 3px 6px #A9A9A9;
 }
 
 .smallgraph {
@@ -62,12 +49,6 @@ ul#slides li div div {
         border:4px double white;
         padding:0 10px;
         margin: 35px auto;
-        border-radius:10px;
-        -moz-border-radius:10px;
-        -webkit-border-radius:10px;
-        box-shadow:3px 3px 6px 2px #A9A9A9;
-        -moz-box-shadow:3px 3px 6px 2px #A9A9A9;
-        -webkit-box-shadow:3px 3px 6px #A9A9A9;
 }
 
 .dropdown-submenu{position:relative;}
