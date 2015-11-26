@@ -324,7 +324,7 @@ my $result = GetOptions(
 	"R|rotate-hourly!"=> \$H_ROTATE,
 	"s|sar=s"        => \$SAR_PROG,
 	"S|disable-sar!" => \$DISABLE_SAR,
-	"T|notablespace!"=> \$NOTABLESPACE,
+	"T|no-tablespace!"=> \$NOTABLESPACE,
 	"U|dbuser=s"     => \$DBUSER,
 	"v|verbose!"     => \$DEBUG,
 	"V|version!"     => \$SHOW_VER,
@@ -1462,11 +1462,11 @@ options:
   -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
   -P, --psql=BIN           path to the psql command. Default: $PSQL_PROG.
   -Q, --no-statement       do not collect queries statistics from pg_stat_statements.
-  -r, --rotate-daily       force the daily rotation of data files.
-  -R, --rotate-hourly      force the daily rotation of data files.
+  -r, --rotate-daily       force daily rotation of data files.
+  -R, --rotate-hourly      force hourly rotation of data files.
   -s, --sar=BIN            path to sar sysstat command. Default: $SAR_PROG.
   -S, --disable-sar        disable collect of system statistics with sar.
-  -T, --notablespace       disable lookup at tablespace when the connect user
+  -T, --no-tablespace      disable lookup at tablespace when the connect user
 			   is not superuser to avoid printing an error message.
   -U, --dbuser=USERNAME    database user to connect as. Default to current user.
   -v, --verbose            Print out debug informations.
