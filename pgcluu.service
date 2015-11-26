@@ -24,7 +24,7 @@ Group=postgres
 PIDFile=/tmp/pgcluu_collectd.pid
 Environment=OUTPUTDIR=/storage/log/psqlStat
 Environment=PGPASSWORD=XXXXX
-ExecStart=/usr/local/bin/pgcluu_collectd -D --rotate-hourly $OUTPUTDIR
+ExecStart=/usr/local/bin/pgcluu_collectd -D --rotate-daily $OUTPUTDIR
 ExecStop=/usr/local/bin/pgcluu_collectd -k
 
 [Install]
