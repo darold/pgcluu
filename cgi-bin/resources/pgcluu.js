@@ -3,6 +3,8 @@
 
 function create_download_button (buttonid, cssclass) {
 	document.writeln('<input type="button" class="'+cssclass+'" value="Download" id="download'+buttonid+'" onclick="return false;">');
+	document.writeln('<input type="button" class="'+cssclass+'" value="CSV export" id="csv'+buttonid+'" onclick="return false;"><a id="csvdl'+buttonid+'">');
+	document.writeln('<a id="acsv'+buttonid+'" href="#"></a>');
 }
 
 /* Disable disabled menus */
@@ -12,7 +14,7 @@ $(document).ready(function() {
    });
 });
 
-function add_download_button_event (buttonid, divid) {
+function add_download_button_event (buttonid, divid, plot) {
 
 	jQuery('#download'+buttonid).click( function() {
 		$('#'+divid).jqplotViewImage();
@@ -28,6 +30,9 @@ function add_download_button_event (buttonid, divid) {
 			w = null;
 		}
 	});
+	jQuery('#csv'+buttonid).click( function() {
+    export_csv(plot, buttonid);
+  });
 
 }
 
@@ -268,4 +273,30 @@ function format_number(val) {
         return val_format;
 }
 
+function export_csv(plot, buttonid) {
+  if (jQuery('#acsv' + buttonid).attr('href') !== '#') {
+    var csv = "data:text/csv;charset=utf-8,";
 
+    if (plot.plugins.lineRenderer != null) {
+      csv += '"serie","epoch","value"\n';
+    } else {
+      csv += '"serie","value"\n';
+    }
+
+    _.each(plot.series[0]._plotValues.x, function(val,i) {
+      _.each(plot.series, function(s, j) {
+        if (plot.plugins.lineRenderer != null) {
+          csv += '"' + s.label + '",' + s._plotValues.x[i] + ',' + s._plotValues.y[i] + '\n';
+        }
+        else {
+          csv += '"' + s._plotValues.x[i] + '",' + s._plotValues.y[i] + '\n';
+        }
+      });
+    });
+
+    var encodedUri = encodeURI(csv);
+    jQuery('#acsv' + buttonid).attr('href', encodedUri).attr('download', 'data.csv');
+  }
+
+  document.getElementById('acsv' + buttonid).click();
+}
