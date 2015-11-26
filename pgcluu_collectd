@@ -1832,8 +1832,8 @@ sub dump_xlog_stat
 			") " .
 			") AS t " .
 			"GROUP BY 6 ",
-			&backend_minimum_version(9, 0) ? "CASE WHEN max_wal1 > max_wal2 THEN max_wal1 ELSE max_wal2 END AS max_wal" : "1 + ( current_setting('checkpoint_segments')::float4 * ( 2 + current_setting('checkpoint_completion_target')::float4 )) AS max_wal",
-			&backend_minimum_version(9, 0) ? ",1 + ( current_setting('checkpoint_segments')::float4 * ( 2 + current_setting('checkpoint_completion_target')::float4 )) AS max_wal1, 1 + current_setting('wal_keep_segments')::float4 + current_setting('checkpoint_segments')::float4 AS max_wal2" : ""
+			&backend_minimum_version(9, 5) ? "max_wal" : &backend_minimum_version(9, 0) ? "CASE WHEN max_wal1 > max_wal2 THEN max_wal1 ELSE max_wal2 END AS max_wal" : "1 + ( current_setting('checkpoint_segments')::float4 * ( 2 + current_setting('checkpoint_completion_target')::float4 )) AS max_wal",
+			&backend_minimum_version(9, 5) ? ",(select setting from pg_settings where name = 'max_wal_size')::float4 AS max_wal" : &backend_minimum_version(9, 0) ? ",1 + ( current_setting('checkpoint_segments')::float4 * ( 2 + current_setting('checkpoint_completion_target')::float4 )) AS max_wal1, 1 + current_setting('wal_keep_segments')::float4 + current_setting('checkpoint_segments')::float4 AS max_wal2" : ""
 		);
 	} else {
 		$sql = sprintf(
