@@ -1,0 +1,31 @@
+# Copy the file as "/etc/systemd/system/pgcluu.service"
+# To run pgcluu_collectd, use:
+#	systemctl start pgcluu.service
+# to enable automatic start at boot time, use:
+#	systemctl enable pgcluu.service
+# to stop pgcluu_collectd:
+#	systemctl stop pgcluu.service
+#
+# Feel free to modify the name of the PostgreSQL service following
+# your installation.
+#
+# For more info about custom unit files, see
+# http://fedoraproject.org/wiki/Systemd#How_do_I_customize_a_unit_file.2F_add_a_custom_unit_file.3F
+
+[Unit]
+Description=Postgresql performance and auditing
+Requires=postgresql-9.5.service
+After=postgresql-9.5.service
+
+[Service]
+Type=forking
+User=postgres
+Group=postgres
+PIDFile=/tmp/pgcluu_collectd.pid
+Environment=OUTPUTDIR=/storage/log/psqlStat
+Environment=PGPASSWORD=XXXXX
+ExecStart=/usr/local/bin/pgcluu_collectd -D --rotate-hourly $OUTPUTDIR
+ExecStop=/usr/local/bin/pgcluu_collectd -k
+
+[Install]
+WantedBy=multi-user.target
