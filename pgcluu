@@ -6052,8 +6052,8 @@ EOF
 		</ul>
 EOF
 		}
-
-		print $fh <<EOF;
+		if (exists $sysinfo{KERNEL}{'kernel'} || exists  $sysinfo{CPU}{'processor'}) {
+			print $fh <<EOF;
 <li class="slide" id="info-slide">
 
 	<div id="info"><br/><br/><br/><br/><br/></div>
@@ -6200,6 +6200,28 @@ EOF
             </div><!--/span-->
 	</div>
 EOF
+		} else {
+			print $fh <<EOF;
+<li class="slide" id="info-slide">
+
+	<div id="info"><br/><br/><br/><br/><br/></div>
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="fa fa-desktop fa-2x pull-left fa-border"></i><h2>System</h2>
+              </div>
+              <div class="panel-body panel-xlheight">
+		<div class="key-figures">
+              <span class="figure-label"><b>No data collected</b></span>
+               </div>
+              </div>
+              </div>
+            </div><!--/span-->
+	</div>
+  </li>
+EOF
+		}
 		if (exists $sysinfo{PROCESS}) {
 			print $fh <<EOF;
 	<div class="row">
@@ -6461,7 +6483,7 @@ AAAASUVORK5CYII=';
 	if ( (-e "$in_dir/sysinfo.txt") || (-e "$in_dir/sysinfo.txt.gz") || (-e "$in_dir/sys_cache.bin") ) {
 		$menu_str .= qq{
               <li id="menu-info" class="dropdown"><a href="index.html#info">SysInfo</a></li>
-};
+} if (exists $sysinfo{KERNEL}{'kernel'} || exists  $sysinfo{CPU}{'processor'});
 	}
 
 	opendir(ODIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
