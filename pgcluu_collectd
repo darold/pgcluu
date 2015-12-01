@@ -537,6 +537,10 @@ if ($USE_SSH) {
 		}
 	}
 
+# With remote database connection and no ssh acces, disable system and sar information
+} elsif ($DBHOST && !grep(/^$DBHOST$/, 'localhost', '127.0.0.1', '::1')) {
+	$NO_SYSINFO = 1;
+	$DISABLE_SAR = 1;
 }
 
 # Get Os information and exit
@@ -940,7 +944,7 @@ sub get_initial_info
 	&get_uptime(1);
 
 	# Collect general information about each database
-	if (!$NO_SYSINFO && ($#alldbs > -1)) {
+	if ($#alldbs > -1) {
 		my @extensions = ();
 		my @schemas = ();
 		my @procs = ();
@@ -1147,7 +1151,7 @@ sub fetch_version
 		$DB_INFO{minor} = $2;
 	}
 
-	if (!$NO_SYSINFO && $save) {
+	if ($save) {
 		unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
 			&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
 			exit 1;
@@ -1227,7 +1231,7 @@ sub get_uptime
 	}
 	chomp($uptime);
 
-	if (!$NO_SYSINFO && $save) {
+	if ($save) {
 		unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
 			&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
 			exit 1;
