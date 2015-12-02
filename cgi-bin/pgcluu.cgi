@@ -8524,7 +8524,7 @@ sub jqplot_linegraph
               </div>
               <div class="panel-body">
 };
-	my $y2label = $infos->{y2label} || "''";
+	my $y2label = "$infos->{y2label}" || '';
 
 	my $dateTracker_dataopts = '';
         my $options_series = '';
@@ -8539,7 +8539,11 @@ sub jqplot_linegraph
 					$options_series .= "{ label: \"$1\", color: \"$GRAPH_COLORS[$i]\" },";
 				}
 			} else {
-				$options_series .= "{ label: \"$legend->[$i]\", color: \"$GRAPH_COLORS[$i]\" },";
+				if (($i == $#{$legend}) && $infos->{y2label}) {
+					$options_series .= "{ label: \"$legend->[$i]\", color: \"$GRAPH_COLORS[$i]\", yaxis: 'y2axis' },";
+				} else {
+					$options_series .= "{ label: \"$legend->[$i]\", color: \"$GRAPH_COLORS[$i]\" },";
+				}
 			}
 		}
 
@@ -8566,7 +8570,7 @@ sub jqplot_linegraph
 var series_arr = [ $options_series ];
 
 create_download_button($buttonid, 'btn');
-var graph_${buttonid} = create_linegraph('$divid$buttonid', '$title', '$ylabel', series_arr, $dateTracker_dataopts, $y2label);
+var graph_${buttonid} = create_linegraph('$divid$buttonid', '$title', '$ylabel', series_arr, $dateTracker_dataopts, '$y2label');
 add_download_button_event($buttonid, '$divid$buttonid');
 /* ]]> */
 </script>
