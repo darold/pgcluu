@@ -3373,7 +3373,7 @@ sub pg_stat_bgwriter_report
 			$bgwriter_stat{buffers_checkpoint} =~ s/,$//;
 			$bgwriter_stat{buffers_clean} =~ s/,$//;
 			$bgwriter_stat{buffers_backend} =~ s/,$//;
-			print &jqplot_linegraph_array($IDX++, 'cluster-bgwriter', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean}, $bgwriter_stat{buffers_backend}, $bgwriter_stat{maxwritten_clean});
+			print &jqplot_linegraph_array($IDX++, 'cluster-bgwriter', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean}, $bgwriter_stat{buffers_backend});
 		} elsif ($data_info{$id}{name} eq 'database-bgwriter_count') {
 			$bgwriter_stat{maxwritten_clean} =~ s/,$//;
 			$bgwriter_stat{buffers_backend_fsync} =~ s/,$//;
