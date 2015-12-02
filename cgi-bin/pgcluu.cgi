@@ -5962,7 +5962,7 @@ EOF
 };
 	}
 	if ($hugepage_info) {
-		$hugepage_info .= <<EOF;
+		$hugepage_info = <<EOF;
                <span class="figure-label"><b>/sys/kernel/mm/transparent_hugepage/</b></span>
                <ul>
                <li></li>
