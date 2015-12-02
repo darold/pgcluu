@@ -1393,6 +1393,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 				open(IN, "$OUTPUT_DIR/$f") or die "FATAL: can't read file $OUTPUT_DIR/$f, $!";
 				while (my $l = <IN>) {
 					chomp($l);
+					$l =~ s/\r//;
 					if ($l =~ /<div id="navigation"><\/div>/) {
 						$l = qq{
 <div id="navigation">
@@ -1691,6 +1692,7 @@ sub get_device_list
 		}
 		while (my $l = <IN>) {
 			chomp($l);
+			$l =~ s/\r//;
 			# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
 			my @data = split(/;/, $l);
 			next if ($data[2] !~ /^\d+/);
@@ -1772,6 +1774,7 @@ sub get_interface_list
 		}
 		while (my $l = <IN>) {
 			chomp($l);
+			$l =~ s/\r//;
 			# hostname;interval;timestamp;IFACE;rxpck/s;txpck/s;rxkB/s;txkB/s;rxcmp/s;txcmp/s;rxmcst/s
 			my @data = split(/;/, $l);
 			next if ($data[2] !~ /^\d+/);
@@ -3978,6 +3981,7 @@ sub pgbouncer_ini
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (my $l = <$curfh>) {
 		chomp($l);
+		$l =~ s/\r//;
 		next if ($l !~ /^[a-z]/);
 		$l =~ s/\s*#.*//;
 		$all_pgbouncer_ini{content} .= "$l\n";
@@ -4627,6 +4631,7 @@ sub postgresql_conf
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (my $l = <$curfh>) {
 		chomp($l);
+		$l =~ s/\r//;
 		next if ($l !~ /^[a-z]/);
 		$l =~ s/\s*#.*//;
 		$all_postgresql_conf{content} .= "$l\n";
@@ -4684,6 +4689,7 @@ sub recovery_conf
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (my $l = <$curfh>) {
 		chomp($l);
+		$l =~ s/\r//;
 		next if ($l !~ /^[a-z]/);
 		$l =~ s/\s*#.*//;
 		$all_recovery_conf{content} .= "$l\n";
@@ -4741,6 +4747,7 @@ sub postgresql_auto_conf
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (my $l = <$curfh>) {
 		chomp($l);
+		$l =~ s/\r//;
 		next if ($l !~ /^[a-z]/);
 		$l =~ s/\s*#.*//;
 		$all_postgresql_auto_conf{content} .= "$l\n";
@@ -4798,6 +4805,7 @@ sub pg_hba_conf
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (my $l = <$curfh>) {
 		chomp($l);
+		$l =~ s/\r//;
 		next if ($l !~ /^[a-z]/);
 		$l =~ s/\s*#.*//;
 		$pg_hba_conf{content} .= "$l\n";
@@ -4857,6 +4865,7 @@ sub pg_ident_conf
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (my $l = <$curfh>) {
 		chomp($l);
+		$l =~ s/\r//;
 		next if ($l !~ /^[a-z]/);
 		$l =~ s/\s*#.*//;
 		$pg_ident_conf{content} .= "$l\n";
@@ -8868,6 +8877,7 @@ sub read_sysinfo
 	my $section = '';
 	while (my $l = <IN>) {
 		chomp($l);
+		$l =~ s/\r//;
 		if ($l =~ /^\[(.*)\]$/) {
 			$section = $1;
 			next;
@@ -8953,8 +8963,6 @@ sub read_sysinfo
 				$sysinfo{$section}{major} = '';
 				$sysinfo{$section}{minor} = '';
 			}
-			$sysinfo{$section}{version} = $sysinfo{$section}{major};
-			$sysinfo{$section}{version} =~ s/\.//g;
 		}
 		if ($section eq 'PGUPTIME') {
 			$sysinfo{PGVERSION}{uptime} = $l;
@@ -9313,7 +9321,7 @@ sub backend_minimum_version
 
 	return 0 if (!$numver);
 
-	return 1 if ($sysinfo{PGVERSION}{'major'} >= $numver);
+	return 1 if (!exists $sysinfo{PGVERSION}{'major'} || ($sysinfo{PGVERSION}{'major'} >= $numver));
 
 	return 0;
 }
