@@ -6391,7 +6391,13 @@ AAAASUVORK5CYII=';
 			      <li id="menu-cluster-connections"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-connections&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Connections by type</a></li>
 			      </ul>
 			</li>
+};
+		if (&backend_minimum_version(9.2)) {
+			$menu_str .= qq{
 		      <li id="menu-cluster-deadlocks"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-deadlocks&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Deadlocks</a></li>
+};
+		}
+		$menu_str .= qq{
 		      <li class="divider"></li>
 		       <li id="menu-cluster-cache_ratio"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-cache_ratio&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Cache utilization</a></li>
 			<li id="menu-pgbuffercache" class="dropdown-submenu">
@@ -6411,6 +6417,9 @@ AAAASUVORK5CYII=';
 			      <li id="menu-cluster-bgwriter_count"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-bgwriter_count&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Background writer counters</a></li>
 			      </ul>
 		        </li>
+};
+		if (&backend_minimum_version(9.2)) {
+			$menu_str .= qq{
 			<li id="menu-temporaryfiles" class="dropdown-submenu">
 			   <a href="#" tabindex="-1">Temporary files </a>
 			      <ul class="dropdown-menu">
@@ -6418,6 +6427,9 @@ AAAASUVORK5CYII=';
 			      <li id="menu-cluster-temporary_bytes"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-temporary_bytes&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Temporary files size</a></li>
 			      </ul>
 		        </li>
+};
+		}
+		$menu_str .= qq{
 			<li id="menu-walcheckpoint" class="dropdown-submenu">
 			   <a href="#" tabindex="-1">Wal / Checkpoint </a>
 			      <ul class="dropdown-menu">
@@ -9137,4 +9149,15 @@ sub empty_dataset
 	return $str;
 }
 
+# Compare given version numbers to the server's version
+sub backend_minimum_version
+{
+	my ($numver) = @_;
+
+	return 0 if (!$numver);
+
+	return 1 if ($sysinfo{PGVERSION}{'major'} >= $numver);
+
+	return 0;
+}
 
