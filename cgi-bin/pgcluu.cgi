@@ -5971,7 +5971,8 @@ EOF
 EOF
 	}
 
-	print <<EOF;
+	if (exists $sysinfo{KERNEL}{'kernel'} || exists  $sysinfo{CPU}{'processor'}) {
+		print <<EOF;
 <ul id="slides">
 <li class="slide active-slide" id="info-slide">
 
@@ -6053,21 +6054,21 @@ EOF
 	      <li><span class="figure">$sysinfo{MEMORY}{'swaptotal'}</span> <span class="figure-label">Total swap</span></li>
 	      <li><span class="figure">$sysinfo{MEMORY}{'swapfree'}</span> <span class="figure-label">Free swap</span></li>
 EOF
-		if (exists $sysinfo{MEMORY}{'shmem'}) {
-			print <<EOF;
+			if (exists $sysinfo{MEMORY}{'shmem'}) {
+				print <<EOF;
 	      <li><span class="figure">$sysinfo{MEMORY}{'shmem'}</span> <span class="figure-label">Shared memory</span></li>
 EOF
-		}
-		if (exists $sysinfo{MEMORY}{'commitlimit'}) {
-			print <<EOF;
+			}
+			if (exists $sysinfo{MEMORY}{'commitlimit'}) {
+				print <<EOF;
 	      <li><span class="figure">$sysinfo{MEMORY}{'commitlimit'}</span> <span class="figure-label">Commit limit</span></li>
 	      <li><span class="figure">$sysinfo{MEMORY}{'committed_as'}</span> <span class="figure-label">Committed</span></li>
 EOF
-		}
-		if (exists $sysinfo{SYSTEM}{'kernel.shmmax'} and exists $sysinfo{SYSTEM}{'kernel.shmall'}) {
-		  $sysinfo{SYSTEM}{'kernel.shmmax'} = pretty_print_size($sysinfo{SYSTEM}{'kernel.shmmax'});
-		  $sysinfo{SYSTEM}{'kernel.shmall'} = pretty_print_size($sysinfo{SYSTEM}{'kernel.shmall'} * 1024 * 4);
-		  print <<EOF;
+			}
+			if (exists $sysinfo{SYSTEM}{'kernel.shmmax'} and exists $sysinfo{SYSTEM}{'kernel.shmall'}) {
+			  $sysinfo{SYSTEM}{'kernel.shmmax'} = pretty_print_size($sysinfo{SYSTEM}{'kernel.shmmax'});
+			  $sysinfo{SYSTEM}{'kernel.shmall'} = pretty_print_size($sysinfo{SYSTEM}{'kernel.shmall'} * 1024 * 4);
+			  print <<EOF;
                 </ul>
                 <span class="figure-label"><b>sysctl parameters</b></span>
                 <ul>
@@ -6075,12 +6076,36 @@ EOF
             <li><span class="figure">$sysinfo{SYSTEM}{'kernel.shmmax'}</span> <span class="figure-label">kernel.shmmax</span></li>
             <li><span class="figure">$sysinfo{SYSTEM}{'kernel.shmall'}</span> <span class="figure-label">kernel.shmall</span></li>
 EOF
+			}
+		} else {
+			print <<EOF;
+<ul id="slides">
+<li class="slide active-slide" id="info-slide">
+
+	<div id="info"><br/><br/><br/></div>
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="fa fa-desktop fa-2x pull-left fa-border"></i><h2>No System information available</h2>
+              </div>
+		<div class="key-figures">
+		<ul>
+		<li></li>
+		</ul>
+		</div>
+              </div>
+              </div>
+            </div><!--/span-->
+	</div>
+EOF
 		}
-		my @df_infos = ();
-		push(@df_infos, @{$sysinfo{DF}}) if (exists $sysinfo{DF});
-		my @mount_infos = ();
-		push(@mount_infos, @{$sysinfo{MOUNT}}) if (exists $sysinfo{MOUNT});
-		print <<EOF;
+		if (exists $sysinfo{DF} || exists $sysinfo{MOUNT}) {
+			my @df_infos = ();
+			push(@df_infos, @{$sysinfo{DF}}) if (exists $sysinfo{DF});
+			my @mount_infos = ();
+			push(@mount_infos, @{$sysinfo{MOUNT}}) if (exists $sysinfo{MOUNT});
+			print <<EOF;
 		</ul>
 		</div>
               </div>
@@ -6117,6 +6142,7 @@ EOF
             </div><!--/span-->
 	</div>
 EOF
+		}
 		if (exists $sysinfo{PROCESS}) {
 			print <<EOF;
 	<div class="row">
