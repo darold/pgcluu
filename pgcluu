@@ -5759,7 +5759,7 @@ EOF
 };
 		}
 		my $deadlock_info = '';
-		if ($OVERALL_STATS{'cluster'}{'deadlocks'}) {
+		if (exists $OVERALL_STATS{'cluster'}{'deadlocks'}) {
 			$deadlock_info = qq{
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'deadlocks'}</span> <span class="figure-label">Deadlocks</span></li>
 };
@@ -6044,7 +6044,7 @@ EOF
 		}
 
 		if ($hugepage_info) {
-			$hugepage_info .= <<EOF;
+			$hugepage_info = <<EOF;
                <span class="figure-label"><b>/sys/kernel/mm/transparent_hugepage/</b></span>
                <ul>
                <li></li>
@@ -6086,10 +6086,7 @@ EOF
               </div>
               <div class="panel-body panel-xlheight">
                <div class="key-figures">
-$hugepage_info
-EOF
-
-		print $fh <<EOF;
+		$hugepage_info
                 <span class="figure-label"><b>sysctl parameters</b></span>
                 <ul>
                 <li></li>
@@ -6544,7 +6541,7 @@ AAAASUVORK5CYII=';
 					$disable_connection = '';
 				} elsif (/<div id="cluster-cache_ratio">/) {
 					$disable_cache = '';
-				} elsif (/<div id="cluster-deadlocks">/) {
+				} elsif (&backend_minimum_version(9.2) && (/<div id="cluster-deadlocks">/)) {
 					$disable_deadlock = '';
 				} elsif (/<div id="cluster-buffersused">/) {
 					$disable_buffercache = '';
@@ -6555,10 +6552,10 @@ AAAASUVORK5CYII=';
 				} elsif (/<div id="cluster-bgwriter_count">/) {
 					$disable_bgwriter_count = "";
 					$disable_writer = "";
-				} elsif (/<div id="cluster-temporary_files">/) {
+				} elsif (&backend_minimum_version(9.2) && (/<div id="cluster-temporary_files">/)) {
 					$disable_tempfile = "";
 					$disable_temporary = "";
-				} elsif (/<div id="cluster-temporary_bytes">/) {
+				} elsif (&backend_minimum_version(9.2) && (/<div id="cluster-temporary_bytes">/)) {
 					$disable_tempfile_bytes = "";
 					$disable_temporary = "";
 				} elsif (/<div id="cluster-xlog_files">/) {
@@ -8952,6 +8949,8 @@ sub read_sysinfo
 				$sysinfo{$section}{major} = '';
 				$sysinfo{$section}{minor} = '';
 			}
+			$sysinfo{$section}{version} = $sysinfo{$section}{major};
+			$sysinfo{$section}{version} =~ s/\.//g;
 		}
 		if ($section eq 'PGUPTIME') {
 			$sysinfo{PGVERSION}{uptime} = $l;
@@ -9303,6 +9302,17 @@ sub load_sys_binary
 	}
 }
 
+# Compare given version numbers to the server's version
+sub backend_minimum_version
+{
+	my ($numver) = @_;
+
+	return 0 if (!$numver);
+
+	return 1 if ($sysinfo{PGVERSION}{'major'} >= $numver);
+
+	return 0;
+}
 
 __DATA__
 
@@ -11827,6 +11837,13 @@ WRFILE: pgcluu.js
 function create_download_button (buttonid, cssclass) {
 	document.writeln('<input type="button" class="'+cssclass+'" value="Download" id="download'+buttonid+'" onclick="return false;">');
 }
+
+/* Disable disabled menus */
+$(document).ready(function() {
+   $(".nav li.disabled a").click(function() {
+     return false;
+   });
+});
 
 function add_download_button_event (buttonid, divid) {
 
