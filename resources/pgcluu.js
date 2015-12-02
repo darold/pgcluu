@@ -5,6 +5,13 @@ function create_download_button (buttonid, cssclass) {
 	document.writeln('<input type="button" class="'+cssclass+'" value="Download" id="download'+buttonid+'" onclick="return false;">');
 }
 
+/* Disable disabled menus */
+$(document).ready(function() {
+   $(".nav li.disabled a").click(function() {
+     return false;
+   });
+});
+
 function add_download_button_event (buttonid, divid) {
 
 	jQuery('#download'+buttonid).click( function() {
