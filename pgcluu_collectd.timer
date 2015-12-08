@@ -1,9 +1,9 @@
 [Unit]
-Description=Timer for pgcluu_collected - 1 Hour
+Description=Timer for pgcluu_collected - 2 Hour
 
 [Timer]
-OnBootSec=5min
-OnUnitActiveSec=1h
+OnBootSec=10min
+OnUnitActiveSec=2h
 
 [Install]
 WantedBy=timers.target
