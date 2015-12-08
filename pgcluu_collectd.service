@@ -1,13 +1,8 @@
 # Copy the file as "/etc/systemd/system/pgcluu.service"
-# To run pgcluu_collectd, use:
-#	systemctl start pgcluu_collectd
-# to enable automatic start at boot time, use:
-#	systemctl enable pgcluu_collectd
-# to stop pgcluu_collectd:
-#	systemctl stop pgcluu_collectd
+# To run pgcluu_collectd, run as root:
+# systemctl start pgcluu_collected.timer
+# systemctl enable pgcluu_collected.timer
 #
-# Feel free to modify the name of the PostgreSQL service following
-# your installation.
 #
 # For more info about systemd service file, visit
 # http://www.freedesktop.org/software/systemd/man/systemd.service.html
