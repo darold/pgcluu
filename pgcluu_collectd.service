@@ -18,14 +18,12 @@ Requires=postgresql.service
 After=postgresql.service
 
 [Service]
-#Type=forking
 User=postgres
 Group=postgres
-#PIDFile=/tmp/pgcluu_collectd.pid
 Environment=OUTPUTDIR=/storage/log/psqlStat
 Environment=PGPASSWORD=XXXXX
 ExecStart=/usr/bin/pgcluu_collectd -i 240 $OUTPUTDIR
 ExecStop=/usr/bin/pgcluu_collectd -k
 
-t
+
 
