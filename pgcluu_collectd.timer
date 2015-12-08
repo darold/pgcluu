@@ -1,0 +1,11 @@
+[Unit]
+Description=Timer for pgcluu_collected - 1 Hour
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target
+
+

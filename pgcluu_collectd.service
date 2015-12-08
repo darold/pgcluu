@@ -29,4 +29,4 @@ ExecStop=/usr/bin/pgcluu_collectd -k
 
 [Install]
 WantedBy=multi-user.target
-Also=pgcluu.timer
+
