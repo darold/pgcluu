@@ -25,6 +25,11 @@ ul#slides li div div {
   padding:0 0.2em;
 }
 
+.mainmenu {
+        height: 80px;
+        width : 100%;
+}
+
 .linegraph {
         width : 900px;
         height: 400px;
@@ -186,4 +191,11 @@ ul#slides li div div {
     color: #5f5555;
  }
 
+ #start-date {
+    color: #000000;
+ }
+
+ #end-date {
+    color: #000000;
+ }
 
