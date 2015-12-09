@@ -45,24 +45,13 @@ INSTALLATION
 
             tar xzf pgcluu-2.x.tar.gz
             cd pgcluu-2.x/
-            perl Makefile.PL
+            perl Makefile.PL INSTALLDIRS='perl'
             make && sudo make install
 
     This will copy the Perl scripts pgcluu_collectd and pgcluu into the
     default /usr/local/bin directory and the man page to
-    /usr/local/share/man/man1/pgcluu.1. Those are the default installation
-    directories for 'site' install.
+    /usr/local/share/man/man1/pgcluu.1.
 
-    If you want to install all under /usr location, use INSTALLDIRS='perl'
-    as an argument of Makefile.PL. The script will be installed into
-    /usr/bin/pgcluu and the manpage into /usr/share/man/man1/pgcluu.1.
-
-    For example, to install everything just like Debian does, proceed as
-    follows:
-
-            perl Makefile.PL INSTALLDIRS=vendor
-
-    By default INSTALLDIRS is set to site.
 
 USAGE
     See next two chapters for a complete description of the command line
