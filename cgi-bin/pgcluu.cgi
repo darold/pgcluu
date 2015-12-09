@@ -6238,9 +6238,9 @@ gFJG04FnRsAnYDuwyRlIq9UjNgu1Uof0OkYlfKMuKCuZA/8B+QsSxkN8YYwAAAAASUVORK5CYII=
  <script type="text/javascript" src="$RSC_BASE/jqplot.pointLabels.min.js"></script>
  <script type="text/javascript" src="$RSC_BASE/bean.js"></script>
  <script type="text/javascript" src="$RSC_BASE/underscore.js"></script>
- <link href="$RSC_BASE/bootstrap.css" rel="stylesheet">
- <link href="$RSC_BASE/fontawesome.css" rel="stylesheet">
- <script type="text/javascript" src="$RSC_BASE/bootstrap.js"></script>
+ <link href="$RSC_BASE/bootstrap.min.css" rel="stylesheet">
+ <link href="$RSC_BASE/font-awesome.min.css" rel="stylesheet">
+ <script type="text/javascript" src="$RSC_BASE/bootstrap.min.js"></script>
 
     <link href="$RSC_BASE/pgcluu.css" rel="stylesheet">
     <link href="$RSC_BASE/datetimepicker.css" rel="stylesheet">
@@ -6387,7 +6387,7 @@ AAAASUVORK5CYII=';
     <div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
       <a class="navbar-brand" href="http://pgcluu.darold.net/">
       <img src="$pgcluu_logo" title="$PROGRAM"></a>
-      <div class="container">
+      <div class="container mainmenu">
         <div class="navbar-header">
           <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
             <span class="icon-bar"></span>
@@ -6853,9 +6853,9 @@ AAAASUVORK5CYII=';
               <li id="menu-time" class="dropdown" style="color: #ffffff;">
 		<table><tr><td>
                 Start: <input size="16" type="text" value="$begin_date" id="start-date" readonly class="form_datepick">
-		</td><td>
+		</td><td>&nbsp;
                 End: <input size="16" type="text" value="$end_date" id="end-date" readonly class="form_datepick">
-		</td><td>
+		</td><td>&nbsp;&nbsp;
 		 <a href="" onclick="document.location.href='$SCRIPT_NAME?db=$DATABASE&dev=$DEVICE&action=$ACTION&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;"><i class="fa fa-refresh fa-2x" style="color: #ffffff; position: top;"></i></a>
 		</td></tr></table>
 	      </li>
