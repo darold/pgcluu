@@ -3343,7 +3343,10 @@ sub pg_stat_bgwriter_report
 	return if (!scalar keys %all_stat_bgwriter);
 
 	my %bgwriter_stat = ();
+	my %data = ();
 	foreach my $t (sort {$a <=> $b} keys %all_stat_bgwriter) {
+		$data{'Checkpoint timed'} += $all_stat_bgwriter{$t}{checkpoints_timed};
+		$data{'Checkpoint requested'} += $all_stat_bgwriter{$t}{checkpoints_red};
 		$bgwriter_stat{checkpoints_timed} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{checkpoints_timed} . '],';
 		$bgwriter_stat{checkpoints_req} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{checkpoints_req} . '],';
 		$bgwriter_stat{checkpoint_write_time} .= '[' . $t . ',' . ($all_stat_bgwriter{$t}{checkpoint_write_time}||0) . '],';
@@ -3356,6 +3359,11 @@ sub pg_stat_bgwriter_report
 	}
 	%all_stat_bgwriter = ();
 
+	my $total_checkpoint = $data{'Checkpoint timed'} + $data{'Checkpoint requested'};
+	if (($data_info{$ID_ACTION}{name} eq 'database-checkpoints') && $total_checkpoint) {
+		$data_info{$ID_ACTION}{legends}[0] .= ' (' . sprintf("%0.2f", $data{'Checkpoint timed'}*100/($total_checkpoint||1)) . '%)';
+		$data_info{$ID_ACTION}{legends}[1] .= ' (' . sprintf("%0.2f", $data{'Checkpoint requested'}*100/($total_checkpoint||1)) . '%)';
+	}
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		next if ($id ne $ID_ACTION);
 		next if ($data_info{$id}{name} ne $REAL_ACTION);
