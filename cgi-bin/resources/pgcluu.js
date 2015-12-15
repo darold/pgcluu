@@ -187,7 +187,7 @@ function create_bargraph (divid, title, ytitle, data, y2title) {
 function pretty_print_number(val, scale, type) 
 {
 
-	if ( (scale == undefined) || ((scale == 0) && (val != 0) && (Math.abs(val) < 1)) ) {
+	if ( (scale == undefined) || ((scale == 0) && (val != 0)) ) {
 		scale = 1;
 	};
 
