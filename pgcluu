@@ -3732,6 +3732,7 @@ sub pg_stat_replication
 {
 	my ($in_dir, $file, $interval) = @_;
 
+	my @start_vals = ();
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
@@ -3745,10 +3746,16 @@ sub pg_stat_replication
 			$data[6] =~ s/"//g;
 			$name .= " - $data[6]" if ($data[6]);
 
+			push(@start_vals, @data) if ($#start_vals < 0);
+
 			if ($CAPTURE) {
-				$all_stat_replication{$data[0]}{master_location} = ($data[10] || 0);
+				$all_stat_replication{$data[0]}{master_location} = 0;
 			} else {
-				$all_stat_replication{$data[0]}{master_location} = &getNumericalOffset($data[10]);
+				if ((&getNumericalOffset($data[10]) - &getNumericalOffset($start_vals[10])) > 0) {
+					$all_stat_replication{$data[0]}{master_location} = &getNumericalOffset($data[10]) -&getNumericalOffset($start_vals[10]);
+				} else {
+					$all_stat_replication{$data[0]}{master_location} = 0;
+				}
 			}
 
 			if (!$data[14]) {
@@ -3777,10 +3784,12 @@ sub pg_stat_replication
 			}
 			if ($CAPTURE) {
 				$all_stat_replication{$data[0]}{$name}{replay_location} = ($data[14] || 0);
-				$all_stat_replication{$data[0]}{$name}{sent_location} = ($data[11] || 0);
+				$all_stat_replication{$data[0]}{$name}{sent_location}  = ($data[11] || 0);
 				$all_stat_replication{$data[0]}{$name}{write_location} = ($data[12] || 0);
 				$all_stat_replication{$data[0]}{$name}{flush_location} = ($data[13] || 0);
 			}
+			@start_vals = ();
+			push(@start_vals, @data);
 		}
 	}
 	$curfh->close();
