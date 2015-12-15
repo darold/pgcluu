@@ -6525,24 +6525,26 @@ AAAASUVORK5CYII=';
 	my $l = 0;
 	foreach my $db (sort @database_list) {
 		next if (($db eq 'all') || (($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB))));
-		my $md = $l % 10;
-		if ($md == 0) {
-			$dbidx++;
-			if ($l > 0) {
-				$menu_str .= qq{
+		if ($#database_list >= 10) {
+			my $md = $l % 10;
+			if ($md == 0) {
+				$dbidx++;
+				if ($l > 0) {
+					$menu_str .= qq{
                     </ul>
                   </li>
 };
-			}
-			my $lbl = '';
-			$lbl = " (part $dbidx)" if ($#database_list >= 10);
-			$menu_str .= qq{
+				}
+				my $lbl = '';
+				$lbl = " (part $dbidx)" if ($#database_list >= 10);
+				$menu_str .= qq{
                   <li id="menu-device$dbidx" class="dropdown-submenu">
                      <a href="#" tabindex="-1">Database $lbl</a>
                       <ul class="dropdown-menu">
 };
+			}
+			$l++;
 		}
-		$l++;
 
 		$menu_str .= qq{
 		<li id="menu-$db" class="dropdown-submenu">
@@ -6719,9 +6721,13 @@ AAAASUVORK5CYII=';
 };
 	}
 	if ($#database_list >= 0) {
-		$menu_str .= qq{
+		if ($#database_list >= 10) {
+			$menu_str .= qq{
                     </ul>
                   </li>
+};
+		}
+		$menu_str .= qq{
                 </ul>
               </li>
 };
