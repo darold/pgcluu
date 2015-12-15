@@ -5769,7 +5769,7 @@ EOF
             <div class="col-md-$numcol">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <span class="fa-stack fa-lg pull-left fa-border"><i class="fa fa-square fa-stack-2x"></i><i class="fa fa-terminal fa-stack-1x fa-inverse"></i></span> <h2>System</h2>
+              <i class="fa fa-desktop fa-2x pull-left fa-border"></i> <h2>System</h2>
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
@@ -6011,7 +6011,7 @@ EOF
             <div class="col-md-3">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-desktop fa-2x pull-left fa-border"></i><h2>Kernel</h2>
+              <i class="fa fa-gear fa-2x pull-left fa-border"></i><h2>Kernel</h2>
               </div>
               <div class="panel-body panel-xlheight">
                 <div class="key-figures">
