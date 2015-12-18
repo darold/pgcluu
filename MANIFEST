@@ -10,7 +10,6 @@ cgi-bin/resources/bootstrap-datetimepicker.js
 cgi-bin/resources/bootstrap.min.css
 cgi-bin/resources/bootstrap.min.js
 cgi-bin/resources/datetimepicker.css
-cgi-bin/resources/fontawesome.css
 cgi-bin/resources/font-awesome.min.css
 cgi-bin/resources/jqplot.barRenderer.min.js
 cgi-bin/resources/jqplot.canvasAxisTickRenderer.min.js
