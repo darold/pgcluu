@@ -2585,7 +2585,7 @@ sub pg_stat_user_tables_report
     <div class="col-md-12">
       <div class="panel panel-default">
       <div class="panel-heading">
-	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database tables</h2>
+	<h2>$data_info{$id}{menu} on $db database tables</h2>
 	<p>$data_info{$id}{description}</p>
       </div>
       <div class="panel-body">
@@ -2746,7 +2746,7 @@ sub pg_stat_user_indexes_report
     <div class="col-md-12">
       <div class="panel panel-default">
       <div class="panel-heading">
-	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database indexes</h2>
+	<h2>$data_info{$id}{menu} on $db database indexes</h2>
 	<p>$data_info{$id}{description}</p>
       </div>
       <div class="panel-body">
@@ -2836,7 +2836,7 @@ sub pg_stat_invalid_indexes_report
     <div class="col-md-12">
       <div class="panel panel-default">
       <div class="panel-heading">
-	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+	<h2>$data_info{$id}{menu} on $db database</h2>
 	<p>$data_info{$id}{description}</p>
       </div>
       <div class="panel-body">
@@ -3074,7 +3074,7 @@ sub pg_relation_buffercache_report
     <div class="col-md-12">
       <div class="panel panel-default">
       <div class="panel-heading">
-	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+	<h2>$data_info{$id}{menu} on $db database</h2>
 	<p>$data_info{$id}{description}</p>
       </div>
       <div class="panel-body">
@@ -3530,7 +3530,7 @@ sub pg_stat_user_functions_report
     <div class="col-md-12">
       <div class="panel panel-default">
       <div class="panel-heading">
-	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+	<h2>$data_info{$id}{menu} on $db database</h2>
 	<p>$data_info{$id}{description}</p>
       </div>
       <div class="panel-body">
@@ -3776,7 +3776,7 @@ sub pgbouncer_ini
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
-	return if ( (!-e "$in_dir/pgbouncer_stats.csv") || (!-e "$in_dir/pgbouncer_stats.csv.gz") );
+	return if (!-e "$in_dir/pgbouncer.ini");
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
@@ -3787,6 +3787,28 @@ sub pgbouncer_ini
 		$all_pgbouncer_ini{content} .= "$l\n";
 	}
 	$curfh->close();
+
+	return if (!exists $all_pgbouncer_ini{content});
+
+	# Load change on configuration file from diff files
+	if (-e "$in_dir/$file.diff") {
+		$curfh = open_filehdl("$in_dir/$file.diff");
+		my $key = '';
+		while (my $l = <$curfh>) {
+			chomp($l);
+			$l =~ s/\r//;
+			next if ($l =~ /^\+\+\+/);
+			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
+				$key = $1;
+				next;
+			}
+			if ($key) {
+				$all_pgbouncer_ini{$key} .= "$l\n";
+			}
+		}
+		$curfh->close();
+	}
+
 }
 
 # Show relevant content of pgbouncer.ini
@@ -3797,7 +3819,6 @@ sub pgbouncer_ini_report
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
 	my $output = $all_pgbouncer_ini{content} || '';
-	%all_pgbouncer_ini = ();
 
 	if (!$output) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
@@ -3813,7 +3834,7 @@ sub pgbouncer_ini_report
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<h2>$data_info{$id}{menu}</h2>
 		<p>$data_info{$id}{description}</p>
               </div>
               <div class="panel-body">
@@ -3826,9 +3847,37 @@ sub pgbouncer_ini_report
 	      </div>
 	    </div>
 	</div>
+};
+
+        delete $all_pgbouncer_ini{content};
+
+        foreach my $k (sort { $b cmp $a } keys %all_pgbouncer_ini) {
+                print qq{
+        <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+                <h4>Change on $k</h4>
+              </div>
+              <div class="panel-body">
+                <div class="analysis-item row-fluid">
+                        <div class="span11">
+                                <pre>$all_pgbouncer_ini{$k}</pre>
+                        </div>
+                </div>
+              </div>
+              </div>
+            </div>
+        </div>
+};
+        }
+        %all_pgbouncer_ini = ();
+
+        print qq{
   </li>
 </ul>
 };
+
 }
 
 # Collect statistics about pgbouncer queries
@@ -3986,7 +4035,7 @@ sub pg_class_size_report
     <div class="col-md-12">
       <div class="panel panel-default">
       <div class="panel-heading">
-	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database $kind</h2>
+	<h2>$data_info{$id}{menu} on $db database $kind</h2>
 	<p>$data_info{$id}{description}</p>
       </div>
       <div class="panel-body">
@@ -4163,7 +4212,7 @@ sub pg_stat_unused_indexes_report
     <div class="col-md-12">
       <div class="panel panel-default">
       <div class="panel-heading">
-	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+	<h2>$data_info{$id}{menu} on $db database</h2>
 	<p>$data_info{$id}{description}</p>
       </div>
       <div class="panel-body">
@@ -4243,7 +4292,7 @@ sub pg_stat_redundant_indexes_report
     <div class="col-md-12">
       <div class="panel panel-default">
       <div class="panel-heading">
-	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+	<h2>$data_info{$id}{menu} on $db database</h2>
 	<p>$data_info{$id}{description}</p>
       </div>
       <div class="panel-body">
@@ -4321,7 +4370,7 @@ sub pg_stat_missing_fkindexes_report
     <div class="col-md-12">
       <div class="panel panel-default">
       <div class="panel-heading">
-	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+	<h2>$data_info{$id}{menu} on $db database</h2>
 	<p>$data_info{$id}{description}</p>
       </div>
       <div class="panel-body">
@@ -4393,7 +4442,7 @@ sub pg_stat_count_indexes_report
     <div class="col-md-12">
       <div class="panel panel-default">
       <div class="panel-heading">
-	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+	<h2>$data_info{$id}{menu} on $db database</h2>
 	<p>$data_info{$id}{description}</p>
       </div>
       <div class="panel-body">
@@ -4431,7 +4480,7 @@ sub pg_stat_count_indexes_report
     <div class="col-md-12">
       <div class="panel panel-default">
       <div class="panel-heading">
-	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+	<h2>$data_info{$id}{menu} on $db database</h2>
 	<p>$data_info{$id}{description}</p>
       </div>
       <div class="panel-body">
@@ -4483,6 +4532,28 @@ sub postgresql_conf
 		$all_postgresql_conf{content} .= "$l\n";
 	}
 	$curfh->close();
+
+	return if (!exists $all_postgresql_conf{content});
+
+	# Load change on configuration file from diff files
+	if (-e "$in_dir/$file.diff") {
+		$curfh = open_filehdl("$in_dir/$file.diff");
+		my $key = '';
+		while (my $l = <$curfh>) {
+			chomp($l);
+			$l =~ s/\r//;
+			next if ($l =~ /^\+\+\+/);
+			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
+				$key = $1;
+				next;
+			}
+			if ($key) {
+				$all_postgresql_conf{$key} .= "$l\n";
+			}
+		}
+		$curfh->close();
+	}
+
 }
 
 # Show content of postgresql.conf
@@ -4493,7 +4564,6 @@ sub postgresql_conf_report
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
 	my $output = $all_postgresql_conf{content} || '';
-	%all_postgresql_conf = ();
 
 	if (!$output) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
@@ -4509,7 +4579,7 @@ sub postgresql_conf_report
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<h2>$data_info{$id}{menu}</h2>
 		<p>$data_info{$id}{description}</p>
               </div>
               <div class="panel-body">
@@ -4522,6 +4592,32 @@ sub postgresql_conf_report
 	      </div>
 	    </div>
 	</div>
+};
+
+	delete $all_postgresql_conf{content};
+
+	foreach my $k (sort { $b cmp $a } keys %all_postgresql_conf) {
+		print qq{
+        <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+                <h4>Change on $k</h4>
+              </div>
+              <div class="panel-body">
+                <div class="analysis-item row-fluid">
+                        <div class="span11">
+                                <pre>$all_postgresql_conf{$k}</pre>
+                        </div>
+                </div>
+              </div>
+              </div>
+            </div>
+        </div>
+};
+        }
+	%all_postgresql_conf = ();
+	print qq{
   </li>
 </ul>
 };
@@ -4543,6 +4639,28 @@ sub recovery_conf
 		$all_recovery_conf{content} .= "$l\n";
 	}
 	$curfh->close();
+
+	return if (!exists $all_recovery_conf{content});
+
+	# Load change on configuration file from diff files
+	if (-e "$in_dir/$file.diff") {
+		$curfh = open_filehdl("$in_dir/$file.diff");
+		my $key = '';
+		while (my $l = <$curfh>) {
+			chomp($l);
+			$l =~ s/\r//;
+			next if ($l =~ /^\+\+\+/);
+			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
+				$key = $1;
+				next;
+			}
+			if ($key) {
+				$all_recovery_conf{$key} .= "$l\n";
+			}
+		}
+		$curfh->close();
+	}
+
 }
 
 # Show content of recovery.conf
@@ -4553,7 +4671,6 @@ sub recovery_conf_report
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
 	my $output = $all_recovery_conf{content} || '';
-	%all_recovery_conf = ();
 
 	if (!$output) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
@@ -4569,7 +4686,7 @@ sub recovery_conf_report
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<h2>$data_info{$id}{menu}</h2>
 		<p>$data_info{$id}{description}</p>
               </div>
               <div class="panel-body">
@@ -4582,6 +4699,33 @@ sub recovery_conf_report
 	      </div>
 	    </div>
 	</div>
+};
+
+	delete $all_recovery_conf{content};
+
+	foreach my $k (sort { $b cmp $a } keys %all_recovery_conf) {
+		print qq{
+        <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+                <h4>Change on $k</h4>
+              </div>
+              <div class="panel-body">
+                <div class="analysis-item row-fluid">
+                        <div class="span11">
+                                <pre>$all_recovery_conf{$k}</pre>
+                        </div>
+                </div>
+              </div>
+              </div>
+            </div>
+        </div>
+};
+	}
+	%all_recovery_conf = ();
+
+	print qq{
   </li>
 </ul>
 };
@@ -4603,6 +4747,28 @@ sub postgresql_auto_conf
 		$all_postgresql_auto_conf{content} .= "$l\n";
 	}
 	$curfh->close();
+
+	return if (!exists $all_postgresql_auto_conf{content});
+
+	# Load change on configuration file from diff files
+	if (-e "$in_dir/$file.diff") {
+		$curfh = open_filehdl("$in_dir/$file.diff");
+		my $key = '';
+		while (my $l = <$curfh>) {
+			chomp($l);
+			$l =~ s/\r//;
+			next if ($l =~ /^\+\+\+/);
+			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
+				$key = $1;
+				next;
+			}
+			if ($key) {
+				$all_postgresql_auto_conf{$key} .= "$l\n";
+			}
+		}
+		$curfh->close();
+	}
+
 }
 
 # Show relevant content of postgresql.auto.conf
@@ -4613,7 +4779,6 @@ sub postgresql_auto_conf_report
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
 	my $output = $all_postgresql_auto_conf{content} || '';
-	%all_postgresql_auto_conf = ();
 
 	if (!$output) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
@@ -4629,7 +4794,7 @@ sub postgresql_auto_conf_report
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<h2>$data_info{$id}{menu}</h2>
 		<p>$data_info{$id}{description}</p>
               </div>
               <div class="panel-body">
@@ -4642,6 +4807,34 @@ sub postgresql_auto_conf_report
 	      </div>
 	    </div>
 	</div>
+};
+
+	delete $all_postgresql_auto_conf{content};
+
+	foreach my $k (sort { $b cmp $a } keys %all_postgresql_auto_conf) {
+		print qq{
+        <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+                <h4>Change on $k</h4>
+              </div>
+              <div class="panel-body">
+                <div class="analysis-item row-fluid">
+                        <div class="span11">
+                                <pre>$all_postgresql_auto_conf{$k}</pre>
+                        </div>
+                </div>
+              </div>
+              </div>
+            </div>
+        </div>
+};
+	}
+	%all_postgresql_auto_conf = ();
+
+	print qq{
+
   </li>
 </ul>
 };
@@ -4663,6 +4856,28 @@ sub pg_hba_conf
 		$pg_hba_conf{content} .= "$l\n";
 	}
 	$curfh->close();
+
+	return if (!exists $pg_hba_conf{content});
+
+	# Load change on configuration file from diff files
+	if (-e "$in_dir/$file.diff") {
+		$curfh = open_filehdl("$in_dir/$file.diff");
+		my $key = '';
+		while (my $l = <$curfh>) {
+			chomp($l);
+			$l =~ s/\r//;
+			next if ($l =~ /^\+\+\+/);
+			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
+				$key = $1;
+				next;
+			}
+			if ($key) {
+				$pg_hba_conf{$key} .= "$l\n";
+			}
+		}
+		$curfh->close();
+	}
+
 }
 
 # Show content of pg_hba.conf
@@ -4673,7 +4888,6 @@ sub pg_hba_conf_report
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
 	my $output = $pg_hba_conf{content} || '';
-	%pg_hba_conf = ();
 
 	if (!$output) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
@@ -4691,7 +4905,7 @@ sub pg_hba_conf_report
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<h2>$data_info{$id}{menu}</h2>
 		<p>$data_info{$id}{description}</p>
               </div>
               <div class="panel-body">
@@ -4704,6 +4918,33 @@ sub pg_hba_conf_report
 	      </div>
 	    </div>
 	</div>
+};
+
+	delete $pg_hba_conf{content};
+
+	foreach my $k (sort { $b cmp $a } keys %pg_hba_conf) {
+		print qq{
+        <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+                <h4>Change on $k</h4>
+              </div>
+              <div class="panel-body">
+                <div class="analysis-item row-fluid">
+                        <div class="span11">
+                                <pre>$pg_hba_conf{$k}</pre>
+                        </div>
+                </div>
+              </div>
+              </div>
+            </div>
+        </div>
+};
+	}
+	%pg_hba_conf = ();
+
+	print qq{
   </li>
 </ul>
 };
@@ -4725,6 +4966,28 @@ sub pg_ident_conf
 		$pg_ident_conf{content} .= "$l\n";
 	}
 	$curfh->close();
+
+	return if (!exists $pg_ident_conf{content});
+
+	# Load change on configuration file from diff files
+	if (-e "$in_dir/$file.diff") {
+		$curfh = open_filehdl("$in_dir/$file.diff");
+		my $key = '';
+		while (my $l = <$curfh>) {
+			chomp($l);
+			$l =~ s/\r//;
+			next if ($l =~ /^\+\+\+/);
+			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
+				$key = $1;
+				next;
+			}
+			if ($key) {
+				$pg_ident_conf{$key} .= "$l\n";
+			}
+		}
+		$curfh->close();
+	}
+
 }
 
 # Show content of pg_ident.conf
@@ -4735,7 +4998,6 @@ sub pg_ident_conf_report
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
 	my $output = $pg_ident_conf{content} || '';
-	%pg_ident_conf = ();
 
 	if (!$output) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
@@ -4752,7 +5014,7 @@ sub pg_ident_conf_report
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<h2>$data_info{$id}{menu}</h2>
 		<p>$data_info{$id}{description}</p>
               </div>
               <div class="panel-body">
@@ -4765,6 +5027,33 @@ sub pg_ident_conf_report
 	      </div>
 	    </div>
 	</div>
+};
+
+	delete $pg_ident_conf{content};
+
+	foreach my $k (sort { $b cmp $a } keys %pg_ident_conf) {
+		print qq{
+        <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+                <h4>Change on $k</h4>
+              </div>
+              <div class="panel-body">
+                <div class="analysis-item row-fluid">
+                        <div class="span11">
+                                <pre>$pg_ident_conf{$k}</pre>
+                        </div>
+                </div>
+              </div>
+              </div>
+            </div>
+        </div>
+};
+	}
+	%pg_ident_conf = ();
+
+	print qq{
   </li>
 </ul>
 };
@@ -4841,7 +5130,7 @@ sub pg_settings_report
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<h2>$data_info{$id}{menu}</h2>
 		<p>$data_info{$id}{description}</p>
               </div>
               <div class="panel-body">
@@ -4901,7 +5190,7 @@ sub pg_nondefault_settings_report
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<h2>$data_info{$id}{menu}</h2>
 		<p>$data_info{$id}{description}</p>
               </div>
               <div class="panel-body">
@@ -4997,7 +5286,7 @@ sub pg_db_role_setting_report
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-		<h2><i class="icon-time"></i> $data_info{$id}{menu}</h2>
+		<h2>$data_info{$id}{menu}</h2>
 		<p>$data_info{$id}{description}</p>
               </div>
               <div class="panel-body">
@@ -5356,7 +5645,7 @@ sub pg_stat_statements_report
     <div class="col-md-12">
       <div class="panel panel-default">
       <div class="panel-heading">
-	<h2><i class="icon-time"></i> $data_info{$id}{menu} on $db database</h2>
+	<h2>$data_info{$id}{menu} on $db database</h2>
 	<p>$data_info{$id}{description}</p>
       </div>
       <div class="panel-body">

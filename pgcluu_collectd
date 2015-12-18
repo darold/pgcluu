@@ -76,6 +76,7 @@ my $INCREMENTAL = 0;
 my $CAPTURE     = 0;
 my $TAR_PROG    = 'tar -czf';
 my $CAPTURE_DIR = '/tmp';
+my $DIFF_PROG   = 'diff -U 0';
 
 # Stores starting time
 my $START_TIME = time();
@@ -762,7 +763,7 @@ while (1) {
 		}
 	}
 
-	# Copy configuration files into output directory
+	# Copy configuration files into output directory and keep track of change
 	if (!$NO_DATABASE && ($#METRICS >= 0) && grep(/^configuration_stats$/, @METRICS)) {
 		my @conf_files = $METRICS_COMMANDS{'configuration_stats'}->{command}->();
 		@conf_files = () if ($PG_RET < 0);
@@ -770,14 +771,29 @@ while (1) {
 		$outdir = "$CAPTURE_DIR/$OUT_DIR" if ($CAPTURE);
 		foreach my $f (@conf_files, '/etc/pgbouncer/pgbouncer.ini') {
 			my $filename = basename($f);
-			next if (-e "$OUT_DIR/$filename"); # Do not copy file twice in same directory
+			# Rename old file to be able to perform a diff
+			if (-e "$OUT_DIR/$filename") {
+				# Unlink any temporary renaming of file (can only appears with a crash/interrupt)
+				unlink("$OUT_DIR/$filename.tmpold");
+				rename ("$OUT_DIR/$filename","$OUT_DIR/$filename.tmpold");
+			}
 			if ($sshcmd) {
 				`$sshcmd "$CAT_PROG $f" >$outdir/$filename 2>/dev/null`;
 			} else {
 				`$CAT_PROG $f >$outdir/$filename 2>/dev/null`;
 			}
-			# remove file when empty
-			unlink("$OUT_DIR/$filename" ) if (-z "$OUT_DIR/$filename");
+			if (-z "$OUT_DIR/$filename") {
+				# remove file when empty
+				unlink("$OUT_DIR/$filename" );
+			} elsif (-e "$OUT_DIR/$filename.tmpold") {
+				# Perform a diff to keep track of configuration change
+				`$DIFF_PROG "$OUT_DIR/$filename" "$OUT_DIR/$filename.tmpold" >> "$OUT_DIR/$filename.diff"`;
+				unlink("$OUT_DIR/$filename.tmpold");
+				# When there's no change do not keep the file
+				if (-z "$OUT_DIR/$filename.diff") {
+					unlink("$OUT_DIR/$filename.diff");
+				}
+			}
 		}
 	}
 
