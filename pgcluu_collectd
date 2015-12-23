@@ -2173,12 +2173,13 @@ sub dump_pgsettings
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), category, name, " .
-		" setting, %s, context, source, %s, %s " .
+		" setting, %s, context, source, %s, %s, %s " .
 		"FROM pg_settings " . 
 		"ORDER BY category,name",
 		&backend_minimum_version(8, 2) ? "unit" : "''::text as unit",
 		&backend_minimum_version(8, 4) ? "boot_val" : "''::text as boot_val",
 		&backend_minimum_version(8, 4) ? "reset_val" : "''::text as reset_val"
+		&backend_minimum_version(9, 5) ? "pending_restart" : ",''::text as pending_restart"
 	);
 
 	return $sql;
@@ -2194,11 +2195,12 @@ sub dump_nondefault_pgsettings
 		"SELECT date_trunc('seconds', now()), category, name, " .
 		" setting, %s, context, source, %s, %s " .
 		"FROM pg_settings " .
-        "WHERE source != 'default' AND source != 'override' " .
+        "WHERE source != 'default' AND source != 'override' %s" .
 		"ORDER BY category,name",
 		&backend_minimum_version(8, 2) ? "unit" : "''::text as unit",
 		&backend_minimum_version(8, 4) ? "boot_val" : "''::text as boot_val",
 		&backend_minimum_version(8, 4) ? "reset_val" : "''::text as reset_val"
+		&backend_minimum_version(8, 4) ? "AND setting != boot_val" : ""
 	);
 
 	return $sql;
