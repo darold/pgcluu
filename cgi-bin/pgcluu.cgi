@@ -5072,7 +5072,7 @@ sub pg_settings
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
 
-		# timestamp | label | setting | value
+		# timestamp | label | setting | value  | unit | context | source | boot_val | reset_val | pending_restart
 		$all_settings{$data[1]}{$data[2]}{value} = $data[3];
 
 		$all_settings{$data[1]}{$data[2]}{unit} = '';
