@@ -5082,6 +5082,9 @@ sub pg_settings
 			$all_settings{$data[1]}{$data[2]}{unit} = $data[4];
 			$all_settings{$data[1]}{$data[2]}{bootval} = $data[7];
 			$all_settings{$data[1]}{$data[2]}{resetval} = $data[8];
+			if ($#data >= 9) {
+				$all_settings{$data[1]}{$data[2]}{pending_restart} = $data[9];
+			}
 		}
 	}
 	$curfh->close();
@@ -5101,7 +5104,7 @@ sub pg_settings_report
 	} else {
 		foreach my $lbl (sort keys %all_settings) {
 			$output .= "<tr><th colspan=\"5\">$lbl</th></tr>\n";
-			$output .= "<tr><th>Name</th><th>Current</th><th>Unit</th><th>Reset val</th><th>Boot val</th></tr>\n";
+			$output .= "<tr><th>Name</th><th>Current</th><th>Unit</th><th>Reset val</th><th>Boot val</th><th>Pending restart</th></tr>\n";
 			foreach my $set (sort { lc($a) cmp lc($b) } keys %{$all_settings{$lbl}}) {
 				$output .= "<tr><td>$set</td><td>$all_settings{$lbl}{$set}{value}</td><td>$all_settings{$lbl}{$set}{unit}</td>";
 				if ($all_settings{$lbl}{$set}{resetval}) {
@@ -5113,6 +5116,15 @@ sub pg_settings_report
 					$output .= "<td>$all_settings{$lbl}{$set}{bootval}</td>";
 				} else {
 					$output .= "<td></td>";
+				}
+				if (exists $all_settings{$lbl}{$set}{pending_restart}) {
+					if ($all_settings{$lbl}{$set}{pending_restart} eq 't') {
+						$output .= "<td><b>$all_settings{$lbl}{$set}{pending_restart}</b></td>";
+					} else {
+						$output .= "<td>$all_settings{$lbl}{$set}{pending_restart}</td>";
+					}
+				} else {
+					$output .= "<td>n/a</td>";
 				}
 				$output .= "</tr>\n";
 			}
