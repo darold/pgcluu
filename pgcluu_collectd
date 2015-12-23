@@ -90,6 +90,10 @@ my $SSH_USER = '';
 my $SSH_TIMEOUT = 10;
 my $SSH_OPTIONS = "-o ConnectTimeout=$SSH_TIMEOUT -o PreferredAuthentications=hostbased,publickey";
 
+# Variable to store previous settings
+my %ORIGINAL_PG_SETTINGS = ();
+my %ORIGINAL_DBROLE_SETTINGS = ();
+
 # Definition to collect metrics from the database
 my %METRICS_COMMANDS = (
 	'database_stats' => {
@@ -763,6 +767,11 @@ while (1) {
 		}
 	}
 
+	if (!$NO_DATABASE) {
+		# Collect previous PostgreSQL settings to track changes
+		&load_settings($OUT_DIR, \%ORIGINAL_PG_SETTINGS,\%ORIGINAL_DBROLE_SETTINGS);
+	}
+
 	# Copy configuration files into output directory and keep track of change
 	if (!$NO_DATABASE && ($#METRICS >= 0) && grep(/^configuration_stats$/, @METRICS)) {
 		my @conf_files = $METRICS_COMMANDS{'configuration_stats'}->{command}->();
@@ -855,6 +864,32 @@ while (1) {
 				print PSQL $script_repeat_sql, "\n";
 				close(PSQL);
 			}
+		}
+
+		# Keep track of settings change
+		if (scalar keys %ORIGINAL_PG_SETTINGS > 0) {
+			my %current_pg_settings = ();
+			my %current_dbrole_settings = ();
+			# Collect current PostgreSQL settings to look compare values
+			&load_settings($OUT_DIR, \%current_pg_settings,\%current_dbrole_settings);
+			# Save pg_settings into a temporary files
+			my ($file1, $file2) = &save_pg_settings($OUT_DIR, \%ORIGINAL_PG_SETTINGS,\%current_pg_settings);
+			# Perform a diff to keep track of configuration change
+			`$DIFF_PROG "$file1" "$file2" >> "$OUT_DIR/pg_settings.diff"`;
+			unlink($file2, $file1);
+			# When there's no change do not keep the file
+			if (-z "$OUT_DIR/pg_settings.diff") {
+				unlink("$OUT_DIR/pg_settings.diff");
+			}
+			# Save settings into temporaries files
+			($file1, $file2) = &save_dbrole_settings($OUT_DIR, \%ORIGINAL_DBROLE_SETTINGS,\%current_dbrole_settings);
+			# Perform a diff to keep track of configuration change
+			`$DIFF_PROG "$file1" "$file2" >> "$OUT_DIR/pg_db_role_setting.diff"`;
+			# When there's no change do not keep the file
+			if (-z "$OUT_DIR/pg_db_role_setting.diff") {
+				unlink("$OUT_DIR/pg_db_role_setting.diff");
+			}
+			unlink($file2, $file1);
 		}
 	}
 
@@ -1946,10 +1981,6 @@ sub dump_pgstatlockgranted
 	return $sql;
 }
 
-
-
-
-
 sub dump_pgbouncerpoolstats
 {
 
@@ -2178,8 +2209,8 @@ sub dump_pgsettings
 		"ORDER BY category,name",
 		&backend_minimum_version(8, 2) ? "unit" : "''::text as unit",
 		&backend_minimum_version(8, 4) ? "boot_val" : "''::text as boot_val",
-		&backend_minimum_version(8, 4) ? "reset_val" : "''::text as reset_val"
-		&backend_minimum_version(9, 5) ? "pending_restart" : ",''::text as pending_restart"
+		&backend_minimum_version(8, 4) ? "reset_val" : "''::text as reset_val",
+		&backend_minimum_version(9, 5) ? "pending_restart" : "''::text as pending_restart"
 	);
 
 	return $sql;
@@ -2455,3 +2486,112 @@ sub compress_files
 	`$GZIP_PROG $dir/*`;
 
 }
+
+# Load setting from file pg_settings.csv and pg_db_role_setting.csv into hashrefs
+sub load_settings
+{
+	my ($in_dir, $pg_settings, $dbrole_settings) = @_;
+
+	if (-e "$in_dir/pg_settings.csv") {
+		# Load data from pg_settings.csv file
+		my $curfh = new IO::File;
+		$curfh->open("$in_dir/pg_settings.csv");
+		while (<$curfh>) {
+			chomp();
+			my @data = split(/;/);
+			# timestamp | label | setting | value | unit | context | source | boot_val | reset_val | pending_restart
+			$pg_settings->{$data[2]}{value} = $data[3];
+			$pg_settings->{$data[2]}{unit} = '';
+			$pg_settings->{$data[2]}{bootval} = '';
+			$pg_settings->{$data[2]}{resetval} = '';
+			if ($#data >= 6) {
+				$pg_settings->{$data[2]}{unit} = $data[4];
+				$pg_settings->{$data[2]}{bootval} = $data[7];
+				$pg_settings->{$data[2]}{resetval} = $data[8];
+				if ($#data >= 9) {
+					$pg_settings->{$data[2]}{pending_restart} = $data[9];
+				}
+			}
+		}
+		$curfh->close();
+	}
+	if (-e "$in_dir/pg_db_role_setting.csv") {
+		# Load data from pg_db_role_setting.csv file
+		my $curfh = new IO::File;
+		$curfh->open("$in_dir/pg_db_role_setting.csv");
+		while (<$curfh>) {
+			chomp();
+			my @data = split(/;/);
+			# timestamp | database | role | settings
+			$data[1] ||= 'All';
+			$data[2] ||= 'All';
+			$dbrole_settings->{$data[1]}{$data[2]} = $data[3];
+		}
+		$curfh->close();
+
+	}
+}
+
+# Save pg_settings into temporaries files and return the path to the files
+sub save_pg_settings
+{
+	my ($out_dir, $pg_settings_orig, $pg_settings_curr) = @_;
+
+	my $f1 = "$out_dir/pg_settings_orig.tmp";
+	my $curfh = new IO::File;
+	$curfh->open(">$f1");
+	foreach my $k (sort keys %$pg_settings_orig) {
+		print $curfh "$k : ";
+		foreach my $c (sort keys %{$pg_settings_orig->{$k}}) {
+			next if ($pg_settings_orig->{$k}{$c} eq '');
+			print $curfh "$c => $pg_settings_orig->{$k}{$c}, ";
+		}
+		print $curfh "\n";
+	}
+	$curfh->close();
+
+	my $f2 = "$out_dir/pg_settings_curr.tmp";
+	my $curfh = new IO::File;
+	$curfh->open(">$f2");
+	foreach my $k (sort keys %$pg_settings_curr) {
+		print $curfh "$k : ";
+		foreach my $c (sort keys %{$pg_settings_curr->{$k}}) {
+			next if ($pg_settings_curr->{$k}{$c} eq '');
+			print $curfh "$c => $pg_settings_curr->{$k}{$c}, ";
+		}
+		print $curfh "\n";
+	}
+	$curfh->close();
+
+	return ($f1,$f2);
+}
+
+# Save db / roles settings into temporaries files and return the path to the files
+sub save_dbrole_settings
+{
+	my ($out_dir, $pg_dbrole_settings_orig, $pg_dbrole_settings_curr) = @_;
+
+	my $f1 = "$out_dir/pg_dbrole_settings_orig.tmp";
+	my $curfh = new IO::File;
+	$curfh->open(">$f1");
+	foreach my $k (sort keys %$pg_dbrole_settings_orig) {
+		foreach my $c (sort keys %{$pg_dbrole_settings_orig->{$k}}) {
+			print $curfh "Database: $k, Role: $c, Settings: $pg_dbrole_settings_orig->{$k}{$c}\n";
+		}
+	}
+	$curfh->close();
+
+	my $f2 = "$out_dir/pg_dbrole_settings_curr.tmp";
+	my $curfh = new IO::File;
+	$curfh->open(">$f2");
+	foreach my $k (sort keys %$pg_dbrole_settings_curr) {
+		foreach my $c (sort keys %{$pg_dbrole_settings_curr->{$k}}) {
+			print $curfh "Database: $k, Role: $c, Settings: $pg_dbrole_settings_curr->{$k}{$c}\n";
+		}
+	}
+	$curfh->close();
+
+	return ($f1,$f2);
+}
+
+

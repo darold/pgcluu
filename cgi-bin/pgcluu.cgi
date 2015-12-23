@@ -109,6 +109,8 @@ our %all_database_usagecount = ();
 our %all_database_isdirty = ();
 our %all_stat_archiver = ();
 our %all_stat_statements = ();
+our %pg_settings_diff = ();
+our %db_role_setting_diff = ();
 
 # Names of the variables that need to be saved as binary file
 our @pg_to_be_stored = (
@@ -5088,6 +5090,27 @@ sub pg_settings
 		}
 	}
 	$curfh->close();
+
+	# Load change on pg_settings from diff file
+	$file =~ s/\.csv/.diff/;
+	if (-e "$in_dir/$file") {
+		$curfh = open_filehdl("$in_dir/$file");
+		my $key = '';
+		while (my $l = <$curfh>) {
+			chomp($l);
+			$l =~ s/\r//;
+			next if (($l =~ /^\+\+\+/) || ($l =~ /^\@\@/));
+			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
+				$key = $1;
+				next;
+			}
+			if ($key) {
+				$pg_settings_diff{$key} .= "$l\n";
+			}
+		}
+		$curfh->close();
+	}
+
 }
 
 # Show configuration from pg_settings
@@ -5155,6 +5178,31 @@ sub pg_settings_report
 	    </div>
 	    </div>
 	</div>
+};
+
+	foreach my $k (sort { $b cmp $a } keys %pg_settings_diff) {
+		print qq{
+        <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+                <h4>Change on $k</h4>
+              </div>
+              <div class="panel-body">
+                <div class="analysis-item row-fluid">
+                        <div class="span11">
+                                <pre>$pg_settings_diff{$k}</pre>
+                        </div>
+                </div>
+              </div>
+              </div>
+            </div>
+        </div>
+};
+	}
+	%pg_settings_diff = ();
+
+	print qq{
     </li>
 </ul>
 };
@@ -5262,6 +5310,27 @@ sub pg_db_role_setting
 		$all_db_role_setting{$data[1]}{$data[2]} = $data[3];
 	}
 	$curfh->close();
+
+	# Load change on pg_settings from diff file
+	$file =~ s/\.csv/.diff/;
+	if (-e "$in_dir/$file") {
+		$curfh = open_filehdl("$in_dir/$file");
+		my $key = '';
+		while (my $l = <$curfh>) {
+			chomp($l);
+			$l =~ s/\r//;
+			next if (($l =~ /^\+\+\+/) || ($l =~ /^\@\@/));
+			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
+				$key = $1;
+				next;
+			}
+			if ($key) {
+				$db_role_setting_diff{$key} .= "$l\n";
+			}
+		}
+		$curfh->close();
+	}
+
 }
 
 # Show configuration from pg_db_role_setting
@@ -5311,6 +5380,31 @@ sub pg_db_role_setting_report
 	    </div>
 	    </div>
 	</div>
+};
+
+	foreach my $k (sort { $b cmp $a } keys %db_role_setting_diff) {
+		print qq{
+        <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+                <h4>Change on $k</h4>
+              </div>
+              <div class="panel-body">
+                <div class="analysis-item row-fluid">
+                        <div class="span11">
+                                <pre>$db_role_setting_diff{$k}</pre>
+                        </div>
+                </div>
+              </div>
+              </div>
+            </div>
+        </div>
+};
+	}
+	%db_role_setting_diff = ();
+
+	print qq{
     </li>
 </ul>
 };
