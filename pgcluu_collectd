@@ -655,10 +655,21 @@ if ($INCREMENTAL) {
 	$H_ROTATE = 1;
 }
 
+my $previous_time = 0;
 while (1) {
 
 	# Stores loop start time
 	my $t0 = time;
+
+	# Do not collect metrics if previous time is upper than current time.
+	# This is to prevent collecting statistics twice when the hour change
+	# for daylight saving.
+	if ($t0 > $previous_time) {
+		# Wait next run following the interval value
+		sleep($INTERVAL);
+		next;
+	}
+	$previous_time = $t0;
 
 	# Search if the monitoring need to stop here
 	if ($END_AFTER && ($t0 > ($START_TIME + $END_AFTER))) {
@@ -2230,7 +2241,7 @@ sub dump_nondefault_pgsettings
 		"ORDER BY category,name",
 		&backend_minimum_version(8, 2) ? "unit" : "''::text as unit",
 		&backend_minimum_version(8, 4) ? "boot_val" : "''::text as boot_val",
-		&backend_minimum_version(8, 4) ? "reset_val" : "''::text as reset_val"
+		&backend_minimum_version(8, 4) ? "reset_val" : "''::text as reset_val",
 		&backend_minimum_version(8, 4) ? "AND setting != boot_val" : ""
 	);
 
@@ -2551,7 +2562,7 @@ sub save_pg_settings
 	$curfh->close();
 
 	my $f2 = "$out_dir/pg_settings_curr.tmp";
-	my $curfh = new IO::File;
+	$curfh = new IO::File;
 	$curfh->open(">$f2");
 	foreach my $k (sort keys %$pg_settings_curr) {
 		print $curfh "$k : ";
@@ -2582,7 +2593,7 @@ sub save_dbrole_settings
 	$curfh->close();
 
 	my $f2 = "$out_dir/pg_dbrole_settings_curr.tmp";
-	my $curfh = new IO::File;
+	$curfh = new IO::File;
 	$curfh->open(">$f2");
 	foreach my $k (sort keys %$pg_dbrole_settings_curr) {
 		foreach my $c (sort keys %{$pg_dbrole_settings_curr->{$k}}) {
