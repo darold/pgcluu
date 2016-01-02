@@ -77,6 +77,7 @@ my $CAPTURE     = 0;
 my $TAR_PROG    = 'tar -czf';
 my $CAPTURE_DIR = '/tmp';
 my $DIFF_PROG   = 'diff -U 0';
+my $CRONUSER    = '';
 
 # Stores starting time
 my $START_TIME = time();
@@ -354,7 +355,13 @@ my $result = GetOptions(
 	'ssh-option=s'   => \$SSH_OPTIONS,
 	'ssh-user=s'     => \$SSH_USER,
 	'ssh-timeout=i'  => \$SSH_TIMEOUT,
+	'cron-user=s'    => \$CRONUSER,
 ) or die &usage();
+
+# Set current username for cron listing
+if (!$CRONUSER) {
+	$CRONUSER = $ENV{USERNAME} || 'postgres';
+}
 
 # Print version number to stdout
 if ($SHOW_VER) {
@@ -1472,6 +1479,10 @@ sub grab_os_information
 	$cmd = 'uptime 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 	my $uptime = `$cmd`;
+	# Get crontab information
+	$cmd = "crontab -u $CRONUSER -l 2>/dev/null";
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my @crontab = `$cmd`;
 	print OUT "[CPU]\n";
 	print OUT @cpuinfo;
 	print OUT "[KERNEL]\n";
@@ -1494,6 +1505,8 @@ sub grab_os_information
 	print OUT @system;
 	print OUT "[PROCESS]\n";
 	print OUT @pslist;
+	print OUT "[CRONTAB]\n";
+	print OUT @crontab;
 	
 	close(OUT);
 }
@@ -1557,6 +1570,10 @@ options:
   --pgservice NAME         Name of service inside of the pg_service.conf file.
   --exclude-time RANGE     exclude a laps of time by giving the start and end
 			   hours.
+  --cron-user=USERNAME     collect crontab settings for the given username (in
+                           this case pgcluu_collectd need to be run as root).
+                           Default is to use USERNAME environment variable or
+                           postgres when it is not defined.
   --help                   print usage
 
 Use those options to execute sar on the remote host defined by the -h option,
@@ -2242,7 +2259,7 @@ sub dump_nondefault_pgsettings
 		&backend_minimum_version(8, 2) ? "unit" : "''::text as unit",
 		&backend_minimum_version(8, 4) ? "boot_val" : "''::text as boot_val",
 		&backend_minimum_version(8, 4) ? "reset_val" : "''::text as reset_val",
-		&backend_minimum_version(8, 4) ? "AND setting != boot_val" : ""
+		&backend_minimum_version(8, 4) ? "AND setting != boot_val " : ""
 	);
 
 	return $sql;
