@@ -671,7 +671,7 @@ while (1) {
 	# Do not collect metrics if previous time is upper than current time.
 	# This is to prevent collecting statistics twice when the hour change
 	# for daylight saving.
-	if ($previous_time && ($t0 > $previous_time)) {
+	if ($previous_time && ($t0 < $previous_time)) {
 		# Wait next run following the interval value
 		sleep($INTERVAL);
 		next;
