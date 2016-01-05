@@ -48,9 +48,8 @@ INSTALLATION
             perl Makefile.PL INSTALLDIRS='perl'
             make && sudo make install
 
-    This will copy the Perl scripts pgcluu_collectd and pgcluu into the
-    default /usr/local/bin directory and the man page to
-    /usr/local/share/man/man1/pgcluu.1.
+    This will copy the Perl scripts pgcluu_collectd and pgcluu into /usr/bin directory and the man page to /usr/local/share/man/man1/pgcluu.1.
+    
 
 
 USAGE
