@@ -19,7 +19,7 @@ Environment=STATDIR=/path/to/statdir
 Environment=REPORTDIR=/path/to/collectdir
 Environment=PGPASSWORD=XXXXX
 ExecStartPre=-/usr/bin/find ${REPORTDIR} -mindepth 1 -type f -delete
-ExecStart=/usr/bin/pgcluu_collectd --end-after=3M ${STATDIR}
+ExecStart=/usr/bin/pgcluu_collectd --end-after=5M ${STATDIR}
 ExecStartPost=/usr/bin/pgcluu -o ${REPORTDIR} ${STATDIR}
 
 

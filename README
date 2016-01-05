@@ -88,7 +88,7 @@ USAGE
     pgcluu comes with a systemd service file pgcluu.service and a timer unit file pgcluu.timer. 
     The last one will trigger the first one periodically. 
    
-    Default for pgcluu.service has been set to end after 3 minutes with the --end-after=3M 
+    Default for pgcluu.service has been set to end after 5 minutes with the --end-after=5M 
     option. 
     Edit the file to set path to your $OUTPUTDIR and $STATDIR, and $PGPASSWORD. If needed, 
     change how long the collect will last.
