@@ -88,20 +88,23 @@ USAGE
     pgcluu comes with a systemd service file pgcluu.service and a timer unit file pgcluu.timer. 
     The last one will trigger the first one periodically. 
    
-    Default for pgcluu.service has been set to end after 3 minutes with the --end-after=3M option. 
-    Edit the file to set path to your $OUTPUTDIR and $STATDIR, and $PGPASSWORD. Change if needed how 
-    long the collect will last.
+    Default for pgcluu.service has been set to end after 3 minutes with the --end-after=3M 
+    option. 
+    Edit the file to set path to your $OUTPUTDIR and $STATDIR, and $PGPASSWORD. If needed, 
+    change how long the collect will last.
 
-    Default for pgcluu.timer has been set to start pgcluu.service every three hours with the OnUnitActiveSec=3h.
-    Again, change it if needed. Refer to man:systemd.timer(5) for more options.
+    Default for pgcluu.timer has been set to start pgcluu.service every three hours with the 
+    OnUnitActiveSec=3h. Again, change it if needed. Refer to man:systemd.timer(5) for more options.
+   
 
-    Once the two files have been edited accordingly, copy them in your system systemd directory, /etc/systemd/system. 
+    Once the two files have been edited accordingly, copy them in your system systemd 
+    directory, /etc/systemd/system. 
     As root, start and enable the timer:
 
 		systemctl start pgcluu.timer
 		systemctl enable pgcluu.timer
 
-    You can at anitime see if the timer is still active with the follwoing command:
+    You can see if the timer is still active with the follwoing command:
   		
 		systemctl list-timers
 
