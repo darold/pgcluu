@@ -53,6 +53,8 @@ INSTALLATION
 
 
 USAGE
+
+1. manually
     See next two chapters for a complete description of the command line
     options. For the impatients, here some simple commands that could be run
     as postgres user:
@@ -80,6 +82,23 @@ USAGE
     By default all javascript, css and the webfont fontawesome are
     automatically generated into the output directory if those files does
     not already exits.
+
+2. use systemd unit files
+    pgcluu comes with a systemd service file ```pgcluu.service``` and a timer unit file ```pgcluu.timer```. The last one will trigger the first one periodically. 
+   
+    Default for ```pgcluu.service``` has been set to end after 3 minutes with the ```--end-after=3M``` option. Edit the file to set path to your $OUTPUTDIR and $STATDIR, and $PGPASSWORD. Change if needed how long the collect will last.
+
+    Default for ```pgcluu.timer```  has been set to start ```pgcluu.service``` every three hours with the ```OnUnitActiveSec=3h```. Again, change it if needed. Refer to man:systemd.timer(5) for more options.
+
+    Once the two files have been edited accordingly, copy them in your system systemd directory, ```/etc/systemd/system```. As root, start and enable the timer:
+
+		systemctl start pgcluu.timer
+		systemctl enable pgcluu.timer
+
+    You can at anitime see if the timer is still active with the follwoing command:
+  		
+		systemctl list-timers
+
 
 COLLECTING STATISTICS
     To generate reports about your PostgreSQL Cluster Utilization you must
