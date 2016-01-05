@@ -1,0 +1,25 @@
+# Feel free to modify the name of the PostgreSQL service following
+# your installation.
+#
+# For more info about custom unit files, see
+# http://fedoraproject.org/wiki/Systemd#How_do_I_customize_a_unit_file.2F_add_a_custom_unit_file.3F
+
+
+
+[Unit]
+Description=Postgresql performance and auditing
+Documentation=man:pgcluu(1)
+Requires=postgresql.service
+After=postgresql.service
+
+
+[Service]
+User=postgres
+Environment=STATDIR=/path/to/statdir
+Environment=REPORTDIR=/path/to/collectdir
+Environment=PGPASSWORD=XXXXX
+ExecStartPre=-/usr/bin/find ${REPORTDIR} -mindepth 1 -type f -delete
+ExecStart=/usr/bin/pgcluu_collectd --end-after=3M ${STATDIR}
+ExecStartPost=/usr/bin/pgcluu -o ${REPORTDIR} ${STATDIR}
+
+

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run periodically pgcluu.service
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target
+
+
