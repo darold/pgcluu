@@ -93,10 +93,10 @@ USAGE
     Edit the file to set path to your $OUTPUTDIR and $STATDIR, and $PGPASSWORD. If needed, 
     change how long the collect will last.
 
-    Default for pgcluu.timer has been set to start pgcluu.service every three hours with the 
-    OnUnitActiveSec=3h. Again, change it if needed. Refer to man:systemd.timer(5) for more options.
-   
-
+    Default for pgcluu.timer has been set to start pgcluu.service every three hours 
+    with the OnUnitActiveSec=3h. Again, change it if needed. Refer to man:systemd.timer(5) 
+    for more options.
+    
     Once the two files have been edited accordingly, copy them in your system systemd 
     directory, /etc/systemd/system. 
     As root, start and enable the timer:
