@@ -45,19 +45,30 @@ INSTALLATION
 
             tar xzf pgcluu-2.x.tar.gz
             cd pgcluu-2.x/
-            perl Makefile.PL INSTALLDIRS='perl'
+            perl Makefile.PL
             make && sudo make install
 
-    This will copy the Perl scripts pgcluu_collectd and pgcluu into /usr/bin directory 
-    and the man page to /usr/local/share/man/man1/pgcluu.1.
-    
+    This will copy the Perl scripts pgcluu_collectd and pgcluu into /usr/bin
+    or /usr/local/bin directory following your distribution and the man page
+    to /usr/share/man/man1/pgcluu.1 or /usr/local/share/man/man1/pgcluu.1.
+    Those are the default installation directories for 'site' install on
+    some well-known distribution but the path may change.
 
+    If you want to install all under /usr location, use INSTALLDIRS='perl'
+    as an argument of Makefile.PL. The script will be installed into
+    /usr/bin/pgcluu and the manpage into /usr/share/man/man1/pgcluu.1.
+
+    For example, to install everything just like Debian does, proceed as
+    follows:
+
+            perl Makefile.PL INSTALLDIRS=vendor
+
+    By default INSTALLDIRS is set to site.
 
 USAGE
-
-1. manually
+   Manually
     See next two chapters for a complete description of the command line
-    options. For the impatients, here some simple commands that could be run
+    options. For the impatient, here some simple commands that could be run
     as postgres user:
 
             mkdir /tmp/stat_db1/
@@ -84,30 +95,31 @@ USAGE
     automatically generated into the output directory if those files does
     not already exits.
 
-2. use systemd unit files
-    pgcluu comes with a systemd service file pgcluu.service and a timer unit file pgcluu.timer. 
-    The last one will trigger the first one periodically. 
-   
-    Default for pgcluu.service has been set to end after 5 minutes with the --end-after=5M 
-    option. 
-    Edit the file to set path to your $OUTPUTDIR and $STATDIR, and $PGPASSWORD. If needed, 
-    change how long the collect will last.
+   Using systemd unit files
+    pgcluu comes with a systemd service file pgcluu.service and a timer unit
+    file pgcluu.timer. The last one will trigger the first one periodically.
+    This is sample files that you may want to adapt following your needs.
 
-    Default for pgcluu.timer has been set to start pgcluu.service every three hours 
-    with the OnUnitActiveSec=3h. Again, change it if needed. Refer to man:systemd.timer(5) 
-    for more options.
-    
-    Once the two files have been edited accordingly, copy them in your system systemd 
-    directory, /etc/systemd/system. 
-    As root, start and enable the timer:
+    Default for pgcluu.service has been set to end after 3 minutes with the
+    --end-after=3M option. Edit the file to set path to your $OUTPUTDIR and
+    $STATDIR, and $PGPASSWORD. Change if needed how long the collect will
+    last.
 
-		systemctl start pgcluu.timer
-		systemctl enable pgcluu.timer
+    Default for pgcluu.timer has been set to start pgcluu.service every
+    three hours with the OnUnitActiveSec=3h. Again, change it if needed.
+    Refer to man:systemd.timer(5) for more options.
 
-    You can see if the timer is still active with the follwoing command:
-  		
-		systemctl list-timers
+    Once the two files have been edited accordingly, copy them in your
+    system systemd directory, /etc/systemd/system. As root, start and enable
+    the timer:
 
+            systemctl start pgcluu.timer
+            systemctl enable pgcluu.timer
+
+    You can at anytime see if the timer is still active with the following
+    command:
+
+            systemctl list-timers
 
 COLLECTING STATISTICS
     To generate reports about your PostgreSQL Cluster Utilization you must

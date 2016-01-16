@@ -55,9 +55,11 @@ Download the tarball from SourceForge and unpack the archive:
         perl Makefile.PL
         make && sudo make install
 
-This will copy the Perl scripts pgcluu_collectd and pgcluu into the default
-/usr/local/bin directory and the man page to /usr/local/share/man/man1/pgcluu.1.
-Those are the default installation directories for 'site' install.
+This will copy the Perl scripts pgcluu_collectd and pgcluu into /usr/bin or
+/usr/local/bin directory following your distribution and the man page to
+/usr/share/man/man1/pgcluu.1 or /usr/local/share/man/man1/pgcluu.1.
+Those are the default installation directories for 'site' install on some
+well-known distribution but the path may change.
 
 If you want to install all under /usr location, use INSTALLDIRS='perl' as an
 argument of Makefile.PL. The script will be installed into /usr/bin/pgcluu
@@ -71,8 +73,10 @@ By default INSTALLDIRS is set to site.
 
 =head1 USAGE
 
+=head3 Manually
+
 See next two chapters for a complete description of the command line options.
-For the impatients, here some simple commands that could be run as postgres
+For the impatient, here some simple commands that could be run as postgres
 user:
 
         mkdir /tmp/stat_db1/
@@ -96,6 +100,30 @@ You should obtain something like example at http://pgcluu.darold.net/example/
 
 By default all javascript, css and the webfont fontawesome are automatically
 generated into the output directory if those files does not already exits.
+
+=head3 Using systemd unit files
+
+pgcluu comes with a systemd service file pgcluu.service and a timer unit file
+pgcluu.timer. The last one will trigger the first one periodically. This is
+sample files that you may want to adapt following your needs.
+
+Default for pgcluu.service has been set to end after 3 minutes with the 
+--end-after=3M option. Edit the file to set path to your $OUTPUTDIR and
+$STATDIR, and $PGPASSWORD. Change if needed how long the collect will last.
+
+Default for pgcluu.timer has been set to start pgcluu.service every three
+hours with the OnUnitActiveSec=3h. Again, change it if needed. Refer to
+man:systemd.timer(5) for more options.
+
+Once the two files have been edited accordingly, copy them in your system
+systemd directory, /etc/systemd/system. As root, start and enable the timer:
+
+	systemctl start pgcluu.timer
+	systemctl enable pgcluu.timer
+
+You can at anytime see if the timer is still active with the following command:
+
+	systemctl list-timers
 
 =head1 COLLECTING STATISTICS
 
