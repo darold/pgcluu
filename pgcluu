@@ -1167,6 +1167,17 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			}
 			print "DEBUG: autodetected interval value $INTERVAL\n" if ($DEBUG);
 
+			# Detect timezone from csv file
+			if ($TIMEZONE eq '00') {
+				if (-e "$in_dir/pg_stat_database.csv" && !-z "$in_dir/pg_stat_database.csv") {
+					$TIMEZONE = &detect_timezone("$in_dir/pg_stat_database.csv");
+				} elsif (-e "$in_dir/pg_stat_database.csv.gz" ) {
+					$TIMEZONE = &detect_timezone("$in_dir/pg_stat_database.csv.gz");
+				}
+
+				print "DEBUG: autodetected timezone value $TIMEZONE\n" if ($DEBUG);
+			}
+
 			# Enable capture mode if all data file are not present
 			if (!-e "$in_dir/pg_stat_connections.csv" && !-e "$in_dir/pg_stat_connections.csv.gz") {
 				$CAPTURE = 1;
@@ -1204,7 +1215,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 			if ($CACHE) {
 				print "DEBUG: Generating PostgreSQL statistics files cache into $in_dir/\n" if ($DEBUG);
-				%global_infos = ('interval' => $INTERVAL, 'in_dir' => $in_dir);
+				%global_infos = ('interval' => $INTERVAL, 'in_dir' => $in_dir, 'timezone' => $TIMEZONE);
 				&dump_pg_binary($in_dir);
 			}
 
@@ -1232,7 +1243,9 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 				}
 				$INTERVAL = $dt if ($dt);
 			}
-
+			if (!$TIMEZONE && ($global_infos{timezone})) {
+				$TIMEZONE = $global_infos{timezone};
+			}
 		}
 		
 		if (!$CACHE) {
@@ -1316,7 +1329,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 			if ($CACHE) {
 				print "DEBUG: Generating sar statistics files cache into $in_dir.\n" if ($DEBUG);
-				%global_infos = ('interval' => $INTERVAL, 'in_dir' => $in_dir);
+				%global_infos = ('interval' => $INTERVAL, 'in_dir' => $in_dir, 'timezone' => $TIMEZONE);
 				push(@{$global_infos{DEVICE_LIST}}, @DEVICE_LIST);
 				push(@{$global_infos{IFACE_LIST}}, @IFACE_LIST);
 				&dump_sar_binary($in_dir);
@@ -1665,6 +1678,37 @@ sub detect_interval
 
 	return $dt || 1;
 }
+
+sub detect_timezone
+{
+	my $file = shift;
+
+	my $tz = '00';
+
+	if (!&is_compressed($file)) {
+		if (!open(IN, "$file")) {
+			die "FATAL: can't read file $file: $!\n";
+		}
+	} else {
+		if (!open(IN, "$ZCAT_PROG $file |")) {
+			die "FATAL: can't read pipe on command: $ZCAT_PROG $file, $!\n";
+		}
+	}
+	my $i = 1;
+	while (<IN>) {
+		my @data = split(/;/);
+		if ($data[0] =~ /^\d+-\d+-\d+ \d+:\d+:\d+([+\-]\d\d)/) {
+			$tz = $1;
+			last;
+		}
+		$i++;
+		last if ($i > 10);
+	}
+	close(IN);
+
+	return $tz;
+}
+
 
 sub get_data_id
 {
