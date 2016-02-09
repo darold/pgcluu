@@ -1083,10 +1083,10 @@ sub verify_action
 			delete $METRICS_COMMANDS{$m} if (($m ne 'configuration_stats') &&
 							 ($m ne 'pg_settings_stats') &&
 							 ($m ne 'pg_nondefault_settings_stats') &&
-							 ($m ne 'pg_db_role_setting_stats') &&
+							 (($m ne 'pg_db_role_setting_stats') || !&backend_minimum_version(9, 0)) &&
 							 ($m ne 'tablespace_size_stats') &&
 							 ($m ne 'database_size_stats') &&
-							 ($m ne 'replication_stats')
+							 (($m ne 'replication_stats') || !&backend_minimum_version(9, 1))
 							);
 		}
 		return $ret;
