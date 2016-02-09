@@ -6068,7 +6068,7 @@ sub generate_html_index
 
 	# Compute global statistics for home page dashboard
 	my %overall_stat_databases = ();
-	if (exists $OVERALL_STATS{'cluster'}) {
+	if ($CAPTURE || exists $OVERALL_STATS{'cluster'}) {
 		$OVERALL_STATS{'cluster'}{'blks_hit'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'blks_read'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'cache_ratio'} = sprintf("%3d", ($OVERALL_STATS{'cluster'}{'blks_hit'} * 100) / (($OVERALL_STATS{'cluster'}{'blks_read'} + $OVERALL_STATS{'cluster'}{'blks_hit'}) || 1)) . "%";
@@ -6346,6 +6346,11 @@ EOF
 
 	}
 	if (!$DISABLE_SAR) {
+		if (!exists $OVERALL_STATS{'cluster'}) {
+			print $fh <<EOF;
+      <div class="row">
+EOF
+		}
 		print $fh <<EOF;
             <div class="col-md-$numcol">
               <div class="panel panel-default">
@@ -6373,14 +6378,17 @@ EOF
             </div><!--/span-->
 EOF
 	}
-	print $fh <<EOF;
+	if (exists $OVERALL_STATS{'cluster'} || (!$DISABLE_SAR)) {
+		print $fh <<EOF;
       </div>
 EOF
+	}
 
        if (exists $sysinfo{PGVERSION}) {
 		my $uptime = '';
 		$uptime = "<li><span class=\"figure-label\">Up since $sysinfo{PGVERSION}{'uptime'}</span></li>" if ($sysinfo{PGVERSION}{'uptime'});
-	       print $fh <<EOF;
+		print $fh <<EOF;
+      <div class="row">
 	    <div class="col-md-12">
 	      <div class="panel panel-default">
 	      <div class="panel-body">
@@ -6394,6 +6402,7 @@ EOF
 	      </div>
 	      </div>
 	    </div><!--/span-->
+	</div>
 EOF
        }
 
@@ -6413,6 +6422,7 @@ EOF
 
 		# Perform some initialization in case
 		print $fh <<EOF;
+      <div class="row">
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
@@ -6428,6 +6438,7 @@ EOF
               </div>
               </div>
             </div><!--/span-->
+	</row>
 EOF
 	}
 
