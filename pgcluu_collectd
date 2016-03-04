@@ -1056,8 +1056,8 @@ sub get_initial_info
 		# Look for all schema in a database
 		print OUT "[PROCEDURE]\n";
 		foreach my $db (sort @alldbs) {
-			my @pro = &get_proc_name($db);
-			push(@procs, "$db=" . join(',', sort @pro)) if ($#pro >= 0);
+			my $pro = &get_proc_count($db);
+			push(@procs, "$db=" . $pro);
 		}
 		foreach my $p (@procs) {
 			print OUT "$p\n";
@@ -2111,6 +2111,33 @@ sub get_proc_name
 	return @db_proc;
 
 }
+
+sub get_proc_count
+{
+	my $database = shift;
+
+	my $LOCAL_PSQL_PROG = $PSQL_PROG;
+	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
+		if ($database !~ /^[a-z0-9\_\-]+$/i) {
+			$LOCAL_PSQL_PROG .= " -d '$database'";
+		} else {
+			$LOCAL_PSQL_PROG .= " -d $database";
+		}
+	}
+	my $db_proc = `$LOCAL_PSQL_PROG -c "SELECT count(p.proname) FROM pg_proc p, pg_namespace n WHERE p.pronamespace=n.oid AND n.nspname NOT IN ('pg_catalog', 'information_schema');"`;
+	if ($? != 0) {
+		&dprint("FATAL: psql error.\n");
+		# remove the pidfile
+		if (-f $PIDFILE) {
+			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
+		}
+		exit 0;
+	}
+	chomp($db_proc);
+
+	return $db_proc;
+}
+
 
 ####
 # Retrieve user triggers count for a given database.

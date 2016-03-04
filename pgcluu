@@ -1905,7 +1905,7 @@ sub write_database_info
 	my $nsch = $#{$sysinfo{SCHEMA}{$db}} + 1;
 	my $schlist = join(',', @{$sysinfo{SCHEMA}{$db}});
 	$schlist = ' (' . $schlist . ')' if ($schlist);
-	my $procount = $#{$sysinfo{PROCEDURE}{$db}} + 1;
+	my $procount = $sysinfo{PROCEDURE}{$db} || 0;
 	my $trigcount = $sysinfo{TRIGGER}{$db} || 0;
 	my $last_vacuum = $OVERALL_STATS{'database'}{$db}{last_vacuum} || '-';
 	my $last_analyze = $OVERALL_STATS{'database'}{$db}{last_analyze} || '-';
@@ -9461,8 +9461,13 @@ sub read_sysinfo
 			push(@{$sysinfo{$section}{$db}}, @vals);
 		}
 		if ($section eq 'PROCEDURE') {
-			my ($db, @vals) = split(/[=,]+/, $l);
-			push(@{$sysinfo{$section}{$db}}, @vals);
+			if ($l =~ /^([^=]+)=(\d+)$/) {
+				$sysinfo{$section}{$1} = $2;
+			} else {
+				# Backward compatibility with version 2.4
+				my ($db, @vals) = split(/[=,]+/, $l);
+				$sysinfo{$section}{$db} = $#vals + 1;
+			}
 		}
 		if ($section eq 'TRIGGER') {
 			my ($db, $val) = split(/[=]+/, $l);
