@@ -94,6 +94,7 @@ my $SSH_OPTIONS = "-o ConnectTimeout=$SSH_TIMEOUT -o PreferredAuthentications=ho
 # Variable to store previous settings
 my %ORIGINAL_PG_SETTINGS = ();
 my %ORIGINAL_DBROLE_SETTINGS = ();
+my %ORIGINAL_SYSTEM_SETTINGS = ();
 
 # Definition to collect metrics from the database
 my %METRICS_COMMANDS = (
@@ -773,18 +774,28 @@ while (1) {
 	# stores previous directory to check when rotated files must compressed
 	$OLD_OUT_DIR = $OUT_DIR;
 
-	# Collect initial information about the cluster
-	if (!-e "$OUT_DIR/sysinfo.txt") {
-		if (!$NO_DATABASE && ($PG_RET >= 0)) {
-			&get_initial_info();
-		}
-
-		# Get Os information
-		if (!$NO_SYSINFO) {
-			&grab_os_information();
-		}
+	####
+	# Collect system information about the cluster
+	####
+	if (-e "$OUT_DIR/sysinfo.txt") {
+		# Remove old system information file
+		unlink("$OUT_DIR/sysinfo.txt");
+	}
+	# Collect PostgreSQL global cluster infromation and save all into $OUT_DIR/sysinfo.txt
+	# Diff with old collected information will be saved to sysinfo.txt.diff
+	if (!$NO_DATABASE && ($PG_RET >= 0)) {
+		&get_initial_info();
 	}
 
+	# Get System information  and save all into $OUT_DIR/sysinfo.txt
+	# Diff with old collected information will be saved to sysinfo.txt.diff
+	if (!$NO_SYSINFO) {
+		&grab_os_information();
+	}
+
+	####
+	# Stores settings and detect change
+	####
 	if (!$NO_DATABASE) {
 		# Collect previous PostgreSQL settings to track changes
 		&load_settings($OUT_DIR, \%ORIGINAL_PG_SETTINGS,\%ORIGINAL_DBROLE_SETTINGS);
@@ -1025,9 +1036,9 @@ sub get_initial_info
 		if (&backend_minimum_version(9, 1)) {
 			# Look for all installed extensions
 			print OUT "[EXTENSION]\n";
-			foreach my $db (@alldbs) {
+			foreach my $db (sort @alldbs) {
 				my @ext = &get_extensions($db);
-				push(@extensions, "$db=" . join(',', @ext)) if ($#ext >= 0);
+				push(@extensions, "$db=" . join(',', sort @ext)) if ($#ext >= 0);
 			}
 			foreach my $e (@extensions) {
 				print OUT "$e\n";
@@ -1035,25 +1046,25 @@ sub get_initial_info
 		}
 		# Look for all schema in a database
 		print OUT "[SCHEMA]\n";
-		foreach my $db (@alldbs) {
+		foreach my $db (sort @alldbs) {
 			my @sch = &get_schemas($db);
-			push(@schemas, "$db=" . join(',', @sch)) if ($#sch >= 0);
+			push(@schemas, "$db=" . join(',', sort @sch)) if ($#sch >= 0);
 		}
 		foreach my $s (@schemas) {
 			print OUT "$s\n";
 		}
 		# Look for all schema in a database
 		print OUT "[PROCEDURE]\n";
-		foreach my $db (@alldbs) {
+		foreach my $db (sort @alldbs) {
 			my @pro = &get_proc_name($db);
-			push(@procs, "$db=" . join(',', @pro)) if ($#pro >= 0);
+			push(@procs, "$db=" . join(',', sort @pro)) if ($#pro >= 0);
 		}
 		foreach my $p (@procs) {
 			print OUT "$p\n";
 		}
 		# Look for all schema in a database
 		print OUT "[TRIGGER]\n";
-		foreach my $db (@alldbs) {
+		foreach my $db (sort @alldbs) {
 			my $tgs = &get_triggers($db);
 			push(@trigs, "$db=$tgs");
 		}
