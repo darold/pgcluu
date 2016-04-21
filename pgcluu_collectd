@@ -1245,7 +1245,7 @@ sub fetch_version
 		close(OUT);
 	}
 
-	return "$1.$2";
+	return "$DB_INFO{major}.$DB_INFO{minor}";
 }
 
 ####
