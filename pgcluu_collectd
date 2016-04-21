@@ -1228,8 +1228,8 @@ sub fetch_version
 	chomp($pg_ver);
 
 	if ($pg_ver =~ /^(PostgreSQL|EnterpriseDB) (\d+)\.(\d+)/) {
-		$DB_INFO{major} = $1;
-		$DB_INFO{minor} = $2;
+		$DB_INFO{major} = $2;
+		$DB_INFO{minor} = $3;
 	} elsif ($pg_ver =~ /(\d+)\.(\d+)\.(\d+)/) {
 		$DB_INFO{major} = $1;
 		$DB_INFO{minor} = $2;
