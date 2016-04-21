@@ -253,6 +253,12 @@ my %METRICS_COMMANDS = (
 		'repeat'  => 1,
 		'override'  => 1,
 	},
+        'hash_indexes_stats' => {
+                'output' => 'pg_stat_hash_indexes.csv',
+                'command' => 'dump_hashindexes',
+                'repeat'  => 1,
+                'override'  => 1,
+        },
 	'missing_fkindexes_stats' => {
 		'output' => 'pg_stat_missing_fkindexes.csv',
 		'command' => 'dump_missingfkindexes',
@@ -1125,6 +1131,7 @@ sub verify_action
 		delete $METRICS_COMMANDS{'functions_stats'};
 		delete $METRICS_COMMANDS{'redundant_indexes_stats'};
 		delete $METRICS_COMMANDS{'invalid_indexes_stats'};
+		delete $METRICS_COMMANDS{'hash_indexes_stats'};
 		delete $METRICS_COMMANDS{'missing_fkindexes_stats'};
 	}
 	if (!&backend_minimum_version(8, 1)) {
@@ -1226,7 +1233,6 @@ sub fetch_version
 		}
 	}
 	chomp($pg_ver);
-
 	if ($pg_ver =~ /^(PostgreSQL|EnterpriseDB) (\d+)\.(\d+)/) {
 		$DB_INFO{major} = $2;
 		$DB_INFO{minor} = $3;
@@ -2240,8 +2246,24 @@ sub dump_invalidindexes
 		"WHERE NOT pg_index.indisvalid " .
 		"ORDER BY schemaname, relname, indexrelname"
 	);
-
 	return $sql;
+}
+
+####
+# Get hash indexes in a database
+####
+sub dump_hashindexes
+{
+
+        my $sql = sprintf(
+		"WITH indexes AS ( " .
+		"SELECT date_trunc('seconds', now()), current_database(), schemaname, relname, indexrelname, pg_get_indexdef(pg_stat_user_indexes.indexrelid) " .
+		"FROM pg_stat_user_indexes " .
+		"INNER JOIN pg_index ON pg_index.indexrelid = pg_stat_user_indexes.indexrelid " .
+		"ORDER BY schemaname, relname, indexrelname) " .
+		"SELECT * from indexes where pg_get_indexdef like '%%USING hash (%' "
+	);
+        return $sql;
 }
 
 ####
