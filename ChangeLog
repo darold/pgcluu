@@ -1,3 +1,201 @@
+2016-04-27 - Version 2.5 released
+
+This release is a major release that fix some issues reported by
+users over past year and a full replacement of the flotr2 javascript
+chart library with jqplot.
+
+There's also some new interesting reports:
+
+  * Add report for hash indexes.
+  * Keep track of pg_settings and database/roles settings changes and
+    show diff in the the reports.
+  * Add report of pending restart in pg settings view.
+  * Add information about percentage of timed against requested
+    checkpoints.
+  * Split database menu in submenu per set of 10 databases.
+  * Add report of tables without indexes and tables with more than
+    five indexes.
+  * Add report about invalid index after concurrency build.
+  * Add report of system and PostgreSQL uptime.
+  * Add report of last statistics reset per database and report of
+    last autovacuum and autoanalyze.
+  * Add report of bgwriter last statistics reset in Home/Cluster view.
+  * Add a non default configuration settings report.
+
+and useful features:
+
+  * Autodetect timezone from csv data files and automatic adjustment
+    of chart axis.
+  * Add systemd start script.
+  * Add collect of crontab information.
+  * Add support to daylight saving.
+  * Add compatibility with PostgreSQL 9.5
+  * Add ablity to export plots data as csv
+  * Set legend table outside the graph.
+  * Display specific titles and description for overall graphs.
+
+Note that a CGI script have been added to be able to perform temporal
+lookup in incremental pgCluu statistics, with predefined year, month,
+day and hour views. This is a work in progress, it will be available
+in next major release.
+
+Upgrade: you can safely override previous installation, backward
+compatibility with 2.4 version is preserved.
+
+Here are the complete list of bug fixes in this release:
+
+  - Add report for hash indexes. Thanks to Adrien Neyrat for the
+    patch.
+  - Fix detection of non official release like EnterpriseDB or devel.
+    Thanks to Piotr Gbyliczek for the patch.
+  - Add use of IO::File, some system was complaining about that.
+    Thanks to microtodd for the report.
+  - Only collect stored procedures count instead of name list.
+  - Refresh sysinfo.txt at each loop and order output per database
+    name.
+  - Fix capture mode with PostgreSQL version 8.4
+  - Fix some bug in capture report.
+  - Fix use of timezone in cluster/database related charts.
+  - Autodetect timezone from csv data files.
+  - Fix some documentation typo about systemd use and apply change to
+    pgcluu.pod.
+  - Fix systemd unit files. Thanks to gabx for the patch.
+  - Update README with systemd unit files usage
+  - Add collect of crontab information. It uses the current logged
+    username or postgres as default and it can be overriden with the
+    --cron-user command line.
+  - Do not collect metrics if previous time is upper than current time
+    This is to prevent storing statistics twice when hour change
+    during daylight saving. Thanks to brownbh3 for the report.
+  - Keep track of pg_settings and database/roles settings changes and
+    show diff in the the reports.
+  - Update comment on pg_settings columns.
+  - Add report of pending restart in pg settings view.
+  - Exclude from non default settings collect case where setting equal
+    boot_val.
+  - Add collect of pending_restart column from pg_settings (pg 9.5).
+  - Remove obsolete css file, it is replaced by font-awesome.min.css
+  - Keep track of configuration files changes by storing diff to files
+    Changes are sorted by date at bottom of the configuration reports.
+  - Fix range of icons in embedded fontawesome css.
+  - Fix report of number of xlog data written per second. Thanks to
+    Ronan Dunklau for the report.
+  - Add ablity to export plots data as csv. Thanks to Julien Rouhaud
+    for the patch.
+  - Fix/change some fontawesome icons.
+  - Fix menu height in pgcluu css.
+  - Add ablity to export plots data as csv
+  - Fix scale on yaxis sticks in javascript graphs.
+  - Report percentage between checkpoint timed and requested in legend
+  - Add information about percentage of timed against requested
+    checkpoints.
+  - Update with resources directory move.
+  - Move resources directory into cgi-bin/ to be less confusing.
+  - Update list of file in MANIFEST for pgcluu package.
+  - Fix top menu height and color in start/end date input box of CGI.
+  - Update html header with new .min.css and .min.js files
+  - Use minimalist version of CSS and Javascript and remove call to
+    sourceMappingURL
+  - Replace external font file fontawesome-webfont.ttf by the base64
+    embeded version.
+  - Removed by their optimised min files.
+  - Fix unparsed section in sysinfo.txt when file is generated from
+    a Windows server.
+  - When system information are missing, display a message.
+  - Remove Deadlocks end Temporary files menu when PostgreSQL version
+    id lower that 9.2.
+  - Fix y2axis on hit ratio and commit vs rollback reports. Thanks to
+    Guillaume Lelarge for the report.
+  - Fix report of huge page information.
+  - Fix an additional series 4 in background writer clean stats report
+    Thanks to Guillaume Lelarge for the report.
+  - Disable mouse click on disabled menu.
+  - Do not display empty deadlocks and temporary files informations if
+    PostgreSQL version is lower than 9.2. Thanks to Guillaume Lelarge
+    for the report.
+  - Prevent display of SysInfo menu when there is no such information.
+    Thanks to Guillaume Lelarge for the report.
+  - Prevent collect of local system information when option -h is used
+    but --enable-ssh is disabled. Thanks to Guillaume Lelarge for the
+    report.
+  - Set daily rotation instead of hourly.
+  - Add pgcluu.service file to start/stop pgcluu_collectd with systemd
+    Thank to Arnaud Gaboury fot the file.
+  - Fix call to current_setting(checkpoint_segments) in dump_xlog_stat
+    It has been replaced by max_wal_size in PostgreSQL 9.5.
+  - Renamed option --notablespace by --no-tablespace.
+  - Split database menu in submenu per set of 10 databases.
+  - Remove border and shadow from all graphs.
+  - Set legend table outside the graph.
+  - Rewrite call to pgcluu_slide.js
+  - Reduce font size in legend and tooltip chart.
+  - Forgot to include uptime with PostgreSQL version in main page.
+  - Fix homepage statistics when data are loaded from cache file.
+  - Add subtitle in homepage panels.
+  - Fix number of connection in home page.
+  - Fix wrong count of database and tuples returned in overall stats.
+  - Fix report of bgwriter stats_reset.
+  - Make some changes in SysInfo view.
+  - Force default date before looking to working dir. Only look for
+    incremental repositiory with CGI.
+  - Replace flotr2 javascript chart library with jqplot.
+  - Add time navigation in pgcluu CGI
+  - Add a configuration file to CGI
+  - Update resources/ directory with new javascript libraries
+  - Remove temporary debug line.
+  - Add margin to panel buttons and center the graph. Thanks to Tomer
+    Steinfeld for the patches.
+  - Fix report of overcommit_memory.
+  - Add configuration file for CGI initialization.
+  - Fix two bugs on indexes report
+  - Add report about invalid index after concurrency build
+  - Fix report on most indexed tables
+  - Add report of tables without indexes and tables with more than 5
+    indexes. Thanks to julien Rouhaud for the feature request.
+  - Add statistics collect about number of indexes by table. Stats
+    are stored in pg_stat_count_indexes.csv
+  - Add postmaster start time. Thanks to Julie Rouhaud for the feature
+    request.
+  - Add system uptime information. Thanks to Julien Rouhaud for the
+    feature request.
+  - Add report of last statistics reset per database and report of
+    last autovacuum and autoanalyze. Thanks to Julien Rouhaud for the
+    feature request.
+  - Add report of bgwriter last statistics reset in Home/Cluster view
+    Thanks to Julien Rouhaud for the feature request.
+  - Add collect of invalid indexes.
+  - Fix pg 8.4 compatibility. Thanks to Julien Rouhaud for the patch.
+  - Check indisprimary instead of name starting by "pk", and also
+    exclude index supporting an exlucsion constraint. Thanks to Julien
+    Rouhaud for the patch.
+  - Fix colspan for pg_settings reports. Thanks to Julien Rouhaud for
+    the patch.
+  - Add a non default configuration settings report. Thanks to Julien
+    Rouhaud for the patch.
+  - Fix missing global title/description for connections and remove
+    call to normalize_line on index report. Thanks to Julien Rouhault
+    for the report.
+  - Display specific titles and description for overall graphs. Thanks
+    to Julien Rouhaud for the patch.
+  - Fix wrong call to pg_current_xlog_location() on secondary host.
+    Thanks to Julien Rouhaud for the report.
+  - Fix error when pgcluu is just used to parse a sar output file.
+    Thanks to Euler Taveira de Oliveira for the report.
+  - Fix wrong calculation of pg_stat_replication lag reports.
+  - Fix error: "Invalid offset: 0" when parsing pg_stat_replication
+    statistics. Thanks to vscherbo for the report.
+  - Fix regexp in previous commit to be more strict.
+  - Fix creation of wrong database menu using function name. Thanks
+    to spritchard for the report.
+  - Fix psql error when using --list-metric option. Thanks to Fabio
+    Pardi for the report.
+  - Fix wrong storage of previous value in pg_stat_user_functions
+    which result in counts on the database-functions page completely
+    wrong. Thanks to Steve Pritchard for the patch.
+  - Remove redundant regular expressions.
+  - Update CSS and JS files in resources directory and datetimepicker
+    ressources files for cgi.
+
 2015-07-25 - Version 2.4 released
 
 This release is a maintenance release that fix some issues. There's also some
