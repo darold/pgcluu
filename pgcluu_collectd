@@ -1980,6 +1980,13 @@ sub dump_pgdatabase_size
 sub dump_pgstatconnections
 {
 
+	my $waiting = '';
+	if (&backend_minimum_version(9, 6)) {
+		#$waiting = "coalesce(SUM((wait_event_type IS NOT NULL)::integer), 0)";
+		$waiting = "coalesce(SUM((wait_event_type='Lock' AND wait_event='tuple')::integer), 0)";
+	} else {
+		&backend_minimum_version(8, 2) ? $waiting = "coalesce(SUM(waiting::integer), 0)" : $waiting = "0::integer";
+	}
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), COUNT(*) AS total, coalesce(SUM((%s)::integer), 0) AS active, " .
 		"%s AS waiting, " .
@@ -1987,7 +1994,7 @@ sub dump_pgstatconnections
 		"FROM pg_stat_activity JOIN pg_database ON (pg_database.oid=pg_stat_activity.datid) " .
 		"WHERE %s <> pg_backend_pid() GROUP BY pg_database.datname" ,
 		&backend_minimum_version(9, 2) ? "state NOT LIKE 'idle%'" : "current_query NOT IN ('<IDLE>','<IDLE> in transaction')",
-		&backend_minimum_version(8, 2) ? "coalesce(SUM(waiting::integer), 0)" : "0::integer",
+		$waiting,
 		&backend_minimum_version(9, 2) ? "state = 'idle in transaction'" : "current_query = '<IDLE> in transaction'",
 		&backend_minimum_version(9, 2) ? "pid" : "procpid" ,
 	);
