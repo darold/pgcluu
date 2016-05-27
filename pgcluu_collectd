@@ -1218,7 +1218,7 @@ sub fetch_version
 
 	return -1 if ($NO_DATABASE);
 
-	my $pg_ver = `$PSQL_PROG -c "SELECT version();" 2>&1`;
+	my $pg_ver = `echo "SELECT version();" | $PSQL_PROG 2>&1`;
 	if ($? != 0) {
 		# Only stop here if there's no pgbouncer querying
 		if (!$PGBOUNCER_ARGS) {
@@ -1270,7 +1270,7 @@ sub get_extensions
 			$LOCAL_PSQL_PROG .= " -d $database";
 		}
 	}
-	my @db_extension = `$LOCAL_PSQL_PROG -c "SELECT extname||'-'||extversion FROM pg_extension;"`;
+	my @db_extension = `echo "SELECT extname||'-'||extversion FROM pg_extension;" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
 		&dprint("FATAL: psql error.\n");
 		# remove the pidfile
@@ -1290,7 +1290,7 @@ sub get_extensions
 sub get_databases
 {
 
-	my @dbs = `$PSQL_PROG -c "SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn;"`;
+	my @dbs = `echo "SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn;" | $PSQL_PROG`;
 	if ($? != 0) {
 		&dprint("FATAL: psql error.\n");
 		# remove the pidfile
@@ -1311,7 +1311,7 @@ sub get_uptime
 {
 	my $save = shift;
 
-	my $uptime = `$PSQL_PROG -c "SELECT pg_postmaster_start_time();"`;
+	my $uptime = `echo "SELECT pg_postmaster_start_time();" | $PSQL_PROG`;
 	if ($? != 0) {
 		&dprint("FATAL: psql error.\n");
 		# remove the pidfile
@@ -1350,7 +1350,7 @@ sub get_schemas
 			$LOCAL_PSQL_PROG .= " -d $database";
 		}
 	}
-	my @db_schema = `$LOCAL_PSQL_PROG -c "SELECT nspname FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' ORDER BY 1"`;
+	my @db_schema = `echo "SELECT nspname FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' ORDER BY 1" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
 		&dprint("FATAL: psql error.\n");
 		# remove the pidfile
@@ -1370,7 +1370,7 @@ sub get_schemas
 sub has_pg_buffercache
 {
 
-	my $hasit = `$PSQL_PROG -c "SELECT proname FROM pg_proc WHERE proname = 'pg_buffercache_pages';"`;
+	my $hasit = `echo "SELECT proname FROM pg_proc WHERE proname = 'pg_buffercache_pages';" | $PSQL_PROG`;
 	if ($? != 0) {
 		&dprint("FATAL: psql error.\n");
 		# remove the pidfile
@@ -1391,7 +1391,7 @@ sub has_pg_buffercache
 sub has_pgstatstatements
 {
 
-	my $hasit = `$PSQL_PROG -c "SELECT n.nspname||'.'||p.proname FROM pg_proc p, pg_namespace n WHERE p.proname='pg_stat_statements' AND p.pronamespace=n.oid;"`;
+	my $hasit = ` echo "SELECT n.nspname||'.'||p.proname FROM pg_proc p, pg_namespace n WHERE p.proname='pg_stat_statements' AND p.pronamespace=n.oid;" | $PSQL_PROG`;
 	if ($? != 0) {
 		&dprint("FATAL: psql error.\n");
 		# remove the pidfile
@@ -1413,7 +1413,7 @@ sub is_superuser
 	# Assume it is superuser per default. In any case this will raise a psql error.
 	return 1 if (!$usr);
 
-	$DB_INFO{is_superuser} = `$PSQL_PROG -c "SELECT 1 FROM pg_user WHERE usename='$usr' AND usesuper"`;
+	$DB_INFO{is_superuser} = `echo "SELECT 1 FROM pg_user WHERE usename='$usr' AND usesuper" | $PSQL_PROG`;
 	chomp($DB_INFO{is_superuser});
 
 	return $DB_INFO{is_superuser};
@@ -2115,7 +2115,7 @@ sub get_proc_name
 			$LOCAL_PSQL_PROG .= " -d $database";
 		}
 	}
-	my @db_proc = `$LOCAL_PSQL_PROG -c "SELECT n.nspname||'.'||p.proname FROM pg_proc p, pg_namespace n WHERE p.pronamespace=n.oid AND n.nspname NOT IN ('pg_catalog', 'information_schema');"`;
+	my @db_proc = `echo "SELECT n.nspname||'.'||p.proname FROM pg_proc p, pg_namespace n WHERE p.pronamespace=n.oid AND n.nspname NOT IN ('pg_catalog', 'information_schema');" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
 		&dprint("FATAL: psql error.\n");
 		# remove the pidfile
@@ -2142,7 +2142,7 @@ sub get_proc_count
 			$LOCAL_PSQL_PROG .= " -d $database";
 		}
 	}
-	my $db_proc = `$LOCAL_PSQL_PROG -c "SELECT count(p.proname) FROM pg_proc p, pg_namespace n WHERE p.pronamespace=n.oid AND n.nspname NOT IN ('pg_catalog', 'information_schema');"`;
+	my $db_proc = `echo "SELECT count(p.proname) FROM pg_proc p, pg_namespace n WHERE p.pronamespace=n.oid AND n.nspname NOT IN ('pg_catalog', 'information_schema');" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
 		&dprint("FATAL: psql error.\n");
 		# remove the pidfile
@@ -2175,7 +2175,7 @@ sub get_triggers
 			$LOCAL_PSQL_PROG .= " -d $database";
 		}
 	}
-	my $db_trigger = `$LOCAL_PSQL_PROG -c "SELECT count(tgname) FROM pg_trigger WHERE NOT tgisinternal;"`;
+	my $db_trigger = `echo "SELECT count(tgname) FROM pg_trigger WHERE NOT tgisinternal;" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
 		&dprint("FATAL: psql error.\n");
 		# remove the pidfile
@@ -2360,7 +2360,7 @@ sub dump_pgdbrolesetting
 ####
 sub get_configuration_files
 {
-	my @cfiles = `$PSQL_PROG -c "SELECT setting FROM pg_settings WHERE name IN ('config_file','hba_file','ident_file','data_directory') ORDER BY name;"`;
+	my @cfiles = `echo "SELECT setting FROM pg_settings WHERE name IN ('config_file','hba_file','ident_file','data_directory') ORDER BY name;" | $PSQL_PROG`;
 	if ($? != 0) {
 		&dprint("FATAL: psql error.\n");
 		# remove the pidfile
