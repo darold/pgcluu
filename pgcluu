@@ -878,10 +878,11 @@ my %SAR_GRAPH_INFOS = (
 	},
 	'9' => {
 		'name' =>  'system-srvtime',
-		'title' => 'Average service/wait time for I/O requests on device %s',
-		'description' => 'The average service time (in milliseconds) for I/O requests that were issued to the device.',
+		'title' => 'Average wait/service time for I/O requests on device %s',
+		'description' => 'Await is the average time (in milliseconds) for I/O requests issued to the device to be served. This includes the time spent by the requests in queue and the time spent servicing them. Srvtime is the average service time (in milliseconds) for I/O requests that were issued to the device.',
 		'ylabel' => 'Milliseconds',
-		'legends' => ['svctm','await'],
+		'y2label' => 'Milliseconds',
+		'legends' => ['await','svctm'],
 	},
 	'10' => {
 		'name' =>  'system-runqueue',
@@ -8193,7 +8194,7 @@ sub compute_srvtime_report
 			}
 			$srvtime_stat{$n}{'await'} =~ s/,$//;
 			$srvtime_stat{$n}{'svctm'} =~ s/,$//;
-			$DEVFH{$n}->print( &jqplot_linegraph_array($IDX++, 'device-service_time', $data_info, $n, $srvtime_stat{$n}{'svctm'}, $srvtime_stat{$n}{'await'}) );
+			$DEVFH{$n}->print( &jqplot_linegraph_array($IDX++, 'device-service_time', $data_info, $n, $srvtime_stat{$n}{'await'}, $srvtime_stat{$n}{'svctm'}) );
 		}
 	}
 }
