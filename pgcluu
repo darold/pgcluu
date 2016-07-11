@@ -19,7 +19,7 @@ use IO::File;
 use Getopt::Long qw(:config bundling no_ignore_case_always);
 use File::Basename;
 use Time::Local 'timegm_nocheck';
-use POSIX qw(locale_h sys_wait_h ceil);
+use POSIX qw(locale_h sys_wait_h ceil strftime);
 setlocale(LC_ALL, 'C');
 use Storable qw(store_fd fd_retrieve);
 
@@ -45,8 +45,8 @@ my $DEBUG           = 0;
 my $BEGIN           = '';
 my $END             = '';
 my $NUMBER_CPU      = 0;
-my $TIMEZONE        = '00';
-my $STATS_TIMEZONE  = '00';
+my $TIMEZONE        = substr(strftime('%z', localtime()), 0, 3);
+my $STATS_TIMEZONE  = '00'; # Timezone is auto detected from data files
 my $REVERT_DATE     = 0;
 my $FROM_SA_FILE    = 0;
 my $SADC_INPUT_FILE = '';
@@ -1187,7 +1187,8 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 				} elsif (-e "$in_dir/pg_stat_database.csv.gz" ) {
 					$STATS_TIMEZONE = &detect_timezone("$in_dir/pg_stat_database.csv.gz");
 				}
-				if ($TIMEZONE eq '00') {
+				# Force use of same the same timezone for postgresql and system metrics
+				if ($TIMEZONE ne $STATS_TIMEZONE) {
 					$TIMEZONE = $STATS_TIMEZONE;
 				}
 
@@ -1702,7 +1703,7 @@ sub detect_timezone
 {
 	my $file = shift;
 
-	my $tz = '00';
+	my $tz = '+00';
 
 	if (!&is_compressed($file)) {
 		if (!open(IN, "$file")) {
