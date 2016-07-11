@@ -12555,7 +12555,7 @@ function create_linegraph (divid, charttitle, ylabel, arr_series, lineseries) {
                 show: true,
                 tooltipContentEditor: function (str, seriesIndex, pointIndex, plot) {
                     var dateToDisplay = new Date(plot.data[seriesIndex][pointIndex][0]);
-                    var textToShow = '<div>On '+dateToDisplay.toGMTString();
+                    var textToShow = '<div>On '+dateToDisplay.toString();
                     for (var i=0; i<plot.data.length;i++) {
                             textToShow += '<br><span class="mfigure">'+pretty_print_number(plot.data[i][pointIndex][1], 2, plot.series[i].label)+' <small>'+plot.series[i].label+'</small></span>';
                     }
