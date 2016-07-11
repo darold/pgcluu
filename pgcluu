@@ -8796,7 +8796,7 @@ sub compute_sarfile_stats
 			next;
 		}
 		# look for kernel header to find the date
-		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /(\d+)\/(\d+)\/(\d+)/) ) {
+		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /(\d+)[\-\/](\d+)[\-\/](\d+)/) ) {
 			$sar_month = $1;
 			$sar_day = $2;
 			$sar_year = $3;
@@ -9257,12 +9257,14 @@ sub convert_sar_time
 
 		my $tz = ((0-$TIMEZONE)*3600);
 		$curdate = &timegm_nocheck(0, 0, 0, $sar_day, $sar_month - 1, $sar_year - 1900) + $tz;
-		while ($old_timestamp > (($curdate+$time) * 1000)) {
-			$curdate += 86399;
-			my @tinf = gmtime($curdate - $tz);
-			$sar_month = $tinf[4]+1;
-			$sar_day = $tinf[3];
-			$sar_year = $tinf[5]+1900;
+		if (!$FROM_SA_FILE) {
+			while ($old_timestamp > (($curdate+$time) * 1000)) {
+				$curdate += 86399;
+				my @tinf = gmtime($curdate - $tz);
+				$sar_month = $tinf[4]+1;
+				$sar_day = $tinf[3];
+				$sar_year = $tinf[5]+1900;
+			}
 		}
 
 		return ($curdate + $time) * 1000;
