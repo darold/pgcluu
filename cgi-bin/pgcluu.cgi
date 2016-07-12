@@ -5191,6 +5191,9 @@ sub pg_settings
 			if ($#data >= 9) {
 				$all_settings{$data[1]}{$data[2]}{pending_restart} = $data[9];
 			}
+			if ($data[2] eq 'data_checksums') {
+				$OVERALL_STATS{'cluster'}{'data_checksums'} = $data[3];
+			}
 		}
 	}
 	$curfh->close();
@@ -6186,6 +6189,8 @@ EOF
 		if (exists $OVERALL_STATS{'cluster'}{hash_indexes_db}) {
 			$hash_dblist = ' (' . join(', ', @{$OVERALL_STATS{'cluster'}{hash_indexes_db}}) . ')';
 		}
+		# On version prior to 9.3 this is not applicable
+		$OVERALL_STATS{'cluster'}{'data_checksums'} ||= 'N/A';
 		print <<EOF;
       <div class="row">
             <div class="col-md-$numcol">
@@ -6198,6 +6203,7 @@ EOF
 		<span class="figure-date">$start_date to $end_date</span>
 		<ul>
 		<li></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'data_checksums'}</span> <span class="figure-label">Data checksums</span></li>
 		<li><span class="figure">$cluster_size</span> <span class="figure-label">Cluster size</span></li>
 		<li><span class="figure">$database_number</span> <span class="figure-label">Databases</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'nbackend'}</span> <span class="figure-label">Connections</span></li>
