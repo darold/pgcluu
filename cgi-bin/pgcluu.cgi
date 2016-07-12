@@ -1454,7 +1454,7 @@ sub get_device_list
 
 	if ($sadc_file && -f "$sadc_file") {
 
-		my $command = "$SADF_PROG -t -P ALL -D $sadc_file -- -d -p";
+		my $command = "$SADF_PROG -t -P ALL -d $sadc_file -- -d -p";
 		print STDERR "DEBUG: looking for device list using command $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -1536,7 +1536,7 @@ sub get_interface_list
 
 	if ($sadc_file && -f "$sadc_file") {
 
-		my $command = "$SADF_PROG -t -P ALL -D $sadc_file -- -n DEV";
+		my $command = "$SADF_PROG -t -P ALL -d $sadc_file -- -n DEV";
 		print STDERR "DEBUG: looking for device list using command $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8139,7 +8139,7 @@ sub compute_sarstat_stats
 	# Get CPU utilization
 	####
 	if ($data_info{name} eq 'system-cpu') {
-		my $command = "$SADF_PROG -t -P ALL -D $file";
+		my $command = "$SADF_PROG -t -d ALL -D $file";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8157,7 +8157,7 @@ sub compute_sarstat_stats
 	# Get load average
 	####
 	if ($data_info{name} eq 'system-load') {
-		my $command = "$SADF_PROG -t -D $file -- -q";
+		my $command = "$SADF_PROG -t -d $file -- -q";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8175,7 +8175,7 @@ sub compute_sarstat_stats
 	# Get process number
 	####
 	if ($data_info{name} eq 'system-process') {
-		my $command = "$SADF_PROG -t -D $file -- -q";
+		my $command = "$SADF_PROG -t -d $file -- -q";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8193,7 +8193,7 @@ sub compute_sarstat_stats
 	# Get context swiches
 	####
 	if ($data_info{name} eq 'system-cswch') {
-		my $command = "$SADF_PROG -t -D $file -- -w";
+		my $command = "$SADF_PROG -t -d $file -- -w";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8211,7 +8211,7 @@ sub compute_sarstat_stats
 	# Get memory utilization
 	####
 	if ($data_info{name} eq 'system-memory') {
-		my $command = "$SADF_PROG -t -D $file -- -r";
+		my $command = "$SADF_PROG -t -d $file -- -r";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8229,7 +8229,7 @@ sub compute_sarstat_stats
 	# Get swap utilization
 	####
 	if ($data_info{name} eq 'system-swap') {
-		my $command = "$SADF_PROG -t -D $file -- -W";
+		my $command = "$SADF_PROG -t -d $file -- -W";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8247,7 +8247,7 @@ sub compute_sarstat_stats
 	# Get page utilization
 	####
 	if ($data_info{name} eq 'system-page') {
-		my $command = "$SADF_PROG -t -D $file -- -B";
+		my $command = "$SADF_PROG -t -d $file -- -B";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8265,7 +8265,7 @@ sub compute_sarstat_stats
 	# Get block in/out
 	####
 	if ($data_info{name} eq 'system-block') {
-		my $command = "$SADF_PROG -t -D $file -- -b";
+		my $command = "$SADF_PROG -t -d $file -- -b";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8283,7 +8283,7 @@ sub compute_sarstat_stats
 	# Get Device service time
 	####
 	if ($data_info{name} eq 'system-srvtime') {
-		my $command = "$SADF_PROG -t -P ALL -D $file -- -d -p";
+		my $command = "$SADF_PROG -t -P ALL -d $file -- -d -p";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8302,7 +8302,7 @@ sub compute_sarstat_stats
 	# Get Device block read/write utilization
 	####
 	if ($data_info{name} eq 'system-rwdevice') {
-		my $command = "$SADF_PROG -t -P ALL -D $file -- -d -p";
+		my $command = "$SADF_PROG -t -P ALL -d $file -- -d -p";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8326,7 +8326,7 @@ sub compute_sarstat_stats
 	# Get run queue length
 	####
 	if ($data_info{name} eq 'system-runqueue') {
-		my $command = "$SADF_PROG -t -D $file -- -q";
+		my $command = "$SADF_PROG -t -d $file -- -q";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8345,7 +8345,7 @@ sub compute_sarstat_stats
 	# Get tasks created per second
 	####
 	if ($data_info{name} eq 'system-pcrea') {
-		my $command = "$SADF_PROG -t -D $file -- -w";
+		my $command = "$SADF_PROG -t -d $file -- -w";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8364,7 +8364,7 @@ sub compute_sarstat_stats
 	# Get TPS
 	####
 	if ($data_info{name} eq 'system-tps') {
-		my $command = "$SADF_PROG -t -D $file -- -b";
+		my $command = "$SADF_PROG -t -d $file -- -b";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8383,7 +8383,7 @@ sub compute_sarstat_stats
 	# Get per device TPS utilization
 	####
 	if ($data_info{name} eq 'system-tpsdevice') {
-		my $command = "$SADF_PROG -t -P ALL -D $file -- -d -p";
+		my $command = "$SADF_PROG -t -P ALL -d $file -- -d -p";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8401,7 +8401,7 @@ sub compute_sarstat_stats
 	# Get Device utilization
 	####
 	if ($data_info{name} eq 'system-cpudevice') {
-		my $command = "$SADF_PROG -t -P ALL -D $file -- -d -p";
+		my $command = "$SADF_PROG -t -P ALL -d $file -- -d -p";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8420,7 +8420,7 @@ sub compute_sarstat_stats
 	# Get network interface utilization
 	####
 	if ($data_info{name} eq 'network-utilization') {
-		my $command = "$SADF_PROG -t -P ALL -D $file -- -n DEV";
+		my $command = "$SADF_PROG -t -P ALL -d $file -- -n DEV";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8438,7 +8438,7 @@ sub compute_sarstat_stats
 	# Get network errors utilization
 	####
 	if ($data_info{name} eq 'network-error') {
-		my $command = "$SADF_PROG -t -P ALL -D $file -- -n EDEV";
+		my $command = "$SADF_PROG -t -P ALL -d $file -- -n EDEV";
 		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
@@ -8547,7 +8547,7 @@ sub compute_sarfile_stats
 			next;
 		}
 		# look for kernel header to find the date
-		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /(\d+)\/(\d+)\/(\d+)/) ) {
+		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /(\d+)[\-\/](\d+)[\-\/](\d+)/) ) {
 			$sar_month = $1;
 			$sar_day = $2;
 			$sar_year = $3;
@@ -9014,12 +9014,14 @@ sub convert_sar_time
 
 		my $tz = ((0-$TIMEZONE)*3600);
 		$curdate = &timegm_nocheck(0, 0, 0, $sar_day, $sar_month - 1, $sar_year - 1900) + $tz;
-		while ($old_timestamp > (($curdate+$time) * 1000)) {
-			$curdate += 86399;
-			my @tinf = gmtime($curdate - $tz);
-			$sar_month = $tinf[4]+1;
-			$sar_day = $tinf[3];
-			$sar_year = $tinf[5]+1900;
+		if (!$FROM_SA_FILE) {
+			while ($old_timestamp > (($curdate+$time) * 1000)) {
+				$curdate += 86399;
+				my @tinf = gmtime($curdate - $tz);
+				$sar_month = $tinf[4]+1;
+				$sar_day = $tinf[3];
+				$sar_year = $tinf[5]+1900;
+			}
 		}
 
 		return ($curdate + $time) * 1000;
