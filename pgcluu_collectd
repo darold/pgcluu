@@ -627,7 +627,7 @@ print OUT $$;
 close(OUT);
 
 # Generate the psql command
-$PSQL_PROG .= " -Atq -F';' -f - ";
+$PSQL_PROG .= " -XAtq -F';' -f - ";
 my $PGBOUNCER_PROG = $PSQL_PROG . ' ' . $PGBOUNCER_ARGS . ' pgbouncer';
 
 if ($NO_DATABASE) {
