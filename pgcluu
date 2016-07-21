@@ -306,6 +306,15 @@ my %DB_GRAPH_INFOS = (
 			'ylabel' => 'Size per seconde',
 			'legends' => ['temporary data'],
 		},
+		'11' => {
+			'name' =>  'database-transactions',
+			'title' => 'Transactions per second on %s database',
+			'all_title' => 'Transaction throughput per second',
+			'description' => 'Number of transaction (commit+rollback) issued per second.',
+			'all_description' => 'Number of transaction (commit+rollback) issued per second.',
+			'ylabel' => 'Transaction/sec',
+			'legends' => ['tps'],
+		},
 	},
 	'pg_stat_database_conflicts.csv' =>  {
 		'1' => {
@@ -1327,7 +1336,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 	}
 
 	# Clear memory from PostgreSQL statistics storage
-	&clear_db_stats();
+	&clear_db_stats() if ($dx > 0);
 
 	# parse SAR stats file
 	if (!$DISABLE_SAR) {
@@ -2073,11 +2082,15 @@ sub pg_stat_database
 		(($data[4] - $start_vals{$data[2]}[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals{$data[2]}[4]);
 		$all_stat_database{$data[0]}{$data[2]}{xact_commit} = $tmp_val;
 		$all_stat_database{$data[0]}{all}{xact_commit} += $tmp_val;
+		$all_stat_database{$data[0]}{$data[2]}{xact_throughput} = $tmp_val;
+		$all_stat_database{$data[0]}{all}{xact_throughput} += $tmp_val;
 
 		# Gather number of rollbacked transaction
 		(($data[5] - $start_vals{$data[2]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[2]}[5]);
 		$all_stat_database{$data[0]}{$data[2]}{xact_rollback} = $tmp_val;
 		$all_stat_database{$data[0]}{all}{xact_rollback} += $tmp_val;
+		$all_stat_database{$data[0]}{$data[2]}{xact_throughput} += $tmp_val;
+		$all_stat_database{$data[0]}{all}{xact_throughput} += $tmp_val;
 
 		# Gather number of canceled queries and stat reset
 		if ($#data >= 13) {
@@ -2125,7 +2138,7 @@ sub pg_stat_database_report
 	foreach my $t (sort {$a <=> $b} keys %all_stat_database) {
 		foreach my $db (@global_databases) {
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
-			foreach my $k (qw(insert returned fetched update delete blks_read blks_hit nbackend xact_commit xact_rollback canceled_queries deadlocks temp_files temp_bytes)) {
+			foreach my $k (qw(insert returned fetched update delete blks_read blks_hit nbackend xact_commit xact_rollback canceled_queries deadlocks temp_files temp_bytes xact_throughput)) {
 				next if ($db eq 'all');
 				$all_stat_database{$t}{$db}{$k} ||= 0;
 				$OVERALL_STATS{'cluster'}{$k} += $all_stat_database{$t}{$db}{$k};
@@ -2171,6 +2184,7 @@ sub pg_stat_database_report
 			$has_conn{$db} = 1 if ($all_stat_database{$t}{$db}{nbackend});
 			$database_stat{$db}{xact_commit} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_database{$t}{$db}{xact_commit}||0)/$interval) . '],';
 			$database_stat{$db}{xact_rollback} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_database{$t}{$db}{xact_rollback}||0)/$interval) . '],';
+			$database_stat{$db}{xact_throughput} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_database{$t}{$db}{xact_throughput}||0)/$interval) . '],';
 			# It depends on the postgresql version
 			if (!$has_conflict) {
 				foreach my $k (keys %{$all_stat_database{$t}{$db}}) {
@@ -2272,6 +2286,15 @@ sub pg_stat_database_report
 				}
 				delete $database_stat{$db}{xact_commit};
 				delete $database_stat{$db}{xact_rollback};
+
+			} elsif ($data_info{$id}{name} eq 'database-transactions') {
+
+				$database_stat{$db}{xact_throughput} =~ s/,$//;
+				if ($db ne 'all') {
+					$dbfh->print( &jqplot_linegraph_array($IDX++, 'database-transactions', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_throughput}) );
+				} else {
+					print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-transactions', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_throughput});
+				}
 			}
 			$dbfh->close();
 			$fhcluster->close();
@@ -7140,6 +7163,7 @@ AAAASUVORK5CYII=';
 		my $disable_pgnondefaultsettings = ' class="disabled"';
 		my $disable_pgdb_role_setting = ' class="disabled"';
 		my $disable_pgbouncer = ' class="disabled"';
+		my $disable_transactions = ' class="disabled"';
 		if (open(IN, "$OUTPUT_DIR/cluster.html")) {
 			while (<IN>) {
 				if (/<div id="cluster-size">/) {
@@ -7198,6 +7222,8 @@ AAAASUVORK5CYII=';
 				} elsif (/<div id="cluster-commits_rollbacks">/) {
 					$disable_commit = "";
 					$disable_rw_ratio = "";
+				} elsif (/<div id="cluster-transactions">/) {
+					$disable_transactions = "";
 				} elsif (/<div id="cluster-conflicts">/) {
 					$disable_conflicts = "";
 					$disable_allrepli = "";
@@ -7301,6 +7327,7 @@ AAAASUVORK5CYII=';
 			      <li id="menu-cluster-commits_rollbacks"$disable_commit><a href="cluster.html#cluster-commits_rollbacks">Commits vs Rollbacks</a></li>
 			      </ul>
 		        </li>
+		      <li id="menu-cluster-transactions"$disable_transactions><a href="cluster.html#cluster-transactions">Transaction throughput</a></li>
 		      <li class="divider"></li>
 			<li id="menu-replication" class="dropdown-submenu$disable_allrepli">
 			   <a href="#" tabindex="-1">Replication statistics </a>
@@ -7541,6 +7568,7 @@ AAAASUVORK5CYII=';
 		my $disable_tempbytes = ' class="disabled"';
 		my $disable_tempfile = ' class="disabled"';
 		my $disable_deadlock = ' class="disabled"';
+		my $disable_transaction = ' class="disabled"';
 		if (open(IN, "$OUTPUT_DIR/database-$db.html")) {
 			while (<IN>) {
 				if (/<div id="database-size">/) {
@@ -7568,6 +7596,8 @@ AAAASUVORK5CYII=';
 				} elsif (/<div id="database-commits_rollbacks">/) {
 					$disable_commit = "";
 					$disable_rw_ratio = "";
+				} elsif (/<div id="database-transactions">/) {
+					$disable_transaction = "";
 				} elsif (/<div id="database-conflicts">/) {
 					$disable_conflicts = "";
 				} elsif (/<div id="database-canceled_queries">/) {
@@ -7623,6 +7653,7 @@ AAAASUVORK5CYII=';
 			      <li id="menu-database-commits_rollbacks"$disable_commit><a href="database-$db.html#database-commits_rollbacks">Commits vs Rollbacks</a></li>
 			  </ul>
 		      </li>
+		      <li id="menu-database-transactions"$disable_transaction><a href="database-$db.html#database-transactions">Transaction thoughput</a></li>
 		      <li class="divider"></li>
 		      <li id="menu-database-canceled_queries"$disable_canceled><a href="database-$db.html#database-canceled_queries">Canceled queries</a></li>
 		      <li id="menu-database-conflicts"$disable_conflicts><a href="database-$db.html#database-conflicts">Conflicts</a></li>
