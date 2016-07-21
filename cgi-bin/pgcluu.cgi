@@ -301,6 +301,16 @@ my %DB_GRAPH_INFOS = (
 			'ylabel' => 'Size per seconde',
 			'legends' => ['temporary data'],
 		},
+                '11' => {
+                        'name' =>  'database-transactions',
+                        'title' => 'Transactions per second on %s database',
+                        'all_title' => 'Transaction throughput per second',
+                        'description' => 'Number of transaction (commit+rollback) issued per second.',
+                        'all_description' => 'Number of transaction (commit+rollback) issued per second.',
+                        'ylabel' => 'Transaction/sec',
+                        'legends' => ['tps'],
+                },
+
 	},
 	'pg_stat_database_conflicts.csv' =>  {
 		'1' => {
@@ -1814,9 +1824,13 @@ sub pg_stat_database
 		if ( ($ACTION ne 'home') && ($ACTION ne 'database-info') ) {
 			$all_stat_database{$data[0]}{$data[2]}{xact_commit} = $tmp_val;
 			$all_stat_database{$data[0]}{all}{xact_commit} += $tmp_val;
+			$all_stat_database{$data[0]}{$data[2]}{xact_throughput} = $tmp_val;
+			$all_stat_database{$data[0]}{all}{xact_throughput} += $tmp_val;
 		} else {
 			$OVERALL_STATS{'cluster'}{xact_commit} += $tmp_val;
 			$OVERALL_STATS{'database'}{$data[2]}{xact_commit} += $tmp_val;
+			$OVERALL_STATS{'cluster'}{xact_throughput} += $tmp_val;
+			$OVERALL_STATS{'database'}{$data[2]}{xact_throughput} += $tmp_val;
 		}
 
 		# Gather number of rollbacked transaction
@@ -1824,9 +1838,13 @@ sub pg_stat_database
 		if ( ($ACTION ne 'home') && ($ACTION ne 'database-info') ) {
 			$all_stat_database{$data[0]}{$data[2]}{xact_rollback} = $tmp_val;
 			$all_stat_database{$data[0]}{all}{xact_rollback} += $tmp_val;
+			$all_stat_database{$data[0]}{$data[2]}{xact_throughput} = +$tmp_val;
+			$all_stat_database{$data[0]}{all}{xact_throughput} += $tmp_val;
 		} else {
 			$OVERALL_STATS{'cluster'}{xact_rollback} += $tmp_val;
 			$OVERALL_STATS{'database'}{$data[2]}{xact_rollback} += $tmp_val;
+			$OVERALL_STATS{'cluster'}{xact_throughput} += $tmp_val;
+			$OVERALL_STATS{'database'}{$data[2]}{xact_throughput} += $tmp_val;
 		}
 
 		# Gather number of canceled queries
@@ -1887,7 +1905,7 @@ sub set_overall_stat_from_binary
 		foreach my $db (@global_databases) {
 			next if (($db eq 'all') || (($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB))));
 
-			foreach my $k (qw(insert returned fetched update delete blks_read blks_hit nbackend xact_commit xact_rollback canceled_queries deadlocks temp_files temp_bytes)) {
+			foreach my $k (qw(insert returned fetched update delete blks_read blks_hit nbackend xact_commit xact_rollback canceled_queries deadlocks temp_files temp_bytes xact_throughput)) {
 				$OVERALL_STATS{'cluster'}{$k} += $all_stat_database{$time}{$db}{$k};
 				$OVERALL_STATS{'database'}{$db}{$k} += $all_stat_database{$time}{$db}{$k};
 
@@ -2032,7 +2050,7 @@ sub pg_stat_database_report
 		foreach my $db (@global_databases) {
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 
-			foreach my $k (qw(insert returned fetched update delete blks_read blks_hit nbackend xact_commit xact_rollback canceled_queries deadlocks temp_files temp_bytes)) {
+			foreach my $k (qw(insert returned fetched update delete blks_read blks_hit nbackend xact_commit xact_rollback canceled_queries deadlocks temp_files temp_bytes xact_throughput)) {
 				$all_stat_database{$time}{$db}{$k} ||= 0;
 
 			}
@@ -2073,6 +2091,7 @@ sub pg_stat_database_report
 			$has_conn{$db} = 1 if ($all_stat_database{$time}{$db}{nbackend});
 			$database_stat{$db}{xact_commit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{xact_commit}||0)/$interval) . '],';
 			$database_stat{$db}{xact_rollback} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{xact_rollback}||0)/$interval) . '],';
+			$database_stat{$db}{xact_throughput} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{xact_throughput}||0)/$interval) . '],';
 			# It depends on the postgresql version
 			if (!$has_conflict) {
 				foreach my $k (keys %{$all_stat_database{$time}{$db}}) {
@@ -2173,6 +2192,17 @@ sub pg_stat_database_report
 				}
 				delete $database_stat{$db}{xact_commit};
 				delete $database_stat{$db}{xact_rollback};
+
+			} elsif ($data_info{$id}{name} eq 'database-transactions') {
+
+				$database_stat{$db}{xact_throughput} =~ s/,$//;
+				if ($db ne 'all') {
+					print &jqplot_linegraph_array($IDX++, 'database-transactions', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_throughput});
+				} else {
+					print &jqplot_linegraph_array($IDX++, 'cluster-transactions', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_throughput});
+				}
+				delete $database_stat{$db}{xact_throughput};
+
 			}
 		}
 	}
@@ -6999,6 +7029,7 @@ AAAASUVORK5CYII=';
 			      <li id="menu-cluster-commits_rollbacks"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-commits_rollbacks&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Commits vs Rollbacks</a></li>
 			      </ul>
 		        </li>
+		      <li id="menu-cluster-transactions"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-transactions&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Transactions throughput</a></li>
 		      <li class="divider"></li>
 			<li id="menu-replication" class="dropdown-submenu">
 			   <a href="#" tabindex="-1">Replication statistics </a>
@@ -7236,6 +7267,7 @@ AAAASUVORK5CYII=';
 			      <li id="menu-database-commits_rollbacks"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=database-commits_rollbacks&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Commits vs Rollbacks</a></li>
 			  </ul>
 		      </li>
+		      <li id="menu-database-transactions"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=database-transactions&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Transactions throughput</a></li>
 		      <li class="divider"></li>
 		      <li id="menu-database-canceled_queries"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=database-canceled_queries&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Canceled queries</a></li>
 		      <li id="menu-database-conflicts"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=database-conflicts&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Conflicts</a></li>
