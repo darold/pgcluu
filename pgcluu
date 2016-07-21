@@ -3184,7 +3184,7 @@ sub pg_stat_unlogged_report
 			}
 			&html_header($fhtable, $src_base);
 			my $table_header = '';
-			my $colspan =  ' colspan="4"';
+			my $colspan =  ' colspan="2"';
 			print $fhtable qq{
 <ul id="slides">
 <div class="row">
