@@ -1118,9 +1118,6 @@ sub verify_action
 	if (!&backend_minimum_version(9, 4)) {
 		delete $METRICS_COMMANDS{'archiver_stats'};
 	}
-	if (!&backend_minimum_version(9, 3)) {
-		delete $METRICS_COMMANDS{'unlogged_stats'};
-	}
 	if (!&backend_minimum_version(8, 3)) {
 		delete $METRICS_COMMANDS{'bgwriter_stats'};
 		delete $METRICS_COMMANDS{'pg_buffercache_stats'};
@@ -1128,6 +1125,7 @@ sub verify_action
 	if (!&backend_minimum_version(9, 1)) {
 		delete $METRICS_COMMANDS{'conflict_stats'};
 		delete $METRICS_COMMANDS{'replication_stats'};
+		delete $METRICS_COMMANDS{'unlogged_stats'};
 	}
 	if (!&backend_minimum_version(9, 0)) {
 		delete $METRICS_COMMANDS{'hot_standby_delay'};
