@@ -112,6 +112,7 @@ our %all_stat_archiver = ();
 our %all_stat_statements = ();
 our %pg_settings_diff = ();
 our %db_role_setting_diff = ();
+our %all_stat_unlogged = ();
 
 # Names of the variables that need to be saved as binary file
 our @pg_to_be_stored = (
@@ -157,6 +158,7 @@ our @pg_to_be_stored = (
 	'all_database_isdirty',
 	'all_stat_archiver',
 	'all_stat_statements',
+	'all_stat_unlogged',
 );
 
 # Names of sar variables that need to be saved as binary file
@@ -817,6 +819,17 @@ my %DB_GRAPH_INFOS = (
 		       'active' => 1,
 		       'menu' => 'Hash Indexes',
 	       },
+	},
+	'pg_stat_unlogged.csv' => {
+		'1' => {
+			'name' =>  'table-unlogged',
+			'title' => 'Unlogged tables on %s',
+			'description' => 'List of unlogged tables in the database.',
+			'ylabel' => 'Number',
+			'legends' => ['Unlogged tables'],
+			'active' => 1,
+			'menu' => 'Unlogged tables',
+		},
 	},
 
 );
@@ -1646,6 +1659,7 @@ sub write_database_info
 	}
 	$OVERALL_STATS{database}{$db}{invalid_indexes} ||= 0;
 	$OVERALL_STATS{database}{$db}{hash_indexes} ||= 0;
+	$OVERALL_STATS{database}{$db}{unlogged} ||= 0;
 	my $dbsize = &pretty_print_size($OVERALL_STATS{'database'}{$db}{'size'});
 	print qq{
 <ul id="slides">
@@ -1663,6 +1677,7 @@ sub write_database_info
 		<li></li>
 	        <li><span class="figure">$dbsize</span> <span class="figure-label">Total size</span></li>
 	        <li><span class="figure">$next</span> <span class="figure-label">Installed extensions$extlist</span></li>
+	        <li><span class="figure">$OVERALL_STATS{database}{$db}{unlogged}</span> <span class="figure-label">Unlogged tables</span></li>
 	        <li><span class="figure">$OVERALL_STATS{database}{$db}{invalid_indexes}</span> <span class="figure-label">Invalid indexes</span></li>
 	        <li><span class="figure">$OVERALL_STATS{database}{$db}{hash_indexes}</span> <span class="figure-label">Hash indexes</span></li>
 	        <li><span class="figure">$nsch</span> <span class="figure-label">Schemas$schlist</span></li>
@@ -2929,6 +2944,91 @@ sub pg_stat_invalid_indexes_report
 };
 	}
 	%all_stat_invalid_indexes = ();
+}
+
+# Compute statistics about unlogged tables
+sub pg_stat_unlogged
+{
+	my ($in_dir, $file) = @_;
+
+	my %start_vals = ();
+	my $tmp_val = 0;
+	# Load data from file
+	my $curfh = open_filehdl("$in_dir/$file");
+	while (<$curfh>) {
+		my @data = split(/;/);
+		next if (!&normalize_line(\@data));
+
+		# timestamp | dbname | schemaname | relname | relkind
+		$all_stat_unlogged{$data[1]}{$data[2]}{$data[3]} = $data[4];
+		$OVERALL_STATS{'database'}{$data[1]}{unlogged}++;
+		$OVERALL_STATS{'cluster'}{unlogged}++;
+		push(@{$OVERALL_STATS{'cluster'}{unlogged_db}}, $data[1]) if (!grep(/^$data[1]$/, @{$OVERALL_STATS{'cluster'}{unlogged_db}}));
+	}
+	$curfh->close();
+}
+
+# Compute report about unlogged tables
+sub pg_stat_unlogged_report
+{
+	my ($interval, $src_base, $db, %data_info) = @_;
+
+	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
+
+	return if (!$db);
+
+	foreach my $id (sort {$a <=> $b} keys %data_info) {
+		next if ($id ne $ID_ACTION);
+		next if ($data_info{$id}{name} ne 'table-unlogged');
+
+		my $table_header = '';
+		my $colspan =  ' colspan="2"';
+		print qq{
+<ul id="slides">
+<div class="row">
+    <div class="col-md-12">
+      <div class="panel panel-default">
+      <div class="panel-heading">
+	<h2>$data_info{$id}{menu} on $db database</h2>
+	<p>$data_info{$id}{description}</p>
+      </div>
+      <div class="panel-body">
+	<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+		<div class="span11">
+			<table class="table table-striped sortable" id="$db-$data_info{$id}{name}-table">
+				<thead>
+					<tr>
+					<th>Schema</th>
+					<th>Table</th>
+					</tr>
+				</thead>
+				<tbody>
+};
+		my $found_stat = 0;
+		foreach my $sch (sort keys %{$all_stat_unlogged{$db}}) {
+			foreach my $tb (sort keys %{$all_stat_unlogged{$db}{$sch}}) {
+				next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
+				$found_stat = 1;
+				print qq{<tr><th>$sch</th><td>$tb</td></tr>};
+			}
+		}
+		if (!$found_stat) {
+			print qq{<tr><td$colspan><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td></tr>};
+		}
+		print qq{
+				</tbody>
+			</table>
+		</div>
+	</div>
+};
+		# Terminate cluster statistics file
+		print qq{
+	</div>
+    </div>
+</div>
+};
+	}
+	%all_stat_unlogged = ();
 }
 
 # Compute statistics about hash index
@@ -6214,6 +6314,11 @@ EOF
 			$bgwriter_reset = "<li><span class=\"figure\"> $OVERALL_STATS{'bgwriter'}{stats_reset}</span> <span class=\"figure-label\">Last bgwriter stats reset</span></li>";
 		}
 		my $cluster_size = &pretty_print_size($OVERALL_STATS{'cluster'}{'size'});
+		$OVERALL_STATS{'cluster'}{unlogged} ||= 0;
+		my $unlogged_dblist = '';
+		if (exists $OVERALL_STATS{'cluster'}{unlogged_db}) {
+			$unlogged_dblist = ' (' . join(', ', @{$OVERALL_STATS{'cluster'}{unlogged_db}}) . ')';
+		}
 		$OVERALL_STATS{'cluster'}{invalid_indexes} ||= 0;
 		my $invalid_dblist = '';
 		if (exists $OVERALL_STATS{'cluster'}{invalid_indexes_db}) {
@@ -6244,6 +6349,7 @@ EOF
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'nbackend'}</span> <span class="figure-label">Connections</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'returned'}</span> <span class="figure-label">Tuples returned</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'cache_ratio'}</span> <span class="figure-label">Hit cache ratio</span></li>
+		<li><span class="figure">$OVERALL_STATS{'cluster'}{'unlogged'}</span> <span class="figure-label">Unlogged tables$unlogged_dblist</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'invalid_indexes'}</span> <span class="figure-label">Invalid indexes$invalid_dblist</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'hash_indexes'}</span> <span class="figure-label">Hash indexes$hash_dblist</span></li>
 		$temp_file_info
@@ -7109,6 +7215,13 @@ AAAASUVORK5CYII=';
 };
 		}
 		%data_info = %{$DB_GRAPH_INFOS{'pg_class_size.csv'}};
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			next if ($data_info{$id}{name} !~ /^table-/);
+			$table_str .= qq{
+			      <li id="menu-$data_info{$id}{name}"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=$data_info{$id}{name}&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">$data_info{$id}{menu}</a></li>
+};
+		}
+		%data_info = %{$DB_GRAPH_INFOS{'pg_stat_unlogged.csv'}};
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^table-/);
 			$table_str .= qq{
