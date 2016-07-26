@@ -1070,11 +1070,21 @@ if (!$o_year) {
 	($o_sec, $o_min, $o_hour, $o_day, $o_month, $o_year) = localtime(time);
 	$o_year += 1900;
 	$o_month++;
+	$o_month = sprintf("%02d", $o_month);
+	$o_day = sprintf("%02d", $o_day);
+	$o_hour = sprintf("%02d", $o_hour);
+	$o_min = sprintf("%02d", $o_min);
+	$o_sec = sprintf("%02d", $o_sec);
 }
 if (!$e_year) {
 	($e_sec, $e_min, $e_hour, $e_day, $e_month, $e_year) = localtime(time);
 	$e_year += 1900;
 	$e_month++;
+	$e_month = sprintf("%02d", $e_month);
+	$e_day = sprintf("%02d", $e_day);
+	$e_hour = sprintf("%02d", $e_hour);
+	$e_min = sprintf("%02d", $e_min);
+	$e_sec = sprintf("%02d", $e_sec);
 }
 
 ####
