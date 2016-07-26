@@ -1098,8 +1098,10 @@ my @WORK_DIRS = &get_data_directories();
 foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 	my $in_dir = "$INPUT_DIR/$WORK_DIRS[$dx]";
 	my ($sar_file, $sadc_file) = &set_sysstat_file($in_dir);
-	@DEVICE_LIST = &get_device_list($sar_file, $sadc_file);
-	@IFACE_LIST = &get_interface_list($sar_file, $sadc_file);
+	if ($sar_file ne 'binary') {
+		@DEVICE_LIST = &get_device_list($sar_file, $sadc_file);
+		@IFACE_LIST = &get_interface_list($sar_file, $sadc_file);
+	}
 	last if ($#DEVICE_LIST >= 0);
 }
 
@@ -1161,7 +1163,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 	my @binfiles = ();
 	if (-d "$in_dir") {
 		opendir(IDIR, "$in_dir") || die "FATAL: can't opendir $in_dir: $!";
-		@binfiles = grep { /^all_.*\.bin$/ } readdir(IDIR);
+		@binfiles = grep { /^.*\.bin$/ } readdir(IDIR);
 		closedir(IDIR);
 	} else {
 		# Input directory does not exists
@@ -1376,9 +1378,10 @@ sub set_sysstat_file
 			$sar_file = "$input_dir/" . 'sar_stats.dat';
 		} elsif (-f "$input_dir/sar_stats.dat.gz") {
 			$sar_file = "$input_dir/" . 'sar_stats.dat.gz';
+		} elsif (-f "$input_dir/sar_cpu_stat.bin") {
+			$sar_file = 'binary';
 		}
 		if (!$sadc_file && !$sar_file) {
-			print STDERR "WARNING: No sar data file found. Consider using -S or --disable-sar command\nline option or use -i / -I option to set the path to the data file.\nContinuing normally without reporting sar statistics.\n";
 			$DISABLE_SAR = 1;
 			return;
 		}
@@ -1392,7 +1395,7 @@ sub set_sysstat_file
 		print STDERR "ERROR: sar binary data file $sadc_file can't be found.\n";
 		exit 1;
 	}
-	if ($sar_file && !-f "$sar_file") {
+	if ($sar_file && ($sar_file ne 'binary') && !-f "$sar_file") {
 		print STDERR "ERROR: sar text data file $sar_file can't be found.\n";
 		exit 1;
 	}
@@ -1952,7 +1955,6 @@ sub set_overall_stat_from_binary
                 # Skip unwanted lines
                 next if ($BEGIN && ($time < $BEGIN));
                 next if ($END   && ($time > $END));
-
 		if (!exists $OVERALL_STATS{'system'}{'cpu'} || ($OVERALL_STATS{'system'}{'cpu'}[1] < $sar_cpu_stat{$time}{'all'}{total})) {
 			@{$OVERALL_STATS{'system'}{'cpu'}} = ($time, $sar_cpu_stat{$time}{'all'}{total});
 		}
@@ -9692,18 +9694,21 @@ sub load_pg_binary
 
 	foreach my $name (@pg_to_be_stored) {
 
-		my $lfh = new IO::File "<$in_dir/$name.bin";
-		if (not defined $lfh) {
-			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
+		my %stats = ();
+		if( -e "$in_dir/$name.bin") {
+			my $lfh = new IO::File "<$in_dir/$name.bin";
+			if (not defined $lfh) {
+				die "FATAL: can't read from $in_dir/$name.bin, $!\n";
+			}
+			%stats = %{ fd_retrieve($lfh) };
+			$lfh->close();
 		}
-		my %stats = %{ fd_retrieve($lfh) };
-		$lfh->close();
 
 		# Setting global information
 		if ($name eq 'global_infos') {
 
 			my %_global_infos = %{$stats{global_infos}} ;
-				foreach my $inf (keys %_global_infos) {
+			foreach my $inf (keys %_global_infos) {
 				if ($_global_infos{$inf} =~ /ARRAY/) {
 					push(@{$inf}, @{$_global_infos{$inf}});
 				} else {
@@ -9758,12 +9763,15 @@ sub load_sar_binary
 
 	foreach my $name (@sar_to_be_stored) {
 
-		my $lfh = new IO::File "<$in_dir/$name.bin";
-		if (not defined $lfh) {
-			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
+		my %stats = ();
+		if (-e "$in_dir/$name.bin") {
+			my $lfh = new IO::File "<$in_dir/$name.bin";
+			if (not defined $lfh) {
+				die "FATAL: can't read from $in_dir/$name.bin, $!\n";
+			}
+			%stats = %{ fd_retrieve($lfh) };
+			$lfh->close();
 		}
-		my %stats = %{ fd_retrieve($lfh) };
-		$lfh->close();
 		# Setting global information
 		if ($name eq 'global_infos') {
 
@@ -9805,7 +9813,7 @@ sub load_sys_binary
 
 	my $lfh = new IO::File "<$in_dir/$infile";
 	if (not defined $lfh) {
-		die "FATAL: can't write to $in_dir/$infile, $!\n";
+		die "FATAL: can't read from $in_dir/$infile, $!\n";
 	}
 	my %stats = %{ fd_retrieve($lfh) };
 	$lfh->close();
