@@ -7510,9 +7510,9 @@ AAAASUVORK5CYII=';
 };
 	}
 	my $begin_date = '';
-        $begin_date = "$o_year-$o_month-$o_day $o_hour:00" if ($o_year);
+        $begin_date = "$o_year-$o_month-$o_day $o_hour:$o_min" if ($o_year);
 	my $end_date = '';
-        $end_date = "$e_year-$e_month-$e_day $e_hour:59" if ($e_year);
+        $end_date = "$e_year-$e_month-$e_day $e_hour:$e_min" if ($e_year);
 
 	$menu_str .= qq{
               <li id="menu-about" class="dropdown"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=about&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">About</a></li>
