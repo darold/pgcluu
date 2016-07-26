@@ -1052,11 +1052,6 @@ if ($END) {
 	}
 }
 
-# Warn that in cache mode the output directory in the same as input one
-if ($CACHE && $OUTPUT_DIR) {
-	warn "WARNING: output directory will not be used, cache files will be generated in $INPUT_DIR\n";
-}
-
 # Force the user to give an output directory
 if (!$CACHE && !$OUTPUT_DIR) {
 	die "FATAL: you must give an output directory $OUTPUT_DIR.\n";
@@ -1077,6 +1072,8 @@ if (!$INPUT_DIR || !-d $INPUT_DIR) {
 	if (!$SAR_INPUT_FILE && !$SADC_INPUT_FILE) {
 		print STDERR "ERROR: you must specify a valid input directory: $INPUT_DIR.\n";
 		&usage();
+	} elsif ($CACHE) {
+		$INPUT_DIR = dirname($SAR_INPUT_FILE || $SADC_INPUT_FILE);
 	}
 }
 
@@ -1085,6 +1082,11 @@ if ($CACHE) {
 	# Ensure this is not a relative path
 	if (dirname($INPUT_DIR) eq '.') {
 		die "FATAL: input directory ($INPUT_DIR) must be an absolute path in caching mode.\n";
+	}
+
+	# Warn that in cache mode the output directory in the same as input one
+	if ($OUTPUT_DIR) {
+		warn "WARNING: output directory will not be used, cache files will be generated in $INPUT_DIR\n";
 	}
 
 } else {
@@ -1184,16 +1186,17 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 		}
 
 		my @statistics_build = ();
-		if ($#binfiles == -1) {
 
-			# Check if there is csv file in the input directory
-			print "DEBUG: looking for CSV file into directory $in_dir/\n" if ($DEBUG);
-			opendir(IDIR, "$in_dir") || die "FATAL: can't opendir $in_dir: $!";
-			my @files = grep { /\.csv(\.gz)?$/ } readdir(IDIR);
-			closedir(IDIR);
-			if ($#files < 0) {
-				die "FATAL: no csv file found in $in_dir";
-			}
+		# Check if there is csv file in the input directory
+		print "DEBUG: looking for CSV file into directory $in_dir/\n" if ($DEBUG);
+		opendir(IDIR, "$in_dir") || die "FATAL: can't opendir $in_dir: $!";
+		my @files = grep { /\.csv(\.gz)?$/ } readdir(IDIR);
+		closedir(IDIR);
+		if ($#files < 0) {
+
+			print "DEBUG: no csv file found in $in_dir" if ($DEBUG);
+
+		} elsif ($#binfiles == -1) {
 
 			# Detect interval from csv file
 			if (-e "$in_dir/pg_stat_database.csv" && !-z "$in_dir/pg_stat_database.csv") {
