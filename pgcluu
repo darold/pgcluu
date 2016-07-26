@@ -1550,6 +1550,19 @@ If you just want to create a report from a sar output file:
 	sar -p -A 10 60 > /root/my_sar_file.txt
         pgcluu -o /tmp/report_sar/ -i /root/my_sar_file.txt
 
+or from a daily sa file:
+
+        sar -p -A -f /var/log/sa/sa18 > /root/my_sar_file.txt
+        pgcluu -o /tmp/report_sar/ -i /root/my_sar_file.txt --from-sa-file
+
+and from a sa binary file:
+
+        pgcluu -o /tmp/report_sar/ -i /var/log/sysstat/sa22
+
+or the sa text file if you don't have the same version of sysstat:
+
+        pgcluu -o /tmp/report_sar/ -i /var/log/sysstat/sar23 --from-sa-file
+
 };
     exit 0;
 }

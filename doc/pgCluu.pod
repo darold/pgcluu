@@ -379,6 +379,14 @@ or from a daily sa file:
         sar -p -A -f /var/log/sa/sa18 > /root/my_sar_file.txt
         pgcluu -o /tmp/report_sar/ -i /root/my_sar_file.txt --from-sa-file
 
+and directly from a sa binary file:
+
+        pgcluu -o /tmp/report_sar/ -i /var/log/sysstat/sa22
+
+or the same sa text file if you don't have the same version of sysstat:
+
+        pgcluu -o /tmp/report_sar/ -i /var/log/sysstat/sar22 --from-sa-file
+
 
 =head1 LICENSE
 
