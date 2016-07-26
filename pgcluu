@@ -8944,7 +8944,7 @@ sub compute_sarfile_stats
 		chomp($l);
 		$l =~ s/\r//;
 		# Skip kernel header part
-		if ( ($l eq '') || ($l =~ /^\d+:\d+:\d+/) || ($l =~ /\d+\/\d+\/\d+/)) {
+		if ( ($l eq '') || ($l =~ /^\d+:\d+:\d+/) || ($l =~ /\d+[\-\/]\d+[\-\/]\d+/)) {
 			push(@content, $l);
 		}
 	}
@@ -8966,10 +8966,16 @@ sub compute_sarfile_stats
 			next;
 		}
 		# look for kernel header to find the date
-		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /(\d+)[\-\/](\d+)[\-\/](\d+)/) ) {
-			$sar_month = $1;
-			$sar_day = $2;
-			$sar_year = $3;
+		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /(\d+)([\-\/])(\d+)[\-\/](\d+)/) ) {
+			if ($2 eq '/') {
+				$sar_month = $1;
+				$sar_day = $2;
+				$sar_year = $3;
+			} else {
+				$sar_month = $2;
+				$sar_day = $3;
+				$sar_year = $1;
+			}
 			if (length($sar_year) == 2) {
 				$sar_year += 2000;
 			}
