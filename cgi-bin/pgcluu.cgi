@@ -1159,6 +1159,10 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 	my $in_dir = "$INPUT_DIR/$WORK_DIRS[$dx]";
 
+	# Do not proceed last workin directory when hour:min is 00:00 because
+	# in this case we don't need even one minute of statistics from this day
+	next if ( ($dx == $#WORK_DIRS) && ($o_hour eq '00') && ($o_min eq '00') );
+
 	# Check if we have binary file in the directory
 	my @binfiles = ();
 	if (-d "$in_dir") {
