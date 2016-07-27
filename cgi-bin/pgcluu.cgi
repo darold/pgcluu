@@ -18,8 +18,8 @@ use CGI;
 use IO::File;
 use Getopt::Long qw(:config bundling no_ignore_case_always);
 use File::Basename;
-use Time::Local 'timegm_nocheck';
-use POSIX qw(locale_h sys_wait_h ceil);
+use Time::Local qw/timegm_nocheck timelocal_nocheck/;
+use POSIX qw(locale_h sys_wait_h ceil strftime);
 setlocale(LC_ALL, 'C');
 use Storable qw(store_fd fd_retrieve);
 
@@ -1141,7 +1141,7 @@ if ($ACTION eq 'about') {
 
 #### Show empty data
 if ($#WORK_DIRS < 0) {
-	&wrong_date_selection();
+	&wrong_date_selection(1);
 	&html_footer();
 	exit 0;
 }
@@ -6532,6 +6532,11 @@ EOF
 
 sub wrong_date_selection
 {
+	my $show_last_stats = shift;
+	if ($show_last_stats) {
+		$show_last_stats = &last_know_statistics();
+	}
+
 	print <<EOF;
 <ul id="slides">
 <li class="slide active-slide" id="wrong_date-slide">
@@ -6544,7 +6549,8 @@ sub wrong_date_selection
 	<li>Start: $o_year-$o_month-$o_day $o_hour:00:00</li>
 	<li>End: $e_year-$e_month-$e_day $e_hour:59:59</li>
 	</ul>
-	<p>Please choose more accurate dates</p>
+	<p>Please choose more accurate dates.</p>
+	$show_last_stats
 	</div>
 </li>
 </ul> <!-- end of slides -->
@@ -6552,6 +6558,61 @@ EOF
 
 }
 
+sub last_know_statistics
+{
+
+	my $start_stats =  '';
+	my $end_stats =  '';
+
+	# Search the path to last computed statistics
+	# Search years / months / days / hours directories
+	if (not opendir(DIR, "$INPUT_DIR")) {
+		die "FATAL: Can't open directory $INPUT_DIR: $!\n";
+	}
+	my @years = grep { /^\d+$/ && -d "$INPUT_DIR/$_" } readdir(DIR);
+	closedir(DIR);
+	if ($#years >= 0) {
+		foreach  my $y (sort { $b <=> $a } @years) {
+			if (not opendir(DIR, "$INPUT_DIR/$y")) {
+				die "FATAL: Can't open directory $INPUT_DIR/$y: $!\n";
+			}
+			my @months = grep { /^\d+$/ && -d "$INPUT_DIR/$y/$_" } readdir(DIR);
+			closedir(DIR);
+			foreach  my $m (sort { $b <=> $a } @months) {
+				if (not opendir(DIR, "$INPUT_DIR/$y/$m")) {
+					die "FATAL: Can't open directory $INPUT_DIR/$y/$m: $!\n";
+				}
+				my @days = grep { /^\d+$/ && -d "$INPUT_DIR/$y/$m/$_" } readdir(DIR);
+				closedir(DIR);
+				foreach  my $d (sort { $b <=> $a } @days) {
+					if (not opendir(DIR, "$INPUT_DIR/$y/$m/$d")) {
+						die "FATAL: Can't open directory $INPUT_DIR/$y/$m/$d: $!\n";
+					}
+					my @hours = grep { /^\d+$/ && -d "$INPUT_DIR/$y/$m/$d/$_" } readdir(DIR);
+					closedir(DIR);
+					if ($#hours == -1) {
+						$start_stats =  "$y-$m-$d\%2000:00";
+						$end_stats = timelocal_nocheck(0, 0, 0, $d, $m - 1, $y - 1900) + 86400;
+						$end_stats = strftime("%Y-%m-%d%%20%H:%M",localtime($end_stats));
+					} else {
+						foreach  my $h (sort { $b <=> $a } @hours) {
+							$start_stats = "$y-$m-$d\%20$h:00";
+							$end_stats = timegm_nocheck(0, 0, $h, $d, $m - 1, $y - 1900) + 3600;
+							$end_stats = strftime("%Y-%m-%d%%20%H:%M",localtime($end_stats));
+							last;
+						}
+					}
+					last;
+				}
+				last;
+			}
+			last;
+		}
+	}
+
+	return "	<p><a href=\"\" onclick=\"document.location.href='$SCRIPT_NAME?action=home&end=$end_stats&start=$start_stats'; return false;\">Last known statistics</a></p>\n";
+
+}
 
 sub show_about
 {
