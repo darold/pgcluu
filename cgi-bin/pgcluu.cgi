@@ -1281,7 +1281,12 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 				}
 				$INTERVAL = $dt if ($dt);
 			}
-
+			if (($TIMEZONE eq '00') && $global_infos{timezone}) {
+				$TIMEZONE = $global_infos{timezone};
+			}
+			if (($STATS_TIMEZONE eq '00') && $global_infos{stats_timezone}) {
+				$STATS_TIMEZONE = $global_infos{stats_timezone};
+			}
 		}
 	}
 
@@ -8777,14 +8782,20 @@ sub compute_sarfile_stats
 		if ($content[$i] eq '') {
 			$type = '';
 			@headers = ();
-			$old_time = 0 if ($FROM_SA_FILE);
+			$old_time = $orig_time if ($FROM_SA_FILE);
 			next;
 		}
 		# look for kernel header to find the date
-		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /(\d+)[\-\/](\d+)[\-\/](\d+)/) ) {
-			$sar_month = $1;
-			$sar_day = $2;
-			$sar_year = $3;
+		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /(\d+)([\-\/])(\d+)[\-\/](\d+)/) ) {
+			if ($2 eq '/') {
+				$sar_month = $1;
+				$sar_day = $3;
+				$sar_year = $4;
+			} else {
+				$sar_month = $3;
+				$sar_day = $4;
+				$sar_year = $1;
+			}
 			if (length($sar_year) == 2) {
 				$sar_year += 2000;
 			}
@@ -8793,6 +8804,10 @@ sub compute_sarfile_stats
 				$sar_day = $sar_month;
 				$sar_month = $tmp;
 			}
+
+			my $tz = ((0-$TIMEZONE)*3600);
+			$orig_time = &timegm_nocheck(0, 0, 0, $sar_day, $sar_month - 1, $sar_year - 1900) + $tz;
+
 			$type = '';
 			@headers = ();
 			next;
