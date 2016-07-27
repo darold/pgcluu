@@ -1161,7 +1161,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 	# Do not proceed last workin directory when hour:min is 00:00 because
 	# in this case we don't need even one minute of statistics from this day
-	next if ( ($dx == $#WORK_DIRS) && ($o_hour eq '00') && ($o_min eq '00') );
+	next if ( ($#WORK_DIRS > 0) && ($dx == $#WORK_DIRS) && ($o_hour eq '00') && ($o_min eq '00') );
 
 	# Check if we have binary file in the directory
 	my @binfiles = ();
@@ -2011,6 +2011,8 @@ sub set_overall_system_stat_from_binary
                 next if ($BEGIN && ($t < $BEGIN));
                 next if ($END   && ($t > $END));
 
+		$sar_swap_stat{$t}{'pswpin'} ||= 0;
+		$sar_swap_stat{$t}{'pswpout'} ||= 0;
 		if (!exists $OVERALL_STATS{'system'}{'pswpin'} || ($OVERALL_STATS{'system'}{'pswpin'}[1] < $sar_swap_stat{$t}{'pswpin'})) {
 			@{$OVERALL_STATS{'system'}{'pswpin'}} = ($t, $sar_swap_stat{$t}{'pswpin'});
 		}
@@ -2024,6 +2026,9 @@ sub set_overall_system_stat_from_binary
                 next if ($BEGIN && ($t < $BEGIN));
                 next if ($END   && ($t > $END));
 
+		$sar_pageswap_stat{$t}{'pgpgin'} ||= 0;
+		$sar_pageswap_stat{$t}{'pgpgout'} ||= 0;
+		$sar_pageswap_stat{$t}{'majflt'} ||= 0;
 		if (!exists $OVERALL_STATS{'system'}{'pgpgin'} || ($OVERALL_STATS{'system'}{'pgpgin'}[1] < $sar_pageswap_stat{$t}{'pgpgin'})) {
 			@{$OVERALL_STATS{'system'}{'pgpgin'}} = ($t, $sar_pageswap_stat{$t}{'pgpgin'});
 		}
@@ -2039,6 +2044,8 @@ sub set_overall_system_stat_from_binary
                 next if ($BEGIN && ($t < $BEGIN));
                 next if ($END   && ($t > $END));
 
+		$sar_block_stat{$t}{'bread'} ||= 0;
+		$sar_block_stat{$t}{'bwrite'} ||= 0;
 		if (!exists $OVERALL_STATS{'system'}{'bread'} || ($OVERALL_STATS{'system'}{'bread'}[1] < $sar_block_stat{$t}{'bread'})) {
 			@{$OVERALL_STATS{'system'}{'bread'}} = ($t, $sar_block_stat{$t}{'bread'});
 		}
@@ -9328,7 +9335,10 @@ sub jqplot_linegraph
               </div>
               <div class="panel-body">
 };
-	my $y2label = "$infos->{y2label}" || '';
+	my $y2label = '';
+	if (exists $infos->{y2label}) {
+		$y2label = $infos->{y2label};
+	}
 
 	my $dateTracker_dataopts = '';
         my $options_series = '';
@@ -9832,7 +9842,6 @@ sub load_sar_binary
         my ($in_dir) = @_;
 
 	foreach my $name (@sar_to_be_stored) {
-
 		my %stats = ();
 		if (-e "$in_dir/$name.bin") {
 			my $lfh = new IO::File "<$in_dir/$name.bin";
