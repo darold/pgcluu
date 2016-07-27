@@ -1015,7 +1015,7 @@ sub read_conf
 	# Check start/end date time
 	if ($BEGIN) {
 		if ($BEGIN =~ /^(\d{4})-(\d+)-(\d+) (\d+):(\d+)/) {
-			$BEGIN = &timegm_nocheck($6, $5, $4, $3, $2 - 1, $1 - 1900) * 1000;
+			$BEGIN = &timegm_nocheck(0, $5, $4, $3, $2 - 1, $1 - 1900) * 1000;
 			$o_day = sprintf("%02d", $3);
 			$o_month = sprintf("%02d", $2);
 			$o_year = $1;
