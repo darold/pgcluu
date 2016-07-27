@@ -7667,8 +7667,11 @@ AAAASUVORK5CYII=';
           fromDate.setDate(fromDate.getDate() - 1);
         break;
     }
-    document.getElementById('start-date').value = (new Date(fromDate)).toISOString().slice(0,16).replace(/T/g," ");
-    document.getElementById('end-date').value = (new Date(toDate)).toISOString().slice(0,16).replace(/T/g," ");
+    var tzoffset = (new Date()).getTimezoneOffset() * 60000;
+    document.getElementById('start-date').value = (new Date(fromDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
+    document.getElementById('start-date').value = document.getElementById('start-date').value.substring(0,11) + '00:00';
+    document.getElementById('end-date').value = (new Date(toDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
+    document.getElementById('end-date').value = document.getElementById('end-date').value.substring(0,11) + '00:00';
   }
 
   function go_forward() {
@@ -7677,8 +7680,9 @@ AAAASUVORK5CYII=';
     var delta    = toDate - fromDate;
     fromDate += delta;
     toDate   += delta;
-    document.getElementById('start-date').value = (new Date(fromDate)).toISOString().slice(0,16).replace(/T/g," ");
-    document.getElementById('end-date').value = (new Date(toDate)).toISOString().slice(0,16).replace(/T/g," ");
+    var tzoffset = (new Date()).getTimezoneOffset() * 60000;
+    document.getElementById('start-date').value = (new Date(fromDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
+    document.getElementById('end-date').value = (new Date(toDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
   };
 
   function go_backward() {
@@ -7687,8 +7691,9 @@ AAAASUVORK5CYII=';
     var delta    = toDate - fromDate;
     fromDate -= delta;
     toDate   -= delta;
-    document.getElementById('start-date').value = (new Date(fromDate)).toISOString().slice(0,16).replace(/T/g," ");
-    document.getElementById('end-date').value = (new Date(toDate)).toISOString().slice(0,16).replace(/T/g," ");
+    var tzoffset = (new Date()).getTimezoneOffset() * 60000;
+    document.getElementById('start-date').value = (new Date(fromDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
+    document.getElementById('end-date').value = (new Date(toDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
   };
 
 </script>            
