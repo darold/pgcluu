@@ -1007,6 +1007,8 @@ sub read_conf
 			push(@INCLUDE_TB, @vals);
 		} elsif ($var eq 'INCLUDE_IFACE') {
 			push(@INCLUDE_IFACE, @vals);
+		} elsif ($var eq 'REVERT_DATE') {
+			$REVERT_DATE = $vals[0];
 		}
 	}
 	# Defined the default backward level where ressources files are stored
@@ -8804,6 +8806,7 @@ sub compute_sarfile_stats
 			if (length($sar_year) == 2) {
 				$sar_year += 2000;
 			}
+			#  mm/dd/yy format in sar file instead of dd/mm/yy (see configuration directive REVERT_DATE)
 			if ($REVERT_DATE || ($sar_month > 12)) {
 				my $tmp = $sar_day;
 				$sar_day = $sar_month;
