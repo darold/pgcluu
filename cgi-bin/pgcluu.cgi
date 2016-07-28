@@ -42,8 +42,8 @@ my $HELP            = 0;
 my $SHOW_VER        = 0;
 my $DEBUG           = 0;
 my $NUMBER_CPU      = 0;
-my $TIMEZONE        = '00';
-my $STATS_TIMEZONE  = '00';
+my $TIMEZONE        = '00'; #substr(strftime('%z', localtime()), 0, 3);
+my $STATS_TIMEZONE  = '00';  # Timezone is auto detected from data files
 my $REVERT_DATE     = 0;
 my $FROM_SA_FILE    = 0;
 my $SADC_INPUT_FILE = '';
@@ -1232,6 +1232,22 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			}
 			print STDERR "DEBUG: autodetected interval value $INTERVAL\n" if ($DEBUG);
 
+			# Detect timezone from csv file
+			if ($STATS_TIMEZONE eq '00') {
+				if (-e "$in_dir/pg_stat_database.csv" && !-z "$in_dir/pg_stat_database.csv") {
+					$STATS_TIMEZONE = &detect_timezone("$in_dir/pg_stat_database.csv");
+				} elsif (-e "$in_dir/pg_stat_database.csv.gz" ) {
+					$STATS_TIMEZONE = &detect_timezone("$in_dir/pg_stat_database.csv.gz");
+				}
+				# Force use of same the same timezone for postgresql and system metrics
+				if ($TIMEZONE ne $STATS_TIMEZONE) {
+					$TIMEZONE = $STATS_TIMEZONE;
+				}
+
+				print "DEBUG: autodetected timezone value database : $STATS_TIMEZONE, system: $TIMEZONE\n" if ($DEBUG);
+			}
+
+
 			# Loop over CSV files and graphics definition to generate reports
 			print STDERR "DEBUG: Building PostgreSQL statistics From $ACTION CSV files\n" if ($DEBUG);
 			foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS) {
@@ -1945,6 +1961,7 @@ sub set_overall_database_stat_from_binary
 			next if (($db eq 'all') || (($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB))));
 
 			foreach my $k (qw(insert returned fetched update delete blks_read blks_hit nbackend xact_commit xact_rollback canceled_queries deadlocks temp_files temp_bytes xact_throughput)) {
+				next if (!exists $all_stat_database{$time}{$db}{$k});
 				$OVERALL_STATS{'cluster'}{$k} += $all_stat_database{$time}{$db}{$k};
 				$OVERALL_STATS{'database'}{$db}{$k} += $all_stat_database{$time}{$db}{$k};
 
@@ -2096,6 +2113,7 @@ sub pg_stat_database_report
 	my $has_tuples = 0;
 	my $has_temp = 0;
 	my $has_conflict = 0;
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $time (sort {$a <=> $b} keys %all_stat_database) {
 		foreach my $db (@global_databases) {
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
@@ -2115,11 +2133,11 @@ sub pg_stat_database_report
 				}
 			}
 			if ($has_tuples) {
-				$database_stat{$db}{insert} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{insert}/$interval)) . '],';
-				$database_stat{$db}{returned} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{returned}/$interval)) . '],';
-				$database_stat{$db}{fetched} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{fetched}/$interval)) . '],';
-				$database_stat{$db}{update} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{update}/$interval)) . '],';
-				$database_stat{$db}{delete} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{delete}/$interval)) . '],';
+				$database_stat{$db}{insert} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{insert}/$interval)) . '],';
+				$database_stat{$db}{returned} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{returned}/$interval)) . '],';
+				$database_stat{$db}{fetched} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{fetched}/$interval)) . '],';
+				$database_stat{$db}{update} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{update}/$interval)) . '],';
+				$database_stat{$db}{delete} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{delete}/$interval)) . '],';
 				$total_query_type{$db}{'all'} +=  $all_stat_database{$time}{$db}{insert} + $all_stat_database{$time}{$db}{returned} + $all_stat_database{$time}{$db}{update} + $all_stat_database{$time}{$db}{delete};
 
 				$total_query_type{$db}{'insert'} += $all_stat_database{$time}{$db}{insert};
@@ -2129,19 +2147,19 @@ sub pg_stat_database_report
 			}
 			$all_stat_database{$time}{$db}{blks_read} ||= 0;
 			$all_stat_database{$time}{$db}{blks_hit} ||= 0;
-			$database_stat{$db}{blks_read} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{blks_read}/$interval)) . '],';
-			$database_stat{$db}{blks_hit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{blks_hit}/$interval)) . '],';
+			$database_stat{$db}{blks_read} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{blks_read}/$interval)) . '],';
+			$database_stat{$db}{blks_hit} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{blks_hit}/$interval)) . '],';
 
 			if (($all_stat_database{$time}{$db}{blks_read} + $all_stat_database{$time}{$db}{blks_hit}) > 0) {
-				$database_stat{$db}{ratio_hit_miss} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{blks_hit}*100)/($all_stat_database{$time}{$db}{blks_read} + $all_stat_database{$time}{$db}{blks_hit})) . '],';
+				$database_stat{$db}{ratio_hit_miss} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{blks_hit}*100)/($all_stat_database{$time}{$db}{blks_read} + $all_stat_database{$time}{$db}{blks_hit})) . '],';
 			} else {
-				$database_stat{$db}{ratio_hit_miss} .= '[' . $time . ',0],';
+				$database_stat{$db}{ratio_hit_miss} .= '[' . ($time - $tz) . ',0],';
 			}
-			$database_stat{$db}{nbackend} .= '[' . $time . ',' . ($all_stat_database{$time}{$db}{nbackend}||0) . '],';
+			$database_stat{$db}{nbackend} .= '[' . ($time - $tz) . ',' . ($all_stat_database{$time}{$db}{nbackend}||0) . '],';
 			$has_conn{$db} = 1 if ($all_stat_database{$time}{$db}{nbackend});
-			$database_stat{$db}{xact_commit} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{xact_commit}||0)/$interval) . '],';
-			$database_stat{$db}{xact_rollback} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{xact_rollback}||0)/$interval) . '],';
-			$database_stat{$db}{xact_throughput} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{xact_throughput}||0)/$interval) . '],';
+			$database_stat{$db}{xact_commit} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{xact_commit}||0)/$interval) . '],';
+			$database_stat{$db}{xact_rollback} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{xact_rollback}||0)/$interval) . '],';
+			$database_stat{$db}{xact_throughput} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{xact_throughput}||0)/$interval) . '],';
 			# It depends on the postgresql version
 			if (!$has_conflict) {
 				foreach my $k (keys %{$all_stat_database{$time}{$db}}) {
@@ -2152,7 +2170,7 @@ sub pg_stat_database_report
 				}
 			}
 			if ($has_conflict) {
-				$database_stat{$db}{canceled_queries} .= '[' . $time . ',' . ($all_stat_database{$time}{$db}{canceled_queries}||0) . '],';
+				$database_stat{$db}{canceled_queries} .= '[' . ($time - $tz) . ',' . ($all_stat_database{$time}{$db}{canceled_queries}||0) . '],';
 			}
 			# It depends on the postgresql version
 			if (!$has_temp) {
@@ -2164,9 +2182,9 @@ sub pg_stat_database_report
 				}
 			}
 			if ($has_temp) {
-				$database_stat{$db}{deadlocks} .= '[' . $time . ',' . ($all_stat_database{$time}{$db}{deadlocks}||0) . '],';
-				$database_stat{$db}{temp_files} .= '[' . $time . ',' . ($all_stat_database{$time}{$db}{temp_files}||0) . '],';
-				$database_stat{$db}{temp_bytes} .= '[' . $time . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{temp_bytes}||0)/$interval) . '],';
+				$database_stat{$db}{deadlocks} .= '[' . ($time - $tz) . ',' . ($all_stat_database{$time}{$db}{deadlocks}||0) . '],';
+				$database_stat{$db}{temp_files} .= '[' . ($time - $tz) . ',' . ($all_stat_database{$time}{$db}{temp_files}||0) . '],';
+				$database_stat{$db}{temp_bytes} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{temp_bytes}||0)/$interval) . '],';
 			}
 		}
 	}
@@ -2445,10 +2463,11 @@ sub pg_database_size_report
 
 	my %database_stat = ();
 	my $total_val = 0;
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort {$a <=> $b} keys %all_database_size) {
 		foreach my $db (@global_databases) {
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
-			$database_stat{$db}{size} .= '[' . $t . ',' . ($all_database_size{$t}{$db} || 0) . '],';
+			$database_stat{$db}{size} .= '[' . ($t - $tz) . ',' . ($all_database_size{$t}{$db} || 0) . '],';
 		}
 	}
 	%all_database_size = ();
@@ -2513,19 +2532,18 @@ sub pg_tablespace_size_report
 	my %data = ();
 	my $print_after = '';
 	my %tablespace_stat = ();
-	foreach my $t (sort {$a <=> $b} keys %all_tablespace_size) {
+	my $tz = ($STATS_TIMEZONE*3600*1000);
+	foreach my $time (sort {$a <=> $b} keys %all_tablespace_size) {
 		foreach my $tbsp (@global_tbspnames) {
-			$tablespace_stat{$tbsp}{size} .= '[' . $t . ',' . ($all_tablespace_size{$t}{$tbsp}{size}||0) . '],';
-			$tablespace_stat{$tbsp}{location} = $all_tablespace_size{$t}{$tbsp}{location} || '';
+			$tablespace_stat{$tbsp}{size} .= '[' . ($time - $tz) . ',' . ($all_tablespace_size{$time}{$tbsp}{size}||0) . '],';
+			$tablespace_stat{$tbsp}{location} = $all_tablespace_size{$time}{$tbsp}{location} || '';
 		}
 	}
 	foreach my $tbsp (sort keys %tablespace_stat) {
 		$tablespace_stat{$tbsp}{size} =~ s/,$//;
 		$data{$tbsp} = $tablespace_stat{$tbsp}{size};
 		if ($tbsp ne 'all') {
-			my $location = "$tbsp";
-			$location .= " ($tablespace_stat{$tbsp}{location})" if ($tablespace_stat{$tbsp}{location});
-			$print_after .= &jqplot_linegraph_array($IDX++, 'tablespace-size+', \%{$data_info{$id}}, $location, $tablespace_stat{$tbsp}{size});
+			$print_after .= "<li>$tbsp ($tablespace_stat{$tbsp}{location})</li>\n";
 		}
 	}
 	%all_tablespace_size = ();
@@ -3219,16 +3237,17 @@ sub pg_statio_user_tables_report
 	my %is_used = ();
 	my %is_toast = ();
 	my %statio_usertable = ();
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort {$a <=> $b} keys %all_statio_user_tables) {
 		foreach my $obj (keys %{ $all_statio_user_tables{$t}{$db} }) {
-			$statio_usertable{$db}{$obj}{heap_blks_read} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_read}||0) . '],';
-			$statio_usertable{$db}{$obj}{heap_blks_hit} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_hit}||0) . '],';
-			$statio_usertable{$db}{$obj}{idx_blks_read} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_read}||0) . '],';
-			$statio_usertable{$db}{$obj}{idx_blks_hit} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_hit}||0) . '],';
-			$statio_usertable{$db}{$obj}{toast_blks_read} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_read}||0) . '],';
-			$statio_usertable{$db}{$obj}{toast_blks_hit} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_hit}||0) . '],';
-			$statio_usertable{$db}{$obj}{tidx_blks_read} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_read}||0) . '],';
-			$statio_usertable{$db}{$obj}{tidx_blks_hit} .= '[' . $t . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_hit}||0) . '],';
+			$statio_usertable{$db}{$obj}{heap_blks_read} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_read}||0) . '],';
+			$statio_usertable{$db}{$obj}{heap_blks_hit} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_hit}||0) . '],';
+			$statio_usertable{$db}{$obj}{idx_blks_read} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_read}||0) . '],';
+			$statio_usertable{$db}{$obj}{idx_blks_hit} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_hit}||0) . '],';
+			$statio_usertable{$db}{$obj}{toast_blks_read} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_read}||0) . '],';
+			$statio_usertable{$db}{$obj}{toast_blks_hit} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_hit}||0) . '],';
+			$statio_usertable{$db}{$obj}{tidx_blks_read} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_read}||0) . '],';
+			$statio_usertable{$db}{$obj}{tidx_blks_hit} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_hit}||0) . '],';
 			$is_used{$db}{$obj}{is_used} += ($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_hit}||0);
 			if (!$is_toast{$db}{$obj}{is_toast}) {
 				$is_toast{$db}{$obj}{is_toast} += ($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_hit}||0);
@@ -3305,18 +3324,19 @@ sub pg_relation_buffercache_report
 	my %rel_stat = ();
 	my %to_show = ();
 	my %buffercache_stat = ();
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 
 	foreach my $t (sort {$a <=> $b} keys %all_relation_buffercache) {
 		foreach my $obj ( keys %{$all_relation_buffercache{$t}{$db}} ) {
-			$rel_stat{$db}{$obj}{buffers}      .= '[' . $t . ',' . ($all_relation_buffercache{$t}{$db}{$obj}{buffers} || 0) . '],';
+			$rel_stat{$db}{$obj}{buffers}      .= '[' . ($t - $tz) . ',' . ($all_relation_buffercache{$t}{$db}{$obj}{buffers} || 0) . '],';
 			$buffercache_stat{$db}{$obj}{buffers} = ($all_relation_buffercache{$t}{$db}{$obj}{buffers} || 0);
-			$rel_stat{$db}{$obj}{pages}        .= '[' . $t . ',' . ($all_relation_buffercache{$t}{$db}{$obj}{pages} || 0) . '],';
+			$rel_stat{$db}{$obj}{pages}        .= '[' . ($t - $tz) . ',' . ($all_relation_buffercache{$t}{$db}{$obj}{pages} || 0) . '],';
 			$buffercache_stat{$db}{$obj}{pages} = ($all_relation_buffercache{$t}{$db}{$obj}{pages} || 0);
-			$rel_stat{$db}{$obj}{buffered}     .= '[' . $t . ',' . ($all_relation_buffercache{$t}{$db}{$obj}{buffered} || 0) . '],';
+			$rel_stat{$db}{$obj}{buffered}     .= '[' . ($t - $tz) . ',' . ($all_relation_buffercache{$t}{$db}{$obj}{buffered} || 0) . '],';
 			$buffercache_stat{$db}{$obj}{buffered} = ($all_relation_buffercache{$t}{$db}{$obj}{buffered} || 0);
-			$rel_stat{$db}{$obj}{'buffers %'}  .= '[' . $t . ',' . ($all_relation_buffercache{$t}{$db}{$obj}{'buffers %'} || 0) . '],';
+			$rel_stat{$db}{$obj}{'buffers %'}  .= '[' . ($t - $tz) . ',' . ($all_relation_buffercache{$t}{$db}{$obj}{'buffers %'} || 0) . '],';
 			$buffercache_stat{$db}{$obj}{'buffers %'} = ($all_relation_buffercache{$t}{$db}{$obj}{'buffers %'} || 0);
-			$rel_stat{$db}{$obj}{'relation %'} .= '[' . $t . ',' . ($all_relation_buffercache{$t}{$db}{$obj}{'relation %'} || 0) . '],';
+			$rel_stat{$db}{$obj}{'relation %'} .= '[' . ($t - $tz) . ',' . ($all_relation_buffercache{$t}{$db}{$obj}{'relation %'} || 0) . '],';
 			$buffercache_stat{$db}{$obj}{'relation %'} = ($all_relation_buffercache{$t}{$db}{$obj}{'relation %'} || 0);
 		}
 	}
@@ -3466,10 +3486,11 @@ sub pg_statio_user_indexes_report
 
 	my %statio_userindex = ();
 	my %is_used = ();
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort {$a <=> $b} keys %all_statio_all_indexes) {
 		foreach my $obj (keys %{ $all_statio_all_indexes{$t}{$db} }) {
-			$statio_userindex{$db}{$obj}{idx_blks_read} .= '[' . $t . ',' . ($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_read}||0) . '],';
-			$statio_userindex{$db}{$obj}{idx_blks_hit} .= '[' . $t . ',' . ($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_hit}||0) . '],';
+			$statio_userindex{$db}{$obj}{idx_blks_read} .= '[' . ($t - $tz) . ',' . ($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_read}||0) . '],';
+			$statio_userindex{$db}{$obj}{idx_blks_hit} .= '[' . ($t - $tz) . ',' . ($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_hit}||0) . '],';
 			$is_used{$db}{$obj} += ($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_hit}||0)+($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_read}||0);
 		}
 	}
@@ -3536,11 +3557,12 @@ sub pg_xlog_stat_report
 	return if (!scalar keys %all_xlog_stat);
 
 	my %xlog_stat = ();
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort {$a <=> $b} keys %all_xlog_stat) {
-		$xlog_stat{total} .= '[' . $t . ',' . ($all_xlog_stat{$t}{total} || 0) . '],';
-		$xlog_stat{recycled} .= '[' . $t . ',' . ($all_xlog_stat{$t}{recycled} || 0) . '],';
-		$xlog_stat{written}  .= '[' . $t . ',' . ($all_xlog_stat{$t}{written} || 0) . '],';
-		$xlog_stat{max_wal}  .= '[' . $t . ',' . ($all_xlog_stat{$t}{max_wal} || 0) . '],';
+		$xlog_stat{total} .= '[' . ($t - $tz) . ',' . ($all_xlog_stat{$t}{total} || 0) . '],';
+		$xlog_stat{recycled} .= '[' . ($t - $tz) . ',' . ($all_xlog_stat{$t}{recycled} || 0) . '],';
+		$xlog_stat{written}  .= '[' . ($t - $tz) . ',' . ($all_xlog_stat{$t}{written} || 0) . '],';
+		$xlog_stat{max_wal}  .= '[' . ($t - $tz) . ',' . ($all_xlog_stat{$t}{max_wal} || 0) . '],';
 	}
 	%all_xlog_stat = ();
 
@@ -3620,18 +3642,19 @@ sub pg_stat_bgwriter_report
 
 	my %bgwriter_stat = ();
 	my %data = ();
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort {$a <=> $b} keys %all_stat_bgwriter) {
 		$data{'Checkpoint timed'} += $all_stat_bgwriter{$t}{checkpoints_timed};
 		$data{'Checkpoint requested'} += $all_stat_bgwriter{$t}{checkpoints_red};
-		$bgwriter_stat{checkpoints_timed} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{checkpoints_timed} . '],';
-		$bgwriter_stat{checkpoints_req} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{checkpoints_req} . '],';
-		$bgwriter_stat{checkpoint_write_time} .= '[' . $t . ',' . ($all_stat_bgwriter{$t}{checkpoint_write_time}||0) . '],';
-		$bgwriter_stat{checkpoint_sync_time} .= '[' . $t . ',' . ($all_stat_bgwriter{$t}{checkpoint_sync_time}||0) . '],';
-		$bgwriter_stat{buffers_checkpoint} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{buffers_checkpoint} . '],';
-		$bgwriter_stat{buffers_clean} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{buffers_clean} . '],';
-		$bgwriter_stat{maxwritten_clean} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{maxwritten_clean} . '],';
-		$bgwriter_stat{buffers_backend} .= '[' . $t . ',' . $all_stat_bgwriter{$t}{buffers_backend} . '],';
-		$bgwriter_stat{buffers_backend_fsync} .= '[' . $t . ',' . ((exists $all_stat_bgwriter{$t}{buffers_backend_fsync}) ? $all_stat_bgwriter{$t}{buffers_backend_fsync} : '0') . '],';
+		$bgwriter_stat{checkpoints_timed} .= '[' . ($t - $tz) . ',' . $all_stat_bgwriter{$t}{checkpoints_timed} . '],';
+		$bgwriter_stat{checkpoints_req} .= '[' . ($t - $tz) . ',' . $all_stat_bgwriter{$t}{checkpoints_req} . '],';
+		$bgwriter_stat{checkpoint_write_time} .= '[' . ($t - $tz) . ',' . ($all_stat_bgwriter{$t}{checkpoint_write_time}||0) . '],';
+		$bgwriter_stat{checkpoint_sync_time} .= '[' . ($t - $tz) . ',' . ($all_stat_bgwriter{$t}{checkpoint_sync_time}||0) . '],';
+		$bgwriter_stat{buffers_checkpoint} .= '[' . ($t - $tz) . ',' . $all_stat_bgwriter{$t}{buffers_checkpoint} . '],';
+		$bgwriter_stat{buffers_clean} .= '[' . ($t - $tz) . ',' . $all_stat_bgwriter{$t}{buffers_clean} . '],';
+		$bgwriter_stat{maxwritten_clean} .= '[' . ($t - $tz) . ',' . $all_stat_bgwriter{$t}{maxwritten_clean} . '],';
+		$bgwriter_stat{buffers_backend} .= '[' . ($t - $tz) . ',' . $all_stat_bgwriter{$t}{buffers_backend} . '],';
+		$bgwriter_stat{buffers_backend_fsync} .= '[' . ($t - $tz) . ',' . ((exists $all_stat_bgwriter{$t}{buffers_backend_fsync}) ? $all_stat_bgwriter{$t}{buffers_backend_fsync} : '0') . '],';
 	}
 	%all_stat_bgwriter = ();
 
@@ -3708,15 +3731,16 @@ sub pg_stat_connections_report
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
 	my %connections_stat = ();
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $time (sort {$a <=> $b} keys %all_stat_connections) {
 		foreach my $db (@global_databases) {
 			next if (($db_glob ne 'all') && ($db ne $db_glob));
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
-			$connections_stat{$db}{total} .= '[' . $time . ',' . ($all_stat_connections{$time}{$db}{total}||0) . '],';
-			$connections_stat{$db}{active} .= '[' . $time . ',' . ($all_stat_connections{$time}{$db}{active}||0) . '],';
-			$connections_stat{$db}{waiting} .= '[' . $time . ',' . ($all_stat_connections{$time}{$db}{waiting}||0) . '],';
-			$connections_stat{$db}{idle_in_xact} .= '[' . $time . ',' . ($all_stat_connections{$time}{$db}{idle_in_xact}||0) . '],';
-			$connections_stat{$db}{idle} .= '[' . $time . ',' . ($all_stat_connections{$time}{$db}{idle}||0) . '],';
+			$connections_stat{$db}{total} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{$db}{total}||0) . '],';
+			$connections_stat{$db}{active} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{$db}{active}||0) . '],';
+			$connections_stat{$db}{waiting} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{$db}{waiting}||0) . '],';
+			$connections_stat{$db}{idle_in_xact} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{$db}{idle_in_xact}||0) . '],';
+			$connections_stat{$db}{idle} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{$db}{idle}||0) . '],';
 		}
 	}
 	%all_stat_connections = ();
@@ -3892,17 +3916,18 @@ sub pg_stat_replication_report
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
 	my %xlog_stat = ();
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort {$a <=> $b} keys %all_stat_replication) {
 		foreach my $name (sort {$a cmp $b} keys %{$all_stat_replication{$t}}) {
 			if ($name eq 'master_location') {
 				$all_stat_replication{$t}{master_location} ||= 0;
-				$xlog_stat{master_location} .= '[' . $t . ',' . sprintf("%0.2f", ($all_stat_replication{$t}{master_location}/$interval)) . '],';
+				$xlog_stat{master_location} .= '[' . ($t - $tz) . ',' . sprintf("%0.2f", ($all_stat_replication{$t}{master_location}/$interval)) . '],';
 				next;
 			}
-			$xlog_stat{$name}{replay_location} .= '[' . $t . ',' . ($all_stat_replication{$t}{$name}{replay_location} || 0) . '],';
-			$xlog_stat{$name}{sent_location} .= '[' . $t . ',' . ($all_stat_replication{$t}{$name}{sent_location} || 0) . '],';
-			$xlog_stat{$name}{write_location} .= '[' . $t . ',' . ($all_stat_replication{$t}{$name}{write_location} || 0) . '],';
-			$xlog_stat{$name}{flush_location} .= '[' . $t . ',' . ($all_stat_replication{$t}{$name}{flush_location} || 0) . '],';
+			$xlog_stat{$name}{replay_location} .= '[' . ($t - $tz) . ',' . ($all_stat_replication{$t}{$name}{replay_location} || 0) . '],';
+			$xlog_stat{$name}{sent_location} .= '[' . ($t - $tz) . ',' . ($all_stat_replication{$t}{$name}{sent_location} || 0) . '],';
+			$xlog_stat{$name}{write_location} .= '[' . ($t - $tz) . ',' . ($all_stat_replication{$t}{$name}{write_location} || 0) . '],';
+			$xlog_stat{$name}{flush_location} .= '[' . ($t - $tz) . ',' . ($all_stat_replication{$t}{$name}{flush_location} || 0) . '],';
 		}
 	}
 	%all_stat_replication = ();
@@ -3965,17 +3990,18 @@ sub pgbouncer_stats_report
 
 	my %pgbouncer_stat = ();
 	my %total_pool = ();
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort {$a <=> $b} keys %all_pgbouncer_stats) {
 		foreach my $db (keys %{$all_pgbouncer_stats{$t}}) {
 			foreach my $usr (keys %{$all_pgbouncer_stats{$t}{$db}}) {
-				$pgbouncer_stat{"$db/$usr"}{cl_active} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{cl_active} || 0) . '],';
-				$pgbouncer_stat{"$db/$usr"}{cl_waiting} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{cl_waiting} || 0) . '],';
-				$pgbouncer_stat{"$db/$usr"}{sv_active} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{sv_active} || 0) . '],';
-				$pgbouncer_stat{"$db/$usr"}{sv_idle} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{sv_idle} || 0) . '],';
-				$pgbouncer_stat{"$db/$usr"}{sv_used} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{sv_used} || 0) . '],';
-				$pgbouncer_stat{"$db/$usr"}{sv_tested} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{sv_tested} || 0) . '],';
-				$pgbouncer_stat{"$db/$usr"}{sv_login} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{sv_login} || 0) . '],';
-				$pgbouncer_stat{"$db/$usr"}{maxwait} .= '[' . $t . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{maxwait} || 0) . '],';
+				$pgbouncer_stat{"$db/$usr"}{cl_active} .= '[' . ($t - $tz) . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{cl_active} || 0) . '],';
+				$pgbouncer_stat{"$db/$usr"}{cl_waiting} .= '[' . ($t - $tz) . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{cl_waiting} || 0) . '],';
+				$pgbouncer_stat{"$db/$usr"}{sv_active} .= '[' . ($t - $tz) . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{sv_active} || 0) . '],';
+				$pgbouncer_stat{"$db/$usr"}{sv_idle} .= '[' . ($t - $tz) . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{sv_idle} || 0) . '],';
+				$pgbouncer_stat{"$db/$usr"}{sv_used} .= '[' . ($t - $tz) . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{sv_used} || 0) . '],';
+				$pgbouncer_stat{"$db/$usr"}{sv_tested} .= '[' . ($t - $tz) . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{sv_tested} || 0) . '],';
+				$pgbouncer_stat{"$db/$usr"}{sv_login} .= '[' . ($t - $tz) . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{sv_login} || 0) . '],';
+				$pgbouncer_stat{"$db/$usr"}{maxwait} .= '[' . ($t - $tz) . ',' . ($all_pgbouncer_stats{$t}{$db}{$usr}{maxwait} || 0) . '],';
 				$total_pool{$db}{cl_active} += $all_pgbouncer_stats{$t}{$db}{$usr}{cl_active};
 				$total_pool{$db}{cl_waiting} += $all_pgbouncer_stats{$t}{$db}{$usr}{cl_waiting};
 				$total_pool{$db}{sv_active} += $all_pgbouncer_stats{$t}{$db}{$usr}{sv_active};
@@ -3985,14 +4011,14 @@ sub pgbouncer_stats_report
 				$total_pool{$db}{sv_login} += $all_pgbouncer_stats{$t}{$db}{$usr}{sv_login};
 				$total_pool{$db}{maxwait} += $all_pgbouncer_stats{$t}{$db}{$usr}{maxwait};
 			}
-			$pgbouncer_stat{$db}{cl_active} .= '[' . $t . ',' . ($total_pool{$db}{cl_active} || 0) . '],';
-			$pgbouncer_stat{$db}{cl_waiting} .= '[' . $t . ',' . ($total_pool{$db}{cl_waiting} || 0) . '],';
-			$pgbouncer_stat{$db}{sv_active} .= '[' . $t . ',' . ($total_pool{$db}{sv_active} || 0) . '],';
-			$pgbouncer_stat{$db}{sv_idle} .= '[' . $t . ',' . ($total_pool{$db}{sv_idle} || 0) . '],';
-			$pgbouncer_stat{$db}{sv_used} .= '[' . $t . ',' . ($total_pool{$db}{sv_used} || 0) . '],';
-			$pgbouncer_stat{$db}{sv_tested} .= '[' . $t . ',' . ($total_pool{$db}{sv_tested} || 0) . '],';
-			$pgbouncer_stat{$db}{sv_login} .= '[' . $t . ',' . ($total_pool{$db}{sv_login} || 0) . '],';
-			$pgbouncer_stat{$db}{maxwait} .= '[' . $t . ',' . ($total_pool{$db}{maxwait} || 0) . '],';
+			$pgbouncer_stat{$db}{cl_active} .= '[' . ($t - $tz) . ',' . ($total_pool{$db}{cl_active} || 0) . '],';
+			$pgbouncer_stat{$db}{cl_waiting} .= '[' . ($t - $tz) . ',' . ($total_pool{$db}{cl_waiting} || 0) . '],';
+			$pgbouncer_stat{$db}{sv_active} .= '[' . ($t - $tz) . ',' . ($total_pool{$db}{sv_active} || 0) . '],';
+			$pgbouncer_stat{$db}{sv_idle} .= '[' . ($t - $tz) . ',' . ($total_pool{$db}{sv_idle} || 0) . '],';
+			$pgbouncer_stat{$db}{sv_used} .= '[' . ($t - $tz) . ',' . ($total_pool{$db}{sv_used} || 0) . '],';
+			$pgbouncer_stat{$db}{sv_tested} .= '[' . ($t - $tz) . ',' . ($total_pool{$db}{sv_tested} || 0) . '],';
+			$pgbouncer_stat{$db}{sv_login} .= '[' . ($t - $tz) . ',' . ($total_pool{$db}{sv_login} || 0) . '],';
+			$pgbouncer_stat{$db}{maxwait} .= '[' . ($t - $tz) . ',' . ($total_pool{$db}{maxwait} || 0) . '],';
 #			$total_pool{'all'}{cl_active} += $total_pool{$db}{cl_active};
 #			$total_pool{'all'}{cl_waiting} += $total_pool{$db}{cl_waiting};
 #			$total_pool{'all'}{sv_active} += $total_pool{$db}{sv_active};
@@ -4003,14 +4029,14 @@ sub pgbouncer_stats_report
 #			$total_pool{'all'}{maxwait} += $total_pool{$db}{maxwait};
 			delete $total_pool{$db};
 		}
-#		$pgbouncer_stat{'all'}{cl_active} .= '[' . $t . ',' . ($total_pool{'all'}{cl_active} || 0) . '],';
-#		$pgbouncer_stat{'all'}{cl_waiting} .= '[' . $t . ',' . ($total_pool{'all'}{cl_waiting} || 0) . '],';
-#		$pgbouncer_stat{'all'}{sv_active} .= '[' . $t . ',' . ($total_pool{'all'}{sv_active} || 0) . '],';
-#		$pgbouncer_stat{'all'}{sv_idle} .= '[' . $t . ',' . ($total_pool{'all'}{sv_idle} || 0) . '],';
-#		$pgbouncer_stat{'all'}{sv_used} .= '[' . $t . ',' . ($total_pool{'all'}{sv_used} || 0) . '],';
-#		$pgbouncer_stat{'all'}{sv_tested} .= '[' . $t . ',' . ($total_pool{'all'}{sv_tested} || 0) . '],';
-#		$pgbouncer_stat{'all'}{sv_login} .= '[' . $t . ',' . ($total_pool{'all'}{sv_login} || 0) . '],';
-#		$pgbouncer_stat{'all'}{maxwait} .= '[' . $t . ',' . ($total_pool{'all'}{maxwait} || 0) . '],';
+#		$pgbouncer_stat{'all'}{cl_active} .= '[' . ($t - $tz) . ',' . ($total_pool{'all'}{cl_active} || 0) . '],';
+#		$pgbouncer_stat{'all'}{cl_waiting} .= '[' . ($t - $tz) . ',' . ($total_pool{'all'}{cl_waiting} || 0) . '],';
+#		$pgbouncer_stat{'all'}{sv_active} .= '[' . ($t - $tz) . ',' . ($total_pool{'all'}{sv_active} || 0) . '],';
+#		$pgbouncer_stat{'all'}{sv_idle} .= '[' . ($t - $tz) . ',' . ($total_pool{'all'}{sv_idle} || 0) . '],';
+#		$pgbouncer_stat{'all'}{sv_used} .= '[' . ($t - $tz) . ',' . ($total_pool{'all'}{sv_used} || 0) . '],';
+#		$pgbouncer_stat{'all'}{sv_tested} .= '[' . ($t - $tz) . ',' . ($total_pool{'all'}{sv_tested} || 0) . '],';
+#		$pgbouncer_stat{'all'}{sv_login} .= '[' . ($t - $tz) . ',' . ($total_pool{'all'}{sv_login} || 0) . '],';
+#		$pgbouncer_stat{'all'}{maxwait} .= '[' . ($t - $tz) . ',' . ($total_pool{'all'}{maxwait} || 0) . '],';
 	}
 
 	# Build graph dataset for all pgbouncer pool
@@ -4191,10 +4217,11 @@ sub pgbouncer_req_stats_report
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
 	my %pgbouncer_stat = ();
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort {$a <=> $b} keys %all_pgbouncer_req_stats) {
 		foreach my $db (keys %{$all_pgbouncer_req_stats{$t}}) {
 			foreach my $k (keys %{$all_pgbouncer_req_stats{$t}{$db}}) {
-				$pgbouncer_stat{$db}{$k} .= '[' . $t . ',' . $all_pgbouncer_req_stats{$t}{$db}{$k} . '],';
+				$pgbouncer_stat{$db}{$k} .= '[' . ($t - $tz) . ',' . $all_pgbouncer_req_stats{$t}{$db}{$k} . '],';
 			}
 		}
 	}
@@ -4401,11 +4428,12 @@ sub pg_stat_locks_report
 
 	my %locks_stat = ();
 	my %legends = ();
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (keys %all_stat_locks) {
 		foreach my $lbl (keys %{$all_stat_locks{$t}{$db}}) {
 			push(@{$legends{$db}{$lbl}}, 'waiting') if ( grep(/^waiting$/, @{$legends{$db}{$lbl}}) && (${$legends{$db}{$lbl}}[0] eq 'granted') );
 			foreach my $k (@{$legends{$db}{$lbl}}) {
-				$locks_stat{$db}{$lbl}{$k} .= '[' . $t . ',' . ($all_stat_locks{$t}{$db}{$lbl}{$k}||0) . '],';
+				$locks_stat{$db}{$lbl}{$k} .= '[' . ($t - $tz) . ',' . ($all_stat_locks{$t}{$db}{$lbl}{$k}||0) . '],';
 			}
 		}
 	}
@@ -5723,11 +5751,12 @@ sub pg_database_buffercache_report
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
 	my %shared_stat = ();
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort keys %all_database_buffercache) {
 		foreach my $db (@global_databases) {
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
-			$shared_stat{$db}{shared_buffers_used} .= '[' . $t . ',' . ($all_database_buffercache{$t}{$db}{shared_buffers_used}||0) . '],';
-			$shared_stat{$db}{database_loaded} .= '[' . $t . ',' . ($all_database_buffercache{$t}{$db}{database_loaded}||0) . '],';
+			$shared_stat{$db}{shared_buffers_used} .= '[' . ($t - $tz) . ',' . ($all_database_buffercache{$t}{$db}{shared_buffers_used}||0) . '],';
+			$shared_stat{$db}{database_loaded} .= '[' . ($t - $tz) . ',' . ($all_database_buffercache{$t}{$db}{database_loaded}||0) . '],';
 		}
 	}
 	%all_database_buffercache = ();
@@ -5783,9 +5812,10 @@ sub pg_database_usagecount_report
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
 	my %shared_stat = ();
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort keys %all_database_usagecount) {
 		foreach my $u (sort keys %{$all_database_usagecount{$t}}) {
-			$shared_stat{$u}{usagecount} .= '[' . $t . ',' . $all_database_usagecount{$t}{$u} . '],';
+			$shared_stat{$u}{usagecount} .= '[' . ($t - $tz) . ',' . $all_database_usagecount{$t}{$u} . '],';
 		}
 	}
 	%all_database_usagecount = ();
@@ -5829,9 +5859,10 @@ sub pg_database_isdirty_report
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
 	my %shared_stat = ();
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort keys %all_database_isdirty) {
 		foreach my $u (sort keys %{$all_database_isdirty{$t}}) {
-			$shared_stat{$u}{usagecount} .= '[' . $t . ',' . $all_database_isdirty{$t}{$u} . '],';
+			$shared_stat{$u}{usagecount} .= '[' . ($t - $tz) . ',' . $all_database_isdirty{$t}{$u} . '],';
 		}
 	}
 	%all_database_isdirty = ();
@@ -5908,9 +5939,10 @@ sub pg_stat_archiver_report
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
 	my %archiver_stat = ();
+	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort {$a <=> $b} keys %all_stat_archiver) {
-		$archiver_stat{archived_count} .= '[' . $t . ',' . $all_stat_archiver{$t}{archived_count}. '],';
-		$archiver_stat{failed_count} .= '[' . $t . ',' . $all_stat_archiver{$t}{failed_count}. '],';
+		$archiver_stat{archived_count} .= '[' . ($t - $tz) . ',' . $all_stat_archiver{$t}{archived_count}. '],';
+		$archiver_stat{failed_count} .= '[' . ($t - $tz) . ',' . $all_stat_archiver{$t}{failed_count}. '],';
 	}
 	%all_stat_archiver = ();
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
@@ -6301,14 +6333,14 @@ EOF
 		$OVERALL_STATS{'start_date'} = ($OVERALL_STATS{'start_date'}/1000) + $tz;
 		$OVERALL_STATS{'end_date'}   = ($OVERALL_STATS{'end_date'}/1000) + $tz;
 	}
-	my $start_date = gmtime($OVERALL_STATS{'start_date'}||0) || 'Unknown start date';
-	my $end_date = gmtime($OVERALL_STATS{'end_date'}||0) || 'Unknown end date';
+	my $start_date = localtime($OVERALL_STATS{'start_date'}||0) || 'Unknown start date';
+	my $end_date = localtime($OVERALL_STATS{'end_date'}||0) || 'Unknown end date';
 	if (exists $OVERALL_STATS{'sar_start_date'}) {
-		$OVERALL_STATS{'sar_start_date'} = ($OVERALL_STATS{'sar_start_date'}/1000) + $tz;
-		$OVERALL_STATS{'sar_end_date'}   = ($OVERALL_STATS{'sar_end_date'}/1000) + $tz;
+		$OVERALL_STATS{'sar_start_date'} = ($OVERALL_STATS{'sar_start_date'}/1000);
+		$OVERALL_STATS{'sar_end_date'}   = ($OVERALL_STATS{'sar_end_date'}/1000);
 	}
-	my $sar_start_date = gmtime($OVERALL_STATS{'sar_start_date'}||0) || 'Unknown start date';
-	my $sar_end_date = gmtime($OVERALL_STATS{'sar_end_date'}||0) || 'Unknown end date';
+	my $sar_start_date = localtime($OVERALL_STATS{'sar_start_date'}||0) || 'Unknown start date';
+	my $sar_end_date = localtime($OVERALL_STATS{'sar_end_date'}||0) || 'Unknown end date';
 
 	if (exists $OVERALL_STATS{'cluster'}) {
 		$OVERALL_STATS{'cluster'}{'size'} ||= 0;
@@ -6551,6 +6583,8 @@ sub wrong_date_selection
 		$show_last_stats = &last_know_statistics();
 	}
 
+	my $end_date = timelocal_nocheck(0, 0, 0, $o_day, $o_month - 1, $o_year - 1900) + 86400;
+	$end_date = strftime("%Y-%m-%d %H:%M:00",localtime($end_date));
 	print <<EOF;
 <ul id="slides">
 <li class="slide active-slide" id="wrong_date-slide">
@@ -6561,9 +6595,9 @@ sub wrong_date_selection
 	<p>$PROGRAM is not able to find any data relative to your date selection.</p>
 	<ul>
 	<li>Start: $o_year-$o_month-$o_day $o_hour:00:00</li>
-	<li>End: $e_year-$e_month-$e_day $e_hour:59:59</li>
+	<li>End&nbsp;: $end_date</li>
 	</ul>
-	<p>Please choose more accurate dates.</p>
+	<p>Please choose more accurate dates or use time selector menu.</p>
 	$show_last_stats
 	</div>
 </li>
