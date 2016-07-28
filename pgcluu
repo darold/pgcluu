@@ -2639,9 +2639,7 @@ sub pg_tablespace_size_report
 			$tablespace_stat{$tbsp}{size} =~ s/,$//;
 			$data{$tbsp} = $tablespace_stat{$tbsp}{size};
 			if ($tbsp ne 'all') {
-				my $location = "$tbsp";
-				$location .= " ($OVERALL_STATS{'tablespace'}{$tbsp}{location})" if ($OVERALL_STATS{'tablespace'}{$tbsp}{location});
-				$print_after .= &jqplot_linegraph_array($IDX++, 'tablespace-size+', \%{$data_info{$id}}, $location, $tablespace_stat{$tbsp}{size});
+				$print_after .= "<li>$tbsp ($OVERALL_STATS{'tablespace'}{$tbsp}{location})</li>\n";
 			}
 		}
 	}
@@ -6474,14 +6472,14 @@ EOF
 		$OVERALL_STATS{'start_date'} = ($OVERALL_STATS{'start_date'}/1000) + $tz;
 		$OVERALL_STATS{'end_date'}   = ($OVERALL_STATS{'end_date'}/1000) + $tz;
 	}
-	my $start_date = gmtime($OVERALL_STATS{'start_date'}||0) || 'Unknown start date';
-	my $end_date = gmtime($OVERALL_STATS{'end_date'}||0) || 'Unknown end date';
 	if (exists $OVERALL_STATS{'sar_start_date'}) {
-		$OVERALL_STATS{'sar_start_date'} = ($OVERALL_STATS{'sar_start_date'}/1000) + $tz;
-		$OVERALL_STATS{'sar_end_date'}   = ($OVERALL_STATS{'sar_end_date'}/1000) + $tz;
+		$OVERALL_STATS{'sar_start_date'} = ($OVERALL_STATS{'sar_start_date'}/1000);
+		$OVERALL_STATS{'sar_end_date'}   = ($OVERALL_STATS{'sar_end_date'}/1000);
 	}
-	my $sar_start_date = gmtime($OVERALL_STATS{'sar_start_date'}||0) || 'Unknown start date';
-	my $sar_end_date = gmtime($OVERALL_STATS{'sar_end_date'}||0) || 'Unknown end date';
+	my $start_date = localtime($OVERALL_STATS{'start_date'}||0) || 'Unknown start date';
+	my $end_date = localtime($OVERALL_STATS{'end_date'}||0) || 'Unknown end date';
+	my $sar_start_date = localtime($OVERALL_STATS{'sar_start_date'}||0) || 'Unknown start date';
+	my $sar_end_date = localtime($OVERALL_STATS{'sar_end_date'}||0) || 'Unknown end date';
 
 	if (exists $OVERALL_STATS{'cluster'}) {
 		$OVERALL_STATS{'cluster'}{'size'} ||= 0;
