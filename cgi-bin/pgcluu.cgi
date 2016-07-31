@@ -23,7 +23,7 @@ use POSIX qw(locale_h sys_wait_h ceil strftime);
 setlocale(LC_ALL, 'C');
 use Storable qw(store_fd fd_retrieve);
 
-$VERSION = '3.0';
+$VERSION = '3.0dev';
 $PROGRAM = 'pgCluu';
 $CONFIG_FILE = 'pgcluu.conf';
 
@@ -52,7 +52,6 @@ our @DEVICE_LIST    = ();
 our @IFACE_LIST     = ();
 my @GRAPH_COLORS    = ('#6e9dc9', '#f4ab3a', '#ac7fa8', '#8dbd0f'); 
 my $ZCAT_PROG       = '/bin/zcat';
-my $INTERVAL        = 1;
 my $CACHE           = 0;
 my $MAX_INDEXES     = 5;
 
@@ -298,8 +297,8 @@ my %DB_GRAPH_INFOS = (
 			'name' =>  'database-temporary_bytes',
 			'title' => 'Size of temporary data on %s database',
 			'all_title' => 'Global size of temporary data',
-			'description' => 'Amount of data written to temporary files created by queries per database.',
-			'all_description' => 'Global amount of data written to temporary files created by queries.',
+			'description' => 'Amount of data per seconde written to temporary files created by queries per database.',
+			'all_description' => 'Global amount of data per second written to temporary files created by queries.',
 			'ylabel' => 'Size per seconde',
 			'legends' => ['temporary data'],
 		},
@@ -344,16 +343,16 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' => 'database-checkpoints',
 			'title' => 'checkpoints counter stats',
-			'description' => 'Background writer statistics on checkpoints. Checkpoints timed is checkpoints issued because of checkpoint_timeout and checkpoints request is checkpoint issued by request.',
+			'description' => 'Background writer statistics on checkpoints. Checkpoints timed is checkpoints issued because of checkpoint_timeout and checkpoints request is checkpoint issued by request. Comparing checkpoints timed and requested shows whether you’ve set checkpoint segments usefully.',
 			'ylabel' => 'Number of checkpoints',
 			'legends' => ['checkpoints timed','checkpoints requests'],
 		},
 		'2' => {
 			'name' =>  'database-bgwriter',
 			'title' => 'background writer clean stats',
-			'description' => 'Background writer cache cleaning statistics by checkpoints, lru and backends.',
-			'ylabel' => 'Buffers per second',
-			'legends' => ['checkpoint buffers','clean buffers','backend buffers'],
+			'description' => 'Background writer cache cleaning statistics by checkpoints, lru, backends and total allocated bytes per second. Buffers checkpoint are written during checkpoint calls, buffers backend represent client backend that had to write to satisfy an allocation and buffers clean represent background writer cleaning a dirty buffer expected by an allocation. Buffers allocated is the total number of allocated new buffer whether or not it was already cached.',
+			'ylabel' => 'Size per second',
+			'legends' => ['checkpoint buffers','clean buffers','backend buffers', 'allocated buffers'],
 		},
 		'3' => {
 			'name' =>  'database-bgwriter_count',
@@ -1224,14 +1223,6 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 				die "FATAL: no csv file found in $in_dir";
 			}
 
-			# Detect interval from csv file
-			if (-e "$in_dir/pg_stat_database.csv" && !-z "$in_dir/pg_stat_database.csv") {
-				$INTERVAL = &detect_interval("$in_dir/pg_stat_database.csv");
-			} elsif (-e "$in_dir/pg_stat_database.csv.gz" ) {
-				$INTERVAL = &detect_interval("$in_dir/pg_stat_database.csv.gz");
-			}
-			print STDERR "DEBUG: autodetected interval value $INTERVAL\n" if ($DEBUG);
-
 			# Detect timezone from csv file
 			if ($STATS_TIMEZONE eq '00') {
 				if (-e "$in_dir/pg_stat_database.csv" && !-z "$in_dir/pg_stat_database.csv") {
@@ -1281,24 +1272,6 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			print STDERR "DEBUG: Loading PostgreSQL statistics from $ACTION cache files from $in_dir\n" if ($DEBUG);
 			&load_pg_binary($in_dir, $ACTION);
 
-			# Try to find the interval related to these statistics
-			if ($global_infos{interval}) {
-				$INTERVAL = $global_infos{interval};
-			} else {
-				my $prev_val = 0;
-				my $dt = 0;
-				foreach $dt (sort {$a <=> $b} keys %all_stat_database) {
-					if ($prev_val) {
-						$dt = ($dt - $prev_val)/1000;
-						last if ($dt > 0);
-					}
-					$prev_val = $dt;
-				}
-				if ( (length($dt) >= 2) && ($dt =~ /([1234])$/) ) {
-					$dt -= $1;
-				}
-				$INTERVAL = $dt if ($dt);
-			}
 			if (($TIMEZONE eq '00') && $global_infos{timezone}) {
 				$TIMEZONE = $global_infos{timezone};
 			}
@@ -1460,41 +1433,6 @@ sub open_filehdl
 		$curfh->open("$ZCAT_PROG $file |") or die "FATAL: can't read pipe from command: $ZCAT_PROG $file, $!\n";
 	}
 	return $curfh;
-}
-
-sub detect_interval
-{
-	my $file = shift;
-
-	my $dt = 0;
-	my $prev_val = 0;
-
-	if (!&is_compressed($file)) {
-		if (!open(IN, "$file")) {
-			die "FATAL: can't read file $file: $!\n";
-		}
-	} else {
-		if (!open(IN, "$ZCAT_PROG $file |")) {
-			die "FATAL: can't read pipe on command: $ZCAT_PROG $file, $!\n";
-		}
-	}
-	while (<IN>) {
-		my @data = split(/;/);
-		next if ($data[0] !~ /^\d+/);
-		$data[0] = &convert_time($data[0]);
-		if (!$dt && $prev_val) {
-			$dt = ($data[0] - $prev_val)/1000;
-			last if ($dt > 0);
-		}
-		$prev_val = $data[0];
-	}
-	close(IN);
-
-	if ( (length($dt) >= 2) && ($dt =~ /([1234])$/) ) {
-		$dt -= $1;
-	}
-
-	return $dt || 1;
 }
 
 sub get_data_id
@@ -1753,7 +1691,7 @@ sub compute_postgresql_stat
 	$fctname =~ s/\.gz//;
 	$fctname =~ s/_all_/_user_/;
 	$fctname =~ s/\./_/g;
-	$fctname->($in_dir, $file, $INTERVAL);
+	$fctname->($in_dir, $file);
 }
 
 sub compute_postgresql_report
@@ -1769,7 +1707,7 @@ sub compute_postgresql_report
 
 	print STDERR "DEBUG: creating reports from statistics $fctname.\n" if ($DEBUG);
 	$fctname .= '_report';
-	$fctname->($INTERVAL, $src_base, $DATABASE, %data_info);
+	$fctname->($src_base, $DATABASE, %data_info);
 }
 
 
@@ -1796,6 +1734,10 @@ sub pg_stat_database
 
 		$OVERALL_STATS{'start_date'} = $data[0] if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} gt $data[0]));
 		$OVERALL_STATS{'end_date'} = $data[0] if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} lt $data[0]));
+
+		# Store interval between previous run
+		$all_stat_database{$data[0]}{$data[2]}{interval} = $data[0] - $start_vals{$data[2]}[0];
+		$all_stat_database{$data[0]}{all}{interval} = $data[0] - $start_vals{$data[2]}[0];
 
 		if ($#data >= 8) {
 
@@ -1954,7 +1896,9 @@ sub pg_stat_database
 	$curfh->close();
 
 	# Store the full list of database
-	map { push(@global_databases, $_) if (!grep/^$_$/, @global_databases); } keys %db_list;
+	foreach my $d (keys %db_list) {
+		push(@global_databases, $d) if (!grep/^$d$/, @global_databases);
+	}
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
 
 }
@@ -2111,7 +2055,7 @@ sub set_overall_system_stat_from_binary
 # Compute graphs of database statistics
 sub pg_stat_database_report
 {
-	my ($interval, $src_base, $db_glob, %data_info) = @_;
+	my ($src_base, $db_glob, %data_info) = @_;
 
 	my %database_stat = ();
 	my %total_query_type = ();
@@ -2122,6 +2066,7 @@ sub pg_stat_database_report
 	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $time (sort {$a <=> $b} keys %all_stat_database) {
 		foreach my $db (@global_databases) {
+			next if (!$all_stat_database{$time}{$db}{interval});
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 
 			foreach my $k (qw(insert returned fetched update delete blks_read blks_hit nbackend xact_commit xact_rollback canceled_queries deadlocks temp_files temp_bytes xact_throughput)) {
@@ -2139,11 +2084,11 @@ sub pg_stat_database_report
 				}
 			}
 			if ($has_tuples) {
-				$database_stat{$db}{insert} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{insert}/$interval)) . '],';
-				$database_stat{$db}{returned} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{returned}/$interval)) . '],';
-				$database_stat{$db}{fetched} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{fetched}/$interval)) . '],';
-				$database_stat{$db}{update} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{update}/$interval)) . '],';
-				$database_stat{$db}{delete} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{delete}/$interval)) . '],';
+				$database_stat{$db}{insert} .= '[' . ($time - $tz) . ',' . int($all_stat_database{$time}{$db}{insert}/$all_stat_database{$time}{$db}{interval}) . '],';
+				$database_stat{$db}{returned} .= '[' . ($time - $tz) . ',' . int($all_stat_database{$time}{$db}{returned}/$all_stat_database{$time}{$db}{interval}) . '],';
+				$database_stat{$db}{fetched} .= '[' . ($time - $tz) . ',' . int($all_stat_database{$time}{$db}{fetched}/$all_stat_database{$time}{$db}{interval}) . '],';
+				$database_stat{$db}{update} .= '[' . ($time - $tz) . ',' . int($all_stat_database{$time}{$db}{update}/$all_stat_database{$time}{$db}{interval}) . '],';
+				$database_stat{$db}{delete} .= '[' . ($time - $tz) . ',' . int($all_stat_database{$time}{$db}{delete}/$all_stat_database{$time}{$db}{interval}) . '],';
 				$total_query_type{$db}{'all'} +=  $all_stat_database{$time}{$db}{insert} + $all_stat_database{$time}{$db}{returned} + $all_stat_database{$time}{$db}{update} + $all_stat_database{$time}{$db}{delete};
 
 				$total_query_type{$db}{'insert'} += $all_stat_database{$time}{$db}{insert};
@@ -2153,8 +2098,8 @@ sub pg_stat_database_report
 			}
 			$all_stat_database{$time}{$db}{blks_read} ||= 0;
 			$all_stat_database{$time}{$db}{blks_hit} ||= 0;
-			$database_stat{$db}{blks_read} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{blks_read}/$interval)) . '],';
-			$database_stat{$db}{blks_hit} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{blks_hit}/$interval)) . '],';
+			$database_stat{$db}{blks_read} .= '[' . ($time - $tz) . ',' . int($all_stat_database{$time}{$db}{blks_read}/$all_stat_database{$time}{$db}{interval}) . '],';
+			$database_stat{$db}{blks_hit} .= '[' . ($time - $tz) . ',' . int($all_stat_database{$time}{$db}{blks_hit}/$all_stat_database{$time}{$db}{interval}) . '],';
 
 			if (($all_stat_database{$time}{$db}{blks_read} + $all_stat_database{$time}{$db}{blks_hit}) > 0) {
 				$database_stat{$db}{ratio_hit_miss} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{blks_hit}*100)/($all_stat_database{$time}{$db}{blks_read} + $all_stat_database{$time}{$db}{blks_hit})) . '],';
@@ -2163,9 +2108,9 @@ sub pg_stat_database_report
 			}
 			$database_stat{$db}{nbackend} .= '[' . ($time - $tz) . ',' . ($all_stat_database{$time}{$db}{nbackend}||0) . '],';
 			$has_conn{$db} = 1 if ($all_stat_database{$time}{$db}{nbackend});
-			$database_stat{$db}{xact_commit} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{xact_commit}||0)/$interval) . '],';
-			$database_stat{$db}{xact_rollback} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{xact_rollback}||0)/$interval) . '],';
-			$database_stat{$db}{xact_throughput} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{xact_throughput}||0)/$interval) . '],';
+			$database_stat{$db}{xact_commit} .= '[' . ($time - $tz) . ',' . int(($all_stat_database{$time}{$db}{xact_commit}||0)/$all_stat_database{$time}{$db}{interval}) . '],';
+			$database_stat{$db}{xact_rollback} .= '[' . ($time - $tz) . ',' . int(($all_stat_database{$time}{$db}{xact_rollback}||0)/$all_stat_database{$time}{$db}{interval}) . '],';
+			$database_stat{$db}{xact_throughput} .= '[' . ($time - $tz) . ',' . int(($all_stat_database{$time}{$db}{xact_throughput}||0)/$all_stat_database{$time}{$db}{interval}) . '],';
 			# It depends on the postgresql version
 			if (!$has_conflict) {
 				foreach my $k (keys %{$all_stat_database{$time}{$db}}) {
@@ -2190,7 +2135,7 @@ sub pg_stat_database_report
 			if ($has_temp) {
 				$database_stat{$db}{deadlocks} .= '[' . ($time - $tz) . ',' . ($all_stat_database{$time}{$db}{deadlocks}||0) . '],';
 				$database_stat{$db}{temp_files} .= '[' . ($time - $tz) . ',' . ($all_stat_database{$time}{$db}{temp_files}||0) . '],';
-				$database_stat{$db}{temp_bytes} .= '[' . ($time - $tz) . ',' . sprintf("%0.2f", ($all_stat_database{$time}{$db}{temp_bytes}||0)/$interval) . '],';
+				$database_stat{$db}{temp_bytes} .= '[' . ($time - $tz) . ',' . int(($all_stat_database{$time}{$db}{temp_bytes}||0)/$all_stat_database{$time}{$db}{interval}) . '],';
 			}
 		}
 	}
@@ -2405,7 +2350,7 @@ sub pg_stat_database_conflicts
 # Compute graphs of database conflict statistics
 sub pg_stat_database_conflicts_report
 {
-	my ($interval, $src_base, $db_glob, %data_info) = @_;
+	my ($src_base, $db_glob, %data_info) = @_;
 
 	my %database_stat = ();
 	my %total_count = ();
@@ -2466,14 +2411,16 @@ sub pg_database_size
 	$curfh->close();
 
 	# Store the full list of database
-	map { push(@global_databases, $_) if (!grep/^$_$/, @global_databases); } keys %db_list;
+	foreach my $d (keys %db_list) {
+		push(@global_databases, $d) if (!grep/^$d$/, @global_databases);
+	}
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
 }
 
 # Compute graphs of database size statistics
 sub pg_database_size_report
 {
-	my ($interval, $src_base, $db_glob, %data_info) = @_;
+	my ($src_base, $db_glob, %data_info) = @_;
 
 	my %database_stat = ();
 	my $total_val = 0;
@@ -2540,7 +2487,7 @@ sub pg_tablespace_size
 # Compute graphs of tablespace size
 sub pg_tablespace_size_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	my $id = &get_data_id('tablespace-size', %data_info);
 	my %data = ();
@@ -2557,7 +2504,7 @@ sub pg_tablespace_size_report
 		$tablespace_stat{$tbsp}{size} =~ s/,$//;
 		$data{$tbsp} = $tablespace_stat{$tbsp}{size};
 		if ($tbsp ne 'all') {
-			$print_after .= "<li>$tbsp ($tablespace_stat{$tbsp}{location})</li>\n";
+			$print_after .= "<p>$tbsp ($tablespace_stat{$tbsp}{location})</p>\n";
 		}
 	}
 	%all_tablespace_size = ();
@@ -2645,7 +2592,7 @@ sub pg_stat_user_tables
 # Compute report about table accesses
 sub pg_stat_user_tables_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -2847,7 +2794,7 @@ sub pg_stat_user_indexes
 # Compute report about index scan
 sub pg_stat_user_indexes_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -2949,7 +2896,7 @@ sub pg_stat_invalid_indexes
 # Compute report about invalid index
 sub pg_stat_invalid_indexes_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -3038,7 +2985,7 @@ sub pg_stat_unlogged
 # Compute report about unlogged tables
 sub pg_stat_unlogged_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -3123,7 +3070,7 @@ sub pg_stat_hash_indexes
 # Compute report about hash index
 sub pg_stat_hash_indexes_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -3190,7 +3137,7 @@ sub pg_stat_hash_indexes_report
 # Compute stats for table I/O
 sub pg_statio_user_tables
 {
-	my ($in_dir, $file, $interval) = @_;
+	my ($in_dir, $file) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -3209,29 +3156,32 @@ sub pg_statio_user_tables
 
 		push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
 
+		# Store interval between previous run
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{interval} = $data[0] - $start_vals{$data[1]}{$data[4]}[0];
+
 		(($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{heap_blks_read} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{heap_blks_read} = $tmp_val;
 
 		(($data[6] - $start_vals{$data[1]}{$data[4]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[1]}{$data[4]}[6]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{heap_blks_hit} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{heap_blks_hit} = $tmp_val;
 
 		(($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{idx_blks_read} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{idx_blks_read} = $tmp_val;
 
 		(($data[8] - $start_vals{$data[1]}{$data[4]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[4]}[8]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{idx_blks_hit} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{idx_blks_hit} = $tmp_val;
 
 		(($data[9] - $start_vals{$data[1]}{$data[4]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[4]}[9]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{toast_blks_read} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{toast_blks_read} = $tmp_val;
 
 		(($data[10] - $start_vals{$data[1]}{$data[4]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[1]}{$data[4]}[10]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{toast_blks_hit} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{toast_blks_hit} = $tmp_val;
 
 		(($data[11] - $start_vals{$data[1]}{$data[4]}[11]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[11] - $start_vals{$data[1]}{$data[4]}[11]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{tidx_blks_read} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{tidx_blks_read} = $tmp_val;
 
 		(($data[12] - $start_vals{$data[1]}{$data[4]}[12]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[12] - $start_vals{$data[1]}{$data[4]}[12]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{tidx_blks_hit} = int($tmp_val/$interval);
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{tidx_blks_hit} = $tmp_val;
 
 		@{$start_vals{$data[1]}{$data[4]}} = ();
 		push(@{$start_vals{$data[1]}{$data[4]}}, @data);
@@ -3242,7 +3192,7 @@ sub pg_statio_user_tables
 # Compute report for table I/O
 sub pg_statio_user_tables_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -3254,14 +3204,15 @@ sub pg_statio_user_tables_report
 	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort {$a <=> $b} keys %all_statio_user_tables) {
 		foreach my $obj (keys %{ $all_statio_user_tables{$t}{$db} }) {
-			$statio_usertable{$db}{$obj}{heap_blks_read} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_read}||0) . '],';
-			$statio_usertable{$db}{$obj}{heap_blks_hit} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_hit}||0) . '],';
-			$statio_usertable{$db}{$obj}{idx_blks_read} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_read}||0) . '],';
-			$statio_usertable{$db}{$obj}{idx_blks_hit} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_hit}||0) . '],';
-			$statio_usertable{$db}{$obj}{toast_blks_read} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_read}||0) . '],';
-			$statio_usertable{$db}{$obj}{toast_blks_hit} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_hit}||0) . '],';
-			$statio_usertable{$db}{$obj}{tidx_blks_read} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_read}||0) . '],';
-			$statio_usertable{$db}{$obj}{tidx_blks_hit} .= '[' . ($t - $tz) . ',' . ($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_hit}||0) . '],';
+			next if (!$statio_usertable{$db}{$obj}{interval});
+			$statio_usertable{$db}{$obj}{heap_blks_read} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_read}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
+			$statio_usertable{$db}{$obj}{heap_blks_hit} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_hit}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
+			$statio_usertable{$db}{$obj}{idx_blks_read} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_read}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
+			$statio_usertable{$db}{$obj}{idx_blks_hit} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_hit}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
+			$statio_usertable{$db}{$obj}{toast_blks_read} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_read}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
+			$statio_usertable{$db}{$obj}{toast_blks_hit} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_hit}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
+			$statio_usertable{$db}{$obj}{tidx_blks_read} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_read}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
+			$statio_usertable{$db}{$obj}{tidx_blks_hit} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_hit}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
 			$is_used{$db}{$obj}{is_used} += ($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_hit}||0);
 			if (!$is_toast{$db}{$obj}{is_toast}) {
 				$is_toast{$db}{$obj}{is_toast} += ($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_hit}||0);
@@ -3329,7 +3280,7 @@ sub pg_relation_buffercache
 # Compute report for relation buffer cache
 sub pg_relation_buffercache_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -3456,7 +3407,7 @@ sub pg_relation_buffercache_report
 # Compute stats for index I/O
 sub pg_statio_user_indexes
 {
-	my ($in_dir, $file, $interval) = @_;
+	my ($in_dir, $file) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -3476,11 +3427,14 @@ sub pg_statio_user_indexes
 
 		push(@{$start_vals{$data[1]}{$data[6]}}, @data) if ($#{$start_vals{$data[1]}{$data[6]}} < 0);
 
+		# Store interval between previous run
+		$all_statio_all_indexes{$data[0]}{$data[1]}{$data[6]}{interval} = $data[0] - $start_vals{$data[1]}{$data[6]}[0];
+
 		(($data[7] - $start_vals{$data[1]}{$data[6]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[6]}[7]);
-		$all_statio_all_indexes{$data[0]}{$data[1]}{$data[6]}{idx_blks_read} = int($tmp_val/$interval);
+		$all_statio_all_indexes{$data[0]}{$data[1]}{$data[6]}{idx_blks_read} = $tmp_val;
 
 		(($data[8] - $start_vals{$data[1]}{$data[6]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[6]}[8]);
-		$all_statio_all_indexes{$data[0]}{$data[1]}{$data[6]}{idx_blks_hit} = int($tmp_val/$interval);
+		$all_statio_all_indexes{$data[0]}{$data[1]}{$data[6]}{idx_blks_hit} = $tmp_val;
 
 		@{$start_vals{$data[1]}{$data[6]}} = ();
 		push(@{$start_vals{$data[1]}{$data[6]}}, @data);
@@ -3492,7 +3446,7 @@ sub pg_statio_user_indexes
 # Compute report for index I/O
 sub pg_statio_user_indexes_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -3503,8 +3457,9 @@ sub pg_statio_user_indexes_report
 	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort {$a <=> $b} keys %all_statio_all_indexes) {
 		foreach my $obj (keys %{ $all_statio_all_indexes{$t}{$db} }) {
-			$statio_userindex{$db}{$obj}{idx_blks_read} .= '[' . ($t - $tz) . ',' . ($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_read}||0) . '],';
-			$statio_userindex{$db}{$obj}{idx_blks_hit} .= '[' . ($t - $tz) . ',' . ($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_hit}||0) . '],';
+			next if (!$statio_userindex{$db}{$obj}{interval});
+			$statio_userindex{$db}{$obj}{idx_blks_read} .= '[' . ($t - $tz) . ',' . int(($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_read}||0)/$statio_userindex{$db}{$obj}{interval}) . '],';
+			$statio_userindex{$db}{$obj}{idx_blks_hit} .= '[' . ($t - $tz) . ',' . int(($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_hit}||0)/$statio_userindex{$db}{$obj}{interval}) . '],';
 			$is_used{$db}{$obj} += ($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_hit}||0)+($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_read}||0);
 		}
 	}
@@ -3564,7 +3519,7 @@ sub pg_xlog_stat
 # Compute graphs of xlog cluster statistics
 sub pg_xlog_stat_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -3595,7 +3550,7 @@ sub pg_xlog_stat_report
 # Compute statistics of bgwriter cluster
 sub pg_stat_bgwriter
 {
-	my ($in_dir, $file, $interval) = @_;
+	my ($in_dir, $file) = @_;
 
 	return if ( $ACTION eq 'database-info' );
 
@@ -3614,29 +3569,35 @@ sub pg_stat_bgwriter
 
 		next if ($ACTION eq 'home');
 		push(@start_vals, @data) if ($#start_vals < 0);
+
+		# Store interval between previous run
+		$all_stat_bgwriter{$data[0]}{interval} = $data[0] - $start_vals[0];
+
 		(($data[1] - $start_vals[1]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[1] - $start_vals[1]);
 		$all_stat_bgwriter{$data[0]}{checkpoints_timed} = $tmp_val;
 		(($data[2] - $start_vals[2]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[2] - $start_vals[2]);
-		$all_stat_bgwriter{$data[0]}{checkpoints_req} .= $tmp_val;
+		$all_stat_bgwriter{$data[0]}{checkpoints_req} = $tmp_val;
 		my $id = 0;
 		if ($#data > 10) {
 			$id += 2;
 			(($data[3] - $start_vals[3]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3] - $start_vals[3]);
-			$all_stat_bgwriter{$data[0]}{checkpoint_write_time} .= $tmp_val;
+			$all_stat_bgwriter{$data[0]}{checkpoint_write_time} = $tmp_val;
 			(($data[4] - $start_vals[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals[4]);
-			$all_stat_bgwriter{$data[0]}{checkpoint_sync_time} .= $tmp_val;
+			$all_stat_bgwriter{$data[0]}{checkpoint_sync_time} = $tmp_val;
 		}
 		(($data[3+$id] - $start_vals[3+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3+$id] - $start_vals[3+$id]);
-		$all_stat_bgwriter{$data[0]}{buffers_checkpoint} .= sprintf("%.2f", $tmp_val/$interval);
+		$all_stat_bgwriter{$data[0]}{buffers_checkpoint} = $tmp_val*8192;
 		(($data[4+$id] - $start_vals[4+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4+$id] - $start_vals[4+$id]);
-		$all_stat_bgwriter{$data[0]}{buffers_clean} .= sprintf("%.2f", $tmp_val/$interval);
+		$all_stat_bgwriter{$data[0]}{buffers_clean} = $tmp_val*8192;
 		(($data[5+$id] - $start_vals[5+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5+$id] - $start_vals[5+$id]);
-		$all_stat_bgwriter{$data[0]}{maxwritten_clean} .= sprintf("%.2f", $tmp_val/$interval);
+		$all_stat_bgwriter{$data[0]}{maxwritten_clean} = $tmp_val;
 		(($data[6+$id] - $start_vals[6+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6+$id] - $start_vals[6+$id]);
-		$all_stat_bgwriter{$data[0]}{buffers_backend} .= sprintf("%.2f", $tmp_val/$interval);
-		(($data[7+$id] - $start_vals[7+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7+$id] - $start_vals[7+$id]);
+		$all_stat_bgwriter{$data[0]}{buffers_backend} = $tmp_val*8192;
 		if ($#data >= 9) {
-			$all_stat_bgwriter{$data[0]}{buffers_backend_fsync} .= sprintf("%.2f", $tmp_val/$interval);
+			(($data[7+$id] - $start_vals[7+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7+$id] - $start_vals[7+$id]);
+			$all_stat_bgwriter{$data[0]}{buffers_backend_fsync} .= $tmp_val;
+			(($data[8+$id] - $start_vals[8+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8+$id] - $start_vals[8+$id]);
+			$all_stat_bgwriter{$data[0]}{buffers_alloc} = $tmp_val*8192;
 		}
 		@start_vals = ();
 		push(@start_vals, @data);
@@ -3648,7 +3609,7 @@ sub pg_stat_bgwriter
 # Compute graphs of bgwriter cluster statistics
 sub pg_stat_bgwriter_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -3658,16 +3619,18 @@ sub pg_stat_bgwriter_report
 	my %data = ();
 	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort {$a <=> $b} keys %all_stat_bgwriter) {
+		next if (!$all_stat_bgwriter{$t}{interval});
 		$data{'Checkpoint timed'} += $all_stat_bgwriter{$t}{checkpoints_timed};
-		$data{'Checkpoint requested'} += $all_stat_bgwriter{$t}{checkpoints_red};
+		$data{'Checkpoint requested'} += $all_stat_bgwriter{$t}{checkpoints_req};
 		$bgwriter_stat{checkpoints_timed} .= '[' . ($t - $tz) . ',' . $all_stat_bgwriter{$t}{checkpoints_timed} . '],';
 		$bgwriter_stat{checkpoints_req} .= '[' . ($t - $tz) . ',' . $all_stat_bgwriter{$t}{checkpoints_req} . '],';
 		$bgwriter_stat{checkpoint_write_time} .= '[' . ($t - $tz) . ',' . ($all_stat_bgwriter{$t}{checkpoint_write_time}||0) . '],';
 		$bgwriter_stat{checkpoint_sync_time} .= '[' . ($t - $tz) . ',' . ($all_stat_bgwriter{$t}{checkpoint_sync_time}||0) . '],';
-		$bgwriter_stat{buffers_checkpoint} .= '[' . ($t - $tz) . ',' . $all_stat_bgwriter{$t}{buffers_checkpoint} . '],';
-		$bgwriter_stat{buffers_clean} .= '[' . ($t - $tz) . ',' . $all_stat_bgwriter{$t}{buffers_clean} . '],';
-		$bgwriter_stat{maxwritten_clean} .= '[' . ($t - $tz) . ',' . $all_stat_bgwriter{$t}{maxwritten_clean} . '],';
-		$bgwriter_stat{buffers_backend} .= '[' . ($t - $tz) . ',' . $all_stat_bgwriter{$t}{buffers_backend} . '],';
+		$bgwriter_stat{buffers_checkpoint} .= '[' . ($t - $tz) . ',' . int(($all_stat_bgwriter{$t}{buffers_checkpoint}||0)/$all_stat_bgwriter{$t}{interval}) . '],';
+		$bgwriter_stat{buffers_clean} .= '[' . ($t - $tz) . ',' . int(($all_stat_bgwriter{$t}{buffers_clean}||0)/$all_stat_bgwriter{$t}{interval}) . '],';
+		$bgwriter_stat{buffers_backend} .= '[' . ($t - $tz) . ',' . int(($all_stat_bgwriter{$t}{buffers_backend}||0)/$all_stat_bgwriter{$t}{interval}) . '],';
+		$bgwriter_stat{buffers_alloc} .= '[' . ($t - $tz) . ',' . int(($all_stat_bgwriter{$t}{buffers_alloc}||0)/$all_stat_bgwriter{$t}{interval}) . '],';
+		$bgwriter_stat{maxwritten_clean} .= '[' . ($t - $tz) . ',' . ($all_stat_bgwriter{$t}{maxwritten_clean}||0) . '],';
 		$bgwriter_stat{buffers_backend_fsync} .= '[' . ($t - $tz) . ',' . ((exists $all_stat_bgwriter{$t}{buffers_backend_fsync}) ? $all_stat_bgwriter{$t}{buffers_backend_fsync} : '0') . '],';
 	}
 	%all_stat_bgwriter = ();
@@ -3694,7 +3657,8 @@ sub pg_stat_bgwriter_report
 			$bgwriter_stat{buffers_checkpoint} =~ s/,$//;
 			$bgwriter_stat{buffers_clean} =~ s/,$//;
 			$bgwriter_stat{buffers_backend} =~ s/,$//;
-			print &jqplot_linegraph_array($IDX++, 'cluster-bgwriter', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean}, $bgwriter_stat{buffers_backend});
+			$bgwriter_stat{buffers_alloc} =~ s/,$//;
+			print &jqplot_linegraph_array($IDX++, 'cluster-bgwriter', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean}, $bgwriter_stat{buffers_backend}, $bgwriter_stat{buffers_alloc});
 		} elsif ($data_info{$id}{name} eq 'database-bgwriter_count') {
 			$bgwriter_stat{maxwritten_clean} =~ s/,$//;
 			$bgwriter_stat{buffers_backend_fsync} =~ s/,$//;
@@ -3740,14 +3704,16 @@ sub pg_stat_connections
 	$curfh->close();
 
 	# Store the full list of database
-	map { push(@global_databases, $_) if (!grep/^$_$/, @global_databases); } keys %db_list;
+	foreach my $d (keys %db_list) {
+		push(@global_databases, $d) if (!grep/^$d$/, @global_databases);
+	}
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
 }
 
 # Compute graphs of connections statistics
 sub pg_stat_connections_report
 {
-	my ($interval, $src_base, $db_glob, %data_info) = @_;
+	my ($src_base, $db_glob, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -3826,7 +3792,7 @@ sub pg_stat_user_functions
 # Compute graphs of user functions call statistics
 sub pg_stat_user_functions_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -3893,7 +3859,7 @@ sub pg_stat_user_functions_report
 # Compute graphs of replication cluster statistics
 sub pg_stat_replication
 {
-	my ($in_dir, $file, $interval) = @_;
+	my ($in_dir, $file) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -3907,20 +3873,25 @@ sub pg_stat_replication
 		# timestamp | pid | usesysid | usename | application_name | client_addr | client_hostname | client_port | backend_start | state | master_location | sent_location | write_location | flush_location | replay_location | sync_priority | sync_state
 		# Do not care about BACKUP and pg_basebackup connection
 		if ( (uc($data[9]) eq 'STREAMING') || (uc($data[4]) eq 'WALRECEIVER') ) {
-			push(@start_vals, @data) if ($#start_vals < 0);
 			my $name = $data[5];
 			$data[6] =~ s/"//g;
 			$name .= " - $data[6]" if ($data[6]);
-			$all_stat_replication{$data[0]}{master_location} = &getNumericalOffset($data[10]) - &getNumericalOffset($start_vals[10]) if (!$all_stat_replication{$data[0]}{master_location});
+
+			push(@start_vals, @data) if ($#start_vals < 0);
+
+			# Store interval between previous run
+			$all_stat_replication{$data[0]}{interval} = $data[0] - $start_vals[0];
+
+			$all_stat_replication{$data[0]}{master_location} = &getNumericalOffset($data[10]) - &getNumericalOffset($start_vals[10]) if (! exists $all_stat_replication{$data[0]}{master_location});
 			next if (!$data[14] && !$data[11] && !$data[12] && !$data[13]);
 			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[14])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[14]));
-			$all_stat_replication{$data[0]}{$name}{replay_location} = sprintf("%.2f", ($tmp_val/$interval));
+			$all_stat_replication{$data[0]}{$name}{replay_location} = $tmp_val;
 			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[11])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[11]));
-			$all_stat_replication{$data[0]}{$name}{sent_location} = sprintf("%.2f", ($tmp_val/$interval));
+			$all_stat_replication{$data[0]}{$name}{sent_location} = $tmp_val;
 			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[12])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[12]));
-			$all_stat_replication{$data[0]}{$name}{write_location} = sprintf("%.2f", ($tmp_val/$interval));
+			$all_stat_replication{$data[0]}{$name}{write_location} = $tmp_val;
 			((&getNumericalOffset($data[10]) - &getNumericalOffset($data[13])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[13]));
-			$all_stat_replication{$data[0]}{$name}{flush_location} = sprintf("%.2f", ($tmp_val/$interval));
+			$all_stat_replication{$data[0]}{$name}{flush_location} = $tmp_val;
 
 			@start_vals = ();
 			push(@start_vals, @data);
@@ -3932,7 +3903,7 @@ sub pg_stat_replication
 # Compute graphs of replication cluster statistics
 sub pg_stat_replication_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -3940,9 +3911,11 @@ sub pg_stat_replication_report
 	my $tz = ($STATS_TIMEZONE*3600*1000);
 	foreach my $t (sort {$a <=> $b} keys %all_stat_replication) {
 		foreach my $name (sort {$a cmp $b} keys %{$all_stat_replication{$t}}) {
+			next if ($name eq 'interval');
 			if ($name eq 'master_location') {
+				next if (!$all_stat_replication{$t}{interval});
 				$all_stat_replication{$t}{master_location} ||= 0;
-				$xlog_stat{master_location} .= '[' . ($t - $tz) . ',' . sprintf("%0.2f", ($all_stat_replication{$t}{master_location}/$interval)) . '],';
+				$xlog_stat{master_location} .= '[' . ($t - $tz) . ',' . int(($all_stat_replication{$t}{master_location}||0)/$all_stat_replication{$t}{interval}) . '],';
 				next;
 			}
 			$xlog_stat{$name}{replay_location} .= '[' . ($t - $tz) . ',' . ($all_stat_replication{$t}{$name}{replay_location} || 0) . '],';
@@ -4005,7 +3978,7 @@ sub pgbouncer_stats
 # Compute graphs of pgbouncer statistics
 sub pgbouncer_stats_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -4137,7 +4110,7 @@ sub pgbouncer_ini
 # Show relevant content of pgbouncer.ini
 sub pgbouncer_ini_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -4233,7 +4206,7 @@ sub pgbouncer_req_stats
 # Show report about pgbouncer queries
 sub pgbouncer_req_stats_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -4319,7 +4292,7 @@ sub pg_class_size
 # Compute graphs of object size statistics
 sub pg_class_size_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -4441,7 +4414,7 @@ sub pg_stat_locks
 # Compute graphs of locks statistics
 sub pg_stat_locks_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -4512,7 +4485,7 @@ sub pg_stat_unused_indexes
 # Compute report about unused index
 sub pg_stat_unused_indexes_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -4595,7 +4568,7 @@ sub pg_stat_redundant_indexes
 # Compute report about redundant index
 sub pg_stat_redundant_indexes_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -4673,7 +4646,7 @@ sub pg_stat_missing_fkindexes
 # Compute report about missing index
 sub pg_stat_missing_fkindexes_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -4749,7 +4722,7 @@ sub pg_stat_count_indexes
 # Compute report about table without indexes or with too many indexes
 sub pg_stat_count_indexes_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -4884,7 +4857,7 @@ sub postgresql_conf
 # Show content of postgresql.conf
 sub postgresql_conf_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -4991,7 +4964,7 @@ sub recovery_conf
 # Show content of recovery.conf
 sub recovery_conf_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -5099,7 +5072,7 @@ sub postgresql_auto_conf
 # Show relevant content of postgresql.auto.conf
 sub postgresql_auto_conf_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -5208,7 +5181,7 @@ sub pg_hba_conf
 # Show content of pg_hba.conf
 sub pg_hba_conf_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -5318,7 +5291,7 @@ sub pg_ident_conf
 # Show content of pg_ident.conf
 sub pg_ident_conf_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -5442,7 +5415,7 @@ sub pg_settings
 # Show configuration from pg_settings
 sub pg_settings_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -5563,7 +5536,7 @@ sub pg_nondefault_settings
 # Show non default configuration from pg_settings
 sub pg_nondefault_settings_report
 {
-	my ($interval, $src_base, %data_info) = @_;
+	my ($src_base, %data_info) = @_;
 
 	return if (scalar keys %all_nondefault_settings == 0);
 
@@ -5662,7 +5635,7 @@ sub pg_db_role_setting
 # Show configuration from pg_db_role_setting
 sub pg_db_role_setting_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -5765,14 +5738,16 @@ sub pg_database_buffercache
 	$curfh->close();
 
 	# Store the full list of database
-	map { push(@global_databases, $_) if (!grep/^$_$/, @global_databases); } keys %db_list;
+	foreach my $d (keys %db_list) {
+		push(@global_databases, $d) if (!grep/^$d$/, @global_databases);
+	}
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
 }
 
 # Compute report of buffercache database statistics
 sub pg_database_buffercache_report
 {
-	my ($interval, $src_base, $db_glob, %data_info) = @_;
+	my ($src_base, $db_glob, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -5833,7 +5808,7 @@ sub pg_database_usagecount
 # Compute graph of usagecount in shared buffers
 sub pg_database_usagecount_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -5880,7 +5855,7 @@ sub pg_database_isdirty
 # Compute graphs of dirty buffer in cache
 sub pg_database_isdirty_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -5960,7 +5935,7 @@ sub pg_stat_archiver
 # Compute graphs of archiver statistics
 sub pg_stat_archiver_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -6051,7 +6026,7 @@ sub pg_stat_statements
 # Compute graphs of statements statistics
 sub pg_stat_statements_report
 {
-	my ($interval, $src_base, $db, %data_info) = @_;
+	my ($src_base, $db, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
@@ -6313,7 +6288,7 @@ sub show_home
 			${$OVERALL_STATS{'system'}{'svctm'}}[0] = localtime(${$OVERALL_STATS{'system'}{'svctm'}}[0]/1000);
 		}
 		if (exists $OVERALL_STATS{'system'}{'devices'}) {
-			foreach my $d (keys %{$OVERALL_STATS{'system'}{'devices'}}) {
+			foreach my $d (sort keys %{$OVERALL_STATS{'system'}{'devices'}}) {
 				if (! exists $overall_system_stats{read} || ($overall_system_stats{read}[1] < $OVERALL_STATS{'system'}{'devices'}{$d}{read})) {
 					@{$overall_system_stats{read}} = ($d, $OVERALL_STATS{'system'}{'devices'}{$d}{read});
 				}
@@ -6684,7 +6659,11 @@ sub last_know_statistics
 		}
 	}
 
-	return "	<p><a href=\"\" onclick=\"document.location.href='$SCRIPT_NAME?action=home&end=$end_stats&start=$start_stats'; return false;\">Last known statistics</a></p>\n";
+	if ($start_stats) {
+		return "	<p><a href=\"\" onclick=\"document.location.href='$SCRIPT_NAME?action=home&end=$end_stats&start=$start_stats'; return false;\">Last known statistics</a></p>\n";
+	}
+
+	return "	<p>No statistics found</p>\n";
 
 }
 
@@ -8229,7 +8208,7 @@ sub compute_srvtime_report
 
 	my %srvtime_stat = ();
 	foreach my $t (sort {$a <=> $b} keys %sar_srvtime_stat) {
-		foreach my $dev (keys %{$sar_srvtime_stat{$t}}) {
+		foreach my $dev (sort keys %{$sar_srvtime_stat{$t}}) {
 			$srvtime_stat{$dev}{'await'} .= '[' . $t . ',' . $sar_srvtime_stat{$t}{$dev}{'await'} . '],';
 			$srvtime_stat{$dev}{'svctm'} .= '[' . $t . ',' . $sar_srvtime_stat{$t}{$dev}{'svctm'} . '],';
 		}
