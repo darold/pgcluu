@@ -216,7 +216,7 @@ function pretty_print_number(val, scale, type)
 				val = (val / 1024);
 				return val.toFixed(scale) + " KiB";
 			} else {
-				return val + " B";
+				return val.toFixed(scale) + " B";
 			}
 		} else if (type.search('duration') >= 0) {
 			if (Math.abs(val) >= 1000) {
