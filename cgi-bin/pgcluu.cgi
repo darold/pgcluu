@@ -1780,6 +1780,7 @@ sub pg_stat_database
 
 	my %start_vals = ();
 	my $tmp_val = 0;
+	my %db_list = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -1788,7 +1789,9 @@ sub pg_stat_database
 
 		# timestamp | datid | datname | numbackends | xact_commit | xact_rollback | blks_read | blks_hit | tup_returned | tup_fetched | tup_inserted | tup_updated | tup_deleted | conflicts | stats_reset | temp_files | temp_bytes | deadlocks | blk_read_time | blk_write_time
 
-		push(@global_databases, $data[2]) if (!grep(/^$data[2]$/, @global_databases));
+                # Store list of database
+                $db_list{$data[2]} = 1;
+		# Store previous data
 		push(@{$start_vals{$data[2]}}, @data) if ($#{$start_vals{$data[2]}} < 0);
 
 		$OVERALL_STATS{'start_date'} = $data[0] if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} gt $data[0]));
@@ -1949,6 +1952,9 @@ sub pg_stat_database
 		push(@{$start_vals{$data[2]}}, @data);
 	}
 	$curfh->close();
+
+	# Store the full list of database
+	map { push(@global_databases, $_) if (!grep/^$_$/, @global_databases); } keys %db_list;
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
 
 }
@@ -2435,13 +2441,18 @@ sub pg_database_size
 {
 	my ($in_dir, $file) = @_;
 
+	my %db_list = ();
+
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
 		# date_trunc | datid | datname | size
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
-		push(@global_databases, $data[2]) if (!grep(/^$data[2]$/, @global_databases));
+
+                # Store list of database
+                $db_list{$data[2]} = 1;
+
 		# Get database size statistics
 		if ( ($ACTION ne 'home') && ($ACTION ne 'database-info') ) {
 			$all_database_size{$data[0]}{$data[2]} = $data[3];
@@ -2453,6 +2464,9 @@ sub pg_database_size
 		}
 	}
 	$curfh->close();
+
+	# Store the full list of database
+	map { push(@global_databases, $_) if (!grep/^$_$/, @global_databases); } keys %db_list;
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
 }
 
@@ -3698,6 +3712,8 @@ sub pg_stat_connections
 
 	my @start_vals = ();
 	my $tmp_val = 0;
+	my %db_list = ();
+
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -3706,7 +3722,9 @@ sub pg_stat_connections
 
 		# timestamp | total | active | waiting | idle_in_xact | datname
 
-		push(@global_databases, $data[5]) if (!grep(/^$data[5]$/, @global_databases));
+                # Store list of database
+                $db_list{$data[5]} = 1;
+
 		$all_stat_connections{$data[0]}{$data[5]}{total} = $data[1];
 		$all_stat_connections{$data[0]}{$data[5]}{active} = $data[2];
 		$all_stat_connections{$data[0]}{$data[5]}{waiting} = $data[3];
@@ -3720,6 +3738,9 @@ sub pg_stat_connections
 		$all_stat_connections{$data[0]}{'all'}{idle} += ($data[1] - $data[2] - $data[4]);
 	}
 	$curfh->close();
+
+	# Store the full list of database
+	map { push(@global_databases, $_) if (!grep/^$_$/, @global_databases); } keys %db_list;
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
 }
 
@@ -5724,13 +5745,16 @@ sub pg_database_buffercache
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
+	my %db_list = ();
+
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
 
-		push(@global_databases, $data[1]) if (!grep(/^$data[1]$/, @global_databases));
+                # Store list of database
+                $db_list{$data[1]} = 1;
 
 		# date_trunc | datname | buffers | buffered | buffers % | database %
 		$all_database_buffercache{$data[0]}{$data[1]}{shared_buffers_used} = ($data[4]||0);
@@ -5740,6 +5764,8 @@ sub pg_database_buffercache
 	}
 	$curfh->close();
 
+	# Store the full list of database
+	map { push(@global_databases, $_) if (!grep/^$_$/, @global_databases); } keys %db_list;
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
 }
 
