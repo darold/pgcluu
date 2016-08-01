@@ -3925,24 +3925,30 @@ sub pg_stat_replication_report
 		}
 	}
 	%all_stat_replication = ();
-	return if (scalar keys %xlog_stat == 0);
+#	return if (scalar keys %xlog_stat == 0);
+
 
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		next if ($id ne $ID_ACTION);
 		next if ($data_info{$id}{name} ne $REAL_ACTION);
-		if (exists $xlog_stat{master_location} && ($data_info{$id}{name} eq 'database-xlog')) {
-			$xlog_stat{master_location} =~ s/,$//;
+		if ($data_info{$id}{name} eq 'database-xlog') {
+			$xlog_stat{master_location} =~ s/,$// if (exists $xlog_stat{master_location});
 			print &jqplot_linegraph_array($IDX++, 'cluster-xlog', \%{$data_info{$id}}, '', $xlog_stat{master_location});
-			delete $xlog_stat{master_location};
+			delete $xlog_stat{master_location} if (exists $xlog_stat{master_location});
 
 		} elsif ($data_info{$id}{name} eq 'database-replication') {
+			my $has_data = 0;
 			foreach my $host (sort {$a cmp $b} keys %xlog_stat) {
 				next if ($host eq 'master_location');
+				$has_data = 1;
 				$xlog_stat{$host}{sent_location} =~ s/,$//;
 				$xlog_stat{$host}{write_location} =~ s/,$//;
 				$xlog_stat{$host}{flush_location} =~ s/,$//;
 				$xlog_stat{$host}{replay_location} =~ s/,$//;
 				print &jqplot_linegraph_array($IDX++, 'cluster-replication', \%{$data_info{$id}}, $host, $xlog_stat{$host}{sent_location}, $xlog_stat{$host}{write_location}, $xlog_stat{$host}{replay_location});
+			}
+			if (!$has_data) {
+				print &jqplot_linegraph_array($IDX++, 'cluster-replication', \%{$data_info{$id}});
 			}
 		}
 	}
@@ -9332,6 +9338,7 @@ sub jqplot_linegraph_array
 
 	my @legend = ();
 	my $description = $infos->{description} || '';
+	$title ||= '';
 
 	for (my $i = 0; $i <= $#data; $i++) {
 		push(@legend, $infos->{legends}[$i] || '');
@@ -9339,12 +9346,10 @@ sub jqplot_linegraph_array
 	if ($title eq 'all') {
 		$title = $infos->{all_title};
 		$description = $infos->{all_description};
-	}
-	elsif ($title ne '') {
-		$title = sprintf($infos->{title}, $title);
 	} else {
-		$title = $infos->{title};
+		$title = sprintf($infos->{title}, $title || 'none');
 	}
+
 	return &jqplot_linegraph($buttonid, $divid, $infos, $title, $description, \@data, \@legend);
 }
 
@@ -9363,11 +9368,7 @@ sub jqplot_linegraph_hash
 		push(@legend, $id);
 		$i++;
 	}
-	if ($title ne '') {
-		$title = sprintf($infos->{title}, $title);
-	} else {
-		$title = $infos->{title};
-	}
+	$title = sprintf($infos->{title}, $title || $infos->{title} || 'none');
 
 	return &jqplot_linegraph($buttonid, $divid, $infos, $title, $description, \@data, \@legend);
 }
@@ -9387,6 +9388,7 @@ sub jqplot_linegraph
 	} else {
 		$divid =~ s/\+$//;
 	}
+	
 	$str .= qq{
       <div class="row">
             <div class="col-md-12">
@@ -9455,7 +9457,10 @@ add_download_button_event($buttonid, '$divid$buttonid');
             </div>
       </div>
 EOF
+	} else {
+		$str .= "<div class=\"jqplot-graph $cssgraph\"><blockquote><b>NO DATASET</b></blockquote></div>";
 	}
+
 	if ($divid !~ /^(pgbouncer|tablespace|statio)/) {
 		$str .= qq{
   </li>
