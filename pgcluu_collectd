@@ -838,7 +838,7 @@ while (1) {
 				unlink("$OUT_DIR/$filename" );
 			} elsif (-e "$OUT_DIR/$filename.tmpold") {
 				# Perform a diff to keep track of configuration change
-				`$DIFF_PROG "$OUT_DIR/$filename" "$OUT_DIR/$filename.tmpold" >> "$OUT_DIR/$filename.diff"`;
+				`$DIFF_PROG "$OUT_DIR/$filename.tmpold" "$OUT_DIR/$filename" >> "$OUT_DIR/$filename.diff"`;
 				unlink("$OUT_DIR/$filename.tmpold");
 				# When there's no change do not keep the file
 				if (-z "$OUT_DIR/$filename.diff") {
