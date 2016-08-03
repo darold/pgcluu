@@ -1144,18 +1144,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 	}
 
 	# Look at system information
-	if (-e "$in_dir/sys_cache.bin") {
-		print "DEBUG: Loading system information from cache file $in_dir/sys_cache.bin\n" if ($DEBUG);
-		&load_sys_binary($in_dir, "sys_cache.bin");
-	} elsif (-e "$in_dir/sysinfo.txt") {
-		print "DEBUG: Loading system information from file $in_dir/sysinfo.txt\n" if ($DEBUG);
-		%sysinfo = &read_sysinfo("$in_dir/sysinfo.txt");
-		$sysinfo{RELEASE}{'name'} ||= 'unknown';
-	} elsif (-e "$in_dir/sysinfo.txt.gz") {
-		print "DEBUG: Loading system information from file $in_dir/sysinfo.txt.gz\n" if ($DEBUG);
-		%sysinfo = &read_sysinfo("$in_dir/sysinfo.txt.gz");
-		$sysinfo{RELEASE}{'name'} ||= 'unknown';
-	}
+	&read_sysinfo($in_dir);
 
 	# In cache mode create the system information binary file each time
 	if ($CACHE && (scalar keys %sysinfo > 0) ) {
@@ -9760,6 +9749,26 @@ sub getNumericalOffset
 }
 
 sub read_sysinfo
+{
+        my $in_dir = shift;
+
+        print STDERR "DEBUG: Looking for system information in directory $in_dir\n" if ($DEBUG);
+        if (-e "$in_dir/sys_cache.bin") {
+                print STDERR "DEBUG: Loading system information from cache file $in_dir/sys_cache.bin\n" if ($DEBUG);
+                &load_sysinfo_binary($in_dir, "sys_cache.bin");
+        } elsif (-e "$in_dir/sysinfo.txt") {
+                print STDERR "DEBUG: Loading system information from file $in_dir/sysinfo.txt\n" if ($DEBUG);
+                %sysinfo = &read_sysinfo_file("$in_dir/sysinfo.txt");
+                $sysinfo{RELEASE}{'name'} ||= 'unknown';
+        } elsif (-e "$in_dir/sysinfo.txt.gz") {
+                print STDERR "DEBUG: Loading system information from file $in_dir/sysinfo.txt.gz\n" if ($DEBUG);
+                %sysinfo = &read_sysinfo_file("$in_dir/sysinfo.txt.gz");
+                $sysinfo{RELEASE}{'name'} ||= 'unknown';
+        }
+
+}
+
+sub read_sysinfo_file
 {
 	my $file = shift;
 
