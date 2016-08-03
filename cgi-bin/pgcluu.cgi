@@ -40,7 +40,7 @@ my %DEVFH           = ();
 my $IDX             = 1;
 my $HELP            = 0;
 my $SHOW_VER        = 0;
-my $DEBUG           = 0;
+my $DEBUG           = 1;
 my $NUMBER_CPU      = 0;
 my $TIMEZONE        = '00'; #substr(strftime('%z', localtime()), 0, 3);
 my $STATS_TIMEZONE  = '00';  # Timezone is auto detected from data files
@@ -48,12 +48,13 @@ my $REVERT_DATE     = 0;
 my $FROM_SA_FILE    = 0;
 my $SADC_INPUT_FILE = '';
 my $SAR_INPUT_FILE  = '';
-our @DEVICE_LIST    = ();
-our @IFACE_LIST     = ();
+my @DEVICE_LIST     = ();
+my @IFACE_LIST      = ();
 my @GRAPH_COLORS    = ('#6e9dc9', '#f4ab3a', '#ac7fa8', '#8dbd0f'); 
 my $ZCAT_PROG       = '/bin/zcat';
 my $CACHE           = 0;
 my $MAX_INDEXES     = 5;
+my @DATABASE_LIST   = ();
 
 my %RELKIND = (
 	'r' => 'tables',
@@ -977,7 +978,6 @@ my $ID_ACTION = -1;
 my $src_base = '';
 my $INPUT_DIR = '';
 my $RSC_BASE = '.';
-my @database_list = ();
 
 sub read_conf
 {
@@ -1093,40 +1093,9 @@ if (!$e_year) {
 ####
 my @WORK_DIRS = &get_data_directories();
 
-####
-# Start to look for devices and database to build the menu
-####
-foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
-	my $in_dir = "$INPUT_DIR/$WORK_DIRS[$dx]";
-	my ($sar_file, $sadc_file) = &set_sysstat_file($in_dir);
-	if ($sar_file ne 'binary') {
-		@DEVICE_LIST = &get_device_list($sar_file, $sadc_file);
-		@IFACE_LIST = &get_interface_list($sar_file, $sadc_file);
-	}
-	last if ($#DEVICE_LIST >= 0);
-}
-
-# show last sysinfo collected
+# Get path to last directory containing stats
 my $in_dir = $INPUT_DIR || '.';
 $in_dir .= "/$WORK_DIRS[-1]" if ($#WORK_DIRS >= 0);
-print STDERR "DEBUG: Looking for system information in directory $in_dir\n" if ($DEBUG);
-if (-e "$in_dir/sys_cache.bin") {
-	print STDERR "DEBUG: Loading system information from cache file $in_dir/sys_cache.bin\n" if ($DEBUG);
-	&load_sys_binary($in_dir, "sys_cache.bin");
-} elsif (-e "$in_dir/sysinfo.txt") {
-	print STDERR "DEBUG: Loading system information from file $in_dir/sysinfo.txt\n" if ($DEBUG);
-	%sysinfo = &read_sysinfo("$in_dir/sysinfo.txt");
-	$sysinfo{RELEASE}{'name'} ||= 'unknown';
-} elsif (-e "$in_dir/sysinfo.txt.gz") {
-	print STDERR "DEBUG: Loading system information from file $in_dir/sysinfo.txt.gz\n" if ($DEBUG);
-	%sysinfo = &read_sysinfo("$in_dir/sysinfo.txt.gz");
-	$sysinfo{RELEASE}{'name'} ||= 'unknown';
-}
-
-# Set database list
-foreach my $db (keys %{$sysinfo{EXTENSION}}) {
-	push(@database_list, $db);
-}
 
 ####
 # Generate page header (common to all reports and include menu)
@@ -1150,14 +1119,16 @@ if ($#WORK_DIRS < 0) {
 
 #### Show system related information
 if ($ACTION eq 'sysinfo') {
+	&read_sysinfo($in_dir);
 	&show_sysinfo($in_dir);
 	&html_footer();
 	exit 0;
 }
 
-
+#### Load statistics from all required directories following the time selection
 foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
+	# Set absolute path to the working directory
 	my $in_dir = "$INPUT_DIR/$WORK_DIRS[$dx]";
 
 	# Do not proceed last workin directory when hour:min is 00:00 because
@@ -1175,102 +1146,96 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 		next;
 	}
 
+	# Set database list from all visited directory to build menu
+	&read_sysinfo($in_dir);
+	foreach my $db (keys %{$sysinfo{EXTENSION}}) {
+		push(@DATABASE_LIST, $db) if (!grep(/^$db$/, @DATABASE_LIST));
+	}
+
 	# Set default sysstat file to read (binary or text format)
 	# an extract the disk devices and network interfaces list
-	# if there's no binary files
+	# if there's no binary files
+	my ($sar_file, $sadc_file) = &set_sysstat_file($in_dir);
+
+	# Detect timezone from csv file when there is no cache file and
+	# look for disk device and network interface from the sar file
+	if ($#binfiles == -1) {
+		if ($STATS_TIMEZONE eq '00') {
+			if (-e "$in_dir/pg_stat_database.csv" && !-z "$in_dir/pg_stat_database.csv") {
+				$STATS_TIMEZONE = &detect_timezone("$in_dir/pg_stat_database.csv");
+			} elsif (-e "$in_dir/pg_stat_database.csv.gz" ) {
+				$STATS_TIMEZONE = &detect_timezone("$in_dir/pg_stat_database.csv.gz");
+			}
+			# Force use of same the same timezone for postgresql and system metrics
+			if ($TIMEZONE ne $STATS_TIMEZONE) {
+				$TIMEZONE = $STATS_TIMEZONE;
+			}
+
+			print STDERR "DEBUG: autodetected timezone value database : $STATS_TIMEZONE, system: $TIMEZONE\n" if ($DEBUG);
+		}
+
+		# Look for disk device and network interface from the sar file
+		if (!$DISABLE_SAR) {
+			foreach my $d (get_device_list($sar_file, $sadc_file)) {
+				push(@DEVICE_LIST, $d) if (!grep(/^$d$/, @DEVICE_LIST));
+			}
+			foreach my $d (@IFACE_LIST = get_interface_list($sar_file, $sadc_file)) {
+				push(@IFACE_LIST, $d) if (!grep(/^$d$/, @IFACE_LIST));
+			}
+		}
+	}
+
+	# Action to perform when a sar statistics is requested
 	if (($ACTION eq 'home') || ($ACTION =~ /^(system|device|network)-/)) {
-		my $sar_file = '';
-		my $sadc_file = '';
-		if ($#binfiles < 0) {
-			# Build sar statistics if a cache file is not present
-			($sar_file, $sadc_file) = &set_sysstat_file($in_dir);
-			@DEVICE_LIST = &get_device_list($sar_file, $sadc_file);
-			@IFACE_LIST = &get_interface_list($sar_file, $sadc_file);
-			if (-f "$sadc_file") {
+
+                # Load statistics from cache files
+                if ($#binfiles >= 0) {
+			@DEVICE_LIST = ();
+			@IFACE_LIST = ();
+                        print STDERR "DEBUG: Loading Sar statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
+                        &load_sar_binary($in_dir);
+                        # Look for disk device and network interface from global info
+                        push(@DEVICE_LIST, @{$global_infos{DEVICE_LIST}}) if (exists $global_infos{DEVICE_LIST});
+                        push(@IFACE_LIST, @{$global_infos{IFACE_LIST}}) if (exists $global_infos{IFACE_LIST});
+			if (($TIMEZONE eq '00') && $global_infos{timezone}) {
+				$TIMEZONE = $global_infos{timezone};
+			}
+			if (($STATS_TIMEZONE eq '00') && $global_infos{stats_timezone}) {
+				$STATS_TIMEZONE = $global_infos{stats_timezone};
+			}
+
+                }
+
+		# Home page is built from cache file or from csv file, not both
+		if (($ACTION ne 'home') || ($#binfiles == -1)) {
+			# Then build sar statistics from data file starting at begining
+			# when there's no cache file or starting at last cache offset.
+			# In cache/binary mode we can not process sadc binary data file
+			if (($#binfiles == -1) && -f "$sadc_file") {
 				print STDERR "DEBUG: looking for sadc binary data file $sadc_file\n" if ($DEBUG);
 				foreach my $id (sort keys %SAR_GRAPH_INFOS) {
 					next if (($ACTION ne 'home') && ($REAL_ACTION ne $SAR_GRAPH_INFOS{$id}->{name}));
 					&compute_sarstat_stats($sadc_file, %{$SAR_GRAPH_INFOS{$id}});
 				}
-			} elsif (-f "$sar_file") {
+			# Read sar file from the start of the file or from the offset stored a previous
+			# run of the cache. Gzipped files do not need to be read again with binary files
+			} elsif ( -f "$sar_file" && (($#binfiles == -1) || ($sar_file !~ /\.gz$/)) ) {
 				print STDERR "DEBUG: looking for sar text data file $sar_file\n" if ($DEBUG);
 				foreach my $id (sort keys %SAR_GRAPH_INFOS) {
 					next if (($ACTION ne 'home') && ($REAL_ACTION ne $SAR_GRAPH_INFOS{$id}->{name}));
 					&compute_sarfile_stats($sar_file, %{$SAR_GRAPH_INFOS{$id}});
 				}
 			}
-
-		} else {
-
-			#Load statistics from cache files
-			@DEVICE_LIST = ();
-			@IFACE_LIST = ();
-			print STDERR "DEBUG: Loading Sar statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
-			&load_sar_binary($in_dir);
 		}
 	}
 
+	# Action to perform when a PostgreSQL statistics is requested
 	if (($ACTION eq 'home') || ($ACTION eq 'database-info') || ($ACTION !~ /^(system|device|network)-/)) {
 
-		if ($#binfiles == -1) {
-
-			# Check if there is csv file in the input directory
-			print STDERR "DEBUG: looking for CSV file into directory $in_dir/\n" if ($DEBUG);
-			opendir(IDIR, "$in_dir") || die "FATAL: can't opendir $in_dir: $!";
-			my @files = grep { /\.csv(\.gz)?$/ } readdir(IDIR);
-			closedir(IDIR);
-			if ($#files < 0) {
-				die "FATAL: no csv file found in $in_dir";
-			}
-
-			# Detect timezone from csv file
-			if ($STATS_TIMEZONE eq '00') {
-				if (-e "$in_dir/pg_stat_database.csv" && !-z "$in_dir/pg_stat_database.csv") {
-					$STATS_TIMEZONE = &detect_timezone("$in_dir/pg_stat_database.csv");
-				} elsif (-e "$in_dir/pg_stat_database.csv.gz" ) {
-					$STATS_TIMEZONE = &detect_timezone("$in_dir/pg_stat_database.csv.gz");
-				}
-				# Force use of same the same timezone for postgresql and system metrics
-				if ($TIMEZONE ne $STATS_TIMEZONE) {
-					$TIMEZONE = $STATS_TIMEZONE;
-				}
-
-				print "DEBUG: autodetected timezone value database : $STATS_TIMEZONE, system: $TIMEZONE\n" if ($DEBUG);
-			}
-
-
-			# Loop over CSV files and graphics definition to generate reports
-			print STDERR "DEBUG: Building PostgreSQL statistics From $ACTION CSV files\n" if ($DEBUG);
-			foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS) {
-				my $to_be_proceed = 0;
-				foreach my $n (keys %{$DB_GRAPH_INFOS{$k}}) {
-					$to_be_proceed = 1, last if (($ACTION eq 'home') || ($ACTION eq 'database-info') || ($REAL_ACTION eq $DB_GRAPH_INFOS{$k}{$n}->{name}));
-				}
-				next if (!$to_be_proceed);
-				if (-e "$in_dir/$k" && !-z "$in_dir/$k") {
-					if (-e "$in_dir/$k" && !-z "$in_dir/$k") {
-						&compute_postgresql_stat($in_dir, $k, $src_base, %{$DB_GRAPH_INFOS{$k}});
-					}
-				} elsif (-e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz") {
-					if (-e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz") {
-						&compute_postgresql_stat($in_dir, "$k.gz", $src_base, %{$DB_GRAPH_INFOS{$k}}); 
-					}
-				} elsif ($k =~ /_all_/) {
-					my $f = $k;
-					$f =~ s/_all_/_user_/;
-					if (-e "$in_dir/$f" && !-z "$in_dir/$f") {
-						&compute_postgresql_stat($in_dir, $f, $src_base, %{$DB_GRAPH_INFOS{$k}});
-					} elsif (-e "$in_dir/$f.gz" && !-z "$in_dir/$f.gz") {
-						&compute_postgresql_stat($in_dir, "$f.gz", $src_base, %{$DB_GRAPH_INFOS{$k}});
-					}
-				}
-			}
-
-		} else {
-
-			# Load statistics from cache files
-			print STDERR "DEBUG: Loading PostgreSQL statistics from $ACTION cache files from $in_dir\n" if ($DEBUG);
-			&load_pg_binary($in_dir, $ACTION);
+		# Load statistics from cache files
+		if ($#binfiles > 0) {
+			print STDERR "DEBUG: Loading PostgreSQL statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
+			&load_pg_binary($in_dir);
 
 			if (($TIMEZONE eq '00') && $global_infos{timezone}) {
 				$TIMEZONE = $global_infos{timezone};
@@ -1278,7 +1243,52 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			if (($STATS_TIMEZONE eq '00') && $global_infos{stats_timezone}) {
 				$STATS_TIMEZONE = $global_infos{stats_timezone};
 			}
+
 		}
+
+		# Home page is built from cache file or from csv file, not both
+		if (($ACTION ne 'home') || ($#binfiles == -1)) {
+			# Loop over CSV files and graphics definition to generate reports
+			print STDERR "DEBUG: Building PostgreSQL statistics From $ACTION CSV files\n" if ($DEBUG);
+			foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS) {
+
+				# Do not compute statistics for reports other than the
+				# one requested by the user.
+				my $to_be_proceed = 0;
+				foreach my $n (keys %{$DB_GRAPH_INFOS{$k}}) {
+					$to_be_proceed = 1, last if (($ACTION eq 'home') || ($ACTION eq 'database-info') || ($REAL_ACTION eq $DB_GRAPH_INFOS{$k}{$n}->{name}));
+				}
+				next if (!$to_be_proceed);
+
+				# Read statistics from csv file starting at at begining of the
+				# file or last offset when binary files are present
+				if (-e "$in_dir/$k" && !-z "$in_dir/$k") {
+					if (-e "$in_dir/$k" && !-z "$in_dir/$k") {
+						&compute_postgresql_stat($in_dir, $k, $src_base, %{$DB_GRAPH_INFOS{$k}});
+					}
+				# Gzip data files are only available when they can't be appended anymore so
+				# if we have binary files and gzipped files, binary files contains all stats
+				} elsif (($#binfiles == -1) && -e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz") {
+					if (-e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz") {
+						&compute_postgresql_stat($in_dir, "$k.gz", $src_base, %{$DB_GRAPH_INFOS{$k}});
+					}
+				} elsif ($k =~ /_all_/) {
+					my $f = $k;
+					$f =~ s/_all_/_user_/;
+					# Read statistics from csv file starting at at begining of the
+					# file or last offset when binary files are present
+					if (-e "$in_dir/$f" && !-z "$in_dir/$f") {
+						&compute_postgresql_stat($in_dir, $f, $src_base, %{$DB_GRAPH_INFOS{$k}});
+					# Gzip data files are only available when they can't be appended anymore so
+					# if we have binary files and gzipped files, binary files contains all stats
+					} elsif (($#binfiles == -1) && -e "$in_dir/$f.gz" && !-z "$in_dir/$f.gz") {
+						&compute_postgresql_stat($in_dir, "$f.gz", $src_base, %{$DB_GRAPH_INFOS{$k}});
+					}
+				}
+
+			}
+		}
+
 	}
 
 }
@@ -1369,6 +1379,7 @@ sub set_sysstat_file
 
 	$input_dir ||= $INPUT_DIR;
 
+	print STDERR "DEBUG: detecting sar/sadc file in $input_dir/.\n" if ($DEBUG);
 	my $sar_file = '';
 	my $sadc_file = '';
 	if (!$SADC_INPUT_FILE && !$SAR_INPUT_FILE) {
@@ -1378,10 +1389,9 @@ sub set_sysstat_file
 			$sar_file = "$input_dir/" . 'sar_stats.dat';
 		} elsif (-f "$input_dir/sar_stats.dat.gz") {
 			$sar_file = "$input_dir/" . 'sar_stats.dat.gz';
-		} elsif (-f "$input_dir/sar_cpu_stat.bin") {
-			$sar_file = 'binary';
 		}
 		if (!$sadc_file && !$sar_file) {
+			print STDERR "WARNING: No sar data file found. Consider using -S or --disable-sar command\nline option or use -i / -I option to set the path to the data file.\nContinuing normally without reporting sar statistics.\n";
 			$DISABLE_SAR = 1;
 			return;
 		}
@@ -1395,10 +1405,12 @@ sub set_sysstat_file
 		print STDERR "ERROR: sar binary data file $sadc_file can't be found.\n";
 		exit 1;
 	}
-	if ($sar_file && ($sar_file ne 'binary') && !-f "$sar_file") {
+	if ($sar_file && !-f "$sar_file") {
 		print STDERR "ERROR: sar text data file $sar_file can't be found.\n";
 		exit 1;
 	}
+
+	print STDERR "DEBUG: sar/sadc file detected $sar_file/$sadc_file.\n" if ($DEBUG);
 
 	return ($sar_file, $sadc_file);
 }
@@ -1433,6 +1445,36 @@ sub open_filehdl
 		$curfh->open("$ZCAT_PROG $file |") or die "FATAL: can't read pipe from command: $ZCAT_PROG $file, $!\n";
 	}
 	return $curfh;
+}
+
+sub detect_timezone
+{
+	my $file = shift;
+
+	my $tz = '+00';
+
+	if (!&is_compressed($file)) {
+		if (!open(IN, "$file")) {
+			die "FATAL: can't read file $file: $!\n";
+		}
+	} else {
+		if (!open(IN, "$ZCAT_PROG $file |")) {
+			die "FATAL: can't read pipe on command: $ZCAT_PROG $file, $!\n";
+		}
+	}
+	my $i = 1;
+	while (<IN>) {
+		my @data = split(/;/);
+		if ($data[0] =~ /^\d+-\d+-\d+ \d+:\d+:\d+([+\-]\d\d)/) {
+			$tz = $1;
+			last;
+		}
+		$i++;
+		last if ($i > 10);
+	}
+	close(IN);
+
+	return $tz;
 }
 
 sub get_data_id
@@ -1721,8 +1763,11 @@ sub pg_stat_database
 	my %db_list = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pg_stat_database'}) ? $global_infos{'pg_stat_database'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | datid | datname | numbackends | xact_commit | xact_rollback | blks_read | blks_hit | tup_returned | tup_fetched | tup_inserted | tup_updated | tup_deleted | conflicts | stats_reset | temp_files | temp_bytes | deadlocks | blk_read_time | blk_write_time
@@ -1894,6 +1939,7 @@ sub pg_stat_database
 		push(@{$start_vals{$data[2]}}, @data);
 	}
 	$curfh->close();
+	$global_infos{'pg_stat_database'} = $offset;
 
 	# Store the full list of database
 	foreach my $d (keys %db_list) {
@@ -2312,8 +2358,11 @@ sub pg_stat_database_conflicts
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pg_stat_database_conflicts'}) ? $global_infos{'pg_stat_database_conflicts'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 		# timestamp | datid | datname | confl_tablespace | confl_lock | confl_snapshot | confl_bufferpin | confl_deadlock
 
@@ -2345,6 +2394,7 @@ sub pg_stat_database_conflicts
 
 	}
 	$curfh->close();
+	$global_infos{'pg_stat_database_conflicts'} = $offset;
 }
 
 # Compute graphs of database conflict statistics
@@ -2390,10 +2440,15 @@ sub pg_database_size
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		# date_trunc | datid | datname | size
-		my @data = split(/;/);
+        my $offset = (exists $global_infos{'pg_database_size'}) ? $global_infos{'pg_database_size'} : 0;
+        $curfh->seek($offset,0);
+        while (my $l = <$curfh>) {
+                $offset += length($l);
+                my @data = split(/;/, $l);
+
 		next if (!&normalize_line(\@data));
+
+		# date_trunc | datid | datname | size
 
                 # Store list of database
                 $db_list{$data[2]} = 1;
@@ -2409,6 +2464,7 @@ sub pg_database_size
 		}
 	}
 	$curfh->close();
+	$global_infos{'pg_database_size'} = $offset;
 
 	# Store the full list of database
 	foreach my $d (keys %db_list) {
@@ -2461,8 +2517,11 @@ sub pg_tablespace_size
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	my $total_val = 0;
-	while (<$curfh>) {
-		my @data = split(/;/);
+        my $offset = (exists $global_infos{'pg_tablespace_size'}) ? $global_infos{'pg_tablespace_size'} : 0;
+        $curfh->seek($offset,0);
+        while (my $l = <$curfh>) {
+                $offset += length($l);
+                my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | tbspname | size | path
@@ -2480,6 +2539,8 @@ sub pg_tablespace_size
 		}
 	}
 	$curfh->close();
+	$global_infos{'pg_tablespace_size'} = $offset;
+
 	push(@global_tbspnames, 'all') if ($#global_tbspnames > 0);
 
 }
@@ -3145,8 +3206,11 @@ sub pg_statio_user_tables
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pg_statio_user_tables'}) ? $global_infos{'pg_statio_user_tables'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | relid | schemaname | relname | heap_blks_read | heap_blks_hit | idx_blks_read | idx_blks_hit | toast_blks_read | toast_blks_hit | tidx_blks_read | tidx_blks_hit
@@ -3187,6 +3251,7 @@ sub pg_statio_user_tables
 		push(@{$start_vals{$data[1]}{$data[4]}}, @data);
 	}
 	$curfh->close();
+	$global_infos{'pg_statio_user_tables'} = $offset;
 }
 
 # Compute report for table I/O
@@ -3258,8 +3323,11 @@ sub pg_relation_buffercache
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pg_statio_user_tables'}) ? $global_infos{'pg_statio_user_tables'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# date_trunc | datname | relname | buffers | relpages | buffered | buffers % | relation %
@@ -3275,6 +3343,8 @@ sub pg_relation_buffercache
 
 	}
 	$curfh->close();
+
+	$global_infos{'pg_relation_buffercache'} = $offset;
 };
 
 # Compute report for relation buffer cache
@@ -3415,8 +3485,11 @@ sub pg_statio_user_indexes
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pg_statio_user_indexes'}) ? $global_infos{'pg_statio_user_indexes'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_blks_read | idx_blks_hit
@@ -3440,7 +3513,7 @@ sub pg_statio_user_indexes
 		push(@{$start_vals{$data[1]}{$data[6]}}, @data);
 	}
 	$curfh->close();
-
+	$global_infos{'pg_statio_user_indexes'} = $offset;
 }
 
 # Compute report for index I/O
@@ -3495,8 +3568,11 @@ sub pg_xlog_stat
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pg_xlog_stat'}) ? $global_infos{'pg_xlog_stat'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | total_file | last_wal_name | wal_recycled | wal_written | max_wal
@@ -3514,6 +3590,7 @@ sub pg_xlog_stat
 		}
 	}
 	$curfh->close();
+	$global_infos{'pg_xlog_stat'} = $offset;
 }
 
 # Compute graphs of xlog cluster statistics
@@ -3559,8 +3636,11 @@ sub pg_stat_bgwriter
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pg_stat_bgwriter'}) ? $global_infos{'pg_stat_bgwriter'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		if ($#data >= 9) {
@@ -3603,6 +3683,7 @@ sub pg_stat_bgwriter
 		push(@start_vals, @data);
 	}
 	$curfh->close();
+	$global_infos{'pg_stat_bgwriter'} = $offset;
 
 }
 
@@ -3680,8 +3761,11 @@ sub pg_stat_connections
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pg_stat_connections'}) ? $global_infos{'pg_stat_connections'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data, 5));
 
 		# timestamp | total | active | waiting | idle_in_xact | datname
@@ -3702,6 +3786,7 @@ sub pg_stat_connections
 		$all_stat_connections{$data[0]}{'all'}{idle} += ($data[1] - $data[2] - $data[4]);
 	}
 	$curfh->close();
+	$global_infos{'pg_stat_connections'} = $offset;
 
 	# Store the full list of database
 	foreach my $d (keys %db_list) {
@@ -3867,8 +3952,11 @@ sub pg_stat_replication
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pg_stat_replication'}) ? $global_infos{'pg_stat_replication'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 		# timestamp | pid | usesysid | usename | application_name | client_addr | client_hostname | client_port | backend_start | state | master_location | sent_location | write_location | flush_location | replay_location | sync_priority | sync_state
 		# Do not care about BACKUP and pg_basebackup connection
@@ -3898,6 +3986,7 @@ sub pg_stat_replication
 		}
 	}
 	$curfh->close();
+	$global_infos{'pg_stat_replication'} = $offset;
 }
 
 # Compute graphs of replication cluster statistics
@@ -3963,8 +4052,11 @@ sub pgbouncer_stats
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pgbouncer_stats'}) ? $global_infos{'pgbouncer_stats'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 		next if ($data[1] eq 'pgbouncer');
 
@@ -3979,6 +4071,7 @@ sub pgbouncer_stats
 		$all_pgbouncer_stats{$data[0]}{$data[1]}{$data[2]}{maxwait} += ($data[10] || 0);
 	}
 	$curfh->close();
+	$global_infos{'pgbouncer_stats'} = $offset;
 }
 
 # Compute graphs of pgbouncer statistics
@@ -4191,8 +4284,11 @@ sub pgbouncer_req_stats
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pgbouncer_req_stats'}) ? $global_infos{'pgbouncer_req_stats'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 		next if ($data[1] eq 'pgbouncer');
 
@@ -4207,6 +4303,7 @@ sub pgbouncer_req_stats
 		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_query} += $data[9];
 	}
 	$curfh->close();
+	$global_infos{'pgbouncer_req_stats'} = $offset;
 }
 
 # Show report about pgbouncer queries
@@ -4402,8 +4499,11 @@ sub pg_stat_locks
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pg_stat_locks'}) ? $global_infos{'pg_stat_locks'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp|database|label|(type|mode|granted)|count
@@ -4415,6 +4515,7 @@ sub pg_stat_locks
 		$all_stat_locks{$data[0]}{$data[1]}{$data[2]}{$data[3]} += $data[4];
 	}
 	$curfh->close();
+	$global_infos{'pg_stat_locks'} = $offset;
 }
 
 # Compute graphs of locks statistics
@@ -5728,8 +5829,11 @@ sub pg_database_buffercache
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pg_database_buffercache'}) ? $global_infos{'pg_database_buffercache'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
                 # Store list of database
@@ -5742,6 +5846,7 @@ sub pg_database_buffercache
 		$all_database_buffercache{$data[0]}{'all'}{database_loaded} += ($data[5]||0);
 	}
 	$curfh->close();
+	$global_infos{'pg_database_buffercache'} = $offset;
 
 	# Store the full list of database
 	foreach my $d (keys %db_list) {
@@ -5801,14 +5906,18 @@ sub pg_database_usagecount
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pg_database_usagecount'}) ? $global_infos{'pg_database_usagecount'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# date_trunc | datname | usagecount | buffer | buffers %
 		$all_database_usagecount{$data[0]}{$data[2]} += ($data[4]||0);
 	}
 	$curfh->close();
+	$global_infos{'pg_database_usagecount'} = $offset;
 }
 
 # Compute graph of usagecount in shared buffers
@@ -5849,13 +5958,17 @@ sub pg_database_isdirty
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pg_database_isdirty'}) ? $global_infos{'pg_database_isdirty'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 		# date_trunc | datname | usagecount | isdirty | buffer | buffers %
 		$all_database_isdirty{$data[0]}{$data[2]} += $data[5] if ($data[3] eq 't');
 	}
 	$curfh->close();
+	$global_infos{'pg_database_isdirty'} = $offset;
 }
 
 # Compute graphs of dirty buffer in cache
@@ -5895,8 +6008,11 @@ sub pg_stat_archiver
 	my @start_vals = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	my $offset = (exists $global_infos{'pg_stat_archiver'}) ? $global_infos{'pg_stat_archiver'} : 0;
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | archived_count | last_archived_wal | last_archived_time | failed_count | last_failed_wal | last_failed_time | stats_reset
@@ -5936,6 +6052,7 @@ sub pg_stat_archiver
 		push(@start_vals, @data);
 	}
 	$curfh->close();
+	$global_infos{'pg_stat_archiver'} = $offset;
 }
 
 # Compute graphs of archiver statistics
@@ -6557,8 +6674,10 @@ EOF
 	}
 
 	if (exists $sysinfo{PGVERSION}) {
+		my $cache_info = '';
+		$cache_info = "<li><span class=\"figure-label\">Cache was last built on $sysinfo{CACHE}{last_run}</span></li>" if (exists $sysinfo{CACHE});
 		my $uptime = '';
-		$uptime = "<span class=\"figure-label\">Up since $sysinfo{PGVERSION}{'uptime'}</span>" if ($sysinfo{PGVERSION}{'uptime'});
+		$uptime = "<li><span class=\"figure-label\">Up since $sysinfo{PGVERSION}{'uptime'}</span></li>" if ($sysinfo{PGVERSION}{'uptime'});
 		print <<EOF;
             <div class="col-md-12">
               <div class="panel panel-default">
@@ -6566,6 +6685,7 @@ EOF
                <div class="key-figures">
                <ul>
                <li></li>
+		$cache_info
                <li><span class="figure-label">$sysinfo{PGVERSION}{'full_version'}</span></li>
 		$uptime
                </ul>
@@ -7054,14 +7174,6 @@ gFJG04FnRsAnYDuwyRlIq9UjNgu1Uof0OkYlfKMuKCuZA/8B+QsSxkN8YYwAAAAASUVORK5CYII=
 
 <body>
 
-<!-- Load navbar -->
-<div id="navigation">
-};
-	print &generate_menu();
-
-	print qq{
-</div>
-
 <div class="container" id="main-container">
 };
 
@@ -7080,6 +7192,10 @@ sub html_footer
       </footer>
 
 </div><!--/.container-->
+};
+
+	print &generate_menu();
+        print qq{
 </body>
 </html>
 };
@@ -7185,6 +7301,8 @@ zh3ZXkrysHoJMkZXW1xH8rZyW9i0GZlu28QgnU4HtplzbknqyzmnRiQ6LbCnaPs/zGhC2bEgIrsA
 AAAASUVORK5CYII=';
 
         my $menu_str = qq{
+<!-- Load navbar -->
+<div id="navigation">
     <div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
       <a class="navbar-brand" href="http://pgcluu.darold.net/">
       <img src="$pgcluu_logo" title="$PROGRAM"></a>
@@ -7196,12 +7314,13 @@ AAAASUVORK5CYII=';
             <span class="icon-bar"></span>
           </button>
         </div>
+
         <div class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
               <li id="menu-home" class="dropdown"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=home&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Home</a></li>
               <li id="menu-info" class="dropdown"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=sysinfo&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">SysInfo</a></li>
 };
-	if ($#database_list >= 0) {
+	if ($#DATABASE_LIST >= 0) {
 
 		$menu_str .= qq{
               <li id="menu-cluster" class="dropdown">
@@ -7307,7 +7426,7 @@ AAAASUVORK5CYII=';
 };
 	}
 
-	if ($#database_list >= 0) {
+	if ($#DATABASE_LIST >= 0) {
 		$menu_str .= qq{
               <li id="menu-database" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">Databases <b class="caret"></b></a>
@@ -7317,9 +7436,9 @@ AAAASUVORK5CYII=';
 
 	my $dbidx = 0;
 	my $l = 0;
-	foreach my $db (sort @database_list) {
+	foreach my $db (sort @DATABASE_LIST) {
 		next if (($db eq 'all') || (($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB))));
-		if ($#database_list >= 10) {
+		if ($#DATABASE_LIST >= 10) {
 			my $md = $l % 10;
 			if ($md == 0) {
 				$dbidx++;
@@ -7330,7 +7449,7 @@ AAAASUVORK5CYII=';
 };
 				}
 				my $lbl = '';
-				$lbl = " (part $dbidx)" if ($#database_list >= 10);
+				$lbl = " (part $dbidx)" if ($#DATABASE_LIST >= 10);
 				$menu_str .= qq{
                   <li id="menu-device$dbidx" class="dropdown-submenu">
                      <a href="#" tabindex="-1">Database $lbl</a>
@@ -7529,8 +7648,8 @@ AAAASUVORK5CYII=';
                 </li>
 };
 	}
-	if ($#database_list >= 0) {
-		if ($#database_list >= 10) {
+	if ($#DATABASE_LIST >= 0) {
+		if ($#DATABASE_LIST >= 10) {
 			$menu_str .= qq{
                     </ul>
                   </li>
@@ -7686,6 +7805,8 @@ AAAASUVORK5CYII=';
         </div><!--/.nav-collapse -->
       </div>
     </div>
+</div><!-- div navigation -->
+
 <script type="text/javascript">
 \$(document).ready(function () {
     \$(".form_datepick").datetimepicker({
@@ -7722,7 +7843,7 @@ AAAASUVORK5CYII=';
   }
 
   function go_forward() {
-    var fromDate = new Date(document.getElementByœId('start-date').value);
+    var fromDate = new Date(document.getElementById('start-date').value);
     var toDate   = new Date(document.getElementById('end-date').value);
     var delta    = toDate - fromDate;
     fromDate += delta;
@@ -8798,29 +8919,30 @@ sub find_report_type
 	return $type;
 }
 
-sub compute_sarfile_stats
+sub load_sarfile_stats
 {
-	my ($file, %data_info) = @_;
+	my ($file) = @_;
 
 	my $interval = 0;
 	my $hostname = 'unknown';
 
 	# Load data from file
-	if (!is_compressed($file)) {
-		open(IN, $file) or die "ERROR: can't read file $file, $!\n";
-	} else {
-		open(IN, "$ZCAT_PROG $file |") or die "ERROR: can't read pipe on command: $ZCAT_PROG $file, $!\n";
-	}
 	my @content = ();
-	while (my $l = <IN>) {
+	my $offset = (exists $global_infos{'load_sarfile_stats'}) ? $global_infos{'load_sarfile_stats'} : 0;
+	my $curfh = open_filehdl("$file");
+	print STDERR "DEBUG: Starting to read $file from offset $offset\n" if ($DEBUG);
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>) {
+		$offset += length($l);
 		chomp($l);
 		$l =~ s/\r//;
 		# Skip kernel header part
-		if ( ($l eq '') || ($l =~ /^\d+:\d+:\d+/) || ($l =~ /\d+\/\d+\/\d+/)) {
+		if ( ($l eq '') || ($l =~ /^\d+:\d+:\d+/) || ($l =~ /\d+[\-\/]\d+[\-\/]\d+/)) {
 			push(@content, $l);
 		}
 	}
-	close(IN);
+	$curfh->close();
+	$global_infos{'load_sarfile_stats'} = $offset;
 
 	my $type = '';
 	my @headers = ();
@@ -8915,13 +9037,21 @@ sub compute_sarfile_stats
 		map { s/,/\./; } @values;
 		push(@{$fulldata{$type}}, "$hostname;$interval;$timestamp;" . join(";", @values));
 	}
-	@content = ();
+
+	return %fulldata;
+}
+
+sub compute_sarfile_stats
+{
+	my ($file, %data_info) = @_;
+
+	# Load sar statistics from file if not already done
+	my %fulldata = &load_sarfile_stats($file);
 
 	####
 	# Set CPU utilization
 	####
 	if ($data_info{name} eq 'system-cpu') {
-
 		# Compute cpu statistics
 		&compute_cpu_stat(@{$fulldata{cpu}});
 
@@ -9542,6 +9672,26 @@ sub getNumericalOffset
 
 sub read_sysinfo
 {
+	my $in_dir = shift;
+
+	print STDERR "DEBUG: Looking for system information in directory $in_dir\n" if ($DEBUG);
+	if (-e "$in_dir/sys_cache.bin") {
+		print STDERR "DEBUG: Loading system information from cache file $in_dir/sys_cache.bin\n" if ($DEBUG);
+		&load_sysinfo_binary($in_dir, "sys_cache.bin");
+		$sysinfo{CACHE}{last_run} = localtime((stat("$in_dir/sys_cache.bin"))[9]) || '';
+	} elsif (-e "$in_dir/sysinfo.txt") {
+		print STDERR "DEBUG: Loading system information from file $in_dir/sysinfo.txt\n" if ($DEBUG);
+		%sysinfo = &read_sysinfo_file("$in_dir/sysinfo.txt");
+		$sysinfo{RELEASE}{'name'} ||= 'unknown';
+	} elsif (-e "$in_dir/sysinfo.txt.gz") {
+		print STDERR "DEBUG: Loading system information from file $in_dir/sysinfo.txt.gz\n" if ($DEBUG);
+		%sysinfo = &read_sysinfo_file("$in_dir/sysinfo.txt.gz");
+		$sysinfo{RELEASE}{'name'} ||= 'unknown';
+	}
+}
+
+sub read_sysinfo_file
+{
 	my $file = shift;
 
 	if (!is_compressed($file)) {
@@ -9956,7 +10106,7 @@ sub load_sar_binary
 }
 
 # Load statistics from sysinfo cache into memory
-sub load_sys_binary
+sub load_sysinfo_binary
 {
         my ($in_dir, $infile) = @_;
 
