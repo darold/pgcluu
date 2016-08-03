@@ -10187,7 +10187,7 @@ sub load_sar_binary
 }
 
 # Load statistics from sysinfo cache into memory
-sub load_sys_binary
+sub load_sysinfo_binary
 {
         my ($in_dir, $infile) = @_;
 
