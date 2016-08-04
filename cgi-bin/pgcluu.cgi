@@ -7781,8 +7781,8 @@ AAAASUVORK5CYII=';
                 <ul class="dropdown-menu">
 		  <li id="menu-time-year"><a href="" onclick="custom_date('year'); return false;">Year</a></li>
 		  <li id="menu-time-month"><a href="" onclick="custom_date('month'); return false;">Month</a></li>
-		  <li id="menu-time-week"><a href="" onclick="custom_date('week');; return false;">Week</a></li>
-		  <li id="menu-time-day"><a href="" onclick="custom_date('day');; return false;">Day</a></li>
+		  <li id="menu-time-week"><a href="" onclick="custom_date('week'); return false;">Week</a></li>
+		  <li id="menu-time-day"><a href="" onclick="custom_date('day'); return false;">Day</a></li>
 		  <li id="menu-time-backward"><a href="" onclick="go_backward(); return false;">Backward</a></li>
 		  <li id="menu-time-forward"><a href="" onclick="go_forward(); return false;">Forward</a></li>
 		</ul>
@@ -7843,8 +7843,11 @@ AAAASUVORK5CYII=';
   }
 
   function go_forward() {
-    var fromDate = new Date(document.getElementById('start-date').value);
-    var toDate   = new Date(document.getElementById('end-date').value);
+    if ((document.getElementById('start-date').value == '')||(document.getElementById('end-date').value == '')) {
+	custom_date( 'day' );
+    }
+    var fromDate = new Date(document.getElementById('start-date').value)/1;
+    var toDate   = new Date(document.getElementById('end-date').value)/1;
     var delta    = toDate - fromDate;
     fromDate += delta;
     toDate   += delta;
@@ -7854,8 +7857,11 @@ AAAASUVORK5CYII=';
   };
 
   function go_backward() {
-    var fromDate = new Date(document.getElementById('start-date').value);
-    var toDate   = new Date(document.getElementById('end-date').value);
+    if ((document.getElementById('start-date').value == '')||(document.getElementById('end-date').value == '')) {
+	custom_date( 'day' );
+    }
+    var fromDate = new Date(document.getElementById('start-date').value)/1;
+    var toDate   = new Date(document.getElementById('end-date').value)/1;
     var delta    = toDate - fromDate;
     fromDate -= delta;
     toDate   -= delta;
