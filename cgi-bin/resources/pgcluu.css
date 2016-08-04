@@ -199,3 +199,10 @@ ul#slides li div div {
     color: #000000;
  }
 
+
+#pgcluuModal .modal-dialog 
+{ 
+     height: 100%; 
+     width: 1200px; 
+     overflow-y: hidden; 
+}

@@ -2,8 +2,8 @@
 /* <![CDATA[ */
 
 function create_download_button (buttonid, cssclass) {
-	document.writeln('<input type="button" class="'+cssclass+'" value="Download" id="download'+buttonid+'" onclick="return false;">');
-	document.writeln('<input type="button" class="'+cssclass+'" value="CSV export" id="csv'+buttonid+'" onclick="return false;"><a id="csvdl'+buttonid+'">');
+	document.writeln('<button type="button" id="download'+buttonid+'" class="btn btn-danger" data-toggle="modal" data-target="#pgcluuModal">Download</button>');
+	document.writeln('<button type="button" id="csv'+buttonid+'" class="btn btn-danger" >CSV export</button>');
 	document.writeln('<a id="acsv'+buttonid+'" href="#"></a>');
 }
 
@@ -17,22 +17,11 @@ $(document).ready(function() {
 function add_download_button_event (buttonid, divid, plot) {
 
 	jQuery('#download'+buttonid).click( function() {
-		$('#'+divid).jqplotViewImage();
-		var nagent = navigator.userAgent.toLowerCase();
-		if (nagent.indexOf('chrome') > -1) {
-			$('#'+divid).jqplotViewImage();
-		} else {
-			var imgData = $('#'+divid).jqplotToImageStr({});
-			var w = window.open('chart.html');
-			w.document.open("text/html");
-			w.document.write("<img src='"+imgData+"' />");
-			w.document.close();
-			w = null;
-		}
+		$('#pgcluuModal img').attr('src', $('#'+divid).jqplotToImageStr({}));
 	});
 	jQuery('#csv'+buttonid).click( function() {
-    export_csv(plot, buttonid);
-  });
+		export_csv(plot, buttonid);
+	});
 
 }
 
@@ -274,15 +263,15 @@ function format_number(val) {
 }
 
 function export_csv(plot, buttonid) {
-  if (jQuery('#acsv' + buttonid).attr('href') !== '#') {
+
+  if (jQuery('#acsv' + buttonid).attr('href') == '#') {
     var csv = "data:text/csv;charset=utf-8,";
 
-    if (plot.plugins.lineRenderer != null) {
+    if (plot.seriesDefaults != null) {
       csv += '"serie","epoch","value"\n';
     } else {
       csv += '"serie","value"\n';
     }
-
     _.each(plot.series[0]._plotValues.x, function(val,i) {
       _.each(plot.series, function(s, j) {
         if (plot.plugins.lineRenderer != null) {
