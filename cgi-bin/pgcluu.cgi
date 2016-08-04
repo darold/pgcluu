@@ -7832,9 +7832,10 @@ AAAASUVORK5CYII=';
           fromDate.setDate(fromDate.getDate() - 7);
         break;
         case 'day':
-          fromDate.setDate(fromDate.getDate() - 1);
+          fromDate.setDate(fromDate.getDate());
         break;
     }
+    toDate.setDate(toDate.getDate()+1);
     var tzoffset = (new Date()).getTimezoneOffset() * 60000;
     document.getElementById('start-date').value = (new Date(fromDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
     document.getElementById('start-date').value = document.getElementById('start-date').value.substring(0,11) + '00:00';
@@ -9873,8 +9874,8 @@ sub get_data_directories
 			my @months = grep { /^\d+$/ && -d "$INPUT_DIR/$y/$_" } readdir(DIR);
 			closedir(DIR);
 			foreach  my $m (sort { $a <=> $b } @months) {
-				next if ($o_month && ("$y$m" lt "$o_year$o_month$o_day"));
-				next if ($e_month && ("$y$m" gt "$e_year$e_month$e_day"));
+				next if ($o_month && ("$y$m" lt "$o_year$o_month"));
+				next if ($e_month && ("$y$m" gt "$e_year$e_month"));
 				if (not opendir(DIR, "$INPUT_DIR/$y/$m")) {
 					die "FATAL: Can't open directory $INPUT_DIR/$y/$m: $!\n";
 				}
