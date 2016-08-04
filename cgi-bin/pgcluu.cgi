@@ -9873,16 +9873,16 @@ sub get_data_directories
 			my @months = grep { /^\d+$/ && -d "$INPUT_DIR/$y/$_" } readdir(DIR);
 			closedir(DIR);
 			foreach  my $m (sort { $a <=> $b } @months) {
-				next if ($o_month && ($m < $o_month));
-				next if ($e_month && ($m > $e_month));
+				next if ($o_month && ("$y$m" lt "$o_year$o_month$o_day"));
+				next if ($e_month && ("$y$m" gt "$e_year$e_month$e_day"));
 				if (not opendir(DIR, "$INPUT_DIR/$y/$m")) {
 					die "FATAL: Can't open directory $INPUT_DIR/$y/$m: $!\n";
 				}
 				my @days = grep { /^\d+$/ && -d "$INPUT_DIR/$y/$m/$_" } readdir(DIR);
 				closedir(DIR);
 				foreach  my $d (sort { $a <=> $b } @days) {
-					next if ($o_day && ($d < $o_day));
-					next if ($e_day && ($d > $e_day));
+					next if ($o_day && ("$y$m$d" lt "$o_year$o_month$o_day"));
+					next if ($e_day && ("$y$m$d" gt "$e_year$e_month$e_day"));
 					if (not opendir(DIR, "$INPUT_DIR/$y/$m/$d")) {
 						die "FATAL: Can't open directory $INPUT_DIR/$y/$m/$d: $!\n";
 					}
@@ -9892,8 +9892,8 @@ sub get_data_directories
 						push(@work_dirs, "$y/$m/$d");
 					} else {
 						foreach  my $h (sort { $a <=> $b } @hours) {
-							next if ($o_hour && ($h < $o_hour));
-							next if ($e_hour && ($h > $e_hour));
+							next if ($o_hour && ("$y$m$d$h" lt "$o_year$o_month$o_day$o_hour"));
+							next if ($e_hour && ("$y$m$d$h" gt "$e_year$e_month$e_day$e_hour"));
 							push(@work_dirs, "$y/$m/$d/$h");
 						}
 					}
