@@ -8148,8 +8148,8 @@ sub compute_process_stat
 		next if ($END   && ($data[2] > $END));
 
 		map { s/,/\./ } @data ;
-		$sar_process_stat{$data[2]}{'plist-sz'} = ($data[4]||0);
-		$sar_process_stat{$data[2]}{'runq-sz'} .= ($data[3]||0);
+		$sar_process_stat{$data[2]}{'plist-sz'}= ($data[4]||0);
+		$sar_process_stat{$data[2]}{'runq-sz'} = ($data[3]||0);
 	}
 }
 

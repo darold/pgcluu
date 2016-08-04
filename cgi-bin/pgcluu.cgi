@@ -8028,8 +8028,8 @@ sub compute_process_stat
 		map { s/,/\./ } @data ;
 		$data[4] ||= 0;
 		if ($ACTION ne 'home') {
-			$sar_process_stat{$data[2]}{'plist-sz'} = $data[4];
-			$sar_process_stat{$data[2]}{'runq-sz'} .= ($data[3]||0);
+			$sar_process_stat{$data[2]}{'plist-sz'}= $data[4];
+			$sar_process_stat{$data[2]}{'runq-sz'} = ($data[3]||0);
 		} else {
 			if (!exists $OVERALL_STATS{'system'}{'process'} || ($OVERALL_STATS{'system'}{'process'}[1] < $data[4])) {
 				@{$OVERALL_STATS{'system'}{'process'}} = ($data[2], $data[4]);
