@@ -1115,6 +1115,8 @@ my @WORK_DIRS = &get_data_directories();
 my $in_dir = $INPUT_DIR || '.';
 $in_dir .= "/$WORK_DIRS[-1]" if ($#WORK_DIRS >= 0);
 
+print STDERR "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE $in_dir\n";
+
 ####
 # Generate page header (common to all reports and include menu)
 ####
@@ -2438,7 +2440,7 @@ sub pg_stat_database_conflicts_report
 		next if ($DATABASE && ($DATABASE ne 'all') && ($db ne $DATABASE));
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 		foreach my $t (sort {$a <=> $b} keys %{$all_stat_database_conflicts{$db}}) {
-				$conflict_type{tablespace} .= '[' . ($t - $tz) . ',' . ($all_stat_database_conflicts{$db}{$t}{tablespace} || 0) . '],';
+				$conflict_type{$db}{tablespace} .= '[' . ($t - $tz) . ',' . ($all_stat_database_conflicts{$db}{$t}{tablespace} || 0) . '],';
 				$conflict_type{$db}{lock} .= '[' . ($t - $tz) . ',' . ($all_stat_database_conflicts{$db}{$t}{lock} || 0) . '],';
 				$conflict_type{$db}{snapshot} .= '[' . ($t - $tz) . ',' . ($all_stat_database_conflicts{$db}{$t}{snapshot} || 0) . '],';
 				$conflict_type{$db}{bufferpin} .= '[' . ($t - $tz) . ',' . ($all_stat_database_conflicts{$db}{$t}{bufferpin} || 0) . '],';
