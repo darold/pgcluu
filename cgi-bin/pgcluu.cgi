@@ -100,8 +100,8 @@ our %all_stat_missing_fkindexes = ();
 our %all_postgresql_conf = ();
 our %all_recovery_conf = ();
 our %all_postgresql_auto_conf = ();
-our %pg_hba_conf = ();
-our %pg_ident_conf = ();
+our %all_pg_hba_conf = ();
+our %all_pg_ident_conf = ();
 our %all_settings = ();
 our %all_nondefault_settings = ();
 our %all_db_role_setting = ();
@@ -110,9 +110,15 @@ our %all_database_usagecount = ();
 our %all_database_isdirty = ();
 our %all_stat_archiver = ();
 our %all_stat_statements = ();
-our %pg_settings_diff = ();
-our %db_role_setting_diff = ();
 our %all_stat_unlogged = ();
+our %all_postgresql_conf_diff = ();
+our %all_recovery_conf_diff = ();
+our %all_postgresql_auto_conf_diff = ();
+our %all_pg_hba_conf_diff = ();
+our %all_pg_ident_conf_diff = ();
+our %all_settings_diff = ();
+our %all_db_role_setting_diff = ();
+our %all_pgbouncer_ini_diff = ();
 
 # Names of the variables that need to be saved as binary file
 our @pg_to_be_stored = (
@@ -148,8 +154,8 @@ our @pg_to_be_stored = (
 	'all_postgresql_conf',
 	'all_recovery_conf',
 	'all_postgresql_auto_conf',
-	'pg_hba_conf',
-	'pg_ident_conf',
+	'all_pg_hba_conf',
+	'all_pg_ident_conf',
 	'all_settings',
 	'all_nondefault_settings',
 	'all_db_role_setting',
@@ -159,6 +165,14 @@ our @pg_to_be_stored = (
 	'all_stat_archiver',
 	'all_stat_statements',
 	'all_stat_unlogged',
+	'all_pgbouncer_ini_diff',
+	'all_db_role_setting_diff',
+	'all_postgresql_conf_diff',
+	'all_recovery_conf_diff',
+	'all_postgresql_auto_conf_diff',
+	'all_pg_hba_conf_diff',
+	'all_pg_ident_conf_diff',
+	'all_settings_diff',
 );
 
 # Names of sar variables that need to be saved as binary file
@@ -2579,6 +2593,8 @@ sub pg_stat_user_tables
 {
 	my ($in_dir, $file) = @_;
 
+	%all_stat_user_tables = ();
+
 	my %start_vals = ();
 	my $tmp_val = 0;
 	# Load data from file
@@ -2822,6 +2838,8 @@ sub pg_stat_user_indexes
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
+	%all_stat_user_indexes = ();
+
 	my %start_vals = ();
 	my $tmp_val = 0;
 	# Load data from file
@@ -2937,6 +2955,8 @@ sub pg_stat_invalid_indexes
 {
 	my ($in_dir, $file) = @_;
 
+	%all_stat_invalid_indexes = ();
+
 	my %start_vals = ();
 	my $tmp_val = 0;
 	# Load data from file
@@ -3026,6 +3046,8 @@ sub pg_stat_unlogged
 {
 	my ($in_dir, $file) = @_;
 
+	%all_stat_unlogged = ();
+
 	my %start_vals = ();
 	my $tmp_val = 0;
 	# Load data from file
@@ -3110,6 +3132,8 @@ sub pg_stat_unlogged_report
 sub pg_stat_hash_indexes
 {
 	my ($in_dir, $file) = @_;
+
+	%all_stat_hash_indexes = ();
 
 	my %start_vals = ();
 	my $tmp_val = 0;
@@ -3845,6 +3869,8 @@ sub pg_stat_user_functions
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
+	%all_stat_user_functions = ();
+
 	my @start_vals = ();
 	my $tmp_val = 0;
 	# Load data from file
@@ -4173,6 +4199,8 @@ sub pgbouncer_ini
 
 	return if (!-e "$in_dir/pgbouncer.ini");
 
+	%all_pgbouncer_ini = ();
+
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (my $l = <$curfh>) {
@@ -4198,7 +4226,7 @@ sub pgbouncer_ini
 				next;
 			}
 			if ($key) {
-				$all_pgbouncer_ini{$key} .= "$l\n";
+				$all_pgbouncer_ini_diff{$key} .= "$l\n";
 			}
 		}
 		$curfh->close();
@@ -4243,10 +4271,9 @@ sub pgbouncer_ini_report
 	    </div>
 	</div>
 };
+        %all_pgbouncer_ini = ();
 
-        delete $all_pgbouncer_ini{content};
-
-        foreach my $k (sort { $b cmp $a } keys %all_pgbouncer_ini) {
+        foreach my $k (sort { $b cmp $a } keys %all_pgbouncer_ini_diff) {
                 print qq{
         <div class="row">
             <div class="col-md-12">
@@ -4257,7 +4284,7 @@ sub pgbouncer_ini_report
               <div class="panel-body">
                 <div class="analysis-item row-fluid">
                         <div class="span11">
-                                <pre>$all_pgbouncer_ini{$k}</pre>
+                                <pre>$all_pgbouncer_ini_diff{$k}</pre>
                         </div>
                 </div>
               </div>
@@ -4266,7 +4293,7 @@ sub pgbouncer_ini_report
         </div>
 };
         }
-        %all_pgbouncer_ini = ();
+        %all_pgbouncer_ini_diff = ();
 
         print qq{
   </li>
@@ -4343,6 +4370,8 @@ sub pgbouncer_req_stats_report
 sub pg_class_size
 {
 	my ($in_dir, $file) = @_;
+
+	%all_class_size = ();
 
 	my %total_class = ();
 	# Load data from file
@@ -4574,6 +4603,8 @@ sub pg_stat_unused_indexes
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
+	%all_stat_unused_indexes = ();
+
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -4655,6 +4686,8 @@ sub pg_stat_redundant_indexes
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
+	%all_stat_redundant_indexes = ();
+
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -4735,6 +4768,8 @@ sub pg_stat_missing_fkindexes
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
+	%all_stat_missing_fkindexes = ();
+
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -4812,6 +4847,8 @@ sub pg_stat_count_indexes
 	my ($in_dir, $file) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
+
+	%all_stat_count_indexes = ();
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
@@ -4928,6 +4965,8 @@ sub postgresql_conf
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
+	%all_postgresql_conf = ();
+
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (my $l = <$curfh>) {
@@ -4953,7 +4992,7 @@ sub postgresql_conf
 				next;
 			}
 			if ($key) {
-				$all_postgresql_conf{$key} .= "$l\n";
+				$all_postgresql_conf_diff{$key} .= "$l\n";
 			}
 		}
 		$curfh->close();
@@ -4999,9 +5038,9 @@ sub postgresql_conf_report
 	</div>
 };
 
-	delete $all_postgresql_conf{content};
+	%all_postgresql_conf = ();
 
-	foreach my $k (sort { $b cmp $a } keys %all_postgresql_conf) {
+	foreach my $k (sort { $b cmp $a } keys %all_postgresql_conf_diff) {
 		print qq{
         <div class="row">
             <div class="col-md-12">
@@ -5012,7 +5051,7 @@ sub postgresql_conf_report
               <div class="panel-body">
                 <div class="analysis-item row-fluid">
                         <div class="span11">
-                                <pre>$all_postgresql_conf{$k}</pre>
+                                <pre>$all_postgresql_conf_diff{$k}</pre>
                         </div>
                 </div>
               </div>
@@ -5021,7 +5060,7 @@ sub postgresql_conf_report
         </div>
 };
         }
-	%all_postgresql_conf = ();
+	%all_postgresql_conf_diff = ();
 	print qq{
   </li>
 </ul>
@@ -5034,6 +5073,8 @@ sub recovery_conf
 	my ($in_dir, $file) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
+
+	%all_recovery_conf = ();
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
@@ -5060,7 +5101,7 @@ sub recovery_conf
 				next;
 			}
 			if ($key) {
-				$all_recovery_conf{$key} .= "$l\n";
+				$all_recovery_conf_diff{$key} .= "$l\n";
 			}
 		}
 		$curfh->close();
@@ -5106,9 +5147,9 @@ sub recovery_conf_report
 	</div>
 };
 
-	delete $all_recovery_conf{content};
+	%all_recovery_conf = ();
 
-	foreach my $k (sort { $b cmp $a } keys %all_recovery_conf) {
+	foreach my $k (sort { $b cmp $a } keys %all_recovery_conf_diff) {
 		print qq{
         <div class="row">
             <div class="col-md-12">
@@ -5119,7 +5160,7 @@ sub recovery_conf_report
               <div class="panel-body">
                 <div class="analysis-item row-fluid">
                         <div class="span11">
-                                <pre>$all_recovery_conf{$k}</pre>
+                                <pre>$all_recovery_conf_diff{$k}</pre>
                         </div>
                 </div>
               </div>
@@ -5128,7 +5169,7 @@ sub recovery_conf_report
         </div>
 };
 	}
-	%all_recovery_conf = ();
+	%all_recovery_conf_diff = ();
 
 	print qq{
   </li>
@@ -5142,6 +5183,8 @@ sub postgresql_auto_conf
 	my ($in_dir, $file) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
+
+	%all_postgresql_auto_conf = ();
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
@@ -5168,7 +5211,7 @@ sub postgresql_auto_conf
 				next;
 			}
 			if ($key) {
-				$all_postgresql_auto_conf{$key} .= "$l\n";
+				$all_postgresql_auto_conf_diff{$key} .= "$l\n";
 			}
 		}
 		$curfh->close();
@@ -5214,9 +5257,9 @@ sub postgresql_auto_conf_report
 	</div>
 };
 
-	delete $all_postgresql_auto_conf{content};
+	%all_postgresql_auto_conf = ();
 
-	foreach my $k (sort { $b cmp $a } keys %all_postgresql_auto_conf) {
+	foreach my $k (sort { $b cmp $a } keys %all_postgresql_auto_conf_diff) {
 		print qq{
         <div class="row">
             <div class="col-md-12">
@@ -5227,7 +5270,7 @@ sub postgresql_auto_conf_report
               <div class="panel-body">
                 <div class="analysis-item row-fluid">
                         <div class="span11">
-                                <pre>$all_postgresql_auto_conf{$k}</pre>
+                                <pre>$all_postgresql_auto_conf_diff{$k}</pre>
                         </div>
                 </div>
               </div>
@@ -5236,7 +5279,7 @@ sub postgresql_auto_conf_report
         </div>
 };
 	}
-	%all_postgresql_auto_conf = ();
+	%all_postgresql_auto_conf_diff = ();
 
 	print qq{
 
@@ -5252,17 +5295,19 @@ sub pg_hba_conf
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
+	%all_pg_hba_conf = ();
+
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (my $l = <$curfh>) {
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
 		$l =~ s/\s*#.*//;
-		$pg_hba_conf{content} .= "$l\n";
+		$all_pg_hba_conf{content} .= "$l\n";
 	}
 	$curfh->close();
 
-	return if (!exists $pg_hba_conf{content});
+	return if (!exists $all_pg_hba_conf{content});
 
 	# Load change on configuration file from diff files
 	if (-e "$in_dir/$file.diff") {
@@ -5277,7 +5322,7 @@ sub pg_hba_conf
 				next;
 			}
 			if ($key) {
-				$pg_hba_conf{$key} .= "$l\n";
+				$all_pg_hba_conf_diff{$key} .= "$l\n";
 			}
 		}
 		$curfh->close();
@@ -5292,7 +5337,7 @@ sub pg_hba_conf_report
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
-	my $output = $pg_hba_conf{content} || '';
+	my $output = $all_pg_hba_conf{content} || '';
 
 	if (!$output) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
@@ -5325,9 +5370,9 @@ sub pg_hba_conf_report
 	</div>
 };
 
-	delete $pg_hba_conf{content};
+	%all_pg_hba_conf = ();
 
-	foreach my $k (sort { $b cmp $a } keys %pg_hba_conf) {
+	foreach my $k (sort { $b cmp $a } keys %all_pg_hba_conf_diff) {
 		print qq{
         <div class="row">
             <div class="col-md-12">
@@ -5338,7 +5383,7 @@ sub pg_hba_conf_report
               <div class="panel-body">
                 <div class="analysis-item row-fluid">
                         <div class="span11">
-                                <pre>$pg_hba_conf{$k}</pre>
+                                <pre>$all_pg_hba_conf_diff{$k}</pre>
                         </div>
                 </div>
               </div>
@@ -5347,7 +5392,7 @@ sub pg_hba_conf_report
         </div>
 };
 	}
-	%pg_hba_conf = ();
+	%all_pg_hba_conf_diff = ();
 
 	print qq{
   </li>
@@ -5362,17 +5407,19 @@ sub pg_ident_conf
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
+	%all_pg_ident_conf = ();
+
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (my $l = <$curfh>) {
 		chomp($l);
 		next if ($l !~ /^[a-z]/);
 		$l =~ s/\s*#.*//;
-		$pg_ident_conf{content} .= "$l\n";
+		$all_pg_ident_conf{content} .= "$l\n";
 	}
 	$curfh->close();
 
-	return if (!exists $pg_ident_conf{content});
+	return if (!exists $all_pg_ident_conf{content});
 
 	# Load change on configuration file from diff files
 	if (-e "$in_dir/$file.diff") {
@@ -5387,7 +5434,7 @@ sub pg_ident_conf
 				next;
 			}
 			if ($key) {
-				$pg_ident_conf{$key} .= "$l\n";
+				$all_pg_ident_conf_diff{$key} .= "$l\n";
 			}
 		}
 		$curfh->close();
@@ -5402,7 +5449,7 @@ sub pg_ident_conf_report
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
-	my $output = $pg_ident_conf{content} || '';
+	my $output = $all_pg_ident_conf{content} || '';
 
 	if (!$output) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
@@ -5434,9 +5481,9 @@ sub pg_ident_conf_report
 	</div>
 };
 
-	delete $pg_ident_conf{content};
+	%all_pg_ident_conf = ();
 
-	foreach my $k (sort { $b cmp $a } keys %pg_ident_conf) {
+	foreach my $k (sort { $b cmp $a } keys %all_pg_ident_conf_diff) {
 		print qq{
         <div class="row">
             <div class="col-md-12">
@@ -5447,7 +5494,7 @@ sub pg_ident_conf_report
               <div class="panel-body">
                 <div class="analysis-item row-fluid">
                         <div class="span11">
-                                <pre>$pg_ident_conf{$k}</pre>
+                                <pre>$all_pg_ident_conf_diff{$k}</pre>
                         </div>
                 </div>
               </div>
@@ -5456,7 +5503,7 @@ sub pg_ident_conf_report
         </div>
 };
 	}
-	%pg_ident_conf = ();
+	%all_pg_ident_conf_diff = ();
 
 	print qq{
   </li>
@@ -5470,6 +5517,8 @@ sub pg_settings
 	my ($in_dir, $file) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
+
+	%all_settings = ();
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
@@ -5511,7 +5560,7 @@ sub pg_settings
 				next;
 			}
 			if ($key) {
-				$pg_settings_diff{$key} .= "$l\n";
+				$all_settings_diff{$key} .= "$l\n";
 			}
 		}
 		$curfh->close();
@@ -5561,6 +5610,7 @@ sub pg_settings_report
 		$output = "<table class=\"table table-striped\" id=\"$data_info{$id}{name}-table\"><tbody>\n$output</tbody></table>\n";
 		%all_settings = ();
 	}
+	%all_settings = ();
 
 	print qq{
 <ul id="slides">
@@ -5586,7 +5636,7 @@ sub pg_settings_report
 	</div>
 };
 
-	foreach my $k (sort { $b cmp $a } keys %pg_settings_diff) {
+	foreach my $k (sort { $b cmp $a } keys %all_settings_diff) {
 		print qq{
         <div class="row">
             <div class="col-md-12">
@@ -5597,7 +5647,7 @@ sub pg_settings_report
               <div class="panel-body">
                 <div class="analysis-item row-fluid">
                         <div class="span11">
-                                <pre>$pg_settings_diff{$k}</pre>
+                                <pre>$all_settings_diff{$k}</pre>
                         </div>
                 </div>
               </div>
@@ -5606,7 +5656,7 @@ sub pg_settings_report
         </div>
 };
 	}
-	%pg_settings_diff = ();
+	%all_settings_diff = ();
 
 	print qq{
     </li>
@@ -5619,6 +5669,8 @@ sub pg_settings_report
 sub pg_nondefault_settings
 {
 	my ($in_dir, $file) = @_;
+
+	%all_nondefault_settings = ();
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
@@ -5704,6 +5756,8 @@ sub pg_db_role_setting
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
+	%all_db_role_setting = ();
+
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -5731,7 +5785,7 @@ sub pg_db_role_setting
 				next;
 			}
 			if ($key) {
-				$db_role_setting_diff{$key} .= "$l\n";
+				$all_db_role_setting_diff{$key} .= "$l\n";
 			}
 		}
 		$curfh->close();
@@ -5788,7 +5842,7 @@ sub pg_db_role_setting_report
 	</div>
 };
 
-	foreach my $k (sort { $b cmp $a } keys %db_role_setting_diff) {
+	foreach my $k (sort { $b cmp $a } keys %all_db_role_setting_diff) {
 		print qq{
         <div class="row">
             <div class="col-md-12">
@@ -5799,7 +5853,7 @@ sub pg_db_role_setting_report
               <div class="panel-body">
                 <div class="analysis-item row-fluid">
                         <div class="span11">
-                                <pre>$db_role_setting_diff{$k}</pre>
+                                <pre>$all_db_role_setting_diff{$k}</pre>
                         </div>
                 </div>
               </div>
@@ -5808,7 +5862,7 @@ sub pg_db_role_setting_report
         </div>
 };
 	}
-	%db_role_setting_diff = ();
+	%all_db_role_setting_diff = ();
 
 	print qq{
     </li>
@@ -6088,6 +6142,8 @@ sub pg_stat_statements
 	my @start_vals = ();
 	my $has_temp = 0;
 
+	%all_stat_statements = ();
+
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	while (<$curfh>) {
@@ -6106,33 +6162,33 @@ sub pg_stat_statements
 		my $id = 3;
 		next if (!$data[$id]);
 
-		$all_stat_statements{$data[2]}{$data[$id]}{calls} += ($data[$id+1] || 0);
-		$all_stat_statements{$data[2]}{$data[$id]}{total_time} += ($data[$id+2] || 0);
-		$all_stat_statements{$data[2]}{$data[$id]}{rows} += ($data[$id+3] || 0);
+		$all_stat_statements{$data[2]}{$data[$id]}{calls} = ($data[$id+1] || 0);
+		$all_stat_statements{$data[2]}{$data[$id]}{total_time} = ($data[$id+2] || 0);
+		$all_stat_statements{$data[2]}{$data[$id]}{rows} = ($data[$id+3] || 0);
 		if ($#data > 6) {
-			$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_hit} += $data[$id+4];
-			$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_read} += $data[$id+5];
+			$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_hit} = $data[$id+4];
+			$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_read} = $data[$id+5];
 			if ($#data < 18) {
-				$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_written} += $data[$id+6];
-				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_hit} += $data[$id+7];
-				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_read} += $data[$id+8];
-				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_written} += $data[$id+9];
-				$all_stat_statements{$data[2]}{$data[$id]}{temp_blks_read} += $data[$id+10];
-				$all_stat_statements{$data[2]}{$data[$id]}{temp_blks_written} += $data[$id+11];
+				$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_written} = $data[$id+6];
+				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_hit} = $data[$id+7];
+				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_read} = $data[$id+8];
+				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_written} = $data[$id+9];
+				$all_stat_statements{$data[2]}{$data[$id]}{temp_blks_read} = $data[$id+10];
+				$all_stat_statements{$data[2]}{$data[$id]}{temp_blks_written} = $data[$id+11];
 				# This is just a flag, the total_time key is not used but must exists to not generate
 				# error on use of unitialised value later. This is ugly but useful
 				$all_stat_statements{$data[2]}{has_temp}{total_time} = 1;
 			} else {
-				$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_dirtied} += ($data[$id+6]*8192);
-				$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_written} += $data[$id+7];
-				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_hit} += $data[$id+8];
-				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_read} += $data[$id+9];
-				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_dirtied} += $data[$id+10];
-				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_written} += $data[$id+11];
-				$all_stat_statements{$data[2]}{$data[$id]}{temp_blks_read} += ($data[$id+12]*8192);
-				$all_stat_statements{$data[2]}{$data[$id]}{temp_blks_written} += ($data[$id+13]*8192);
-				$all_stat_statements{$data[2]}{$data[$id]}{blk_read_time} += $data[$id+14];
-				$all_stat_statements{$data[2]}{$data[$id]}{blk_write_time} += $data[$id+15];
+				$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_dirtied} = ($data[$id+6]*8192);
+				$all_stat_statements{$data[2]}{$data[$id]}{shared_blks_written} = $data[$id+7];
+				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_hit} = $data[$id+8];
+				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_read} = $data[$id+9];
+				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_dirtied} = $data[$id+10];
+				$all_stat_statements{$data[2]}{$data[$id]}{local_blks_written} = $data[$id+11];
+				$all_stat_statements{$data[2]}{$data[$id]}{temp_blks_read} = ($data[$id+12]*8192);
+				$all_stat_statements{$data[2]}{$data[$id]}{temp_blks_written} = ($data[$id+13]*8192);
+				$all_stat_statements{$data[2]}{$data[$id]}{blk_read_time} = $data[$id+14];
+				$all_stat_statements{$data[2]}{$data[$id]}{blk_write_time} = $data[$id+15];
 				# This is just a flag, the total_time key is not used but must exists to not generate
 				# error on use of unitialised value later. This is ugly but useful
 				$all_stat_statements{$data[2]}{has_temp}{total_time} = 2;
