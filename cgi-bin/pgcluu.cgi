@@ -332,7 +332,11 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'database-conflicts',
 			'title' => 'Conflicts per type on %s database',
+			'all_title' => 'Conflicts per type on all database',
 			'description' => 'Per database statistics about query cancels occurring due to conflicts with recovery on standby servers.',
+			'all_description' => 'Statistics about query cancels occurring due to conflicts with recovery on standby servers.',
+                        'ylabel' => 'Number of conflict',
+			'legends' => [ 'tablespace', 'lock', 'snapshot', 'bufferpin', 'deadlock' ],
 		},
 	},
 	'pg_database_size.csv' => {
@@ -2393,24 +2397,24 @@ sub pg_stat_database_conflicts
 		push(@{$start_vals{$data[2]}}, @data) if ($#{$start_vals{$data[2]}} < 0);
 
 		(($data[3] - $start_vals{$data[2]}[3]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3] - $start_vals{$data[2]}[3]);
-		$all_stat_database_conflicts{$data[2]}{tablespace} += $tmp_val;
-		$all_stat_database_conflicts{'all'}{tablespace} += $tmp_val;
+		$all_stat_database_conflicts{$data[2]}{$data[0]}{tablespace} = $tmp_val;
+		$all_stat_database_conflicts{'all'}{$data[0]}{tablespace} = $tmp_val;
 
 		(($data[4] - $start_vals{$data[2]}[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals{$data[2]}[4]);
-		$all_stat_database_conflicts{$data[2]}{lock} += $tmp_val;
-		$all_stat_database_conflicts{'all'}{lock} += $tmp_val;
+		$all_stat_database_conflicts{$data[2]}{$data[0]}{lock} = $tmp_val;
+		$all_stat_database_conflicts{'all'}{$data[0]}{lock} = $tmp_val;
 
 		(($data[5] - $start_vals{$data[2]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[2]}[5]);
-		$all_stat_database_conflicts{$data[2]}{snapshot} += $tmp_val;
-		$all_stat_database_conflicts{'all'}{snapshot} += $tmp_val;
+		$all_stat_database_conflicts{$data[2]}{$data[0]}{snapshot} += $tmp_val;
+		$all_stat_database_conflicts{'all'}{$data[0]}{snapshot} = $tmp_val;
 
 		(($data[6] - $start_vals{$data[2]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[2]}[6]);
-		$all_stat_database_conflicts{$data[2]}{bufferpin} += $tmp_val;
-		$all_stat_database_conflicts{'all'}{bufferpin} += $tmp_val;
+		$all_stat_database_conflicts{$data[2]}{$data[0]}{bufferpin} = $tmp_val;
+		$all_stat_database_conflicts{'all'}{$data[0]}{bufferpin} = $tmp_val;
 
 		(($data[7] - $start_vals{$data[2]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[2]}[7]);
-		$all_stat_database_conflicts{$data[2]}{deadlock} += $tmp_val;
-		$all_stat_database_conflicts{'all'}{deadlock} += $tmp_val;
+		$all_stat_database_conflicts{$data[2]}{$data[0]}{deadlock} = $tmp_val;
+		$all_stat_database_conflicts{'all'}{$data[0]}{deadlock} = $tmp_val;
 
 		@{$start_vals{$data[2]}} = ();
 		push(@{$start_vals{$data[2]}}, @data);
@@ -2426,30 +2430,26 @@ sub pg_stat_database_conflicts_report
 	my ($src_base, $db_glob, %data_info) = @_;
 
 	my %database_stat = ();
-	my %total_count = ();
 	my $id = &get_data_id('database-conflicts', %data_info);
+	my $total_val = 0;
+	my $tz = ($STATS_TIMEZONE*3600*1000);
+	my %conflict_type = ();
 	foreach my $db (sort keys %all_stat_database_conflicts) {
-
 		next if ($DATABASE && ($DATABASE ne 'all') && ($db ne $DATABASE));
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
-		my $total = 0;
-		foreach my $k (sort keys %{$all_stat_database_conflicts{$db}}) {
-			$total += $all_stat_database_conflicts{$db}{$k};
+		foreach my $t (sort {$a <=> $b} keys %{$all_stat_database_conflicts{$db}}) {
+				$conflict_type{tablespace} .= '[' . ($t - $tz) . ',' . ($all_stat_database_conflicts{$db}{$t}{tablespace} || 0) . '],';
+				$conflict_type{$db}{lock} .= '[' . ($t - $tz) . ',' . ($all_stat_database_conflicts{$db}{$t}{lock} || 0) . '],';
+				$conflict_type{$db}{snapshot} .= '[' . ($t - $tz) . ',' . ($all_stat_database_conflicts{$db}{$t}{snapshot} || 0) . '],';
+				$conflict_type{$db}{bufferpin} .= '[' . ($t - $tz) . ',' . ($all_stat_database_conflicts{$db}{$t}{bufferpin} || 0) . '],';
+				$conflict_type{$db}{deadlock} .= '[' . ($t - $tz) . ',' . ($all_stat_database_conflicts{$db}{$t}{deadlock} || 0) . '],';
 		}
-		#next if (!$total);
-		my %conflict_type = ();
-		if ($conflict_type{tablespace} || $conflict_type{lock} || $conflict_type{snapshot} || $conflict_type{bufferpin} || $conflict_type{deadlock}) {
-			$conflict_type{tablespace} = sprintf("%0.2f", ($all_stat_database_conflicts{$db}{'tablespace'}*100)/$total);
-			$conflict_type{lock} = sprintf("%0.2f", ($all_stat_database_conflicts{$db}{'lock'}*100)/$total);
-			$conflict_type{snapshot} = sprintf("%0.2f", ($all_stat_database_conflicts{$db}{'snapshot'}*100)/$total);
-			$conflict_type{bufferpin} =  sprintf("%0.2f", ($all_stat_database_conflicts{$db}{'bufferpin'}*100)/$total);
-			$conflict_type{deadlock} =  sprintf("%0.2f", ($all_stat_database_conflicts{$db}{'deadlock'}*100)/$total);
-		}
-		if (($db ne 'all') && ($DATABASE ne 'all') && ($ACTION !~ /^cluster/)) {
-			print &jqplot_piegraph($IDX++, 'database-conflicts', \%{$data_info{$id}}, $db, %conflict_type);
-		} elsif (($db eq 'all') && ($DATABASE eq 'all')) {
-			print &jqplot_piegraph($IDX++, 'cluster-conflicts', \%{$data_info{$id}}, $db, %conflict_type);
-		}
+		$conflict_type{$db}{tablespace} =~ s/,$//;
+		$conflict_type{$db}{lock} =~ s/,$//;
+		$conflict_type{$db}{snapshot} =~ s/,$//;
+		$conflict_type{$db}{bufferpin} =~ s/,$//;
+		$conflict_type{$db}{deadlock} =~ s/,$//;
+		print &jqplot_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $conflict_type{$db}{tablespace}, $conflict_type{$db}{lock}, $conflict_type{$db}{snapshot}, $conflict_type{$db}{bufferpin}, $conflict_type{$db}{deadlock});
 	}
 	%all_stat_database_conflicts = ();
 }
