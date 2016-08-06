@@ -1107,7 +1107,7 @@ if (!$e_year) {
 ####
 my @WORK_DIRS = &get_data_directories();
 
-# Get path to last directory containing stats
+# Set path to last directory containing stats by default
 my $in_dir = $INPUT_DIR || '.';
 $in_dir .= "/$WORK_DIRS[-1]" if ($#WORK_DIRS >= 0);
 
@@ -1119,6 +1119,12 @@ $in_dir .= "/$WORK_DIRS[-1]" if ($#WORK_DIRS >= 0);
 #### Show about page and exit
 if ($ACTION eq 'about') {
 	&show_about();
+	if ($#WORK_DIRS >= 0) {
+		&read_sysinfo($in_dir);
+		foreach my $db (keys %{$sysinfo{EXTENSION}}) {
+			push(@DATABASE_LIST, $db) if (!grep(/^$db$/, @DATABASE_LIST));
+		}
+	}
 	&html_footer();
 	exit 0;
 }
@@ -1134,6 +1140,9 @@ if ($#WORK_DIRS < 0) {
 #### Show system related information
 if ($ACTION eq 'sysinfo') {
 	&read_sysinfo($in_dir);
+	foreach my $db (keys %{$sysinfo{EXTENSION}}) {
+		push(@DATABASE_LIST, $db) if (!grep(/^$db$/, @DATABASE_LIST));
+	}
 	&show_sysinfo($in_dir);
 	&html_footer();
 	exit 0;
@@ -1143,7 +1152,7 @@ if ($ACTION eq 'sysinfo') {
 foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 	# Set absolute path to the working directory
-	my $in_dir = "$INPUT_DIR/$WORK_DIRS[$dx]";
+	$in_dir = "$INPUT_DIR/$WORK_DIRS[$dx]";
 
 	# Do not proceed last workin directory when hour:min is 00:00 because
 	# in this case we don't need even one minute of statistics from this day
