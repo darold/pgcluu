@@ -4637,7 +4637,7 @@ sub pg_stat_unused_indexes_report
 					<th>Index</th>
 					<th>Code</th>
 };
-	if (!exists $all_stat_unused_indexes{$db} || scalar keys %{$all_stat_unused_indexes{$db}} == 0) {
+	if (!exists $all_stat_unused_indexes{$db} || $#{$all_stat_unused_indexes{$db}} < 0) {
 		$table_header = qq{<td><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td>};
 	}
 	print qq{
@@ -4719,7 +4719,7 @@ sub pg_stat_redundant_indexes_report
                                         <th>Contained</th>
                                         <th>Containing</th>
 };
-	if (!exists $all_stat_redundant_indexes{$db} || scalar keys %{$all_stat_redundant_indexes{$db}} == 0) {
+	if (!exists $all_stat_redundant_indexes{$db} || $#{$all_stat_redundant_indexes{$db}} < 0) {
 		$table_header = qq{<td><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td>};
 	}
 	print qq{
@@ -4799,7 +4799,7 @@ sub pg_stat_missing_fkindexes_report
 					<th>Table</th>
 					<th>Missing index</th>
 };
-	if (!exists $all_stat_missing_fkindexes{$db} || scalar keys %{$all_stat_missing_fkindexes{$db}} == 0) {
+	if (!exists $all_stat_missing_fkindexes{$db} || $#{$all_stat_missing_fkindexes{$db}} < 0) {
 		$table_header = qq{<td><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td>};
 	}
 	print qq{
