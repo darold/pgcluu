@@ -40,7 +40,7 @@ my %DEVFH           = ();
 my $IDX             = 1;
 my $HELP            = 0;
 my $SHOW_VER        = 0;
-my $DEBUG           = 0;
+my $DEBUG           = 1;
 my $NUMBER_CPU      = 0;
 my $TIMEZONE        = '00'; #substr(strftime('%z', localtime()), 0, 3);
 my $STATS_TIMEZONE  = '00';  # Timezone is auto detected from data files
@@ -50,7 +50,7 @@ my $SADC_INPUT_FILE = '';
 my $SAR_INPUT_FILE  = '';
 my @DEVICE_LIST     = ();
 my @IFACE_LIST      = ();
-my @GRAPH_COLORS    = ('#6e9dc9', '#f4ab3a', '#ac7fa8', '#8dbd0f','#de7563'); 
+my @GRAPH_COLORS    = ('#6e9dc9', '#f4ab3a', '#ac7fa8', '#8dbd0f','#958c12'); 
 my $ZCAT_PROG       = '/bin/zcat';
 my $CACHE           = 0;
 my $MAX_INDEXES     = 5;
@@ -1115,8 +1115,6 @@ my @WORK_DIRS = &get_data_directories();
 my $in_dir = $INPUT_DIR || '.';
 $in_dir .= "/$WORK_DIRS[-1]" if ($#WORK_DIRS >= 0);
 
-print STDERR "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE $in_dir\n";
-
 ####
 # Generate page header (common to all reports and include menu)
 ####
@@ -1159,10 +1157,6 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 	# Set absolute path to the working directory
 	$in_dir = "$INPUT_DIR/$WORK_DIRS[$dx]";
-
-	# Do not proceed last workin directory when hour:min is 00:00 because
-	# in this case we don't need even one minute of statistics from this day
-	next if ( ($#WORK_DIRS > 0) && ($dx == $#WORK_DIRS) && ($o_hour eq '00') && ($o_min eq '00') );
 
 	# Check if we have binary file in the directory
 	my @binfiles = ();
@@ -4201,6 +4195,62 @@ sub pgbouncer_stats_report
 	}
 }
 
+sub get_diff
+{
+	my $file = shift;
+
+	return if (! -e $file);
+
+	my %diff = ();
+
+	my $curfh = open_filehdl($file);
+	my $key = '';
+	while (my $l = <$curfh>) {
+		chomp($l);
+		$l =~ s/\r//;
+		next if ($l =~ /^\+\+\+/);
+		if ($l =~ /^\-\-\-.*\s(\d+)-(\d+)-(\d+) (\d+):(\d+):(\d+)/) {
+			my $tz = ((0-$TIMEZONE)*3600);
+			$key = &timegm_nocheck($6, $5, $4, $3, $2 - 1, $1 - 1900) + $tz;
+			next;
+		}
+		if ($key) {
+			$diff{$key} .= "$l\n";
+		}
+	}
+	$curfh->close();
+
+	return %diff;
+}
+
+sub show_diff
+{
+	my %diff = @_;
+
+        foreach my $k (sort { $b cmp $a } keys %diff) {
+		my $date = localtime($k);
+                print qq{
+        <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+                <h4>Change on $date</h4>
+              </div>
+              <div class="panel-body">
+                <div class="analysis-item row-fluid">
+                        <div class="span11">
+                                <pre>$diff{$k}</pre>
+                        </div>
+                </div>
+              </div>
+              </div>
+            </div>
+        </div>
+};
+        }
+}
+
+
 # Get content of pgbouncer.ini
 sub pgbouncer_ini
 {
@@ -4225,25 +4275,10 @@ sub pgbouncer_ini
 	return if (!exists $all_pgbouncer_ini{content});
 
 	# Load change on configuration file from diff files
-	if (-e "$in_dir/$file.diff") {
-		$curfh = open_filehdl("$in_dir/$file.diff");
-		my $key = '';
-		while (my $l = <$curfh>) {
-			chomp($l);
-			$l =~ s/\r//;
-			next if ($l =~ /^\+\+\+/);
-			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
-				$key = $1;
-				next;
-			}
-			if ($key) {
-				$all_pgbouncer_ini_diff{$key} .= "$l\n";
-			}
-		}
-		$curfh->close();
-	}
+	%all_pgbouncer_ini_diff = &get_diff("$in_dir/$file.diff");
 
 }
+
 
 # Show relevant content of pgbouncer.ini
 sub pgbouncer_ini_report
@@ -4284,26 +4319,8 @@ sub pgbouncer_ini_report
 };
         %all_pgbouncer_ini = ();
 
-        foreach my $k (sort { $b cmp $a } keys %all_pgbouncer_ini_diff) {
-                print qq{
-        <div class="row">
-            <div class="col-md-12">
-              <div class="panel panel-default">
-              <div class="panel-heading">
-                <h4>Change on $k</h4>
-              </div>
-              <div class="panel-body">
-                <div class="analysis-item row-fluid">
-                        <div class="span11">
-                                <pre>$all_pgbouncer_ini_diff{$k}</pre>
-                        </div>
-                </div>
-              </div>
-              </div>
-            </div>
-        </div>
-};
-        }
+	&show_diff(%all_pgbouncer_ini_diff);
+
         %all_pgbouncer_ini_diff = ();
 
         print qq{
@@ -4991,24 +5008,7 @@ sub postgresql_conf
 	return if (!exists $all_postgresql_conf{content});
 
 	# Load change on configuration file from diff files
-	if (-e "$in_dir/$file.diff") {
-		$curfh = open_filehdl("$in_dir/$file.diff");
-		my $key = '';
-		while (my $l = <$curfh>) {
-			chomp($l);
-			$l =~ s/\r//;
-			next if ($l =~ /^\+\+\+/);
-			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
-				$key = $1;
-				next;
-			}
-			if ($key) {
-				$all_postgresql_conf_diff{$key} .= "$l\n";
-			}
-		}
-		$curfh->close();
-	}
-
+	%all_postgresql_conf_diff = &get_diff("$in_dir/$file.diff");
 }
 
 # Show content of postgresql.conf
@@ -5051,26 +5051,8 @@ sub postgresql_conf_report
 
 	%all_postgresql_conf = ();
 
-	foreach my $k (sort { $b cmp $a } keys %all_postgresql_conf_diff) {
-		print qq{
-        <div class="row">
-            <div class="col-md-12">
-              <div class="panel panel-default">
-              <div class="panel-heading">
-                <h4>Change on $k</h4>
-              </div>
-              <div class="panel-body">
-                <div class="analysis-item row-fluid">
-                        <div class="span11">
-                                <pre>$all_postgresql_conf_diff{$k}</pre>
-                        </div>
-                </div>
-              </div>
-              </div>
-            </div>
-        </div>
-};
-        }
+	&show_diff(%all_postgresql_conf_diff);
+
 	%all_postgresql_conf_diff = ();
 	print qq{
   </li>
@@ -5100,23 +5082,7 @@ sub recovery_conf
 	return if (!exists $all_recovery_conf{content});
 
 	# Load change on configuration file from diff files
-	if (-e "$in_dir/$file.diff") {
-		$curfh = open_filehdl("$in_dir/$file.diff");
-		my $key = '';
-		while (my $l = <$curfh>) {
-			chomp($l);
-			$l =~ s/\r//;
-			next if ($l =~ /^\+\+\+/);
-			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
-				$key = $1;
-				next;
-			}
-			if ($key) {
-				$all_recovery_conf_diff{$key} .= "$l\n";
-			}
-		}
-		$curfh->close();
-	}
+	%all_recovery_conf_diff = &get_diff("$in_dir/$file.diff");
 
 }
 
@@ -5160,26 +5126,8 @@ sub recovery_conf_report
 
 	%all_recovery_conf = ();
 
-	foreach my $k (sort { $b cmp $a } keys %all_recovery_conf_diff) {
-		print qq{
-        <div class="row">
-            <div class="col-md-12">
-              <div class="panel panel-default">
-              <div class="panel-heading">
-                <h4>Change on $k</h4>
-              </div>
-              <div class="panel-body">
-                <div class="analysis-item row-fluid">
-                        <div class="span11">
-                                <pre>$all_recovery_conf_diff{$k}</pre>
-                        </div>
-                </div>
-              </div>
-              </div>
-            </div>
-        </div>
-};
-	}
+	&show_diff(%all_recovery_conf_diff);
+
 	%all_recovery_conf_diff = ();
 
 	print qq{
@@ -5210,23 +5158,7 @@ sub postgresql_auto_conf
 	return if (!exists $all_postgresql_auto_conf{content});
 
 	# Load change on configuration file from diff files
-	if (-e "$in_dir/$file.diff") {
-		$curfh = open_filehdl("$in_dir/$file.diff");
-		my $key = '';
-		while (my $l = <$curfh>) {
-			chomp($l);
-			$l =~ s/\r//;
-			next if ($l =~ /^\+\+\+/);
-			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
-				$key = $1;
-				next;
-			}
-			if ($key) {
-				$all_postgresql_auto_conf_diff{$key} .= "$l\n";
-			}
-		}
-		$curfh->close();
-	}
+	%all_postgresql_auto_conf_diff = &get_diff("$in_dir/$file.diff");
 
 }
 
@@ -5270,26 +5202,8 @@ sub postgresql_auto_conf_report
 
 	%all_postgresql_auto_conf = ();
 
-	foreach my $k (sort { $b cmp $a } keys %all_postgresql_auto_conf_diff) {
-		print qq{
-        <div class="row">
-            <div class="col-md-12">
-              <div class="panel panel-default">
-              <div class="panel-heading">
-                <h4>Change on $k</h4>
-              </div>
-              <div class="panel-body">
-                <div class="analysis-item row-fluid">
-                        <div class="span11">
-                                <pre>$all_postgresql_auto_conf_diff{$k}</pre>
-                        </div>
-                </div>
-              </div>
-              </div>
-            </div>
-        </div>
-};
-	}
+	&show_diff(%all_postgresql_auto_conf_diff);
+
 	%all_postgresql_auto_conf_diff = ();
 
 	print qq{
@@ -5321,23 +5235,7 @@ sub pg_hba_conf
 	return if (!exists $all_pg_hba_conf{content});
 
 	# Load change on configuration file from diff files
-	if (-e "$in_dir/$file.diff") {
-		$curfh = open_filehdl("$in_dir/$file.diff");
-		my $key = '';
-		while (my $l = <$curfh>) {
-			chomp($l);
-			$l =~ s/\r//;
-			next if ($l =~ /^\+\+\+/);
-			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
-				$key = $1;
-				next;
-			}
-			if ($key) {
-				$all_pg_hba_conf_diff{$key} .= "$l\n";
-			}
-		}
-		$curfh->close();
-	}
+	%all_pg_hba_conf_diff = &get_diff("$in_dir/$file.diff");
 
 }
 
@@ -5383,26 +5281,8 @@ sub pg_hba_conf_report
 
 	%all_pg_hba_conf = ();
 
-	foreach my $k (sort { $b cmp $a } keys %all_pg_hba_conf_diff) {
-		print qq{
-        <div class="row">
-            <div class="col-md-12">
-              <div class="panel panel-default">
-              <div class="panel-heading">
-                <h4>Change on $k</h4>
-              </div>
-              <div class="panel-body">
-                <div class="analysis-item row-fluid">
-                        <div class="span11">
-                                <pre>$all_pg_hba_conf_diff{$k}</pre>
-                        </div>
-                </div>
-              </div>
-              </div>
-            </div>
-        </div>
-};
-	}
+	&show_diff(%all_pg_hba_conf_diff);
+
 	%all_pg_hba_conf_diff = ();
 
 	print qq{
@@ -5433,23 +5313,7 @@ sub pg_ident_conf
 	return if (!exists $all_pg_ident_conf{content});
 
 	# Load change on configuration file from diff files
-	if (-e "$in_dir/$file.diff") {
-		$curfh = open_filehdl("$in_dir/$file.diff");
-		my $key = '';
-		while (my $l = <$curfh>) {
-			chomp($l);
-			$l =~ s/\r//;
-			next if ($l =~ /^\+\+\+/);
-			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
-				$key = $1;
-				next;
-			}
-			if ($key) {
-				$all_pg_ident_conf_diff{$key} .= "$l\n";
-			}
-		}
-		$curfh->close();
-	}
+	%all_pg_ident_conf_diff = &get_diff("$in_dir/$file.diff");
 
 }
 
@@ -5494,26 +5358,8 @@ sub pg_ident_conf_report
 
 	%all_pg_ident_conf = ();
 
-	foreach my $k (sort { $b cmp $a } keys %all_pg_ident_conf_diff) {
-		print qq{
-        <div class="row">
-            <div class="col-md-12">
-              <div class="panel panel-default">
-              <div class="panel-heading">
-                <h4>Change on $k</h4>
-              </div>
-              <div class="panel-body">
-                <div class="analysis-item row-fluid">
-                        <div class="span11">
-                                <pre>$all_pg_ident_conf_diff{$k}</pre>
-                        </div>
-                </div>
-              </div>
-              </div>
-            </div>
-        </div>
-};
-	}
+	&show_diff(%all_pg_ident_conf_diff);
+
 	%all_pg_ident_conf_diff = ();
 
 	print qq{
@@ -5557,25 +5403,9 @@ sub pg_settings
 	}
 	$curfh->close();
 
-	# Load change on pg_settings from diff file
+	# Load change on configuration file from diff files
 	$file =~ s/\.csv/.diff/;
-	if (-e "$in_dir/$file") {
-		$curfh = open_filehdl("$in_dir/$file");
-		my $key = '';
-		while (my $l = <$curfh>) {
-			chomp($l);
-			$l =~ s/\r//;
-			next if (($l =~ /^\+\+\+/) || ($l =~ /^\@\@/));
-			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
-				$key = $1;
-				next;
-			}
-			if ($key) {
-				$all_settings_diff{$key} .= "$l\n";
-			}
-		}
-		$curfh->close();
-	}
+	%all_settings_diff = &get_diff("$in_dir/$file");
 
 }
 
@@ -5647,26 +5477,8 @@ sub pg_settings_report
 	</div>
 };
 
-	foreach my $k (sort { $b cmp $a } keys %all_settings_diff) {
-		print qq{
-        <div class="row">
-            <div class="col-md-12">
-              <div class="panel panel-default">
-              <div class="panel-heading">
-                <h4>Change on $k</h4>
-              </div>
-              <div class="panel-body">
-                <div class="analysis-item row-fluid">
-                        <div class="span11">
-                                <pre>$all_settings_diff{$k}</pre>
-                        </div>
-                </div>
-              </div>
-              </div>
-            </div>
-        </div>
-};
-	}
+	&show_diff(%all_settings_diff);
+
 	%all_settings_diff = ();
 
 	print qq{
@@ -5782,25 +5594,9 @@ sub pg_db_role_setting
 	}
 	$curfh->close();
 
-	# Load change on pg_settings from diff file
+	# Load change on configuration file from diff files
 	$file =~ s/\.csv/.diff/;
-	if (-e "$in_dir/$file") {
-		$curfh = open_filehdl("$in_dir/$file");
-		my $key = '';
-		while (my $l = <$curfh>) {
-			chomp($l);
-			$l =~ s/\r//;
-			next if (($l =~ /^\+\+\+/) || ($l =~ /^\@\@/));
-			if ($l =~ /^\-\-\-.*\s(\d+-\d+-\d+ \d+:\d+:\d+)/) {
-				$key = $1;
-				next;
-			}
-			if ($key) {
-				$all_db_role_setting_diff{$key} .= "$l\n";
-			}
-		}
-		$curfh->close();
-	}
+	%all_db_role_setting_diff = &get_diff("$in_dir/$file");
 
 }
 
@@ -5853,26 +5649,8 @@ sub pg_db_role_setting_report
 	</div>
 };
 
-	foreach my $k (sort { $b cmp $a } keys %all_db_role_setting_diff) {
-		print qq{
-        <div class="row">
-            <div class="col-md-12">
-              <div class="panel panel-default">
-              <div class="panel-heading">
-                <h4>Change on $k</h4>
-              </div>
-              <div class="panel-body">
-                <div class="analysis-item row-fluid">
-                        <div class="span11">
-                                <pre>$all_db_role_setting_diff{$k}</pre>
-                        </div>
-                </div>
-              </div>
-              </div>
-            </div>
-        </div>
-};
-	}
+	&show_diff(%all_db_role_setting_diff);
+
 	%all_db_role_setting_diff = ();
 
 	print qq{
