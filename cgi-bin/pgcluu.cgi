@@ -4198,10 +4198,9 @@ sub pgbouncer_stats_report
 sub get_diff
 {
 	my $file = shift;
+	my $diff_hashref = shift;
 
 	return if (! -e $file);
-
-	my %diff = ();
 
 	my $curfh = open_filehdl($file);
 	my $key = '';
@@ -4212,15 +4211,14 @@ sub get_diff
 		if ($l =~ /^\-\-\-.*\s(\d+)-(\d+)-(\d+) (\d+):(\d+):(\d+)/) {
 			my $tz = ((0-$TIMEZONE)*3600);
 			$key = &timegm_nocheck($6, $5, $4, $3, $2 - 1, $1 - 1900) + $tz;
+			delete $diff_hashref->{$key} if (exists $diff_hashref->{$key});
 			next;
 		}
 		if ($key) {
-			$diff{$key} .= "$l\n";
+			$diff_hashref->{$key} .= "$l\n";
 		}
 	}
 	$curfh->close();
-
-	return %diff;
 }
 
 sub show_diff
@@ -4275,7 +4273,7 @@ sub pgbouncer_ini
 	return if (!exists $all_pgbouncer_ini{content});
 
 	# Load change on configuration file from diff files
-	%all_pgbouncer_ini_diff = &get_diff("$in_dir/$file.diff");
+	&get_diff("$in_dir/$file.diff", \%all_pgbouncer_ini_diff);
 
 }
 
@@ -5008,7 +5006,7 @@ sub postgresql_conf
 	return if (!exists $all_postgresql_conf{content});
 
 	# Load change on configuration file from diff files
-	%all_postgresql_conf_diff = &get_diff("$in_dir/$file.diff");
+	&get_diff("$in_dir/$file.diff", \%all_postgresql_conf_diff);
 }
 
 # Show content of postgresql.conf
@@ -5082,7 +5080,7 @@ sub recovery_conf
 	return if (!exists $all_recovery_conf{content});
 
 	# Load change on configuration file from diff files
-	%all_recovery_conf_diff = &get_diff("$in_dir/$file.diff");
+	&get_diff("$in_dir/$file.diff", \%all_recovery_conf_diff);
 
 }
 
@@ -5158,7 +5156,7 @@ sub postgresql_auto_conf
 	return if (!exists $all_postgresql_auto_conf{content});
 
 	# Load change on configuration file from diff files
-	%all_postgresql_auto_conf_diff = &get_diff("$in_dir/$file.diff");
+	&get_diff("$in_dir/$file.diff", \%all_postgresql_auto_conf_diff);
 
 }
 
@@ -5235,7 +5233,7 @@ sub pg_hba_conf
 	return if (!exists $all_pg_hba_conf{content});
 
 	# Load change on configuration file from diff files
-	%all_pg_hba_conf_diff = &get_diff("$in_dir/$file.diff");
+	&get_diff("$in_dir/$file.diff", \%all_pg_hba_conf_diff);
 
 }
 
@@ -5313,7 +5311,7 @@ sub pg_ident_conf
 	return if (!exists $all_pg_ident_conf{content});
 
 	# Load change on configuration file from diff files
-	%all_pg_ident_conf_diff = &get_diff("$in_dir/$file.diff");
+	&get_diff("$in_dir/$file.diff", \%all_pg_ident_conf_diff);
 
 }
 
@@ -5405,7 +5403,7 @@ sub pg_settings
 
 	# Load change on configuration file from diff files
 	$file =~ s/\.csv/.diff/;
-	%all_settings_diff = &get_diff("$in_dir/$file");
+	&get_diff("$in_dir/$file", \%all_settings_diff);
 
 }
 
@@ -5596,7 +5594,7 @@ sub pg_db_role_setting
 
 	# Load change on configuration file from diff files
 	$file =~ s/\.csv/.diff/;
-	%all_db_role_setting_diff = &get_diff("$in_dir/$file");
+	&get_diff("$in_dir/$file", \%all_db_role_setting_diff);
 
 }
 
