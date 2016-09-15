@@ -1676,6 +1676,21 @@ sub init_device_output
 	$DEVFH{$DEVICE_LIST[$i]}->print("<ul id=\"slides\">\n");
 }
 
+sub init_iface_output
+{
+	my $i = shift;
+	my $src_base = shift;
+
+	# Open a filehandle for each database
+	$DEVFH{$IFACE_LIST[$i]} = new IO::File ">$OUTPUT_DIR/network-device$i.html";
+	if (not defined $DEVFH{$IFACE_LIST[$i]}) {
+		die "FATAL: can't write to $OUTPUT_DIR/network-device$i.html, $!\n";
+	}
+	&html_header($DEVFH{$IFACE_LIST[$i]}, $src_base);
+	$DEVFH{$IFACE_LIST[$i]}->print("<ul id=\"slides\">\n");
+}
+
+
 sub progress_bar
 {
 	my ( $got, $total, $width, $char ) = @_;
@@ -1829,7 +1844,6 @@ sub get_device_list
 		close(IN);
 
 	}
-
 	return @dev_list;
 }
 
@@ -7836,6 +7850,8 @@ AAAASUVORK5CYII=';
 		$menu_str .= qq{
 		    </ul>
 		  </li>
+} if ($#DEVICE_LIST >= 0);
+		$menu_str .= qq{
 		  <li id="menu-network" class="dropdown-submenu">
 		     <a href="#" tabindex="-1">Network </a>
 		      <ul class="dropdown-menu">
@@ -8443,8 +8459,8 @@ sub compute_network_report
 	if (scalar keys %networks_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %networks_stat) {
 			if (!exists $DEVFH{$n}) {
-				push(@DEVICE_LIST, $n);
-				&init_device_output($#DEVICE_LIST, $src_base);
+				push(@IFACE_LIST, $n);
+				&init_iface_output($#IFACE_LIST, $src_base);
 			}
 			$networks_stat{$n}{'rxkB/s'} =~ s/,$//;
 			$networks_stat{$n}{'txkB/s'} =~ s/,$//;
@@ -8488,8 +8504,8 @@ sub compute_network_error_report
 	if (scalar keys %errors_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %errors_stat) {
 			if (!exists $DEVFH{$n}) {
-				push(@DEVICE_LIST, $n);
-				&init_device_output($#DEVICE_LIST, $src_base);
+				push(@IFACE_LIST, $n);
+				&init_iface_output($#IFACE_LIST, $src_base);
 			}
 			$errors_stat{$n}{'rxerr/s'} =~ s/,$//;
 			$errors_stat{$n}{'txerr/s'} =~ s/,$//;

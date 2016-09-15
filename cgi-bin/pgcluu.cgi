@@ -1199,10 +1199,10 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 		# Look for disk device and network interface from the sar file
 		if (!$DISABLE_SAR) {
-			foreach my $d (get_device_list($sar_file, $sadc_file)) {
+			foreach my $d (&get_device_list($sar_file, $sadc_file)) {
 				push(@DEVICE_LIST, $d) if (!grep(/^$d$/, @DEVICE_LIST));
 			}
-			foreach my $d (@IFACE_LIST = get_interface_list($sar_file, $sadc_file)) {
+			foreach my $d (@IFACE_LIST = &get_interface_list($sar_file, $sadc_file)) {
 				push(@IFACE_LIST, $d) if (!grep(/^$d$/, @IFACE_LIST));
 			}
 		}
@@ -6585,26 +6585,26 @@ sub last_know_statistics
 	# Search the path to last computed statistics
 	# Search years / months / days / hours directories
 	if (not opendir(DIR, "$INPUT_DIR")) {
-		die "FATAL: Can't open directory $INPUT_DIR: $!\n";
+		return "<p>FATAL: Can't open directory $INPUT_DIR: $!</p>\n";
 	}
 	my @years = grep { /^\d+$/ && -d "$INPUT_DIR/$_" } readdir(DIR);
 	closedir(DIR);
 	if ($#years >= 0) {
 		foreach  my $y (sort { $b <=> $a } @years) {
 			if (not opendir(DIR, "$INPUT_DIR/$y")) {
-				die "FATAL: Can't open directory $INPUT_DIR/$y: $!\n";
+				return "<p>FATAL: Can't open directory $INPUT_DIR/$y: $!</p>\n";
 			}
 			my @months = grep { /^\d+$/ && -d "$INPUT_DIR/$y/$_" } readdir(DIR);
 			closedir(DIR);
 			foreach  my $m (sort { $b <=> $a } @months) {
 				if (not opendir(DIR, "$INPUT_DIR/$y/$m")) {
-					die "FATAL: Can't open directory $INPUT_DIR/$y/$m: $!\n";
+					return "<p>FATAL: Can't open directory $INPUT_DIR/$y/$m: $!</p>\n";
 				}
 				my @days = grep { /^\d+$/ && -d "$INPUT_DIR/$y/$m/$_" } readdir(DIR);
 				closedir(DIR);
 				foreach  my $d (sort { $b <=> $a } @days) {
 					if (not opendir(DIR, "$INPUT_DIR/$y/$m/$d")) {
-						die "FATAL: Can't open directory $INPUT_DIR/$y/$m/$d: $!\n";
+						return "<p>FATAL: Can't open directory $INPUT_DIR/$y/$m/$d: $!</p>\n";
 					}
 					my @hours = grep { /^\d+$/ && -d "$INPUT_DIR/$y/$m/$d/$_" } readdir(DIR);
 					closedir(DIR);
@@ -7606,6 +7606,8 @@ AAAASUVORK5CYII=';
 			$menu_str .= qq{
 		    </ul>
 		  </li>
+} if ($#DEVICE_LIST >= 0);
+			$menu_str .= qq{
 		  <li id="menu-network" class="dropdown-submenu">
 		     <a href="#" tabindex="-1">Network </a>
 		      <ul class="dropdown-menu">
@@ -9723,7 +9725,8 @@ sub get_data_directories
 	# Lookup for daily or hourly sub directories to scan
 	# Search years / months / days / hours directories
 	if (not opendir(DIR, "$INPUT_DIR")) {
-		die "FATAL: Can't open directory $INPUT_DIR: $!\n";
+		print STDERR "FATAL: Can't open directory $INPUT_DIR: $!\n";
+		return;
 	}
 	my @years = grep { /^\d+$/ && -d "$INPUT_DIR/$_" } readdir(DIR);
 	closedir(DIR);
@@ -9732,7 +9735,8 @@ sub get_data_directories
 			next if ($o_year && ($y < $o_year));
 			next if ($e_year && ($y > $e_year));
 			if (not opendir(DIR, "$INPUT_DIR/$y")) {
-				die "FATAL: Can't open directory $INPUT_DIR/$y: $!\n";
+				print STDERR "FATAL: Can't open directory $INPUT_DIR/$y: $!\n";
+				return;
 			}
 			my @months = grep { /^\d+$/ && -d "$INPUT_DIR/$y/$_" } readdir(DIR);
 			closedir(DIR);
@@ -9740,7 +9744,8 @@ sub get_data_directories
 				next if ($o_month && ("$y$m" lt "$o_year$o_month"));
 				next if ($e_month && ("$y$m" gt "$e_year$e_month"));
 				if (not opendir(DIR, "$INPUT_DIR/$y/$m")) {
-					die "FATAL: Can't open directory $INPUT_DIR/$y/$m: $!\n";
+					print STDERR "FATAL: Can't open directory $INPUT_DIR/$y/$m: $!\n";
+					return;
 				}
 				my @days = grep { /^\d+$/ && -d "$INPUT_DIR/$y/$m/$_" } readdir(DIR);
 				closedir(DIR);
@@ -9748,7 +9753,8 @@ sub get_data_directories
 					next if ($o_day && ("$y$m$d" lt "$o_year$o_month$o_day"));
 					next if ($e_day && ("$y$m$d" gt "$e_year$e_month$e_day"));
 					if (not opendir(DIR, "$INPUT_DIR/$y/$m/$d")) {
-						die "FATAL: Can't open directory $INPUT_DIR/$y/$m/$d: $!\n";
+						print STDERR "FATAL: Can't open directory $INPUT_DIR/$y/$m/$d: $!\n";
+						return;
 					}
 					my @hours = grep { /^\d+$/ && -d "$INPUT_DIR/$y/$m/$d/$_" } readdir(DIR);
 					closedir(DIR);
