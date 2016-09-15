@@ -25,7 +25,7 @@ function add_download_button_event (buttonid, divid, plot) {
 
 }
 
-function create_linegraph (divid, charttitle, ylabel, arr_series, lineseries) {
+function create_linegraph (divid, charttitle, ylabel, arr_series, lineseries, y2label) {
         return $.jqplot(divid, lineseries, { 
         seriesColors: ['#6e9dc9','#f4ab3a','#ac7fa8','#8dbd0f',"#958c12","#953579", "#4b5de4", "#d8b83f", "#ff5800", "#0085cc"],
         seriesDefaults: { markerOptions: {show: false}, lineWidth:1 },
