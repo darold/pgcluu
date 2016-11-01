@@ -6705,7 +6705,7 @@ sub show_sysinfo
 	my $sysctl_info = '';
 	my $hugepage_info = '';
 	foreach my $k (sort keys %{$sysinfo{SYSTEM}}) {
-		next if ($k =~ /^kernel/);
+		next if ($k =~ /^kernel.*shm/);
 		if ($k =~ /transparent_hugepage/) {
 			my $k2 = $k;
 			$k2 =~ s/\/sys\/kernel\/mm\/transparent_hugepage\///;
@@ -6714,7 +6714,9 @@ sub show_sysinfo
 		<li><span class="figure-label" data-toggle="tooltip" data-placement="top" title="$k">$k2</span> <span class="figure">$sysinfo{SYSTEM}{$k}</span></li>
 EOF
 		} else {
-			$sysctl_info .= "<li><span class=\"figure-label\">$k</span> <span class=\"figure\">$sysinfo{SYSTEM}{$k}</span></li>\n";
+			my $lbl = $k;
+			$lbl =~ s/kernel\.//;
+			$sysctl_info .= "<li><span class=\"figure-label\">$lbl</span> <span class=\"figure\">$sysinfo{SYSTEM}{$k}</span></li>\n";
 		}
 	}
 	my $core_info = '';

@@ -6723,7 +6723,7 @@ EOF
 		my $sysctl_info = '';
 		my $hugepage_info = '';
 		foreach my $k (sort keys %{$sysinfo{SYSTEM}}) {
-			next if ($k =~ /^kernel/);
+			next if ($k =~ /^kernel.*shm/);
 			if ($k =~ /transparent_hugepage/) {
 				my $k2 = $k;
 				$k2 =~ s/\/sys\/kernel\/mm\/transparent_hugepage\///;
@@ -6732,7 +6732,9 @@ EOF
 		<li><span class="figure-label" data-toggle="tooltip" data-placement="top" title="$k">$k2</span> <span class="figure">$sysinfo{SYSTEM}{$k}</span></li>
 EOF
 			} else {
-				$sysctl_info .= "<li><span class=\"figure-label\">$k</span> <span class=\"figure\">$sysinfo{SYSTEM}{$k}</span></li>\n";
+				my $lbl = $k;
+				$lbl =~ s/kernel\.//;
+				$sysctl_info .= "<li><span class=\"figure-label\">$lbl</span> <span class=\"figure\">$sysinfo{SYSTEM}{$k}</span></li>\n";
 			}
 		}
 		my $core_info = '';
@@ -6792,13 +6794,7 @@ EOF
                 <ul>
                 <li></li>
                 $sysctl_info
-                </ul>
-				<span class="figure-label"><b>kernel scheduler parameters</b></span>
-				<ul>
-				<li></li>
-				<li><span class="figure-label">kernel.sched_autogroup_enabled</span></br><span class="figure">$sysinfo{SYSTEM}{'kernel.sched_autogroup_enabled'}</span></li>
-				<li><span class="figure-label">kernel.sched_migration_cost_ns</span></br><span class="figure">$sysinfo{SYSTEM}{'kernel.sched_migration_cost_ns'}</span></li>
-				</ul>
+		</ul>
 		</div>
               </div>
               </div>
