@@ -6793,6 +6793,12 @@ EOF
                 <li></li>
                 $sysctl_info
                 </ul>
+				<span class="figure-label"><b>kernel scheduler parameters</b></span>
+				<ul>
+				<li></li>
+				<li><span class="figure-label">kernel.sched_autogroup_enabled</span></br><span class="figure">$sysinfo{SYSTEM}{'kernel.sched_autogroup_enabled'}</span></li>
+				<li><span class="figure-label">kernel.sched_migration_cost_ns</span></br><span class="figure">$sysinfo{SYSTEM}{'kernel.sched_migration_cost_ns'}</span></li>
+				</ul>
 		</div>
               </div>
               </div>
