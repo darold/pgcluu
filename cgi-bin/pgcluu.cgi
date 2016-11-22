@@ -40,7 +40,7 @@ my %DEVFH           = ();
 my $IDX             = 1;
 my $HELP            = 0;
 my $SHOW_VER        = 0;
-my $DEBUG           = 1;
+my $DEBUG           = 0;
 my $NUMBER_CPU      = 0;
 my $TIMEZONE        = '00'; #substr(strftime('%z', localtime()), 0, 3);
 my $STATS_TIMEZONE  = '00';  # Timezone is auto detected from data files
@@ -82,7 +82,7 @@ our %all_stat_invalid_indexes = ();
 our %all_stat_hash_indexes = ();
 our %all_statio_user_tables = ();
 our %all_relation_buffercache = ();
-our %all_statio_all_indexes = ();
+our %all_statio_user_indexes = ();
 our %all_xlog_stat = ();
 our %all_stat_bgwriter = ();
 our %all_stat_connections = ();
@@ -136,7 +136,7 @@ our @pg_to_be_stored = (
 	'all_stat_hash_indexes',
 	'all_statio_user_tables',
 	'all_relation_buffercache',
-	'all_statio_all_indexes',
+	'all_statio_user_indexes',
 	'all_xlog_stat',
 	'all_stat_bgwriter',
 	'all_stat_connections',
@@ -408,7 +408,7 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'Functions statistics',
 		},
 	},
-	'pg_stat_all_tables.csv' => {
+	'pg_stat_user_tables.csv' => {
 		'1' => {
 			'name' =>  'table-indexes',
 			'title' => 'Sequencial vs Index scan on %s',
@@ -448,7 +448,7 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'Live vs dead tuples',
 		},
 	},
-	'pg_statio_all_tables.csv' => {
+	'pg_statio_user_tables.csv' => {
 		'1' => {
 			'name' =>  'statio-table',
 			'title' => 'Statistics about I/O on %s',
@@ -459,7 +459,7 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'Tables I/O stats',
 		},
 	},
-	'pg_stat_all_indexes.csv' => {
+	'pg_stat_user_indexes.csv' => {
 		'1' => {
 			'name' =>  'index-scan',
 			'title' => 'Statistics about accesses to index %s',
@@ -471,7 +471,7 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'Index read/fetch',
 		},
 	},
-	'pg_statio_all_indexes.csv' => {
+	'pg_statio_user_indexes.csv' => {
 		'1' => {
 			'name' =>  'statio-index',
 			'title' => 'Statistics about I/O on %s',
@@ -1076,6 +1076,7 @@ sub read_conf
 	}
 }
 
+
 ####
 # Read configuration file
 ####
@@ -1271,8 +1272,10 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 		# Home page is built from cache file or from csv file, not both
 		if (($ACTION ne 'home') || ($#binfiles == -1)) {
+
+			print STDERR "DEBUG: Building PostgreSQL $ACTION view\n" if ($DEBUG);
+
 			# Loop over CSV files and graphics definition to generate reports
-			print STDERR "DEBUG: Building PostgreSQL statistics From $ACTION CSV files\n" if ($DEBUG);
 			foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS) {
 
 				# Do not compute statistics for reports other than the
@@ -1283,21 +1286,20 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 				}
 				next if (!$to_be_proceed);
 
+				print STDERR "DEBUG: Building PostgreSQL statistics from $k CSV files\n" if ($DEBUG);
+
 				# Read statistics from csv file starting at at begining of the
 				# file or last offset when binary files are present
 				if (-e "$in_dir/$k" && !-z "$in_dir/$k") {
-					if (-e "$in_dir/$k" && !-z "$in_dir/$k") {
-						&compute_postgresql_stat($in_dir, $k, $src_base, %{$DB_GRAPH_INFOS{$k}});
-					}
+					&compute_postgresql_stat($in_dir, $k, $src_base, %{$DB_GRAPH_INFOS{$k}});
 				# Gzip data files are only available when they can't be appended anymore so
 				# if we have binary files and gzipped files, binary files contains all stats
 				} elsif (($#binfiles == -1) && -e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz") {
-					if (-e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz") {
-						&compute_postgresql_stat($in_dir, "$k.gz", $src_base, %{$DB_GRAPH_INFOS{$k}});
-					}
-				} elsif ($k =~ /_all_/) {
+					&compute_postgresql_stat($in_dir, "$k.gz", $src_base, %{$DB_GRAPH_INFOS{$k}});
+				# Files use 'all' instead of 'user' with pgcluu_collectd --stat-type option
+				} elsif ($k =~ /_user_/) {
 					my $f = $k;
-					$f =~ s/_all_/_user_/;
+					$f =~ s/_user_/_all_/;
 					# Read statistics from csv file starting at at begining of the
 					# file or last offset when binary files are present
 					if (-e "$in_dir/$f" && !-z "$in_dir/$f") {
@@ -1361,18 +1363,11 @@ if (($ACTION ne 'home') && ($ACTION ne 'database-info') && ($ACTION !~ /^(system
 		if (($inmem =~ /_conf/) && ($inmem !~ /^all/)) {
 			$inmem = 'all_' . $inmem;
 		}
-		$inmem =~ s/_all_/_user_/;
 
 		# Skip this report if there's no statistics loaded in memory
 		next if ((scalar keys %{$inmem} == 0) && ($ID_ACTION == 0));
 		print STDERR "DEBUG: Building report for $k (from memory \%$inmem)\n" if ($DEBUG);
-		if ($k =~ /_all_/) {
-			my $f = $k;
-			$f =~ s/_all_/_user_/;
-			&compute_postgresql_report($f, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
-		} else {
-			&compute_postgresql_report($k, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
-		}
+		&compute_postgresql_report($k, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
 	}
 
 }
@@ -1402,7 +1397,7 @@ sub set_sysstat_file
 
 	$input_dir ||= $INPUT_DIR;
 
-	print STDERR "DEBUG: detecting sar/sadc file in $input_dir/.\n" if ($DEBUG);
+	print STDERR "DEBUG: detecting sar/sadc file in $input_dir/\n" if ($DEBUG);
 	my $sar_file = '';
 	my $sadc_file = '';
 	if (!$SADC_INPUT_FILE && !$SAR_INPUT_FILE) {
@@ -1433,7 +1428,7 @@ sub set_sysstat_file
 		exit 1;
 	}
 
-	print STDERR "DEBUG: sar/sadc file detected $sar_file/$sadc_file.\n" if ($DEBUG);
+	print STDERR "DEBUG: sar/sadc file detected ", ($sar_file) ? $sar_file : $sadc_file, "\n" if ($DEBUG);
 
 	return ($sar_file, $sadc_file);
 }
@@ -1754,7 +1749,6 @@ sub compute_postgresql_stat
 	my $fctname = $file;
 	$fctname =~ s/\.csv(\.gz)?//;
 	$fctname =~ s/\.gz//;
-	$fctname =~ s/_all_/_user_/;
 	$fctname =~ s/\./_/g;
 	$fctname->($in_dir, $file);
 }
@@ -1767,7 +1761,7 @@ sub compute_postgresql_report
 	my $fctname = $file;
 	$fctname =~ s/\.csv(\.gz)?//;
 	$fctname =~ s/\.gz//;
-	$fctname =~ s/_all_/_user_/;
+	$fctname =~ s/_all_/_user_/g;
 	$fctname =~ s/\./_/g;
 
 	print STDERR "DEBUG: creating reports from statistics $fctname.\n" if ($DEBUG);
@@ -2671,6 +2665,11 @@ sub pg_stat_user_tables
 	$curfh->close();
 }
 
+sub pg_stat_all_tables
+{
+	return &pg_stat_user_tables;
+}
+
 # Compute report about table accesses
 sub pg_stat_user_tables_report
 {
@@ -2873,6 +2872,11 @@ sub pg_stat_user_indexes
 		push(@{$start_vals{$data[1]}{$data[6]}}, @data);
 	}
 	$curfh->close();
+}
+
+sub pg_stat_all_indexes
+{
+	return &pg_stat_user_indexes;
 }
 
 # Compute report about index scan
@@ -3530,13 +3534,13 @@ sub pg_statio_user_indexes
 		push(@{$start_vals{$data[1]}{$data[6]}}, @data) if ($#{$start_vals{$data[1]}{$data[6]}} < 0);
 
 		# Store interval between previous run
-		$all_statio_all_indexes{$data[0]}{$data[1]}{$data[6]}{interval} = $data[0] - $start_vals{$data[1]}{$data[6]}[0];
+		$all_statio_user_indexes{$data[0]}{$data[1]}{$data[6]}{interval} = $data[0] - $start_vals{$data[1]}{$data[6]}[0];
 
 		(($data[7] - $start_vals{$data[1]}{$data[6]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[6]}[7]);
-		$all_statio_all_indexes{$data[0]}{$data[1]}{$data[6]}{idx_blks_read} = $tmp_val;
+		$all_statio_user_indexes{$data[0]}{$data[1]}{$data[6]}{idx_blks_read} = $tmp_val;
 
 		(($data[8] - $start_vals{$data[1]}{$data[6]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[6]}[8]);
-		$all_statio_all_indexes{$data[0]}{$data[1]}{$data[6]}{idx_blks_hit} = $tmp_val;
+		$all_statio_user_indexes{$data[0]}{$data[1]}{$data[6]}{idx_blks_hit} = $tmp_val;
 
 		@{$start_vals{$data[1]}{$data[6]}} = ();
 		push(@{$start_vals{$data[1]}{$data[6]}}, @data);
@@ -3557,15 +3561,15 @@ sub pg_statio_user_indexes_report
 	my %statio_userindex = ();
 	my %is_used = ();
 	my $tz = ($STATS_TIMEZONE*3600*1000);
-	foreach my $t (sort {$a <=> $b} keys %all_statio_all_indexes) {
-		foreach my $obj (keys %{ $all_statio_all_indexes{$t}{$db} }) {
+	foreach my $t (sort {$a <=> $b} keys %all_statio_user_indexes) {
+		foreach my $obj (keys %{ $all_statio_user_indexes{$t}{$db} }) {
 			next if (!$statio_userindex{$db}{$obj}{interval});
-			$statio_userindex{$db}{$obj}{idx_blks_read} .= '[' . ($t - $tz) . ',' . int(($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_read}||0)/$statio_userindex{$db}{$obj}{interval}) . '],';
-			$statio_userindex{$db}{$obj}{idx_blks_hit} .= '[' . ($t - $tz) . ',' . int(($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_hit}||0)/$statio_userindex{$db}{$obj}{interval}) . '],';
-			$is_used{$db}{$obj} += ($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_hit}||0)+($all_statio_all_indexes{$t}{$db}{$obj}{idx_blks_read}||0);
+			$statio_userindex{$db}{$obj}{idx_blks_read} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_indexes{$t}{$db}{$obj}{idx_blks_read}||0)/$statio_userindex{$db}{$obj}{interval}) . '],';
+			$statio_userindex{$db}{$obj}{idx_blks_hit} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_indexes{$t}{$db}{$obj}{idx_blks_hit}||0)/$statio_userindex{$db}{$obj}{interval}) . '],';
+			$is_used{$db}{$obj} += ($all_statio_user_indexes{$t}{$db}{$obj}{idx_blks_hit}||0)+($all_statio_user_indexes{$t}{$db}{$obj}{idx_blks_read}||0);
 		}
 	}
-	%all_statio_all_indexes = ();
+	%all_statio_user_indexes = ();
 
 	my $id = &get_data_id('statio-index', %data_info);
 
@@ -7331,7 +7335,7 @@ AAAASUVORK5CYII=';
 		      <li id="menu-database-info"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=database-info&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Database info</a></li>
 };
 
-		my %data_info = %{$DB_GRAPH_INFOS{'pg_stat_all_tables.csv'}};
+		my %data_info = %{$DB_GRAPH_INFOS{'pg_stat_user_tables.csv'}};
 		my $table_str = '';
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^table-/);
@@ -7353,7 +7357,7 @@ AAAASUVORK5CYII=';
 			      <li id="menu-$data_info{$id}{name}"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=$data_info{$id}{name}&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">$data_info{$id}{menu}</a></li>
 };
 		}
-		%data_info = %{$DB_GRAPH_INFOS{'pg_statio_all_tables.csv'}};
+		%data_info = %{$DB_GRAPH_INFOS{'pg_statio_user_tables.csv'}};
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^statio-/);
 			$table_str .= qq{
@@ -7373,7 +7377,7 @@ AAAASUVORK5CYII=';
 		$table_str = '';
 
 		my $idx_str = '';
-		%data_info = %{$DB_GRAPH_INFOS{'pg_stat_all_indexes.csv'}};
+		%data_info = %{$DB_GRAPH_INFOS{'pg_stat_user_indexes.csv'}};
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^index-/);
 			$idx_str .= qq{
@@ -7401,7 +7405,7 @@ AAAASUVORK5CYII=';
 			      <li id="menu-$data_info{$id}{name}"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=$data_info{$id}{name}&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">$data_info{$id}{menu}</a></li>
 };
 		}
-		%data_info = %{$DB_GRAPH_INFOS{'pg_statio_all_indexes.csv'}};
+		%data_info = %{$DB_GRAPH_INFOS{'pg_statio_user_indexes.csv'}};
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^statio-/);
 			$idx_str .= qq{
@@ -9869,15 +9873,15 @@ sub load_pg_binary
 
 	foreach my $name (@pg_to_be_stored) {
 
+		next if ( -e "$in_dir/$name.bin");
+
 		my %stats = ();
-		if( -e "$in_dir/$name.bin") {
-			my $lfh = new IO::File "<$in_dir/$name.bin";
-			if (not defined $lfh) {
-				die "FATAL: can't read from $in_dir/$name.bin, $!\n";
-			}
-			%stats = %{ fd_retrieve($lfh) };
-			$lfh->close();
+		my $lfh = new IO::File "<$in_dir/$name.bin";
+		if (not defined $lfh) {
+			die "FATAL: can't read from $in_dir/$name.bin, $!\n";
 		}
+		%stats = %{ fd_retrieve($lfh) };
+		$lfh->close();
 
 		# Setting global information
 		if ($name eq 'global_infos') {
@@ -9926,6 +9930,28 @@ sub load_pg_binary
 			}
 		}
 	}
+
+	# Preserve backward compatibility with renaming of variable all_statio_all_indexes
+	if (-e "$in_dir/all_statio_all_indexes.bin") {
+
+		my $lfh = new IO::File "<$in_dir/all_statio_all_indexes.bin";
+		if (not defined $lfh) {
+			die "FATAL: can't read from $in_dir/all_statio_all_indexes.bin, $!\n";
+		}
+		my %stats = %{ fd_retrieve($lfh) };
+		$lfh->close();
+
+		foreach my $a (keys %{$stats{'all_statio_all_indexes'}}) {
+			foreach my $b (keys %{$stats{'all_statio_all_indexes'}{$a}}) {
+				foreach my $c (keys %{$stats{'all_statio_all_indexes'}{$a}{$b}}) {
+					foreach my $k (keys %{$stats{'all_statio_all_indexes'}{$a}{$b}{$c}}) {
+						$all_statio_user_indexes{$a}{$b}{$c}{$k} = $stats{'all_statio_all_indexes'}{$a}{$b}{$c}{$k};
+					}
+				}
+			}
+		}
+	}
+
 	# Compute overall database statistics from binary file 
 	# as they are normally computed when reading data files.
 	set_overall_database_stat_from_binary();
