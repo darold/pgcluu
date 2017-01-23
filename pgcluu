@@ -10263,8 +10263,8 @@ sub build_incremental_index
 		closedir DIR;
 		my $i = 1;
 		foreach my $m (sort {$a <=> $b } @ymonths) {
-			print $fh "<td><span class=\"col-md-4\">", &get_calendar($y, $m, $outdir), "</span></td>\n";
-			print $fh "</tr>\n<tr>\n" if ( ($i%3) == 0 );
+			print $fh "<td><span>", &get_calendar($y, $m, $outdir), "</span></td>\n";
+			print $fh "</tr>\n<tr>\n" if ( ($i%4) == 0 );
 			$i++;
 		}
 		print $fh qq{
