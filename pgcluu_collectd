@@ -2417,7 +2417,7 @@ sub dump_missingfkindexes
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), current_database(), relname, " .
-		"'CREATE INDEX idx_' || relname || '_' || " . 
+		"'CREATE INDEX CONCURRENTLY idx_' || relname || '_' || " . 
 		"         array_to_string(column_name_list, '_') || ' ON ' || conrelid || " . 
 		"         ' (' || array_to_string(column_name_list, ',') || ')' AS ddl " . 
 		"FROM (SELECT DISTINCT conrelid, " . 
