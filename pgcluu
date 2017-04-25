@@ -5026,9 +5026,9 @@ sub pg_stat_redundant_indexes
 	while (<$curfh>) {
 		my @data = split(/;/);
 
-		# Do not report indexes when one is partial and not the oher one
+		# Do not report indexes when one is partial and not the other one
+		# otherwise keep it for user recheck
 		next if (grep(/\bWHERE\b/i, $data[2], $data[3]) == 1);
-		next if (grep(/\bUNIQUE\b/i, $data[2], $data[3]) >= 1);
 
 		# timestamp | dbname | contained | containing
 		push(@{$all_stat_redundant_indexes{$data[1]}}, [ ($data[2], $data[3]) ] );
@@ -5044,6 +5044,7 @@ sub pg_stat_redundant_indexes_report
 	return if ($NO_TB_STAT);
 
 	my $id = &get_data_id('redundant-index', %data_info);
+
 	foreach my $db (sort keys %all_stat_redundant_indexes) {
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 		# Open filehandle to cluster file
