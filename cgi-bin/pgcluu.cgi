@@ -497,7 +497,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'redundant-index',
 			'title' => 'Redundant indexes on %s',
-			'description' => 'List of useless indexes because they are redundant.',
+			'description' => 'List of useless indexes because they are redundant. Before removing them, check that the redundant index is not a primary key or an index on a column referencing a foreign key.',
 			'ylabel' => 'Number',
 			'legends' => ['Redundant index'],
 			'active' => 1,
@@ -4723,7 +4723,9 @@ sub pg_stat_redundant_indexes
 	while (<$curfh>) {
 		my @data = split(/;/);
 		next if (!&normalize_line(\@data));
-		# Do not report indexes when one is partial and not the oher one
+
+		# Do not report indexes when one is partial and not the other one
+		# otherwise keep them for user recheck.
 		next if (grep(/\bWHERE\b/i, $data[2], $data[3]) == 1);
 
 		# timestamp | dbname | contained | containing
