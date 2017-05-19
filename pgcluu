@@ -2054,10 +2054,15 @@ sub write_database_info
 	return if (($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 
 	my $next = $#{$sysinfo{EXTENSION}{$db}} + 1;
-	my $extlist = join(',', @{$sysinfo{EXTENSION}{$db}});
+	my $extlist = join(', ', @{$sysinfo{EXTENSION}{$db}});
 	$extlist = ' (' . $extlist . ')' if ($extlist);
+	my $nparts = 0;
+	$nparts = scalar keys %{$sysinfo{PARTITIONNED_TABLE}{$db}} if (exists $sysinfo{PARTITIONNED_TABLE}{$db});
+	my $partlist = '';
+	$partlist = join(', ', keys %{$sysinfo{PARTITIONNED_TABLE}{$db}}) if ($nparts > 0);
+	$partlist = '(' . $partlist . ')' if ($partlist);
 	my $nsch = $#{$sysinfo{SCHEMA}{$db}} + 1;
-	my $schlist = join(',', @{$sysinfo{SCHEMA}{$db}});
+	my $schlist = join(', ', @{$sysinfo{SCHEMA}{$db}});
 	$schlist = ' (' . $schlist . ')' if ($schlist);
 	my $procount = $sysinfo{PROCEDURE}{$db} || 0;
 	my $trigcount = $sysinfo{TRIGGER}{$db} || 0;
@@ -2093,6 +2098,7 @@ sub write_database_info
 		<li></li>
 	        <li><span class="figure">$dbsize</span> <span class="figure-label">Total size</span></li>
 	        <li><span class="figure">$next</span> <span class="figure-label">Installed extensions$extlist</span></li>
+	        <li><span class="figure">$nparts</span> <span class="figure-label">Partitionned tables$partlist</span></li>
 	        <li><span class="figure">$OVERALL_STATS{database}{$db}{unlogged}</span> <span class="figure-label">Unlogged tables</span></li>
 	        <li><span class="figure">$OVERALL_STATS{database}{$db}{invalid_indexes}</span> <span class="figure-label">Invalid indexes</span></li>
 	        <li><span class="figure">$OVERALL_STATS{database}{$db}{hash_indexes}</span> <span class="figure-label">Hash indexes</span></li>
@@ -2116,6 +2122,68 @@ sub write_database_info
 }
 	);
 
+	if ($nparts > 0) {
+		$dbfh->print( qq{
+<li class="slide" id="partitionned-table-slide">
+  <div id="partitionned-tbl"><br/><br/><br/></div>
+  <div class="row">
+    <div class="col-md-12">
+      <div class="panel panel-default">
+        <div class="panel-heading">
+          <i class="fa fa-desktop fa-2x pull-left fa-border"></i><h2>Partitionned tables in database $db</h2>
+        </div>
+        <div class="panel-body">
+}
+		);
+		foreach my $oid (sort(keys %{$sysinfo{PARTITIONNED_TABLE}{$db}})) {
+			$dbfh->print( qq{
+          <div class="analysis-item row-fluid" id="part-tbl-$oid">
+            <div class="span11">
+              <h3>$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{name}</h3>
+              <div class="key-figures">
+                <ul>
+                  <li>Partitionning kind: <span class="figure">$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{kind}</span></li>
+                  <li>Number of partitions: <span class="figure">$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{nparts}</span></li>
+                  <li>$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{kind} detail: <pre>$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{implementation}</pre></li>
+                </ul>
+              </div>
+              <table class="table table-striped sortable" id="part-tbl-$oid-table">
+                <thead>
+                  <tr>
+                    <th>Partition name</th>
+                    <th>Constraint</th>
+                  </tr>
+                </thead>
+                <tbody>
+}
+			);
+
+			foreach my $part (sort(keys %{$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{child}})) {
+				$dbfh->print( qq{
+                  <tr>
+                    <td>$part</td>
+                    <td>$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{child}{$part}</td>
+                  </tr>
+}
+				);
+			}
+			$dbfh->print( qq{
+              </table>
+            </div>
+          </div>
+}
+			);
+        }
+		$dbfh->print( qq{
+        </div>
+      </div>
+    </div>
+  </div>
+</li>
+}
+		);
+
+	}
 }
 
 sub compute_postgresql_stat
@@ -6582,6 +6650,12 @@ EOF
 			my $extlist = join(', ', @{$OVERALL_STATS{'cluster'}{'extensions'}});
 			$extensions_info = qq{<li><span class="figure">$extnum</span> <span class="figure-label">Extensions ($extlist)</span></li>};
 		}
+		my $nparts = $#{$OVERALL_STATS{'cluster'}{'partitionned_tables'}} + 1;
+		my $parts_info = '';
+		if ($nparts) {
+			my $partlist = join(', ', @{$OVERALL_STATS{'cluster'}{'partitionned_tables'}});
+			$parts_info = qq{<li><span class="figure">$nparts</span> <span class="figure-label">Partitioned tables ($partlist)</span></li>};
+			}
 		$sysinfo{PGVERSION}{'full_version'} ||= '';
 		$sysinfo{PGVERSION}{'uptime'} ||= '';
 		my $database_number = scalar keys %{$OVERALL_STATS{'database'}};
@@ -6636,6 +6710,7 @@ EOF
 		$temp_file_info
 		$deadlock_info
 		$extensions_info
+		$parts_info
 		$bgwriter_reset
 		</ul>
 		</div>
@@ -7523,6 +7598,12 @@ sub generate_html_menu
 		      <li id="menu-database-info"><a href="database-$db.html#database-info">Database info</a></li>
 };
 		}
+
+		my $disable_parttables = ' class="disabled"';
+		$disable_parttables = '' if (defined $sysinfo{PARTITIONNED_TABLE}{$db});
+		$menu_str .= qq{
+		    <li id="menu-partitionned-tbl"$disable_parttables><a href="database-$db.html#partitionned-tbl">Partitionned Tables</a></li>
+};
 
 		my %data_info = %{$DB_GRAPH_INFOS{'pg_stat_user_tables.csv'}};
 		my $table_str = '';
@@ -9803,6 +9884,25 @@ sub read_sysinfo_file
 			my ($USER,$PID,$CPU,$MEM,$VSZ,$RSS,$TTY,$STAT,$START,$TIME,$COMMAND) = split(/\s+/, $l, 11);
 			push(@{$sysinfo{$section}}, '<tr><td>' . join('</td><td>', $USER,$PID,$CPU,$MEM,$VSZ,$RSS,$TTY,$STAT,$START,$TIME,$COMMAND) . '</td></tr>') if ($l !~/^USER/);
 		}
+		if ($section eq 'PARTITIONNED_TABLE') {
+			# limit split to 2 fields, check constraint can contains "="
+			my ($db, $csv) = split(/[=]/, $l, 2);
+
+			if ($csv) {
+				my ($oid, $parent, $child, $constraint, $kind, $nparts ) = split(/[;]+/, $csv);
+				$sysinfo{$section}{$db}{$oid}{name} = $parent;
+				$sysinfo{$section}{$db}{$oid}{child}{$child} = $constraint;
+				$sysinfo{$section}{$db}{$oid}{kind} = $kind;
+				$sysinfo{$section}{$db}{$oid}{nparts} = $nparts;
+				push(@{$OVERALL_STATS{'cluster'}{'partitionned_tables'}}, "$db.$parent") if (!grep(/^$db.$parent/, @{$OVERALL_STATS{'cluster'}{'partitionned_tables'}}));
+			}
+		}
+        if ($section =~ /PARTITION_IMPL (.*) (\d+)/) {
+            my $db = $1;
+            my $oid = $2;
+
+			$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{implementation} .= "$l\n";
+        }
 	}
 	close(IN);
 

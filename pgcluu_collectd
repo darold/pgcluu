@@ -1026,6 +1026,7 @@ sub get_initial_info
 		my @schemas = ();
 		my @procs = ();
 		my @trigs = ();
+		my %parts = ();
 		unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
 			&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
 			exit 1;
@@ -1068,8 +1069,30 @@ sub get_initial_info
 		foreach my $t (@trigs) {
 			print OUT "$t\n";
 		}
-		close(OUT);
+		# Look for partitionned tables in a database
+		print OUT "[PARTITIONNED_TABLE]\n";
+		foreach my $db (sort @alldbs) {
+			my @p = &get_partitionned_tables($db);
 
+			# Get general partition information
+			foreach my $line (@p) {
+				my ($oid, $content) = split(/[;]/, $line, 2);
+
+				$parts{$oid} = $db;
+				print OUT "$db=$oid;$content\n";
+			}
+		}
+		# get trigger or rule definition of each partitionned table
+		for my $oid (keys %parts) {
+			my $db = $parts{$oid};
+			my @implementation = &get_partitionned_implementation($db, $oid);
+
+			print OUT "[PARTITION_IMPL $db $oid]\n";
+			foreach my $line (@implementation) {
+				print OUT "$line\n";
+			}
+		}
+		close(OUT);
 	}
 }
 
@@ -1323,16 +1346,86 @@ sub get_schemas
 	}
 	my @db_schema = `echo "SELECT nspname FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' ORDER BY 1" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
-		&dprint("FATAL: psql error.\n");
-		# remove the pidfile
-		if (-f $PIDFILE) {
-			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
-		}
-		exit 0;
+		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
 	chomp(@db_schema);
 
 	return @db_schema;
+}
+
+####
+## Retrieve partitionned tables from a given database.
+####
+sub get_partitionned_tables
+{
+    my $database = shift;
+	my $LOCAL_PSQL_PROG = $PSQL_PROG;
+
+	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
+		if ($database !~ /^[a-z0-9\_\-]+$/i) {
+			$LOCAL_PSQL_PROG .= " -d '$database'";
+		} else {
+			$LOCAL_PSQL_PROG .= " -d $database";
+		}
+	}
+
+	# Assume that inherited tables having check constraints are partitions
+    my $sql = "SELECT p.oid, quote_ident(pn.nspname) || '.' || quote_ident(p.relname),"
+		. " quote_ident(cn.nspname) || '.' || quote_ident(c.relname), con.consrc,"
+		. " CASE WHEN t.oid IS NOT NULL THEN 'Trigger' WHEN r.oid IS NOT NULL THEN 'Rule' ELSE 'Unknown' END,"
+		. " count(*) OVER (PARTITION BY p.oid)"
+		. " FROM pg_inherits i"
+		. " JOIN pg_class p ON p.oid = i.inhparent"
+		. " JOIN pg_namespace pn ON pn.oid = p.relnamespace"
+		. " JOIN pg_class c ON c.oid = i.inhrelid"
+		. " JOIN pg_namespace cn ON cn.oid = p.relnamespace"
+		. " JOIN pg_constraint con ON con.conrelid= c.oid AND con.contype = 'c'"
+		. " LEFT JOIN pg_trigger t ON t.tgrelid = p.oid"
+		. " LEFT JOIN pg_rewrite r ON r.ev_class = p.oid";
+
+	my @db_parttables = `echo "$sql" | $LOCAL_PSQL_PROG`;
+	if ($? != 0) {
+		unlink_pid_and_exit("FATAL: psql error.", 0);
+	}
+	chomp(@db_parttables);
+
+	return @db_parttables;
+}
+
+###
+# Retrieve trigger or rules of a specific partitionned table from a given database.
+###
+sub get_partitionned_implementation {
+	my $database = shift;
+	my $oid = shift;
+	my $LOCAL_PSQL_PROG = $PSQL_PROG;
+
+	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
+		if ($database !~ /^[a-z0-9\_\-]+$/i) {
+			$LOCAL_PSQL_PROG .= " -d '$database'";
+		} else {
+			$LOCAL_PSQL_PROG .= " -d $database";
+		}
+	}
+
+    my $sql = "SELECT DISTINCT CASE WHEN pro.oid IS NOT NULL THEN pro.prosrc"
+		. "   WHEN r.oid IS NOT NULL THEN pg_get_ruledef(r.oid)"
+		. "   ELSE 'Unknown' END"
+		. " FROM pg_inherits i"
+		. " JOIN pg_class p ON p.oid = i.inhparent"
+		. " JOIN pg_namespace pn ON pn.oid = p.relnamespace"
+		. " LEFT JOIN pg_trigger t ON t.tgrelid = p.oid"
+		. " LEFT JOIN pg_proc pro ON pro.oid = t.tgfoid"
+		. " LEFT JOIN pg_rewrite r ON r.ev_class = p.oid"
+		. " WHERE p.oid = $oid";
+
+	my @db_parttables = `echo "$sql" | $LOCAL_PSQL_PROG`;
+	if ($? != 0) {
+		unlink_pid_and_exit("FATAL: psql error.", 0);
+	}
+	chomp(@db_parttables);
+
+	return @db_parttables;
 }
 
 ####
