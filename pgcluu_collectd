@@ -590,7 +590,7 @@ sub terminate
 		unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
 	}
 
-        # Wait for all child processes to die except for the logger
+	# Wait for all child processes to die except for the logger
 	&wait_all_childs();
 
 	exit 0;
@@ -694,22 +694,14 @@ while (1) {
 
 	# Search if the monitoring need to stop here
 	if ($END_AFTER && ($t0 > ($START_TIME + $END_AFTER))) {
-		&dprint("LOG: ending time reach, terminating.\n");
-		if (-f $PIDFILE) {
-			unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
-		}
-		exit 0;
+		unlink_pid_and_exit("LOG: ending time reach, terminating.", 0);
 	}
 
 	# If counter reached then exit
 	$tcounter++;
 
 	if (($END_AFTER_COUNTER > 0) && ($tcounter > $END_AFTER_COUNTER)) {
-		&dprint("LOG: counter reached, terminating.\n");
-		if (-f $PIDFILE) {
-			unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
-		}
-		exit 0;
+		unlink_pid_and_exit("LOG: counter reached, terminating.", 0);
 	}
 
 	# Some time range may not collect data
@@ -866,11 +858,7 @@ while (1) {
 	my $script_sql = &create_sql_script();
 	if (!$script_sql && ($#METRICS < 0)) {
 		# No action can be perform with this PostgreSQL version
-		if (-f $PIDFILE) {
-			unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
-		}
-		&dprint("FATAL: no action will be run on this PostgreSQL version $DB_INFO{major}.$DB_INFO{minor}, $!\n");
-		exit 1;
+		unlink_pid_and_exit("FATAL: no action will be run on this PostgreSQL version $DB_INFO{major}.$DB_INFO{minor}, $!", 1);
 	}
 
 	if (!$NO_DATABASE) {
@@ -969,11 +957,7 @@ while (1) {
 			my $lsize = `du -s $OUTPUT_DIR`;
 			chomp($lsize);
 			if ($lsize > $MAX_SIZE) {
-				&dprint("LOG: max size limit reach, terminating.\n");
-				if (-f $PIDFILE) {
-					unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
-				}
-				exit 0;
+				unlink_pid_and_exit("LOG: max size limit reach, terminating.", 0);
 			}
 		}
 
@@ -1042,6 +1026,7 @@ sub get_initial_info
 		my @schemas = ();
 		my @procs = ();
 		my @trigs = ();
+		my %parts = ();
 		unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
 			&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
 			exit 1;
@@ -1084,8 +1069,30 @@ sub get_initial_info
 		foreach my $t (@trigs) {
 			print OUT "$t\n";
 		}
-		close(OUT);
+		# Look for partitionned tables in a database
+		print OUT "[PARTITIONNED_TABLE]\n";
+		foreach my $db (sort @alldbs) {
+			my @p = &get_partitionned_tables($db);
 
+			# Get general partition information
+			foreach my $line (@p) {
+				my ($oid, $content) = split(/[;]/, $line, 2);
+
+				$parts{$oid} = $db;
+				print OUT "$db=$oid;$content\n";
+			}
+		}
+		# get trigger or rule definition of each partitionned table
+		for my $oid (keys %parts) {
+			my $db = $parts{$oid};
+			my @implementation = &get_partitionned_implementation($db, $oid);
+
+			print OUT "[PARTITION_IMPL $db $oid]\n";
+			foreach my $line (@implementation) {
+				print OUT "$line\n";
+			}
+		}
+		close(OUT);
 	}
 }
 
@@ -1229,12 +1236,7 @@ sub fetch_version
 	if ($? != 0) {
 		# Only stop here if there's no pgbouncer querying
 		if (!$PGBOUNCER_ARGS) {
-			&dprint("FATAL: psql error. $pg_ver\n");
-			# remove the pidfile
-			if (-f $PIDFILE) {
-				unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
-			}
-			exit 0;
+			unlink_pid_and_exit("FATAL: psql error. $pg_ver", 0);
 		} else {
 			return -1;
 		}
@@ -1279,12 +1281,7 @@ sub get_extensions
 	}
 	my @db_extension = `echo "SELECT extname||'-'||extversion FROM pg_extension;" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
-		&dprint("FATAL: psql error.\n");
-		# remove the pidfile
-		if (-f $PIDFILE) {
-			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
-		}
-		exit 0;
+		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
 	chomp(@db_extension);
 
@@ -1299,12 +1296,7 @@ sub get_databases
 
 	my @dbs = `echo "SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn;" | $PSQL_PROG`;
 	if ($? != 0) {
-		&dprint("FATAL: psql error.\n");
-		# remove the pidfile
-		if (-f $PIDFILE) {
-			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
-		}
-		exit 0;
+		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
 	chomp(@dbs);
 
@@ -1320,12 +1312,7 @@ sub get_uptime
 
 	my $uptime = `echo "SELECT pg_postmaster_start_time();" | $PSQL_PROG`;
 	if ($? != 0) {
-		&dprint("FATAL: psql error.\n");
-		# remove the pidfile
-		if (-f $PIDFILE) {
-			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
-		}
-		exit 0;
+		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
 	chomp($uptime);
 
@@ -1359,16 +1346,86 @@ sub get_schemas
 	}
 	my @db_schema = `echo "SELECT nspname FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' ORDER BY 1" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
-		&dprint("FATAL: psql error.\n");
-		# remove the pidfile
-		if (-f $PIDFILE) {
-			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
-		}
-		exit 0;
+		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
 	chomp(@db_schema);
 
 	return @db_schema;
+}
+
+####
+## Retrieve partitionned tables from a given database.
+####
+sub get_partitionned_tables
+{
+    my $database = shift;
+	my $LOCAL_PSQL_PROG = $PSQL_PROG;
+
+	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
+		if ($database !~ /^[a-z0-9\_\-]+$/i) {
+			$LOCAL_PSQL_PROG .= " -d '$database'";
+		} else {
+			$LOCAL_PSQL_PROG .= " -d $database";
+		}
+	}
+
+	# Assume that inherited tables having check constraints are partitions
+    my $sql = "SELECT p.oid, quote_ident(pn.nspname) || '.' || quote_ident(p.relname),"
+		. " quote_ident(cn.nspname) || '.' || quote_ident(c.relname), con.consrc,"
+		. " CASE WHEN t.oid IS NOT NULL THEN 'Trigger' WHEN r.oid IS NOT NULL THEN 'Rule' ELSE 'Unknown' END,"
+		. " count(*) OVER (PARTITION BY p.oid)"
+		. " FROM pg_inherits i"
+		. " JOIN pg_class p ON p.oid = i.inhparent"
+		. " JOIN pg_namespace pn ON pn.oid = p.relnamespace"
+		. " JOIN pg_class c ON c.oid = i.inhrelid"
+		. " JOIN pg_namespace cn ON cn.oid = p.relnamespace"
+		. " JOIN pg_constraint con ON con.conrelid= c.oid AND con.contype = 'c'"
+		. " LEFT JOIN pg_trigger t ON t.tgrelid = p.oid"
+		. " LEFT JOIN pg_rewrite r ON r.ev_class = p.oid";
+
+	my @db_parttables = `echo "$sql" | $LOCAL_PSQL_PROG`;
+	if ($? != 0) {
+		unlink_pid_and_exit("FATAL: psql error.", 0);
+	}
+	chomp(@db_parttables);
+
+	return @db_parttables;
+}
+
+###
+# Retrieve trigger or rules of a specific partitionned table from a given database.
+###
+sub get_partitionned_implementation {
+	my $database = shift;
+	my $oid = shift;
+	my $LOCAL_PSQL_PROG = $PSQL_PROG;
+
+	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
+		if ($database !~ /^[a-z0-9\_\-]+$/i) {
+			$LOCAL_PSQL_PROG .= " -d '$database'";
+		} else {
+			$LOCAL_PSQL_PROG .= " -d $database";
+		}
+	}
+
+    my $sql = "SELECT DISTINCT CASE WHEN pro.oid IS NOT NULL THEN pro.prosrc"
+		. "   WHEN r.oid IS NOT NULL THEN pg_get_ruledef(r.oid)"
+		. "   ELSE 'Unknown' END"
+		. " FROM pg_inherits i"
+		. " JOIN pg_class p ON p.oid = i.inhparent"
+		. " JOIN pg_namespace pn ON pn.oid = p.relnamespace"
+		. " LEFT JOIN pg_trigger t ON t.tgrelid = p.oid"
+		. " LEFT JOIN pg_proc pro ON pro.oid = t.tgfoid"
+		. " LEFT JOIN pg_rewrite r ON r.ev_class = p.oid"
+		. " WHERE p.oid = $oid";
+
+	my @db_parttables = `echo "$sql" | $LOCAL_PSQL_PROG`;
+	if ($? != 0) {
+		unlink_pid_and_exit("FATAL: psql error.", 0);
+	}
+	chomp(@db_parttables);
+
+	return @db_parttables;
 }
 
 ####
@@ -1379,12 +1436,7 @@ sub has_pg_buffercache
 
 	my $hasit = `echo "SELECT proname FROM pg_proc WHERE proname = 'pg_buffercache_pages';" | $PSQL_PROG`;
 	if ($? != 0) {
-		&dprint("FATAL: psql error.\n");
-		# remove the pidfile
-		if (-f $PIDFILE) {
-			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
-		}
-		exit 0;
+		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
 	chomp($hasit);
 
@@ -1400,12 +1452,7 @@ sub has_pgstatstatements
 
 	my $hasit = ` echo "SELECT n.nspname||'.'||p.proname FROM pg_proc p, pg_namespace n, pg_settings s WHERE p.proname='pg_stat_statements' AND p.pronamespace=n.oid AND s.name='shared_preload_libraries' AND s.setting LIKE '%pg_stat_statements%';" | $PSQL_PROG`;
 	if ($? != 0) {
-		&dprint("FATAL: psql error.\n");
-		# remove the pidfile
-		if (-f $PIDFILE) {
-			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
-		}
-		exit 0;
+		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
 	chomp($hasit);
 
@@ -2126,12 +2173,7 @@ sub get_proc_name
 	}
 	my @db_proc = `echo "SELECT n.nspname||'.'||p.proname FROM pg_proc p, pg_namespace n WHERE p.pronamespace=n.oid AND n.nspname NOT IN ('pg_catalog', 'information_schema');" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
-		&dprint("FATAL: psql error.\n");
-		# remove the pidfile
-		if (-f $PIDFILE) {
-			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
-		}
-		exit 0;
+		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
 	chomp(@db_proc);
 
@@ -2153,12 +2195,7 @@ sub get_proc_count
 	}
 	my $db_proc = `echo "SELECT count(p.proname) FROM pg_proc p, pg_namespace n WHERE p.pronamespace=n.oid AND n.nspname NOT IN ('pg_catalog', 'information_schema');" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
-		&dprint("FATAL: psql error.\n");
-		# remove the pidfile
-		if (-f $PIDFILE) {
-			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
-		}
-		exit 0;
+		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
 	chomp($db_proc);
 
@@ -2186,12 +2223,7 @@ sub get_triggers
 	}
 	my $db_trigger = `echo "SELECT count(tgname) FROM pg_trigger WHERE NOT tgisinternal;" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
-		&dprint("FATAL: psql error.\n");
-		# remove the pidfile
-		if (-f $PIDFILE) {
-			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
-		}
-		exit 0;
+		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
 	chomp($db_trigger);
 
@@ -2387,12 +2419,7 @@ sub get_configuration_files
 {
 	my @cfiles = `echo "SELECT setting FROM pg_settings WHERE name IN ('config_file','hba_file','ident_file','data_directory') ORDER BY name;" | $PSQL_PROG`;
 	if ($? != 0) {
-		&dprint("FATAL: psql error.\n");
-		# remove the pidfile
-		if (-f $PIDFILE) {
-			unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
-		}
-		exit 0;
+		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
 	chomp(@cfiles);
 
@@ -2611,6 +2638,18 @@ sub compress_files
 
 	`$GZIP_PROG $dir/*`;
 
+}
+
+sub unlink_pid_and_exit
+{
+	my ($msg, $rc) = shift;
+
+	&dprint("$msg\n");
+	# remove the pidfile
+	if (-f $PIDFILE) {
+		unlink $PIDFILE or &dprint("ERROR: Unable to remove pidfile: $!\n");
+	}
+	exit $rc;
 }
 
 # Load setting from file pg_settings.csv and pg_db_role_setting.csv into hashrefs
