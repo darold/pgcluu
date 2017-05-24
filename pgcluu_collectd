@@ -2275,7 +2275,8 @@ sub dump_redundantindexes
 		"    ORDER BY array_to_string(indkey,'+') DESC) " . 
 		") AS tmp " . 
 		"WHERE (colindexbackward LIKE (colindex || '+%') OR colindexbackward = colindex) " .
-		"  AND (is_unique_backward <> is_unique) AND NOT is_unique" 
+		"  AND (is_unique_backward <> is_unique OR (not is_unique_backward AND NOT is_unique)) " .
+		"  AND NOT is_unique"
 	);
 
 	return $sql;
