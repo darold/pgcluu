@@ -7008,18 +7008,18 @@ gFJG04FnRsAnYDuwyRlIq9UjNgu1Uof0OkYlfKMuKCuZA/8B+QsSxkN8YYwAAAAASUVORK5CYII=
  <script type="text/javascript" src="$RSC_BASE/jqplot.highlighter.min.js"></script>
  <script type="text/javascript" src="$RSC_BASE/jqplot.cursor.min.js"></script>
  <script type="text/javascript" src="$RSC_BASE/jqplot.pointLabels.min.js"></script>
- <script type="text/javascript" src="$RSC_BASE/bean.js"></script>
- <script type="text/javascript" src="$RSC_BASE/underscore.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/bean.min.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/underscore.min.js"></script>
  <link href="$RSC_BASE/bootstrap.min.css" rel="stylesheet">
- <link href="$RSC_BASE/font-awesome.min.css" rel="stylesheet">
+ <link href="$RSC_BASE/fontawesome.min.css" rel="stylesheet">
  <script type="text/javascript" src="$RSC_BASE/bootstrap.min.js"></script>
 
-    <link href="$RSC_BASE/pgcluu.css" rel="stylesheet">
-    <link href="$RSC_BASE/datetimepicker.css" rel="stylesheet">
-    <script src="$RSC_BASE/pgcluu.js"></script>
-    <script src="$RSC_BASE/pgcluu_slide.js"></script>
-    <script src="$RSC_BASE/sorttable.js"></script>
-    <script src="$RSC_BASE/bootstrap-datetimepicker.js"></script>
+    <link href="$RSC_BASE/pgcluu.min.css" rel="stylesheet">
+    <link href="$RSC_BASE/bootstrap-datetimepicker.min.css" rel="stylesheet">
+    <script src="$RSC_BASE/pgcluu.min.js"></script>
+    <script src="$RSC_BASE/pgcluu_slide.min.js"></script>
+    <script src="$RSC_BASE/sorttable.min.js"></script>
+    <script src="$RSC_BASE/bootstrap-datetimepicker.min.js"></script>
 
 </head>
 
