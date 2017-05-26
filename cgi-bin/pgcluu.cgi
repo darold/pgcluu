@@ -7694,36 +7694,26 @@ function custom_date( kind ) {
     var fromDate = new Date()
     var toDate = new Date();
 
+    if (document.getElementById('end-date').value != '') {
+       toDate = new Date(document.getElementById('end-date').value.substring(0, 10))
+       fromDate = new Date(document.getElementById('end-date').value.substring(0, 10))
+    }
+
     switch(kind) {
       case 'year':
           fromDate.setYear(fromDate.getYear() + 1900 - 1);
-	  toDate.setDate(fromDate.getDate);
-          toDate.setYear(toDate.getYear() + 1900 + 1);
-          if (document.getElementById('end-date').value != '') {
-             toDate = new Date(document.getElementById('end-date').value.substring(0, 10))
-             fromDate.setDate(toDate.getDate());
-          }
         break;
       case 'month':
-          if (document.getElementById('end-date').value != '') {
-             toDate = new Date(document.getElementById('end-date').value.substring(0, 10))
-             fromDate.setDate(toDate.getDate());
-          }
           fromDate.setMonth(toDate.getMonth() - 1);
         break;
       case 'week':
-          if (document.getElementById('end-date').value != '') {
-             toDate = new Date(document.getElementById('end-date').value.substring(0, 10))
-          }
           fromDate.setDate(toDate.getDate() - 7);
         break;
       case 'day':
-          if (document.getElementById('end-date').value != '') {
-             toDate = new Date(document.getElementById('end-date').value.substring(0, 10))
-          }
-	  fromDate.setDate(toDate.getDate()-1);
+	  fromDate.setDate(toDate.getDate() - 1);
         break;
     }
+
     var tzoffset = (new Date()).getTimezoneOffset() * 60000;
     document.getElementById('start-date').value = (new Date(fromDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
     document.getElementById('start-date').value = document.getElementById('start-date').value.substring(0,11) + '00:00';
@@ -7752,8 +7742,8 @@ function custom_date( kind ) {
     var fromDate = new Date(document.getElementById('start-date').value)/1;
     var toDate   = new Date(document.getElementById('end-date').value)/1;
     var delta    = toDate - fromDate;
-    fromDate -= delta;
-    toDate   -= delta;
+    fromDate -= delta - 3600000;
+    toDate   -= delta - 3600000;
     var tzoffset = (new Date()).getTimezoneOffset() * 60000;
     document.getElementById('start-date').value = (new Date(fromDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
     document.getElementById('end-date').value = (new Date(toDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
