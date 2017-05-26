@@ -7175,7 +7175,7 @@ AAAASUVORK5CYII=';
 <!-- Load navbar -->
 <div id="navigation">
     <div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
-      <a class="navbar-brand" href="http://pgcluu.darold.net/">
+      <a class="navbar-brand" href="" onclick="document.location.href='$SCRIPT_NAME?action=home'; return false;">
       <img src="$pgcluu_logo" title="$PROGRAM"></a>
       <div class="container mainmenu">
         <div class="navbar-header">
@@ -7690,25 +7690,40 @@ AAAASUVORK5CYII=';
     });
 });
 
-  function custom_date( kind ) {
+function custom_date( kind ) {
     var fromDate = new Date()
     var toDate = new Date();
 
     switch(kind) {
       case 'year':
           fromDate.setYear(fromDate.getYear() + 1900 - 1);
+	  toDate.setDate(fromDate.getDate);
+          toDate.setYear(toDate.getYear() + 1900 + 1);
+          if (document.getElementById('end-date').value != '') {
+             toDate = new Date(document.getElementById('end-date').value.substring(0, 10))
+             fromDate.setDate(toDate.getDate());
+          }
         break;
-        case 'month':
-          fromDate.setMonth(fromDate.getMonth() - 1);
+      case 'month':
+          if (document.getElementById('end-date').value != '') {
+             toDate = new Date(document.getElementById('end-date').value.substring(0, 10))
+             fromDate.setDate(toDate.getDate());
+          }
+          fromDate.setMonth(toDate.getMonth() - 1);
         break;
-        case 'week':
-          fromDate.setDate(fromDate.getDate() - 7);
+      case 'week':
+          if (document.getElementById('end-date').value != '') {
+             toDate = new Date(document.getElementById('end-date').value.substring(0, 10))
+          }
+          fromDate.setDate(toDate.getDate() - 7);
         break;
-        case 'day':
-          fromDate.setDate(fromDate.getDate());
+      case 'day':
+          if (document.getElementById('end-date').value != '') {
+             toDate = new Date(document.getElementById('end-date').value.substring(0, 10))
+          }
+	  fromDate.setDate(toDate.getDate()-1);
         break;
     }
-    toDate.setDate(toDate.getDate()+1);
     var tzoffset = (new Date()).getTimezoneOffset() * 60000;
     document.getElementById('start-date').value = (new Date(fromDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
     document.getElementById('start-date').value = document.getElementById('start-date').value.substring(0,11) + '00:00';
@@ -7723,8 +7738,8 @@ AAAASUVORK5CYII=';
     var fromDate = new Date(document.getElementById('start-date').value)/1;
     var toDate   = new Date(document.getElementById('end-date').value)/1;
     var delta    = toDate - fromDate;
-    fromDate += delta;
-    toDate   += delta;
+    fromDate += delta - 3600000;
+    toDate   += delta - 3600000;
     var tzoffset = (new Date()).getTimezoneOffset() * 60000;
     document.getElementById('start-date').value = (new Date(fromDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
     document.getElementById('end-date').value = (new Date(toDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
