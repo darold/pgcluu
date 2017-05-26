@@ -1707,7 +1707,7 @@ sub write_database_info
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-desktop fa-2x pull-left fa-border"></i><h2>Database $db</h2>
+              <i class="glyphicon icon-desktop icon-2x pull-left"></i><h2>Database $db</h2>
               </div>
               <div class="panel-body">
 		<div class="key-figures">
@@ -6376,7 +6376,7 @@ EOF
             <div class="col-md-$numcol">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-cogs fa-2x pull-left fa-border"></i><h2>Cluster</h2>
+              <i class="glyphicon icon-cogs icon-2x pull-left"></i><h2>Cluster</h2>
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
@@ -6405,7 +6405,7 @@ EOF
             <div class="col-md-$numcol">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-th fa-2x pull-left fa-border"></i><h2>Databases</h2>
+              <i class="glyphicon icon-th icon-2x pull-left"></i><h2>Databases</h2>
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
@@ -6461,7 +6461,7 @@ EOF
             <div class="col-md-$numcol">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-desktop fa-2x pull-left fa-border"></i> <h2>System</h2>
+              <i class="glyphicon icon-desktop icon-2x pull-left"></i> <h2>System</h2>
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
@@ -6507,7 +6507,7 @@ EOF
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-th fa-2x pull-left fa-archive"></i><h2>Archiver</h2>
+              <i class="glyphicon icon-th icon-2x pull-left icon-archive"></i><h2>Archiver</h2>
               </div>
               <div class="panel-body">
 		<div class="key-figures">
@@ -6657,7 +6657,7 @@ sub show_about
             <div class="col-md-4">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-chain-broken fa-2x pull-left fa-border"></i><h2>License</h2>
+              <i class="glyphicon icon-link icon-2x pull-left"></i><h2>License</h2>
               </div>
               <div class="panel-body panel-height">
               <p>$PROGRAM is licenced under the PostgreSQL Licence a liberal Open Source license, similar to the BSD or MIT licenses.</p>
@@ -6669,7 +6669,7 @@ sub show_about
             <div class="col-md-4">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-download fa-2x pull-left fa-border"></i><h2>Download</h2>
+              <i class="glyphicon icon-download-alt icon-2x pull-left"></i><h2>Download</h2>
               </div>
               <div class="panel-body panel-height">
               <p>Official releases at SourceForge:<br/>
@@ -6684,7 +6684,7 @@ sub show_about
             <div class="col-md-4">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-wrench fa-2x pull-left fa-border"></i><h2>Authors</h2>
+              <i class="glyphicon icon-wrench icon-2x pull-left"></i><h2>Authors</h2>
               </div>
               <div class="panel-body panel-height">
 	      <p>$PROGRAM is an original development of <a href="http://www.darold.net/">Gilles Darold</a>.</p>
@@ -6753,7 +6753,7 @@ EOF
             <div class="col-md-3">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-desktop fa-2x pull-left fa-border"></i><h2>System</h2>
+              <i class="glyphicon icon-desktop icon-2x pull-left"></i><h2>System</h2>
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
@@ -6775,7 +6775,7 @@ EOF
             <div class="col-md-3">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-gear fa-2x pull-left fa-border"></i><h2>Kernel</h2>
+              <i class="glyphicon icon-gear icon-2x pull-left"></i><h2>Kernel</h2>
               </div>
               <div class="panel-body panel-xlheight">
                 <div class="key-figures">
@@ -6792,7 +6792,7 @@ EOF
             <div class="col-md-3">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-tachometer fa-2x pull-left fa-border"></i><h2>CPU</h2>
+              <i class="glyphicon icon-dashboard icon-2x pull-left"></i><h2>CPU</h2>
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
@@ -6812,7 +6812,7 @@ EOF
             <div class="col-md-3">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-tasks fa-2x pull-left fa-border"></i><h2>Memory</h2>
+              <i class="glyphicon icon-tasks icon-2x pull-left"></i><h2>Memory</h2>
               </div>
               <div class="panel-body panel-xlheight">
 		<div class="key-figures">
@@ -6859,7 +6859,7 @@ EOF
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-desktop fa-2x pull-left fa-border"></i><h2>No System information available</h2>
+              <i class="glyphicon icon-desktop icon-2x pull-left"></i><h2>No System information available</h2>
               </div>
 		<div class="key-figures">
 		<ul>
@@ -6889,7 +6889,7 @@ EOF
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-hdd-o fa-2x pull-left fa-border"></i><h2>Filesystem</h2>
+              <i class="glyphicon icon-hdd icon-2x pull-left"></i><h2>Filesystem</h2>
               </div>
               <div class="panel-body panel-lheight">
 		<div class="key-figures">
@@ -6921,7 +6921,7 @@ EOF
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="fa fa-hdd-o fa-2x pull-left fa-border"></i><h2>Process list</h2>
+              <i class="glyphicon icon-list icon-2x pull-left"></i><h2>Process list</h2>
               </div>
               <div class="panel-body panel-lheight">
 		<div class="key-figures">
@@ -7671,7 +7671,7 @@ AAAASUVORK5CYII=';
 		</td><td>&nbsp;
                 End: <input size="16" type="text" value="$end_date" id="end-date" readonly class="form_datepick">
 		</td><td>&nbsp;&nbsp;
-		 <a href="" onclick="document.location.href='$SCRIPT_NAME?db=$DATABASE&dev=$DEVICE&action=$ACTION&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;"><i class="fa fa-refresh fa-2x" style="color: #ffffff; position: top;"></i></a>
+		 <a href="" onclick="document.location.href='$SCRIPT_NAME?db=$DATABASE&dev=$DEVICE&action=$ACTION&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;"><i class="glyphicon icon-refresh icon-2x" style="color: #ffffff; position: top;"></i></a>
 		</td></tr></table>
 	      </li>
           </ul>
