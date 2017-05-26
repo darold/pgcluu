@@ -55,7 +55,7 @@ ul#slides li div div {
         padding:0 10px;
         margin: 35px auto;
 }
-
+.dropdown {font-size:1.2em;}
 .dropdown-submenu{position:relative;}
 .dropdown-submenu>.dropdown-menu{top:0;left:100%;margin-top:-6px;margin-left:-1px;-webkit-border-radius:0 6px 6px 6px;-moz-border-radius:0 6px 6px 6px;border-radius:0 6px 6px 6px;}
 .dropdown-submenu:hover>.dropdown-menu{display:block;}
@@ -101,13 +101,13 @@ ul#slides li div div {
 .mfigure {
 	font-weight: bold;
 	font-size: 1.2em;
-	color:#d26115;
+	color: #d9534f;
 }
 
 .mfigure small {
 	font-weight: bold;
-	font-size: 0.6em;
-	color:#ffffff;
+	font-size: 0.8em;
+	color:#5f5555;
 }
 
 .span11 {
@@ -170,10 +170,9 @@ ul#slides li div div {
     font-weight: bold;
     margin: 5px;
     padding: 5px;
-    color:#ffffff;
-    background: #5f5555;
-    border:1px solid #5f5555;
-    border:1px solid rgba(0, 0, 0, 0.2);
+    color:#5f5555;
+    background: #f5f5f5;
+    border:1px solid #DCA;
     -webkit-border-radius:6px;
     -moz-border-radius:6px;
     border-radius:6px;
@@ -206,3 +205,10 @@ ul#slides li div div {
      width: 1200px; 
      overflow-y: hidden; 
 }
+
+.btn-danger {
+	background: #5f5555;
+	color: #f5f5f5;
+    border:1px solid #DCA;
+}
+
