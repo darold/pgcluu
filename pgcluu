@@ -6623,6 +6623,7 @@ EOF
 	my $sar_start_date = localtime($OVERALL_STATS{'sar_start_date'}||0) || 'Unknown start date';
 	my $sar_end_date = localtime($OVERALL_STATS{'sar_end_date'}||0) || 'Unknown end date';
 
+	my $parts_info = '';
 	if (exists $OVERALL_STATS{'cluster'}) {
 		$OVERALL_STATS{'cluster'}{'size'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'nbackend'} ||= 0;
@@ -6651,11 +6652,17 @@ EOF
 			$extensions_info = qq{<li><span class="figure">$extnum</span> <span class="figure-label">Extensions ($extlist)</span></li>};
 		}
 		my $nparts = $#{$OVERALL_STATS{'cluster'}{'partitionned_tables'}} + 1;
-		my $parts_info = '';
 		if ($nparts) {
-			my $partlist = join(', ', @{$OVERALL_STATS{'cluster'}{'partitionned_tables'}});
-			$parts_info = qq{<li><span class="figure">$nparts</span> <span class="figure-label">Partitioned tables ($partlist)</span></li>};
+			my %partitions = ();
+			foreach my $pt (sort @{$OVERALL_STATS{'cluster'}{'partitionned_tables'}}) {
+				$pt =~ s/^([^\.]+)\.//;
+				$partitions{$1} .= "$pt;";
 			}
+			$parts_info = qq{<li><span class="figure">$nparts</span> <span class="figure-label">Partitioned tables</span></li><ul>};
+			foreach my $t (keys %partitions) {
+				$parts_info .= qq{<li><span class="figure">$t</span> <span class="figure-label">$partitions{$t}</span></li></ul>};
+			}
+		}
 		$sysinfo{PGVERSION}{'full_version'} ||= '';
 		$sysinfo{PGVERSION}{'uptime'} ||= '';
 		my $database_number = scalar keys %{$OVERALL_STATS{'database'}};
@@ -6709,8 +6716,6 @@ EOF
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'hash_indexes'}</span> <span class="figure-label">Hash indexes$hash_dblist</span></li>
 		$temp_file_info
 		$deadlock_info
-		$extensions_info
-		$parts_info
 		$bgwriter_reset
 		</ul>
 		</div>
@@ -6766,6 +6771,7 @@ EOF
 EOF
 		}
 		print $fh <<EOF;
+		$extensions_info
 		</ul>
 		</div>
               </div>
@@ -6867,9 +6873,32 @@ EOF
               </div>
               </div>
             </div><!--/span-->
-	</row>
+	</div>
 EOF
 	}
+
+	if ($parts_info) {
+		print $fh <<EOF;
+      <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="glyphicon icon-th icon-2x pull-left"></i><h2>Partitionning</h2>
+              </div>
+              <div class="panel-body">
+		<div class="key-figures">
+		<ul>
+		<li></li>
+		$parts_info
+		</ul>
+		</div>
+              </div>
+              </div>
+            </div><!--/span-->
+	</div>
+EOF
+	}
+
 
 	print $fh <<EOF;
 </li>
@@ -10416,7 +10445,11 @@ sub get_calendar
 		$wn =  &get_week_number($year,$month,$d);
 		next if ($wn == -1);
 		if ( !-e "$outdir/$year/$month/$d/index.html" ) {
-			$currow[$wd] = "<td>$d</td>";
+			if ( !-e "$outdir/$year/$month/$d" ) {
+				$currow[$wd] = "<td>$d</td>";
+			} else {
+				$currow[$wd] = "<td><a href=\"$year/$month/$d/\" target=\"new\">$d</a></td>";
+			}
 		} else {
 			$currow[$wd] = "<td><a href=\"$year/$month/$d/index.html\" target=\"new\">$d</a></td>";
 		}
