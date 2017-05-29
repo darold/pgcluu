@@ -1409,7 +1409,6 @@ sub set_sysstat_file
 			$sar_file = "$input_dir/" . 'sar_stats.dat.gz';
 		}
 		if (!$sadc_file && !$sar_file) {
-			print STDERR "WARNING: No sar data file found. Consider using -S or --disable-sar command\nline option or use -i / -I option to set the path to the data file.\nContinuing normally without reporting sar statistics.\n";
 			$DISABLE_SAR = 1;
 			return;
 		}
@@ -6315,6 +6314,7 @@ EOF
 	my $sar_start_date = localtime($OVERALL_STATS{'sar_start_date'}||0) || 'Unknown start date';
 	my $sar_end_date = localtime($OVERALL_STATS{'sar_end_date'}||0) || 'Unknown end date';
 
+	my $parts_info = '';
 	if (exists $OVERALL_STATS{'cluster'}) {
 		$OVERALL_STATS{'cluster'}{'size'} ||= 0;
 		$OVERALL_STATS{'cluster'}{'nbackend'} ||= 0;
@@ -6342,6 +6342,20 @@ EOF
 			my $extlist = join(', ', @{$OVERALL_STATS{'cluster'}{'extensions'}});
 			$extensions_info = qq{<li><span class="figure">$extnum</span> <span class="figure-label">Extensions ($extlist)</span></li>};
 		}
+
+		my $nparts = $#{$OVERALL_STATS{'cluster'}{'partitionned_tables'}} + 1;
+		if ($nparts) {
+			my %partitions = ();
+			foreach my $pt (sort @{$OVERALL_STATS{'cluster'}{'partitionned_tables'}}) {
+				$pt =~ s/^([^\.]+)\.//;
+				$partitions{$1} .= "$pt;";
+			}
+			$parts_info = qq{<li><span class="figure">$nparts</span> <span class="figure-label">Partitioned tables</span></li><ul>};
+			foreach my $t (keys %partitions) {
+				$parts_info .= qq{<li><span class="figure">$t</span> <span class="figure-label">$partitions{$t}</span></li></ul>};
+			}
+		}
+
 		$sysinfo{PGVERSION}{'full_version'} ||= '';
 		$sysinfo{PGVERSION}{'uptime'} ||= '';
 		my $database_number = scalar keys %{$OVERALL_STATS{'database'}};
@@ -6502,7 +6516,6 @@ EOF
 			$archiver_infos .= qq{<li><span class="figure">$OVERALL_STATS{'archiver'}{stats_reset}</span> <span class="figure-label">Last stats reset</span></li>};
 		}
 
-		# Perform some initialization in case
 		print <<EOF;
             <div class="col-md-12">
               <div class="panel panel-default">
@@ -6519,6 +6532,28 @@ EOF
               </div>
               </div>
             </div><!--/span-->
+EOF
+	}
+
+	if ($parts_info) {
+		print <<EOF;
+      <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="glyphicon icon-th icon-2x pull-left"></i><h2>Partitionning</h2>
+              </div>
+              <div class="panel-body">
+                <div class="key-figures">
+                <ul>
+                <li></li>
+                $parts_info
+                </ul>
+                </div>
+              </div>
+              </div>
+            </div><!--/span-->
+        </div>
 EOF
 	}
 
@@ -6545,6 +6580,7 @@ EOF
 
 EOF
 	}
+
 	print <<EOF;
 </li>
 </ul> <!-- end of slides -->
@@ -9700,6 +9736,22 @@ sub read_sysinfo_file
 		if ($section eq 'PROCESS') {
 			my ($USER,$PID,$CPU,$MEM,$VSZ,$RSS,$TTY,$STAT,$START,$TIME,$COMMAND) = split(/\s+/, $l, 11);
 			push(@{$sysinfo{$section}}, '<tr><td>' . join('</td><td>', $USER,$PID,$CPU,$MEM,$VSZ,$RSS,$TTY,$STAT,$START,$TIME,$COMMAND) . '</td></tr>') if ($l !~/^USER/);
+		}
+		if ($section eq 'PARTITIONNED_TABLE') {
+			# limit split to 2 fields, check constraint can contains "="
+			my ($db, $csv) = split(/[=]/, $l, 2);
+
+			if ($csv) {
+				my ($oid, $parent, $child, $constraint, $kind, $nparts ) = split(/[;]+/, $csv);
+				$sysinfo{$section}{$db}{$oid}{name} = $parent;
+				$sysinfo{$section}{$db}{$oid}{child}{$child} = $constraint;
+				$sysinfo{$section}{$db}{$oid}{kind} = $kind;
+				$sysinfo{$section}{$db}{$oid}{nparts} = $nparts;
+				push(@{$OVERALL_STATS{'cluster'}{'partitionned_tables'}}, "$db.$parent") if (!grep(/^$db.$parent/, @{$OVERALL_STATS{'cluster'}{'partitionned_tables'}}));
+			}
+		}
+		if ($section =~ /PARTITION_IMPL (.*) (\d+)/) {
+			$sysinfo{PARTITIONNED_TABLE}{$1}{$2}{implementation} .= "$l\n";
 		}
 	}
 	close(IN);
