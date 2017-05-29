@@ -1599,7 +1599,7 @@ $menu
 	}
 }
 
-if ($have_incremental_dir) {
+if (!$CACHE && $have_incremental_dir) {
 	build_incremental_index($ORIG_OUTPUT_DIR);
 }
 
@@ -6855,7 +6855,6 @@ EOF
 			$archiver_infos .= qq{<li><span class="figure">$OVERALL_STATS{'archiver'}{stats_reset}</span> <span class="figure-label">Last stats reset</span></li>};
 		}
 
-		# Perform some initialization in case
 		print $fh <<EOF;
       <div class="row">
             <div class="col-md-12">
@@ -9926,12 +9925,9 @@ sub read_sysinfo_file
 				push(@{$OVERALL_STATS{'cluster'}{'partitionned_tables'}}, "$db.$parent") if (!grep(/^$db.$parent/, @{$OVERALL_STATS{'cluster'}{'partitionned_tables'}}));
 			}
 		}
-        if ($section =~ /PARTITION_IMPL (.*) (\d+)/) {
-            my $db = $1;
-            my $oid = $2;
-
-			$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{implementation} .= "$l\n";
-        }
+		if ($section =~ /PARTITION_IMPL (.*) (\d+)/) {
+			$sysinfo{PARTITIONNED_TABLE}{$1}{$2}{implementation} .= "$l\n";
+		}
 	}
 	close(IN);
 
