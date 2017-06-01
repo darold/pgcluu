@@ -23,7 +23,7 @@ use POSIX qw(locale_h sys_wait_h ceil strftime);
 setlocale(LC_ALL, 'C');
 use Storable qw(store_fd fd_retrieve);
 
-$VERSION = '3.0dev';
+$VERSION = '2.6';
 $PROGRAM = 'pgCluu';
 
 my $OUTPUT_DIR      = '';
@@ -230,6 +230,7 @@ my $charset = 'utf-8';
 
 my $week_start_monday = 1;
 my $have_incremental_dir = 0;
+my $have_hourly_dir = 0;
 my $pgcluu_ico = 'data:image/png;base64,
 iVBORw0KGgoAAAANSUhEUgAAACAAAAAjCAYAAAD17ghaAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A
 /wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB98GCwcGIvGIhhwAAAOBSURBVFjD
@@ -1608,6 +1609,11 @@ $menu
 
 if (!$CACHE && $have_incremental_dir) {
 	build_incremental_index($ORIG_OUTPUT_DIR);
+}
+
+if ($CACHE && $have_hourly_dir) {
+	print "DEBUG: building binary file per day from hourly binary files...\n" if ($DEBUG);
+	build_daily_binary($ORIG_OUTPUT_DIR);
 }
 
 exit 0;
@@ -9969,6 +9975,7 @@ sub get_data_directories
 					} else {
 						foreach  my $h (sort { $a <=> $b } @hours) {
 							push(@work_dirs, "$y/$m/$d/$h");
+							$have_hourly_dir = 1;
 						}
 					}
 				}
@@ -10459,16 +10466,16 @@ sub build_head
 
 sub build_hour_index
 {
-my $outdir = shift;
+	my $outdir = shift;
 
-print "DEBUG: generating index to access hourly reports...\n" if ($DEBUG);
+	print "DEBUG: generating index to access hourly reports...\n" if ($DEBUG);
 
-my $fh = new IO::File ">$outdir/index.html";
-if (not defined $fh) {
-	die "FATAL: can't write to $outdir/index.html, $!\n";
-}
-print $fh &build_head('Hourly Index on incremental reports', '../../..');
-print $fh qq{
+	my $fh = new IO::File ">$outdir/index.html";
+	if (not defined $fh) {
+		die "FATAL: can't write to $outdir/index.html, $!\n";
+	}
+	print $fh &build_head('Hourly Index on incremental reports', '../../..');
+	print $fh qq{
 <body>
 
 <div id="navigation">
@@ -10522,10 +10529,9 @@ print $fh qq{
 			print $fh "<td>$h:00</td>";
 		}
 	}
-	print $fh qq{
+	print $fh qq{</tr></tbody></table>
                 </div>
               </div>
-		</tr></tbody></table>
         </td></tr></table>
 	$COPYRIGHT
 </div><!--/.container-->
@@ -10580,6 +10586,64 @@ sub get_week_number
 		$weekNumber = POSIX::strftime("%W", 1, 1, 1, $day, $month - 1, $year - 1900);
 	}
 	return sprintf("%02d", $weekNumber+1);
+}
+
+sub build_daily_binary
+{
+	my $old_day = '';
+	my $day_dir = '';
+	foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
+
+		next if ($WORK_DIRS[$dx] !~ /\d{4}\/\d{2}\/(\d{2})\/\d{2}/);
+		my $curday = $1;
+		my $in_dir = "$INPUT_DIR/$WORK_DIRS[$dx]";
+
+		if ($old_day ne $curday) {
+			$day_dir = "$INPUT_DIR/$WORK_DIRS[$dx]";
+			$day_dir =~ s/\/\d{2}$//;
+			# Save binary files for the previous day
+			&dump_sys_binary($day_dir, "sys_cache.bin");
+			&dump_pg_binary($day_dir);
+
+			# Reset global variables before processing a new work dir
+			&clear_stats();
+			@DEVICE_LIST = ();
+			@IFACE_LIST = ();
+
+			# Switch to next day
+			$old_day = $curday;
+		}
+
+		$OUTPUT_DIR = "$ORIG_OUTPUT_DIR/$WORK_DIRS[$dx]";
+
+		# Check if we have binary file in the directory
+		my @binfiles = ();
+		if (-d "$in_dir") {
+			opendir(IDIR, "$in_dir") || die "FATAL: can't opendir $in_dir: $!";
+			@binfiles = grep { /^all_.*\.bin$/ } readdir(IDIR);
+			closedir(IDIR);
+		}
+
+		# Look at system information
+		&read_sysinfo($in_dir);
+
+		if ($#binfiles > 0) {
+			# Load statistics from cache files
+			print "DEBUG: Loading PostgreSQL statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
+			&load_pg_binary($in_dir);
+			if (!$DISABLE_SAR) {
+				print "DEBUG: Loading Sar statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
+				&load_sar_binary($in_dir);
+			}
+		}
+	}
+
+	# Save binary files for the last day
+	$day_dir = "$INPUT_DIR/$WORK_DIRS[-1]";
+	$day_dir =~ s/\/\d{2}$//;
+	# Save binary files for the last day
+	&dump_sys_binary($day_dir, "sys_cache.bin");
+	&dump_pg_binary($day_dir);
 }
 
 __DATA__
