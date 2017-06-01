@@ -9881,10 +9881,10 @@ sub read_sysinfo_file
 
 			if ($csv) {
 				my ($oid, $parent, $child, $constraint, $kind, $nparts ) = split(/;/, $csv);
-				$sysinfo{$section}{$db}{$oid}{name} = $parent;
 				$sysinfo{$section}{$db}{$oid}{child}{$child} = $constraint;
 				$sysinfo{$section}{$db}{$oid}{kind} = $kind;
 				$sysinfo{$section}{$db}{$oid}{nparts} = $nparts;
+				$sysinfo{$section}{$db}{$oid}{name} = $parent;
 				push(@{$OVERALL_STATS{'cluster'}{'partitionned_tables'}}, "$db.$parent") if (!grep(/^$db.$parent/, @{$OVERALL_STATS{'cluster'}{'partitionned_tables'}}));
 			}
 		}
@@ -10215,14 +10215,25 @@ sub load_sysinfo_binary
 	my %stats = %{ fd_retrieve($lfh) };
 	$lfh->close();
 	my %_sysinfo = %{$stats{sysinfo}};
-
 	# Load other storages
 	foreach my $s (keys %_sysinfo) {
 		if ($_sysinfo{$s} =~ /HASH/) {
 			foreach my $n (keys %{$_sysinfo{$s}}) {
 				if ($_sysinfo{$s}{$n} =~ /HASH/) {
 					foreach my $k (keys %{$_sysinfo{$s}{$n}}) {
-						$sysinfo{$s}{$n}{$k} = $_sysinfo{$s}{$n}{$k};
+						if ($_sysinfo{$s}{$n}{$k} =~ /HASH/) {
+							foreach my $j (keys %{$_sysinfo{$s}{$n}{$k}}) {
+								if ($_sysinfo{$s}{$n}{$k}{$j} =~ /HASH/) {
+									foreach my $i (keys %{$_sysinfo{$s}{$n}{$k}{$j}}) {
+										$sysinfo{$s}{$n}{$k}{$j}{$i} = $_sysinfo{$s}{$n}{$k}{$j}{$i};
+									}
+								} else {
+									$sysinfo{$s}{$n}{$k}{$j} = $_sysinfo{$s}{$n}{$k}{$j};
+								}
+							}
+						} else {
+							$sysinfo{$s}{$n}{$k} = $_sysinfo{$s}{$n}{$k};
+						}
 					}
 				} elsif ($_sysinfo{$s}{$n} =~ /ARRAY/) {
 					foreach my $k (@{$_sysinfo{$s}{$n}}) {
@@ -10236,6 +10247,16 @@ sub load_sysinfo_binary
 			foreach my $k (@{$_sysinfo{$s}}) {
 				push(@{$sysinfo{$s}}, $k);
 			}
+		}
+	}
+	foreach my $db (keys %{$sysinfo{EXTENSION}}) {
+		foreach my $e (@{$sysinfo{EXTENSION}{$db}}) {
+			push(@{$OVERALL_STATS{'cluster'}{'extensions'}}, $e) if (!grep(/^$e$/, @{$OVERALL_STATS{'cluster'}{'extensions'}}));
+		}
+	}
+	foreach my $db (keys %{$sysinfo{PARTITIONNED_TABLE}}) {
+		foreach my $oid (keys %{$sysinfo{PARTITIONNED_TABLE}{$db}}) {
+			push(@{$OVERALL_STATS{'cluster'}{'partitionned_tables'}}, "$db.$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{name}") if (!grep(/^$db.$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{name}/, @{$OVERALL_STATS{'cluster'}{'partitionned_tables'}}));
 		}
 	}
 }
@@ -10631,6 +10652,12 @@ sub build_daily_binary
 			# Load statistics from cache files
 			print "DEBUG: Loading PostgreSQL statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
 			&load_pg_binary($in_dir);
+			if (($TIMEZONE eq '00') && $global_infos{timezone}) {
+				$TIMEZONE = $global_infos{timezone};
+			}
+			if (($STATS_TIMEZONE eq '00') && $global_infos{stats_timezone}) {
+				$STATS_TIMEZONE = $global_infos{stats_timezone};
+			}
 			if (!$DISABLE_SAR) {
 				print "DEBUG: Loading Sar statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
 				&load_sar_binary($in_dir);
@@ -10641,9 +10668,11 @@ sub build_daily_binary
 	# Save binary files for the last day
 	$day_dir = "$INPUT_DIR/$WORK_DIRS[-1]";
 	$day_dir =~ s/\/\d{2}$//;
+	$global_infos{'in_dir'} = $day_dir;
 	# Save binary files for the last day
 	&dump_sys_binary($day_dir, "sys_cache.bin");
 	&dump_pg_binary($day_dir);
+	&dump_sar_binary($day_dir);
 }
 
 __DATA__
