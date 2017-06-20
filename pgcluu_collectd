@@ -320,7 +320,7 @@ my %METRICS_COMMANDS = (
 		'override'  => 1,
 	},
 	'prepared_stats' => {
-		'output' => 'prepared_xacts_stats.csv',
+		'output' => 'pg_prepared_xact.csv',
 		'command' => 'dump_preparedxactstats'
 	},
 );
