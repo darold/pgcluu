@@ -319,6 +319,10 @@ my %METRICS_COMMANDS = (
 		'repeat'  => 1,
 		'override'  => 1,
 	},
+	'prepared_stats' => {
+		'output' => 'prepared_xacts_stats.csv',
+		'command' => 'dump_preparedxactstats'
+	},
 );
 
 # Process command line options and look for an action keyword. There
@@ -1150,6 +1154,7 @@ sub verify_action
 	}
 	if (!&backend_minimum_version(8, 1)) {
 		delete $METRICS_COMMANDS{'xlog_stats'};
+		delete $METRICS_COMMANDS{'prepared_stats'};
 	}
 	$DB_INFO{pg_stat_statement} = &has_pgstatstatements();
 	if ($NO_STATEMENTS || !$DB_INFO{pg_stat_statement}) {
@@ -2569,6 +2574,19 @@ sub dump_pgstatarchiver
 
 	return $sql;
 }
+
+sub dump_preparedxactstats
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), database, count(*) AS num_prepared, " .
+		"max(coalesce(extract('epoch' FROM date_trunc('second', current_timestamp-prepared)), 0)) oldest " .
+		"FROM pg_prepared_xacts GROUP BY database"
+	);
+
+	return $sql;
+}
+
 
 sub parse_pretty_size
 {
