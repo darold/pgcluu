@@ -38,6 +38,7 @@ function create_linegraph (divid, charttitle, ylabel, arr_series, lineseries, y2
                 tickOptions:{ angle: -30, textColor: '#333' },
             },
             yaxis: {
+		label: ylabel,
                 renderer: $.jqplot.LogAxisRenderer,
                 labelRenderer: $.jqplot.CanvasAxisLabelRenderer,
                 tickRenderer: $.jqplot.CanvasAxisTickRenderer,

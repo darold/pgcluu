@@ -17,6 +17,7 @@ cp dist/plugins/jqplot.categoryAxisRenderer.js /home/git/pgcluu/resources/
 cp dist/plugins/jqplot.canvasAxisTickRenderer.js /home/git/pgcluu/resources/
 cp dist/plugins/jqplot.highlighter.js /home/git/pgcluu/resources/
 cp dist/plugins/jqplot.cursor.js /home/git/pgcluu/resources/
+cp dist/plugins/jqplot.canvasAxisLabelRenderer.js /home/git/pgcluu/resources/
 cd ..
 
 Bootstrap:
