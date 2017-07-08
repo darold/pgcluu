@@ -6648,20 +6648,23 @@ sub last_know_statistics
 					if (not opendir(DIR, "$INPUT_DIR/$y/$m/$d")) {
 						return "<p>FATAL: Can't open directory $INPUT_DIR/$y/$m/$d: $!</p>\n";
 					}
-					my @hours = grep { /^\d+$/ && -d "$INPUT_DIR/$y/$m/$d/$_" } readdir(DIR);
-					closedir(DIR);
-					if ($#hours == -1) {
-						$start_stats =  "$y-$m-$d\%2000:00";
-						$end_stats = timelocal_nocheck(0, 0, 0, $d, $m - 1, $y - 1900) + 86400;
-						$end_stats = strftime("%Y-%m-%d%%20%H:%M",localtime($end_stats));
-					} else {
-						foreach  my $h (sort { $b <=> $a } @hours) {
-							$start_stats = "$y-$m-$d\%20$h:00";
-							$end_stats = timegm_nocheck(0, 0, $h, $d, $m - 1, $y - 1900) + 3600;
-							$end_stats = strftime("%Y-%m-%d%%20%H:%M",localtime($end_stats));
-							last;
-						}
-					}
+					$start_stats =  "$y-$m-$d\%2000:00";
+					$end_stats = timelocal_nocheck(0, 0, 0, $d, $m - 1, $y - 1900) + 86400;
+					$end_stats = strftime("%Y-%m-%d%%2000:00",localtime($end_stats));
+#					my @hours = grep { /^\d+$/ && -d "$INPUT_DIR/$y/$m/$d/$_" } readdir(DIR);
+#					closedir(DIR);
+#					if ($#hours == -1) {
+#						$start_stats =  "$y-$m-$d\%2000:00";
+#						$end_stats = timelocal_nocheck(0, 0, 0, $d, $m - 1, $y - 1900) + 86400;
+#						$end_stats = strftime("%Y-%m-%d%%20%H:%M",localtime($end_stats));
+#					} else {
+#						foreach  my $h (sort { $b <=> $a } @hours) {
+#							$start_stats = "$y-$m-$d\%20$h:00";
+#							$end_stats = timegm_nocheck(0, 0, $h, $d, $m - 1, $y - 1900) + 3600;
+#							$end_stats = strftime("%Y-%m-%d%%20%H:%M",localtime($end_stats));
+#							last;
+#						}
+#					}
 					last;
 				}
 				last;
@@ -7040,6 +7043,7 @@ gFJG04FnRsAnYDuwyRlIq9UjNgu1Uof0OkYlfKMuKCuZA/8B+QsSxkN8YYwAAAAASUVORK5CYII=
  <script type="text/javascript" src="$RSC_BASE/jqplot.canvasTextRenderer.min.js"></script>
  <script type="text/javascript" src="$RSC_BASE/jqplot.categoryAxisRenderer.min.js"></script>
  <script type="text/javascript" src="$RSC_BASE/jqplot.canvasAxisTickRenderer.min.js"></script>
+ <script type="text/javascript" src="$RSC_BASE/jqplot.canvasAxisLabelRenderer.min.js"></script>
  <script type="text/javascript" src="$RSC_BASE/jqplot.highlighter.min.js"></script>
  <script type="text/javascript" src="$RSC_BASE/jqplot.highlighter.min.js"></script>
  <script type="text/javascript" src="$RSC_BASE/jqplot.cursor.min.js"></script>
@@ -9821,9 +9825,15 @@ sub get_data_directories
 						print STDERR "FATAL: Can't open directory $INPUT_DIR/$y/$m/$d: $!\n";
 						return;
 					}
+					my @hbin = grep { /^.*\.bin$/ } readdir(DIR);
+					closedir(DIR);
+					if (not opendir(DIR, "$INPUT_DIR/$y/$m/$d")) {
+						print STDERR "FATAL: Can't open directory $INPUT_DIR/$y/$m/$d: $!\n";
+						return;
+					}
 					my @hours = grep { /^\d+$/ && -d "$INPUT_DIR/$y/$m/$d/$_" } readdir(DIR);
 					closedir(DIR);
-					if ($#hours == -1) {
+					if ($#hours == -1 || $#hbin >= 0) {
 						push(@work_dirs, "$y/$m/$d");
 					} else {
 						foreach  my $h (sort { $a <=> $b } @hours) {
@@ -9932,7 +9942,7 @@ sub load_pg_binary
 
 	foreach my $name (@pg_to_be_stored) {
 
-		next if ( -e "$in_dir/$name.bin");
+		next if ( !-e "$in_dir/$name.bin");
 
 		my %stats = ();
 		my $lfh = new IO::File "<$in_dir/$name.bin";
