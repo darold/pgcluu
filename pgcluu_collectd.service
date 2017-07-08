@@ -1,3 +1,5 @@
+# Start script to run pgcluu_collectd as daemon
+# 
 # Feel free to modify the name of the PostgreSQL service following
 # your installation.
 #
@@ -9,13 +11,15 @@
 [Unit]
 Description=Postgresql performance and auditing
 Documentation=man:pgcluu(1)
+After=postgresql-9.x.service
+Wants=postgresql-9.x.service
 
 
 [Service]
 User=postgres
 Environment=STATDIR=/var/lib/pgcluu/data
-Environment=REPORTDIR=/var/lib/pgcluu/report
-ExecStartPre=-/usr/bin/find ${REPORTDIR} -mindepth 1 -type f -delete
-ExecStart=/usr/local/bin/pgcluu -o ${REPORTDIR} ${STATDIR}
-
+ExecStart=/usr/local/bin/pgcluu_collectd -D $STATDIR
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=on-failure
 
