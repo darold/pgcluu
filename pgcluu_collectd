@@ -1821,13 +1821,18 @@ sub dump_pgstatreplication
 		"SELECT date_trunc('seconds', now()), %s, usesysid, usename, " .
 		"application_name, client_addr, client_hostname, client_port, " .
 		"date_trunc('seconds', backend_start) AS backend_start, state, " .
-		"(CASE WHEN pg_is_in_recovery() THEN NULL ELSE pg_current_xlog_location() END) AS master_location, " .
-		"sent_location, write_location, flush_location, replay_location, " .
+		"(CASE WHEN pg_is_in_recovery() THEN NULL ELSE %s END) AS master_location, " .
+		"%s, %s, %s, %s, " .
 		"sync_priority, " .
 		"sync_state " .
 		"FROM pg_stat_replication " .
 		"ORDER BY application_name",
-		&backend_minimum_version(9, 2) ? "pid" : "procpid"
+		&backend_minimum_version(9, 2) ? "pid" : "procpid",
+		&backend_minimum_version(10, 0) ? "pg_current_wal_lsn()" : "pg_current_xlog_location()",
+		&backend_minimum_version(10, 0) ? "sent_lsn" : "sent_location",
+		&backend_minimum_version(10, 0) ? "write_lsn" : "write_location",
+		&backend_minimum_version(10, 0) ? "flush_lsn" : "flush_location",
+		&backend_minimum_version(10, 0) ? "replay_lsn" : "replay_location"
 	);
 
 	return $sql;
@@ -1983,23 +1988,26 @@ sub dump_xlog_stat
 	if (&backend_minimum_version(8, 4)) {
 		$sql = sprintf(
 			"SELECT date_trunc('seconds', now()), count(*) AS num_file, " .
-			"pg_xlogfile_name(pg_current_xlog_location()) AS current, " .
+			"%s AS current, " .
 			"sum(is_recycled::int) AS is_recycled, " .
 			"sum((NOT is_recycled)::int) AS written, " .
 			"%s " .
 			"FROM ( " .
 			"SELECT file > first_value(file) OVER w AS is_recycled " .
 			"%s " .
-			"FROM pg_ls_dir('pg_xlog') as file " .
+			"FROM pg_ls_dir('%s') as file " .
 			"WHERE file ~ '^[0-9A-F]{24}\$' " .
 			"WINDOW w AS ( " .
-			"ORDER BY (pg_stat_file('pg_xlog/'||file)).modification " .
+			"ORDER BY (pg_stat_file('%s/'||file)).modification " .
 			"DESC " .
 			") " .
 			") AS t " .
 			"GROUP BY 6 ",
+			&backend_minimum_version(10, 0) ? "pg_walfile_name(pg_current_wal_lsn())" : "pg_xlogfile_name(pg_current_xlog_location())",
 			&backend_minimum_version(9, 5) ? "max_wal" : &backend_minimum_version(9, 0) ? "CASE WHEN max_wal1 > max_wal2 THEN max_wal1 ELSE max_wal2 END AS max_wal" : "1 + ( current_setting('checkpoint_segments')::float4 * ( 2 + current_setting('checkpoint_completion_target')::float4 )) AS max_wal",
-			&backend_minimum_version(9, 5) ? ",(select setting from pg_settings where name = 'max_wal_size')::float4 AS max_wal" : &backend_minimum_version(9, 0) ? ",1 + ( current_setting('checkpoint_segments')::float4 * ( 2 + current_setting('checkpoint_completion_target')::float4 )) AS max_wal1, 1 + current_setting('wal_keep_segments')::float4 + current_setting('checkpoint_segments')::float4 AS max_wal2" : ""
+			&backend_minimum_version(9, 5) ? ",(select setting from pg_settings where name = 'max_wal_size')::float4 AS max_wal" : &backend_minimum_version(9, 0) ? ",1 + ( current_setting('checkpoint_segments')::float4 * ( 2 + current_setting('checkpoint_completion_target')::float4 )) AS max_wal1, 1 + current_setting('wal_keep_segments')::float4 + current_setting('checkpoint_segments')::float4 AS max_wal2" : "",
+			&backend_minimum_version(10, 0) ? "pg_wal" : "pg_xlog",
+			&backend_minimum_version(10, 0) ? "pg_wal" : "pg_xlog"
 		);
 	} else {
 		$sql = sprintf(
@@ -2011,15 +2019,18 @@ sub dump_xlog_stat
 			"FROM ( " .
 			"SELECT file, file > ( " .
 			"SELECT s.f " .
-			"FROM pg_ls_dir('pg_xlog') AS s(f) " .
-			"ORDER BY (pg_stat_file('pg_xlog/'||s.f)).modification DESC " .
+			"FROM pg_ls_dir('%s') AS s(f) " .
+			"ORDER BY (pg_stat_file('%s/'||s.f)).modification DESC " .
 			"LIMIT 1 " .
 			") AS recycled " .
-			"FROM pg_ls_dir('pg_xlog') AS file " .
+			"FROM pg_ls_dir('%s') AS file " .
 			"WHERE file ~ '^[0-9A-F]{24}\$' " .
 			") AS t  ",
-			&backend_minimum_version(8, 2) ? "pg_xlogfile_name(pg_current_xlog_location())" : "'-'::text",
-			&backend_minimum_version(8, 3) ? "1 + ( current_setting('checkpoint_segments')::float4 * ( 2 + current_setting('checkpoint_completion_target')::float4 ))" : "1 + (current_setting('checkpoint_segments')::integer * 2)"
+			&backend_minimum_version(10, 0) ? "pg_walfile_name(pg_current_wal_lsn())" : &backend_minimum_version(8, 2) ? "pg_xlogfile_name(pg_current_xlog_location())" : "'-'::text",
+			&backend_minimum_version(8, 3) ? "1 + ( current_setting('checkpoint_segments')::float4 * ( 2 + current_setting('checkpoint_completion_target')::float4 ))" : "1 + (current_setting('checkpoint_segments')::integer * 2)",
+			&backend_minimum_version(10, 0) ? "pg_wal" : "pg_xlog",
+			&backend_minimum_version(10, 0) ? "pg_wal" : "pg_xlog",
+			&backend_minimum_version(10, 0) ? "pg_wal" : "pg_xlog"
 		);
 	}
 
