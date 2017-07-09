@@ -23,6 +23,7 @@ users over past year but it also adds some new interesting reports:
 
 and useful features:
 
+  * Compatibility with PostgreSQL 10.0
   * Add static index on main directory with incremental report
     to link to the different days.
   * Use bootstrap modal dialog windows to download graph as png.
