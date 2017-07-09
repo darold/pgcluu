@@ -7,15 +7,19 @@
 
 
 [Unit]
-Description=Postgresql performance and auditing
+Description=Postgresql performance and auditing reporting
 Documentation=man:pgcluu(1)
 
 
 [Service]
+PermissionsStartOnly=true
 User=postgres
 Environment=STATDIR=/var/lib/pgcluu/data
 Environment=REPORTDIR=/var/lib/pgcluu/report
-ExecStartPre=-/usr/bin/find ${REPORTDIR} -mindepth 1 -type f -delete
-ExecStart=/usr/local/bin/pgcluu -o ${REPORTDIR} ${STATDIR}
+ExecStartPre=-/bin/mkdir -p $REPORTDIR
+ExecStartPre=-/bin/chown postgres: $REPORTDIR
+ExecStart=/usr/local/bin/pgcluu -o $REPORTDIR $STATDIR
 
+[Install]
+WantedBy=multi-user.target
 

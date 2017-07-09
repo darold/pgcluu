@@ -103,27 +103,25 @@ generated into the output directory if those files does not already exits.
 
 =head3 Using systemd unit files
 
-pgcluu comes with a systemd service file pgcluu.service and a timer unit file
-pgcluu.timer. The last one will trigger the first one periodically. This is
-sample files that you may want to adapt following your needs.
+pgcluu comes with systemd service files:
 
-Default for pgcluu.service has been set to end after 3 minutes with the 
---end-after=3M option. Edit the file to set path to your $OUTPUTDIR and
-$STATDIR, and $PGPASSWORD. Change if needed how long the collect will last.
+    - pgcluu_collectd.service: execute pgcluu_collectd as a daemon to collect statistics.
+    - pgcluu.service: execute pgcluu to generate reports.
+    - pgcluu.timer: run periodically pgcluu.service
 
-Default for pgcluu.timer has been set to start pgcluu.service every three
-hours with the OnUnitActiveSec=3h. Again, change it if needed. Refer to
-man:systemd.timer(5) for more options.
+This is sample files that you may want to adapt to your Linux distribution or
+your needs. To install them after editing use commands below:
 
-Once the two files have been edited accordingly, copy them in your system
-systemd directory, /etc/systemd/system. As root, start and enable the timer:
+	cp pgcluu_collectd.service /usr/lib/systemd/system/
+	cp pgcluu.service /usr/lib/systemd/system/
+	cp pgcluu.timer /usr/lib/systemd/system/
 
-	systemctl start pgcluu.timer
+	systemctl daemon-reload
+	systemctl enable pgcluu_collectd.service
+	systemctl enable pgcluu.service
 	systemctl enable pgcluu.timer
-
-You can at anytime see if the timer is still active with the following command:
-
-	systemctl list-timers
+	systemctl start pgcluu_collectd.service
+	systemctl start pgcluu.timer
 
 =head1 COLLECTING STATISTICS
 

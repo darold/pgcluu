@@ -1,25 +1,31 @@
 # Start script to run pgcluu_collectd as daemon
 # 
-# Feel free to modify the name of the PostgreSQL service following
+# Feel free to modify the name of the PostgreSQL service and the path to following
 # your installation.
 #
-# For more info about custom unit files, see
-# http://fedoraproject.org/wiki/Systemd#How_do_I_customize_a_unit_file.2F_add_a_custom_unit_file.3F
-
-
 
 [Unit]
-Description=Postgresql performance and auditing
+Description=Postgresql performance and auditing statistics collecting
 Documentation=man:pgcluu(1)
 After=postgresql-9.x.service
 Wants=postgresql-9.x.service
 
 
 [Service]
+Type=forking
+PermissionsStartOnly=true
 User=postgres
 Environment=STATDIR=/var/lib/pgcluu/data
-ExecStart=/usr/local/bin/pgcluu_collectd -D $STATDIR
-ExecReload=/bin/kill -HUP $MAINPID
+Environment=PIDFILE=/var/run/postgresql/pgcluu_collectd.pid
+ExecStartPre=-/bin/mkdir -p $STATDIR
+ExecStartPre=-/bin/chown postgres: $STATDIR
+ExecStart=/usr/local/bin/pgcluu_collectd --daemonize --rotate-daily --pid-file $PIDFILE $STATDIR
+ExecStop=/usr/local/bin/pgcluu_collectd -k --pid-file $PIDFILE
 KillMode=process
 Restart=on-failure
+RestartSec=60s
+PIDFile=/var/run/postgresql/pgcluu_collectd.pid
+
+[Install]
+WantedBy=multi-user.target
 
