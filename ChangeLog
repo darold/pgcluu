@@ -1,3 +1,182 @@
+2017-06-12 - Version 2.6 released
+
+This release is a minor release that fix some issues reported by
+users over past year but it also adds some new interesting reports:
+
+  * Add report on prepared transaction and oldest one in seconde
+    per database.
+  * Detect partitions and summarize information in a dedicated
+    report.
+  * Add kernel scheduler configuration for sched_autogroup_enabled
+    and sched_migration_cost_ns to sysinfo report.
+  * Add report of configuration files changes in incremental mode.
+  * Report on cancelled queries due to conflicts is now a time
+    based graph instead of a pie chart.
+  * bgwritter buffer clean, checkpoint and backend statistics are
+    now reported as bytes using size of 8192 per buffer.
+  * Add report of allocated buffers with bgwritter buffer statistics.
+  * Add report of transaction throughput per second.
+  * Show data checksum status.
+  * Add report of unlogged tables. Database with unlogged tables
+    will be listed in cluster view.
+  * Add hourly index when --rotate-hourly is enabled.
+
+and useful features:
+
+  * Add static index on main directory with incremental report
+    to link to the different days.
+  * Use bootstrap modal dialog windows to download graph as png.
+  * Autodetect interval between collected data to support interval
+    change during stats collect.
+  * Replace javascript call to dateToDisplay.toGMTString() with
+    dateToDisplay.toString(). Please note that this could not be
+    backward compatible with your previous timezone settings. See
+    pgcluu.js to revert the function call.
+  * Create DDL of missing index concurrently.
+
+Here are the complete list of bug fixes in this release:
+
+  - Finalize systemd unit files. pgcluu_collectd.service is used to
+    start pgcluu_collectd in daemon mode. Other files, pgcluu.service
+    and pgcluu.timer to execute pgcluu periodically to generate reports.
+  - Add import of missing jqplot.canvasAxisLabelRenderer.min.js file used
+    to render axis labels in graphs.
+  - Set logo and icon on a single line in an url attribute as chrome
+    complain that it will be obsolete in M60.
+  - Add partitioning report and partition information into cache.
+  - Add hourly index when --rotate-hourly is enabled.
+  - Add support of partition information to cache mode.
+  - Fix unwanted exit in cache mode
+  - Cosmetic change in tooltip and download button. Main menu font size have also been improved.
+  - Update generated html to use Bootstrap 3 glyphicons.
+  - Add javascript and CSS sources, licences and download information for
+    packaging. Add a tool to minified and embedded the script and css into
+    pgcluu Perl script and copy the minified files into cgi-bin/rsc/
+  - Add minified resources file for CGI into cgi-bin/rsc
+  - Fix redundant index query. Thanks to Julien Rouhaud for the patch.
+  - Detect partitions and summarize information in a dedicated report.
+    Thanks to Julien Rouhaud for the patch.
+  - Refactor pidfile unlink handling. Thanks to Julien Rouhaud for
+    the patch.
+  - Limit call to pg_relation_size() when we are in capture mode.
+    Thanks to Guillaume Lelarge for the report.
+  - Add information about recheck of redundant index with primary key
+    and index on a column referencing a foreign key.
+  - Fix exclusion of UNIQUE index in redudant indexes report.
+  - Fix incremental global index on resize.
+  - Update year in copyright.
+  - Add index on main directory with incremental report to link to
+    the different days. Thanks to Heath Yob for the feature request.
+  - Add verification that pg_stat_statement is loaded from
+    shared_preload_libraries.
+  - Fix incomplete per-database-statistics. Thanks to Markus Braunig
+    for the report.
+  - Add kernel scheduler configuration for sched_autogroup_enabled
+    and sched_migration_cost_ns to sysinfo report. Thanks to Adrien
+    Nayrat for the patch.
+  - Fix broken main menu when no disk devices was present in sar
+    report.
+  - Allow to set label for y2axis in create_linegraph() parameters
+  - Change parameters and return of the get_diff() method to support
+    incremental mode.
+  - Create function get_diff() and shows_diff() to report
+    configuration file change.
+  - Append new color for line graph.
+  - Set missing database list with sysinfo and about menu.
+  - Fix Not a HASH reference in function reporting information about
+    indexes.
+  - Rename diff storage variables and stores them in binary file.
+    Initialyze storage variables for statistics that must be read
+    from file each time.
+  - Fix detection of working directories with dates over two months.
+  - Fix runqueue size report. Thanks to Thomas Reiss for the report.
+  - Create function to reuse the look for sysinfo file.
+  - pgcluu CGI now append new csv statistic to cached binary files.
+  - The menu is now built at end to avoid reading csv files first to
+    look for database, disk device and network interface.
+  - The CGI home page is now just built from the binary files to
+    speed up the first screen. As we do not append last data collected
+    from the csv files we indicate at which time the cache was last
+    built. This is to give a quick snapshot of the dashboard. When
+    looking at the statistics binary and csv files are both read.
+    If the cache have not been run yet, pgcluu will read dashboard
+    statistics from data fileis which takes longer to display.
+  - Allow incremental cache. When running in cache mode pgcluu will
+    append new csv statistics to old cached binary files. Then when
+    building reports, pgcluu will first load statistics from binary
+    files and complete statistics with data from csv file collected
+    after the last cache mode run. This mean that if cache mode is
+    run each minute on an incremental statistics collect (see option
+    -r or -R of pgcluu_collectd), pgcluu is able to create report very
+    quickly at any time. This is especially useful with CGI mode where
+    a full day statistics report can be displayed in few seconds.
+  - Fix diff of configuration files, old and new files was inversed.
+    Thanks to Adrien Nayrat for the report.
+  - Fix display of message no dataset on empty graphs.
+  - Update description of temporary files report and statistics
+    on checkpoints.
+  - Rewrite use of interval between collected data to support change
+    during collecting. Interval is now always calculated from the
+    difference between the current line end the previous line. This
+    mean that the first line is never present in reports with per
+    second statistics.
+  - Fix formatting of bytes in pretty number.
+  - Improve storage of database list with huge number of database.
+  - Fix timezone on all reports and remove graph per tablespace and
+    replace them with a list of tablespace and their location.
+  - Fix timezone on start and end timestamp of collect. Remove graph
+    per tablespace and replace them with a list of tablespace and
+    their location.
+  - Clear Start/End input box at startup in CGI.
+  - Comment and include REVERT_DATE toogle about sar date format
+    in CGI configuration file.
+  - Fix timezone and time selector in javascript menu.
+  - Fix use of timezone and date detection in sa file.
+  - Fix date parsing from sa text file.
+  - Fix some warning about use of undefined variables.
+  - Add link to last known statistics in CGI front page when no
+    data are found.
+  - Fix a call to timegm_nocheck()
+  - Split set_overall_stat_from_binary() in two function, one for
+    database orverall statistics and the other for system statistics.
+  - Fix parsing of sa file.
+  - Do not load statistic from the last day when hour:min is 00:00.
+  - Fix some bugs when there is just sar cached binary files.
+  - Fix two digit in date parts on start/end date.
+  - Fix cache mode when there is just sar file in entry.
+  - Add INCLUDE_DEV configuration directive to be able to filter
+    disk device. Allow comma as list separator in configuration file.
+  - Add information about how to parse sysstat sa binary and text file.
+  - Fix remove of unlogged tables following pg version.
+  - Fix colspan on unlogged table report.
+  - Add report of transaction throughput per second.
+  - Use psql -X option so .psqlrc doesn't get in the way. If .psqlrc
+    contains for example \timing, pgcluu_collectd will get confused.
+    Thanks to Christoph Berg for the patch.
+  - Separate svctm/await dataset on two different axes.
+  - Remove unwanted bgwriter stats prior pg 9.1
+  - Add data checksum status to CGI report.
+  - Fix autodetection of timezone and set default timezone for sar
+    statistics to the result of
+	perl -MPOSIX -e "print substr(strftime(\"%z\", localtime()), 0, 3);".
+  - Replace javascript call to dateToDisplay.toGMTString() with
+    dateToDisplay.toString(). Please note that this could not be
+    backward compatible with your previous timezone settings. See
+    pgcluu.js to revert the function call.
+  - Fix an issue with --from-sa-file where date was still incremented.
+    Thanks to Flavie Perette for the report.
+  - Replace sadf -D option by -d to obtain a compatible output.
+  - Separate svctm/await dataset on two different axes to be able to
+    see both dataset.
+  - Fix kernel parameter hugepage report when not available.
+  - Fix all call of psql that use both -f - and -c that doe not have
+    the same behavior in pg 9.6. Previous version does not care of
+    the -f stdin input when a command was provided with -c. This not
+    compatible anymore. Thanks to Vincent Laborie for the report.
+  - Fix collect of lock in pg_stat_activity with PostgreSQL 9.6.
+    Thanks to Vincent Laborie for the report.
+
+
 2016-04-27 - Version 2.5 released
 
 This release is a major release that fix some issues reported by
