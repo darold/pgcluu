@@ -1227,8 +1227,12 @@ sub fetch_version
 {
 	my $save = shift;
 
-	if ($PG_VERSION) {
-		if ($PG_VERSION =~ /^(\d+)\.(\d+)/) {
+	if ($PG_VERSION =~ /^(\d+)/) {
+		$DB_INFO{major} = $1;
+		if ($DB_INFO{major} >= 10) {
+			$DB_INFO{minor} = 0;
+			return "$DB_INFO{major}.0";
+		} elsif ($PG_VERSION =~ /^(\d+)\.(\d+)/) {
 			$DB_INFO{major} = $1;
 			$DB_INFO{minor} = $2;
 			return "$1.$2";
@@ -1248,12 +1252,22 @@ sub fetch_version
 	}
 	chomp($pg_ver);
 
-	if ($pg_ver =~ /^(PostgreSQL|EnterpriseDB) (\d+)\.(\d+)/) {
-		$DB_INFO{major} = $2;
-		$DB_INFO{minor} = $3;
-	} elsif ($pg_ver =~ /(\d+)\.(\d+)\.(\d+)/) {
+	if ($pg_ver =~ /^(?:PostgreSQL|EnterpriseDB) (\d+)/) {
+		$DB_INFO{major} = $1;
+		if ($DB_INFO{major} >= 10) {
+			$DB_INFO{minor} = 0;
+		} elsif ($pg_ver =~ /^(?:PostgreSQL|EnterpriseDB) (\d+)\.(\d+)/) {
+			$DB_INFO{major} = $1;
+			$DB_INFO{minor} = $2;
+		}
+	} elsif ($pg_ver =~ /(\d+)\.(\d+)(\.\d+)?/) {
 		$DB_INFO{major} = $1;
 		$DB_INFO{minor} = $2;
+		if ($DB_INFO{major} >= 10) {
+			$DB_INFO{minor} = 0;
+		} else {
+			$DB_INFO{minor} = $2;
+		}
 	}
 
 	if ($save) {
