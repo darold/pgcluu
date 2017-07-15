@@ -7917,24 +7917,63 @@ sub generate_html_menu
 	}
 
 	if (!$DISABLE_SAR) {
+		my $disable_cpu = ' class="disabled"';
+		my $disable_memory = ' class="disabled"';
+		my $disable_swap = ' class="disabled"';
+		my $disable_load = ' class="disabled"';
+		my $disable_process = ' class="disabled"';
+		my $disable_runqueue = ' class="disabled"';
+		my $disable_cswch = ' class="disabled"';
+		my $disable_pcrea = ' class="disabled"';
+		my $disable_block = ' class="disabled"';
+		my $disable_tps = ' class="disabled"';
+		my $disable_page = ' class="disabled"';
+		if (open(IN, "$OUTPUT_DIR/system.html")) {
+			while (<IN>) {
+				if (/<div id="system-cpu">/) {
+					$disable_cpu = '';
+				} elsif (/<div id="system-memory">/) {
+					$disable_memory = '';
+				} elsif (/<div id="system-swap">/) {
+					$disable_swap = '';
+				} elsif (/<div id="system-load">/) {
+					$disable_load = '';
+				} elsif (/<div id="system-process">/) {
+					$disable_process = '';
+				} elsif (/<div id="system-runqueue">/) {
+					$disable_runqueue = '';
+				} elsif (/<div id="system-cswch">/) {
+					$disable_cswch = '';
+				} elsif (/<div id="system-pcrea">/) {
+					$disable_pcrea = '';
+				} elsif (/<div id="system-block">/) {
+					$disable_block = '';
+				} elsif (/<div id="system-tps">/) {
+					$disable_tps = '';
+				} elsif (/<div id="system-page">/) {
+					$disable_page = '';
+				}
+			}
+			close(IN);
+		}
 		$menu_str .= qq{
               <li id="menu-system" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">System <b class="caret"></b></a>
                 <ul class="dropdown-menu">
-		  <li id="menu-system-cpu"><a href="system.html#system-cpu">Cpu</a></li>
+		  <li id="menu-system-cpu"$disable_cpu><a href="system.html#system-cpu">Cpu</a></li>
                   <li class="divider"></li>
-                  <li id="menu-system-memory"><a href="system.html#system-memory">Memory</a></li>
-                  <li id="menu-system-swap"><a href="system.html#system-swap">Swap</a></li>
+                  <li id="menu-system-memory"$disable_memory><a href="system.html#system-memory">Memory</a></li>
+                  <li id="menu-system-swap"$disable_swap><a href="system.html#system-swap">Swap</a></li>
                   <li class="divider"></li>
-                  <li id="menu-system-load"><a href="system.html#system-load">Load</a></li>
-                  <li id="menu-system-process"><a href="system.html#system-process">Task list</a></li>
-                  <li id="menu-system-runqueue"><a href="system.html#system-runqueue">Run queue</a></li>
-                  <li id="menu-system-cswch"><a href="system.html#system-cswch">Context switches</a></li>
-                  <li id="menu-system-pcrea"><a href="system.html#system-pcrea">Tasks created per second</a></li>
+                  <li id="menu-system-load"$disable_load><a href="system.html#system-load">Load</a></li>
+                  <li id="menu-system-process"$disable_process><a href="system.html#system-process">Task list</a></li>
+                  <li id="menu-system-runqueue"$disable_runqueue><a href="system.html#system-runqueue">Run queue</a></li>
+                  <li id="menu-system-cswch"$disable_cswch><a href="system.html#system-cswch">Context switches</a></li>
+                  <li id="menu-system-pcrea"$disable_pcrea><a href="system.html#system-pcrea">Tasks created per second</a></li>
                   <li class="divider"></li>
-                  <li id="menu-system-block"><a href="system.html#system-block">Blocks</a></li>
-                  <li id="menu-system-tps"><a href="system.html#system-tps">Transfers per second</a></li>
-                  <li id="menu-system-page"><a href="system.html#system-page">Pages</a></li>
+                  <li id="menu-system-block"$disable_block><a href="system.html#system-block">Blocks</a></li>
+                  <li id="menu-system-tps"$disable_tps><a href="system.html#system-tps">Transfers per second</a></li>
+                  <li id="menu-system-page"$disable_page><a href="system.html#system-page">Pages</a></li>
                   <li class="divider"></li>
 };
 		my $idx = 0;
@@ -7957,14 +7996,32 @@ sub generate_html_menu
 		      <ul class="dropdown-menu">
 };
 			}
+			my $disable_device_cpu = ' class="disabled"';
+			my $disable_device_read_write = ' class="disabled"';
+			my $disable_device_tps = ' class="disabled"';
+			my $disable_device_service_time = ' class="disabled"';
+			if (open(IN, "$OUTPUT_DIR/system-device$i.html")) {
+				while (<IN>) {
+					if (/<div id="device-cpu">/) {
+						$disable_device_cpu = '';
+					} elsif (/<div id="device-read_write">/) {
+						$disable_device_read_write = '';
+					} elsif (/<div id="device-tps">/) {
+						$disable_device_tps = '';
+					} elsif (/<div id="device-service_time">/) {
+						$disable_device_service_time = '';
+					}
+				}
+				close(IN);
+			}
 			$menu_str .= qq{
 			  <li id="menu-device$i" class="dropdown-submenu">
 			     <a href="#" tabindex="-1">$DEVICE_LIST[$i] </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-device-cpu"><a href="system-device$i.html#device-cpu">Cpu utilization</a></li>
-			      <li id="menu-device-read_write"><a href="system-device$i.html#device-read_write">Read/write bytes per second</a></li>
-			      <li id="menu-device-tps"><a href="system-device$i.html#device-tps">Transfert per second</a></li>
-			      <li id="menu-device-service_time"><a href="system-device$i.html#device-service_time">Average service time</a></li>
+			      <li id="menu-device-cpu"$disable_device_cpu><a href="system-device$i.html#device-cpu">Cpu utilization</a></li>
+			      <li id="menu-device-read_write"$disable_device_read_write><a href="system-device$i.html#device-read_write">Read/write bytes per second</a></li>
+			      <li id="menu-device-tps"$disable_device_tps><a href="system-device$i.html#device-tps">Transfert per second</a></li>
+			      <li id="menu-device-service_time"$disable_device_service_time><a href="system-device$i.html#device-service_time">Average service time</a></li>
 			      </ul>
 			  </li>
 };
@@ -7973,19 +8030,33 @@ sub generate_html_menu
 		    </ul>
 		  </li>
 } if ($#DEVICE_LIST >= 0);
+		my $disable_network = ' disabled';
+		$disable_network = '' if (!$SADC_INPUT_FILE && $SAR_INPUT_FILE);
 		$menu_str .= qq{
-		  <li id="menu-network" class="dropdown-submenu">
+		  <li id="menu-network" class="dropdown-submenu$disable_network">
 		     <a href="#" tabindex="-1">Network </a>
 		      <ul class="dropdown-menu">
 };
 		for (my $i = 0; $i <= $#IFACE_LIST; $i++) {
 			next if (!&interface_in_report($IFACE_LIST[$i]));
+			my $disable_network_utilization = ' class="disabled"';
+			my $disable_network_error = ' class="disabled"';
+			if (open(IN, "$OUTPUT_DIR/network-device$i.html")) {
+				while (<IN>) {
+					if (/<div id="network-utilization">/) {
+						$disable_network_utilization = '';
+					} elsif (/<div id="network-error">/) {
+						$disable_network_error = '';
+					}
+				}
+				close(IN);
+			}
 			$menu_str .= qq{
 			  <li id="menu-device$i" class="dropdown-submenu">
 			     <a href="#" tabindex="-1">$IFACE_LIST[$i] </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-network-utilization"><a href="network-device$i.html#network-utilization">Network utilization</a></li>
-			      <li id="menu-network-error"><a href="network-device$i.html#network-error">Network errors</a></li>
+			      <li id="menu-network-utilization"$disable_network_utilization><a href="network-device$i.html#network-utilization">Network utilization</a></li>
+			      <li id="menu-network-error"$disable_network_error><a href="network-device$i.html#network-error">Network errors</a></li>
 			      </ul>
 			  </li>
 };
