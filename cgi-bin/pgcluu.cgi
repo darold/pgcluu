@@ -860,7 +860,7 @@ my %SAR_GRAPH_INFOS = (
 		'description' => 'Percentage of CPU utilization that occurred while executing at the system level (kernel), the user level (application) and the percentage of time that the CPU or CPUs were idle during which the system had an outstanding disk I/O request.',
 		'all_description' => 'Percentage of CPU utilization that occurred while executing at the system level (kernel), the user level (application) and the percentage of time that the CPU or CPUs were idle during which the system had an outstanding disk I/O request.',
 		'ylabel' => 'Percentage',
-		'legends' => ['Total','System','User','Iowait'],
+		'legends' => ['Total','System','User','Idle','Iowait'],
 		'active' => 1,
 	},
 	'2' => {
@@ -7882,7 +7882,7 @@ sub compute_cpu_report
 		$cpu_stat{'all'}{iowait} =~ s/,$//;
 		$cpu_stat{'all'}{idle} =~ s/,$//;
 
-		print &jqplot_linegraph_array($IDX++, 'system-cpu', $data_info, 'all', $cpu_stat{'all'}{total}, $cpu_stat{'all'}{system}, $cpu_stat{'all'}{user}, $cpu_stat{'all'}{iowait});
+		print &jqplot_linegraph_array($IDX++, 'system-cpu', $data_info, 'all', $cpu_stat{'all'}{total}, $cpu_stat{'all'}{system}, $cpu_stat{'all'}{user}, $cpu_stat{'all'}{idle}, $cpu_stat{'all'}{iowait});
 	}
 
 }
