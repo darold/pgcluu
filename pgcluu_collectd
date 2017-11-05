@@ -1572,6 +1572,29 @@ sub grab_os_information
 		$ret = `$cmd`;
 		push(@system, "/sys/kernel/mm/transparent_hugepage/khugepaged/defrag: " . $ret);
 	}
+    # Look at block devices informations
+    my @devices;
+    $cmd = 'ls /sys/block/';
+    foreach my $device ( `$cmd` ) {
+        my @row;
+        chomp($device);
+        push(@row , 'Device : ' . $device . "\n");
+        # Fetch scheduler setting
+        $cmd = 'cat /sys/block/' . $device . '/queue/scheduler';
+        push(@row , '/queue/scheduler : ' . `$cmd`);
+        # Fetch add_random setting
+        $cmd = 'cat /sys/block/' . $device . '/queue/add_random';
+        push(@row , '/queue/add_random : ' . `$cmd`);
+        # Fetch rq_affinity setting
+        $cmd = 'cat /sys/block/' . $device . '/queue/rq_affinity';
+        push(@row , '/queue/rq_affinity : ' . `$cmd`);
+        # Fetch rotational setting
+        $cmd = 'cat /sys/block/' . $device . '/queue/rotational';
+        push(@row , '/queue/rotational : ' . `$cmd`);
+        push(@devices, @row);
+    }
+	print OUT "[DEVICES]\n";
+	print OUT @devices;
 	# Look at uptime informations
 	$cmd = 'uptime 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
