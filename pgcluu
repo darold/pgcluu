@@ -8036,7 +8036,7 @@ sub generate_html_menu
 		  <li id="menu-network" class="dropdown-submenu$disable_network">
 		     <a href="#" tabindex="-1">Network </a>
 		      <ul class="dropdown-menu">
-};
+} if ($#IFACE_LIST >= 0);
 		for (my $i = 0; $i <= $#IFACE_LIST; $i++) {
 			next if (!&interface_in_report($IFACE_LIST[$i]));
 			my $disable_network_utilization = ' class="disabled"';
@@ -8064,6 +8064,8 @@ sub generate_html_menu
 		$menu_str .= qq{
 		    </ul>
 		  </li>
+} if ($#IFACE_LIST >= 0);
+		$menu_str .= qq{
                 </ul>
               </li>
 };
