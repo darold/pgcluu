@@ -1468,6 +1468,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 				&html_footer($DEVFH{$dev}, $dev);
 				$DEVFH{$dev}->close;
 			}
+			%DEVFH = ();
 
 			# Generate main index
 			&generate_html_index($in_dir, $src_base);
@@ -8031,7 +8032,7 @@ sub generate_html_menu
 		  </li>
 } if ($#DEVICE_LIST >= 0);
 		my $disable_network = ' disabled';
-		$disable_network = '' if (!$SADC_INPUT_FILE && $SAR_INPUT_FILE);
+		$disable_network = '' if (($#IFACE_LIST >= 0) || (!$SADC_INPUT_FILE && $SAR_INPUT_FILE));
 		$menu_str .= qq{
 		  <li id="menu-network" class="dropdown-submenu$disable_network">
 		     <a href="#" tabindex="-1">Network </a>
