@@ -10448,6 +10448,11 @@ sub build_incremental_index
 	$fh->close;
 }
 
+sub IsLeapYear
+{
+	return ((($_[0] & 3) == 0) && (($_[0] % 100 != 0) || ($_[0] % 400 == 0)));
+} 
+
 sub get_calendar
 {
 	my ($year, $month, $outdir) = @_;
@@ -10474,7 +10479,7 @@ sub get_calendar
 	for $d ("01" .. "31") {
 		last if (($d == 31) && grep(/^$month$/, '04','06','09','11'));
 		last if (($d == 30) && ($month eq '02'));
-		last if (($d == 29) && ($month eq '02') && !&IsLeapYear($year));
+		last if (($d == 29) && ($month eq '02') && !IsLeapYear($year));
 		$wd = &get_day_of_week($year,$month,$d);
 		$wn =  &get_week_number($year,$month,$d);
 		next if ($wn == -1);
