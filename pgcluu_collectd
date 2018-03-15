@@ -92,6 +92,8 @@ my $SSH_USER = '';
 my $SSH_TIMEOUT = 10;
 my $SSH_OPTIONS = "-o ConnectTimeout=$SSH_TIMEOUT -o PreferredAuthentications=hostbased,publickey";
 
+my $ALWAYS_SECURE_SEARCH_PATH_SQL = "SELECT pg_catalog.set_config('search_path', '', false);";
+
 # Variable to store previous settings
 my %ORIGINAL_PG_SETTINGS = ();
 my %ORIGINAL_DBROLE_SETTINGS = ();
@@ -1197,6 +1199,7 @@ sub create_sql_script
 		}
 		if (&backend_minimum_version(8, 2)) {
 			$sql_queries .= <<EOF
+$ALWAYS_SECURE_SEARCH_PATH_SQL
 -- $type
 \\o | cat $FILE_REDIR $OUT_DIR/$METRICS_COMMANDS{$type}->{output}
 COPY ($sql) TO STDOUT CSV DELIMITER ';';
@@ -1206,6 +1209,7 @@ EOF
 			# 8.1 and lower doesn't support select statement into COPY
 			# we use a temporary table instead
 			$sql_queries .= <<EOF
+$ALWAYS_SECURE_SEARCH_PATH_SQL
 -- $type
 \\o | cat $FILE_REDIR $OUT_DIR/$METRICS_COMMANDS{$type}->{output}
 BEGIN;
@@ -1402,7 +1406,7 @@ sub get_partitionned_tables
 		. " LEFT JOIN pg_trigger t ON t.tgrelid = p.oid"
 		. " LEFT JOIN pg_rewrite r ON r.ev_class = p.oid";
 
-	my @db_parttables = `echo "$sql" | $LOCAL_PSQL_PROG`;
+	my @db_parttables = `echo "$ALWAYS_SECURE_SEARCH_PATH_SQL $sql" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
 		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
