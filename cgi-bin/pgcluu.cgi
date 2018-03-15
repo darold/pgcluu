@@ -2597,8 +2597,10 @@ sub pg_stat_user_tables
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | relid | schemaname | relname | seq_scan | seq_tup_read | idx_scan | idx_tup_fetch | n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | last_vacuum | last_autovacuum | last_analyze | last_autoanalyze | vacuum_count | autovacuum_count | analyze_count | autoanalyze_count
@@ -2847,8 +2849,10 @@ sub pg_stat_user_indexes
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | idx_tup_read | idx_tup_fetch
@@ -2969,8 +2973,10 @@ sub pg_stat_invalid_indexes
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | schemaname | relname | indexrelname | index_definition
@@ -3060,8 +3066,10 @@ sub pg_stat_unlogged
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | schemaname | relname | relkind
@@ -3147,8 +3155,10 @@ sub pg_stat_hash_indexes
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | schemaname | relname | indexrelname | index_definition
@@ -3883,8 +3893,10 @@ sub pg_stat_user_functions
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | datname | funcid | schemaname | funcname | calls | total_time | self_time
@@ -4405,8 +4417,10 @@ sub pg_class_size
 	my %total_class = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 		if ($data[4] !~ /^[a-zA-Z]$/) {
 			print STDERR "WARNING: incompatible type of file pg_class_size.csv, the second field should be the database name\n";
@@ -4636,8 +4650,10 @@ sub pg_stat_unused_indexes
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | schemaname | relname | indexrelname | index_code
@@ -4719,8 +4735,10 @@ sub pg_stat_redundant_indexes
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# Do not report indexes when one is partial and not the other one
@@ -4803,8 +4821,10 @@ sub pg_stat_missing_fkindexes
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | dbname | relname | ddl
@@ -4883,8 +4903,10 @@ sub pg_stat_count_indexes
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
 
 		next if (($#INCLUDE_DB >= 0) && (!grep($data[1] =~ /^$_$/, @INCLUDE_DB)));
 
@@ -5382,8 +5404,10 @@ sub pg_settings
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | label | setting | value  | unit | context | source | boot_val | reset_val | pending_restart
@@ -5500,8 +5524,10 @@ sub pg_nondefault_settings
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | label | setting | value
@@ -5586,8 +5612,10 @@ sub pg_db_role_setting
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		# timestamp | database | role | settings
@@ -5938,8 +5966,10 @@ sub pg_stat_statements
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (<$curfh>) {
-		my @data = split(/;/);
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
 
 		next if (($#INCLUDE_DB >= 0) && (!grep($data[2] =~ /^$_$/, @INCLUDE_DB)));
