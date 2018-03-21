@@ -1089,7 +1089,7 @@ sub get_initial_info
 			}
 		}
 		# get trigger or rule definition of each partitionned table
-		for my $oid (keys %parts) {
+		foreach my $oid (sort keys %parts) {
 			my $db = $parts{$oid};
 			my @implementation = &get_partitionned_implementation($db, $oid);
 
@@ -1381,7 +1381,8 @@ sub get_schemas
 ####
 sub get_partitionned_tables
 {
-    my $database = shift;
+	my $database = shift;
+
 	my $LOCAL_PSQL_PROG = $PSQL_PROG;
 
 	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
@@ -1393,7 +1394,7 @@ sub get_partitionned_tables
 	}
 
 	# Assume that inherited tables having check constraints are partitions
-    my $sql = "SELECT p.oid, quote_ident(pn.nspname) || '.' || quote_ident(p.relname),"
+	my $sql = "SELECT p.oid, quote_ident(pn.nspname) || '.' || quote_ident(p.relname),"
 		. " quote_ident(cn.nspname) || '.' || quote_ident(c.relname), con.consrc,"
 		. " CASE WHEN t.oid IS NOT NULL THEN 'Trigger' WHEN r.oid IS NOT NULL THEN 'Rule' ELSE 'Unknown' END,"
 		. " count(*) OVER (PARTITION BY p.oid)"
@@ -1412,13 +1413,15 @@ sub get_partitionned_tables
 	}
 	chomp(@db_parttables);
 
-	return @db_parttables;
+	# Return non empty lines
+	return grep(!/^\s*$/s, @db_parttables);
 }
 
 ###
 # Retrieve trigger or rules of a specific partitionned table from a given database.
 ###
-sub get_partitionned_implementation {
+sub get_partitionned_implementation
+{
 	my $database = shift;
 	my $oid = shift;
 	my $LOCAL_PSQL_PROG = $PSQL_PROG;
@@ -1448,7 +1451,8 @@ sub get_partitionned_implementation {
 	}
 	chomp(@db_parttables);
 
-	return @db_parttables;
+	# Return non empty lines
+	return grep(!/^\s*$/s, @db_parttables);
 }
 
 ####
