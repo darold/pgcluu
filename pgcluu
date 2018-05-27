@@ -4791,14 +4791,29 @@ sub pgbouncer_req_stats
 		next if ($data[1] eq 'pgbouncer');
 
 		# timestamp|database|total_requests|total_received|total_sent|total_query_time|avg_req|avg_recv|avg_sent|avg_query
-		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_requests} += $data[2];
-		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_received} += $data[3];
-		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_sent} += $data[4];
-		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_query_time} += $data[5];
-		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_req} += $data[6];
-		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_recv} += $data[7];
-		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_sent} += $data[8];
-		$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_query} += $data[9];
+		# Since 1.8:
+		# timestamp|database|total_xact_count|total_query_count|total_received|total_sent|total_xact_time|total_query_time|total_wait_time|avg_xact_count|avg_query_count|avg_recv|avg_sent|avg_xact_time|avg_query_time|avg_wait_time
+		if ($#data == 9) {
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_requests} += $data[2];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_received} += $data[3];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_sent} += $data[4];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_query_time} += $data[5];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_req} += $data[6];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_recv} += $data[7];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_sent} += $data[8];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_query} += $data[9];
+		} else {
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_requests} += $data[3];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_received} += $data[4];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_sent} += $data[5];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_query_time} += $data[7];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_wait_time} += $data[8];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_query_count} += $data[10];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_recv} += $data[11];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_sent} += $data[12];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_query_time} += $data[14];
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_wait_time} += $data[15];
+		}
 	}
 	$curfh->close();
 	$global_infos{'pgbouncer_req_stats'} = $offset;
@@ -4822,11 +4837,35 @@ sub pgbouncer_req_stats_report
 			next if ($db eq 'all');
 			my $pgbfh = &append_to_html_file("$OUTPUT_DIR/pgbouncer-$db.html", $src_base);
 			if ($data_info{$id}{name} eq 'pgbouncer-duration') {
-				$pgbouncer_stat{$db}{avg_query} =~ s/,$//;
-				$pgbfh->print( &jqplot_linegraph_array($IDX++, 'pgbouncer-duration', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_query}) );
+				# Assure backward compatibility with cached file with pgbouncer < 1.8
+				# avg_query have been renamed into avg_query_time
+				if (exists $pgbouncer_stat{$db}{avg_query_time}) {
+					if (exists $pgbouncer_stat{$db}{avg_query}) {
+						$pgbouncer_stat{$db}{avg_query} .= $pgbouncer_stat{$db}{avg_query_time};
+						$pgbouncer_stat{$db}{avg_query_time} = $pgbouncer_stat{$db}{avg_query};
+					}
+					$pgbouncer_stat{$db}{avg_query_time} =~ s/,$//;
+					$data_info{$id}{legends} = ['avg_query_time'];
+					$pgbfh->print( &jqplot_linegraph_array($IDX++, 'pgbouncer-duration', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_query_time}) );
+				} else {
+					$pgbouncer_stat{$db}{avg_query} =~ s/,$//;
+					$pgbfh->print( &jqplot_linegraph_array($IDX++, 'pgbouncer-duration', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_query}) );
+				}
 			} elsif ($data_info{$id}{name} eq 'pgbouncer-number') {
-				$pgbouncer_stat{$db}{avg_req} =~ s/,$//;
-				$pgbfh->print( &jqplot_linegraph_array($IDX++, 'pgbouncer-number', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_req}) );
+				# Assure backward compatibility with cached file with pgbouncer < 1.8
+				# avg_req have been renamed into avg_query_count
+				if (exists $pgbouncer_stat{$db}{avg_query_count}) {
+					if (exists $pgbouncer_stat{$db}{avg_req}) {
+						$pgbouncer_stat{$db}{avg_req} .= $pgbouncer_stat{$db}{avg_query_count};
+						$pgbouncer_stat{$db}{avg_query_count} = $pgbouncer_stat{$db}{avg_req};
+					}
+					$pgbouncer_stat{$db}{avg_query_count} =~ s/,$//;
+					$data_info{$id}{legends} = ['avg_query_count'];
+					$pgbfh->print( &jqplot_linegraph_array($IDX++, 'pgbouncer-number', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_query_count}) );
+				} else {
+					$pgbouncer_stat{$db}{avg_req} =~ s/,$//;
+					$pgbfh->print( &jqplot_linegraph_array($IDX++, 'pgbouncer-number', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_req}) );
+				}
 			}
 			$pgbfh->close();
 		}
