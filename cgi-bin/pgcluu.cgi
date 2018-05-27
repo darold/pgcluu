@@ -585,6 +585,20 @@ my %DB_GRAPH_INFOS = (
 			'ylabel' => 'Number',
 			'legends' => ['avg_req'],
 		},
+		'3' => {
+			'name' =>  'pgbouncer-wait-total',
+			'title' => 'pgbouncer wait time on %s',
+			'description' => 'Time spent by clients waiting for a server in microseconds.',
+			'ylabel' => 'Microseconds',
+			'legends' => ['total_wait_time'],
+		},
+		'4' => {
+			'name' =>  'pgbouncer-wait-average',
+			'title' => 'Average of wait time spent on %s',
+			'description' => 'Average of time spent by clients waiting for a server in microseconds (average per second).',
+			'ylabel' => 'Number',
+			'legends' => ['avg_wait_time'],
+		},
 	},
 	'pg_class_size.csv' => {
 		'1' => {
@@ -4350,6 +4364,7 @@ sub pgbouncer_req_stats
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
+	my @start_vals = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	my $offset = (exists $global_infos{'pgbouncer_req_stats'}) ? $global_infos{'pgbouncer_req_stats'} : 0;
@@ -4360,30 +4375,44 @@ sub pgbouncer_req_stats
 		next if (!&normalize_line(\@data));
 		next if ($data[1] eq 'pgbouncer');
 
+		push(@start_vals, @data) if ($#start_vals < 0);
+		my $tmp_val = 0;
+
 		# timestamp|database|total_requests|total_received|total_sent|total_query_time|avg_req|avg_recv|avg_sent|avg_query
 		# Since 1.8:
 		# timestamp|database|total_xact_count|total_query_count|total_received|total_sent|total_xact_time|total_query_time|total_wait_time|avg_xact_count|avg_query_count|avg_recv|avg_sent|avg_xact_time|avg_query_time|avg_wait_time
 		if ($#data == 9) {
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_requests} += $data[2];
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_received} += $data[3];
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_sent} += $data[4];
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_query_time} += $data[5];
+			(($data[2] - $start_vals[2]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[2] - $start_vals[2]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_requests} += $tmp_val;
+			(($data[3] - $start_vals[3]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3] - $start_vals[3]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_received} += $tmp_val;
+			(($data[4] - $start_vals[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals[4]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_sent} += $tmp_val;
+			(($data[5] - $start_vals[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals[5]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_query_time} += $tmp_val;
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_req} += $data[6];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_recv} += $data[7];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_sent} += $data[8];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_query} += $data[9];
 		} else {
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_requests} += $data[3];
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_received} += $data[4];
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_sent} += $data[5];
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_query_time} += $data[7];
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_wait_time} += $data[8];
+			(($data[3] - $start_vals[3]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3] - $start_vals[3]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_requests} += $tmp_val;
+			(($data[4] - $start_vals[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals[4]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_received} += $tmp_val;
+			(($data[5] - $start_vals[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals[5]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_sent} += $tmp_val;
+			(($data[7] - $start_vals[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals[7]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_query_time} += $tmp_val;
+			(($data[8] - $start_vals[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals[8]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_wait_time} += $tmp_val;
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_query_count} += $data[10];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_recv} += $data[11];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_sent} += $data[12];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_query_time} += $data[14];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_wait_time} += $data[15];
 		}
+		@start_vals = ();
+		push(@start_vals, @data);
 	}
 	$curfh->close();
 	$global_infos{'pgbouncer_req_stats'} = $offset;
@@ -4441,6 +4470,12 @@ sub pgbouncer_req_stats_report
 					$pgbouncer_stat{$db}{avg_req} =~ s/,$//;
 					print &jqplot_linegraph_array($IDX++, 'pgbouncer-number', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_req});
 				}
+			} elsif ($data_info{$id}{name} eq 'pgbouncer-wait-total') {
+				$pgbouncer_stat{$db}{total_wait_time} =~ s/,$//;
+				print &jqplot_linegraph_array($IDX++, 'pgbouncer-wait-total', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{total_wait_time});
+			} elsif ($data_info{$id}{name} eq 'pgbouncer-wait-average') {
+				$pgbouncer_stat{$db}{avg_wait_time} =~ s/,$//;
+				print &jqplot_linegraph_array($IDX++, 'pgbouncer-wait-average', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_wait_time});
 			}
 		}
 	}
@@ -7656,6 +7691,8 @@ AAAASUVORK5CYII=';
 			      <li id="menu-pgbouncer-connections"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=pgbouncer-connections&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Clients / servers connections</a></li>
 			      <li id="menu-pgbouncer-duration"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=pgbouncer-duration&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Average queries duration</a></li>
 			      <li id="menu-pgbouncer-number"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=pgbouncer-number&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Queries per second</a></li>
+			      <li id="menu-pgbouncer-wait-total"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=pgbouncer-wait-total&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Total wait time</a></li>
+			      <li id="menu-pgbouncer-wait-average"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=pgbouncer-wait-average&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Average of wait time per second</a></li>
                              </ul>
                         </li>
 };

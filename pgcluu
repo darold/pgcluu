@@ -617,6 +617,7 @@ my %DB_GRAPH_INFOS = (
 			'ylabel' => 'Number of connexions',
 			'legends' => ['Client active','Client waiting','Server active','Server idle','Server used','Clients wait time'],
 			'y2label' => 'Duration',
+			'active' => 1,
 		},
 	},
 	'pgbouncer_req_stats.csv' => {
@@ -633,6 +634,20 @@ my %DB_GRAPH_INFOS = (
 			'description' => 'Number of queries per second in each pgbouncer pool.',
 			'ylabel' => 'Number',
 			'legends' => ['avg_req'],
+		},
+		'3' => {
+			'name' =>  'pgbouncer-wait-total',
+			'title' => 'pgbouncer wait time on %s',
+			'description' => 'Time spent by clients waiting for a server in microseconds.',
+			'ylabel' => 'Microseconds',
+			'legends' => ['total_wait_time'],
+		},
+		'4' => {
+			'name' =>  'pgbouncer-wait-average',
+			'title' => 'Average of wait time spent on %s',
+			'description' => 'Average of time spent by clients waiting for a server in microseconds (average per second).',
+			'ylabel' => 'Number',
+			'legends' => ['avg_wait_time'],
 		},
 	},
 	'pg_class_size.csv' => {
@@ -4780,6 +4795,8 @@ sub pgbouncer_req_stats
 {
 	my ($in_dir, $file) = @_;
 
+
+	my @start_vals = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	my $offset = (exists $global_infos{'pgbouncer_req_stats'}) ? $global_infos{'pgbouncer_req_stats'} : 0;
@@ -4790,31 +4807,46 @@ sub pgbouncer_req_stats
 		next if (!&normalize_line(\@data));
 		next if ($data[1] eq 'pgbouncer');
 
+		push(@start_vals, @data) if ($#start_vals < 0);
+		my $tmp_val = 0;
+
 		# timestamp|database|total_requests|total_received|total_sent|total_query_time|avg_req|avg_recv|avg_sent|avg_query
 		# Since 1.8:
 		# timestamp|database|total_xact_count|total_query_count|total_received|total_sent|total_xact_time|total_query_time|total_wait_time|avg_xact_count|avg_query_count|avg_recv|avg_sent|avg_xact_time|avg_query_time|avg_wait_time
 		if ($#data == 9) {
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_requests} += $data[2];
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_received} += $data[3];
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_sent} += $data[4];
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_query_time} += $data[5];
+			(($data[2] - $start_vals[2]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[2] - $start_vals[2]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_requests} += $tmp_val;
+			(($data[3] - $start_vals[3]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3] - $start_vals[3]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_received} += $tmp_val;
+			(($data[4] - $start_vals[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals[4]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_sent} += $tmp_val;
+			(($data[5] - $start_vals[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals[5]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_query_time} += $tmp_val;
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_req} += $data[6];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_recv} += $data[7];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_sent} += $data[8];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_query} += $data[9];
 		} else {
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_requests} += $data[3];
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_received} += $data[4];
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_sent} += $data[5];
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_query_time} += $data[7];
-			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_wait_time} += $data[8];
+			(($data[3] - $start_vals[3]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3] - $start_vals[3]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_requests} += $tmp_val;
+			(($data[4] - $start_vals[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals[4]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_received} += $tmp_val;
+			(($data[5] - $start_vals[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals[5]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_sent} += $tmp_val;
+			(($data[7] - $start_vals[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals[7]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_query_time} += $tmp_val;
+			(($data[8] - $start_vals[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals[8]);
+			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_wait_time} += $tmp_val;
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_query_count} += $data[10];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_recv} += $data[11];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_sent} += $data[12];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_query_time} += $data[14];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_wait_time} += $data[15];
 		}
+		@start_vals = ();
+		push(@start_vals, @data);
 	}
+
 	$curfh->close();
 	$global_infos{'pgbouncer_req_stats'} = $offset;
 }
@@ -4866,6 +4898,12 @@ sub pgbouncer_req_stats_report
 					$pgbouncer_stat{$db}{avg_req} =~ s/,$//;
 					$pgbfh->print( &jqplot_linegraph_array($IDX++, 'pgbouncer-number', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_req}) );
 				}
+			} elsif ($data_info{$id}{name} eq 'pgbouncer-wait-total' && exists $pgbouncer_stat{$db}{total_wait_time}) {
+				$pgbouncer_stat{$db}{total_wait_time} =~ s/,$//;
+				$pgbfh->print( &jqplot_linegraph_array($IDX++, 'pgbouncer-wait-total', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{total_wait_time}) );
+			} elsif ($data_info{$id}{name} eq 'pgbouncer-wait-average' && exists $pgbouncer_stat{$db}{avg_wait_time}) {
+				$pgbouncer_stat{$db}{avg_wait_time} =~ s/,$//;
+				$pgbfh->print( &jqplot_linegraph_array($IDX++, 'pgbouncer-wait-average', \%{$data_info{$id}}, $db, $pgbouncer_stat{$db}{avg_wait_time}) );
 			}
 			$pgbfh->close();
 		}
@@ -7898,6 +7936,7 @@ sub generate_html_menu
 			}
 			close(IN);
 		}
+
 		$menu_str .= qq{
 		      <li class="divider"></li>
 		      <li id="menu-database-size"$disable_size><a href="database-$db.html#database-size">Database size</a></li>
@@ -7968,6 +8007,20 @@ sub generate_html_menu
                 <ul class="dropdown-menu">
 };
 		foreach my $db (sort @pgbouncer_list) {
+
+			my $disable_wait_total = ' class="disabled"';
+			my $disable_wait_avg = ' class="disabled"';
+			if (open(IN, "$OUTPUT_DIR/pgbouncer-$db.html")) {
+				while (<IN>) {
+					if (/<div id="pgbouncer-wait-total">/) {
+						$disable_wait_total = '';
+					} elsif (/<div id="pgbouncer-wait-average">/) {
+						$disable_wait_avg = '';
+					}
+				}
+				close(IN);
+			}
+
 			$menu_str .= qq{
 			<li id="menu-$db" class="dropdown-submenu">
 			   <a href="#" tabindex="-1">$db </a>
@@ -7975,6 +8028,8 @@ sub generate_html_menu
 			      <li id="menu-pgbouncer-connections"><a href="pgbouncer-$db.html#pgbouncer-connections">Clients / servers connections</a></li>
 			      <li id="menu-pgbouncer-duration"><a href="pgbouncer-$db.html#pgbouncer-duration">Average queries duration</a></li>
 			      <li id="menu-pgbouncer-number"><a href="pgbouncer-$db.html#pgbouncer-number">Queries per second</a></li>
+			      <li id="menu-pgbouncer-wait-total"$disable_wait_total><a href="pgbouncer-$db.html#pgbouncer-wait-total">Total wait time</a></li>
+			      <li id="menu-pgbouncer-wait-average"$disable_wait_avg><a href="pgbouncer-$db.html#pgbouncer-wait-average">Average of wait time</a></li>
                              </ul>
                         </li>
 };
@@ -9736,7 +9791,6 @@ sub jqplot_linegraph
 	my $str = '';
 	if (($divid !~ /\+$/) && ($divid !~ /^statio-/)) {
 		$str = qq{
-<ul id="slides">
 <li class="slide active-slide" id="$divid-slide">
       <div id="$divid"><br/><br/><br/><br/></div>
 };
@@ -9808,13 +9862,8 @@ add_download_button_event($buttonid, '$divid$buttonid', graph_${buttonid});
               </div>
             </div>
       </div>
-EOF
-	}
-	if ($divid !~ /^(pgbouncer|tablespace|statio)/) {
-		$str .= qq{
   </li>
-</ul>
-};
+EOF
 	}
 
 	return $str;
@@ -9835,7 +9884,6 @@ sub jqplot_piegraph
 	}
 	my $description = $infos->{description} || '';
 	my $str = qq{
-<ul id="slides">
 <li class="slide active-slide" id="$divid-slide">
       <div id="$divid"><br/><br/><br/><br/></div>
       <div class="row">
@@ -9871,7 +9919,6 @@ EOF
             </div><!--/span-->
       </div>
 </li>
-</ul>
 };
 
 	return $str;
