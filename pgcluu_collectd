@@ -1561,7 +1561,7 @@ sub grab_os_information
 	# System kernel tuning parameters
 	$cmd = '/sbin/sysctl -a 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
-    my @system = `$cmd | grep -E "vm.nr_hugepages |vm.overcommit|vm.dirty_.*(ratio|bytes)|swappiness|zone_reclaim_mode|shmmax|shmall|sched_autogroup_enabled|sched_migration_cost"`;
+    my @system = `$cmd | grep -E "vm.nr_hugepages |vm.overcommit|vm.dirty_.*(ratio|bytes|kbytes)|swappiness|zone_reclaim_mode|shmmax|shmall|sched_autogroup_enabled|sched_migration_cost"`;
 	unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
 		&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
 		exit 1;
