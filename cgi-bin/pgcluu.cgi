@@ -384,7 +384,7 @@ my %DB_GRAPH_INFOS = (
 			'name' => 'database-checkpoints_time',
 			'title' => 'checkpoints write stats',
 			'description' => 'Background writer statistics on checkpoints. Checkpoint write time reports the total amount of time that has been spent in the portion of checkpoint processing where files are written to disk. Checkpoint sync time reports the total amount of time that has been spent in the portion of checkpoint processing where files are synchronized to disk.',
-			'ylabel' => 'mDuration',
+			'ylabel' => 'Duration',
 			'legends' => ['checkpoint write time','checkpoint sync time'],
 		},
 	},
@@ -575,7 +575,7 @@ my %DB_GRAPH_INFOS = (
 			'name' =>  'pgbouncer-duration',
 			'title' => 'pgbouncer average queries duration on %s',
 			'description' => 'Average queries duration in each pgbouncer pool.',
-			'ylabel' => 'mDuration',
+			'ylabel' => 'Duration',
 			'legends' => ['avg_query'],
 		},
 		'2' => {
