@@ -2765,6 +2765,8 @@ sub pg_prepared_xact_report
 {
 	my ($src_base, %data_info) = @_;
 
+	return if (scalar keys %all_prepared_xact == 0);
+
 	my %database_stat = ();
 	my $total_val = 0;
 	foreach my $t (sort {$a <=> $b} keys %all_prepared_xact) {
