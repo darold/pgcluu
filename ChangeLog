@@ -1,3 +1,33 @@
+2018-07-09 - Version 2.7 released
+
+This release is a minor release that fix some issues reported by
+users over past year, it also adds some new reports:
+
+  - Add reports of pgbouncer wait for server statistics.
+  - Make pgCluu more compatible with PG10 and pgBouncer 1.8
+  - Add kernel vm.overcommit_kbytes configuration to report.
+
+Here are the complete list of bug fixes in this release:
+
+  - Fix Prepared Transaction menu not disabled with no stat data.
+  - Fix typos and use proper measure in the graph. Thanks to Fabio Porta for the patch
+  - Add vm.overcommit_kbytes to kernel report. Thanks to Adrien Neyrat for the patch.
+  - Since version 1.8 of pgbouncer, the command "show stats" changed output. Make pgcluu compatible. Thanks to Fabio Pardi for the report and the mapping of changes.
+  - Fix issue in partitionning lookup.
+  - Secure search_path before executing SQL queries.
+  - Fix several use of unintialized variable case.
+  - Add missing function IsLeapYear. Thanks to Emmanuel Boucle for the patch.
+  - Fix report for network and disk devices in incremental mode.
+  - Fix unwanted Network menu when no network device are found.
+  - Fetch devices informations. Thanks to Adrien Neyrat for the patch.
+  - Dockerise pgcluu, the container helps run both the collection and the report generator. Thanks to Roy Golan for the patch.
+  - Disable System submenu when the corresponding report is not available.
+  - Append %idle to cpu report.
+  - Fix list of resources files. Thanks to Bosstek Consulting for the report.
+  - Change fetch_version() to be closer with the new versioning politic in 10.0 and above. Thanks to Julien Rouhaud for the patch.
+  - Makes pgcluu compatible with PostgreSQL 10.0.
+
+
 2017-07-09 - Version 2.6 released
 
 This release is a minor release that fix some issues reported by
