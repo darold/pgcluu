@@ -6606,6 +6606,30 @@ EOF
       </div>
 EOF
 
+	if (exists $sysinfo{PGVERSION}) {
+		my $cache_info = '';
+		$cache_info = "<li><span class=\"figure-label\">Cache was last built on $sysinfo{CACHE}{last_run}</span></li>" if (exists $sysinfo{CACHE});
+		my $uptime = '';
+		$uptime = "<li><span class=\"figure-label\">Up since $sysinfo{PGVERSION}{'uptime'}</span></li>" if ($sysinfo{PGVERSION}{'uptime'});
+		print <<EOF;
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-body">
+               <div class="key-figures">
+               <ul>
+               <li></li>
+		$cache_info
+               <li><span class="figure-label">$sysinfo{PGVERSION}{'full_version'}</span></li>
+		$uptime
+               </ul>
+               </div>
+              </div>
+              </div>
+            </div><!--/span-->
+
+EOF
+	}
+
 	if (exists $OVERALL_STATS{'archiver'}) {
 		my $archiver_infos = '';
 		if (exists $OVERALL_STATS{'archiver'}{last_archived_wal}) {
@@ -6639,6 +6663,28 @@ EOF
 EOF
 	}
 
+	if ($parts_info) {
+		print <<EOF;
+      <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="glyphicon icon-th icon-2x pull-left"></i><h2>Partitionning</h2>
+              </div>
+              <div class="panel-body">
+                <div class="key-figures">
+                <ul>
+                <li></li>
+                $parts_info
+                </ul>
+                </div>
+              </div>
+              </div>
+            </div><!--/span-->
+        </div>
+EOF
+	}
+
 	if (exists $sysinfo{INSTALLATION}) {
 		my $package_infos = join('', @{$sysinfo{INSTALLATION}});
 		print <<EOF;
@@ -6662,51 +6708,30 @@ EOF
 EOF
 	}
 
-	if ($parts_info) {
+
+	if (exists $sysinfo{CRONTAB}) {
+		my $cron_infos = join('', @{$sysinfo{CRONTAB}});
 		print <<EOF;
       <div class="row">
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="glyphicon icon-th icon-2x pull-left"></i><h2>Partitionning</h2>
+              <i class="glyphicon icon-coffee icon-2x pull-left"></i><h2>Crontab entries</h2>
               </div>
               <div class="panel-body">
-                <div class="key-figures">
-                <ul>
-                <li></li>
-                $parts_info
-                </ul>
-                </div>
+		<div class="key-figures">
+		<ul>
+		<li></li>
+		<pre>$cron_infos</pre>
+		</ul>
+		</div>
               </div>
               </div>
             </div><!--/span-->
-        </div>
+	</div>
 EOF
 	}
 
-	if (exists $sysinfo{PGVERSION}) {
-		my $cache_info = '';
-		$cache_info = "<li><span class=\"figure-label\">Cache was last built on $sysinfo{CACHE}{last_run}</span></li>" if (exists $sysinfo{CACHE});
-		my $uptime = '';
-		$uptime = "<li><span class=\"figure-label\">Up since $sysinfo{PGVERSION}{'uptime'}</span></li>" if ($sysinfo{PGVERSION}{'uptime'});
-		print <<EOF;
-            <div class="col-md-12">
-              <div class="panel panel-default">
-              <div class="panel-body">
-               <div class="key-figures">
-               <ul>
-               <li></li>
-		$cache_info
-               <li><span class="figure-label">$sysinfo{PGVERSION}{'full_version'}</span></li>
-		$uptime
-               </ul>
-               </div>
-              </div>
-              </div>
-            </div><!--/span-->
-
-EOF
-	}
 
 	print <<EOF;
 </li>

@@ -7013,30 +7013,7 @@ EOF
             </div><!--/span-->
 	</div>
 EOF
-		}
-
-		if (exists $sysinfo{INSTALLATION}) {
-			my $package_infos = join('', @{$sysinfo{INSTALLATION}});
-			print $fh <<EOF;
-      <div class="row">
-            <div class="col-md-12">
-              <div class="panel panel-default">
-              <div class="panel-heading">
-              <i class="glyphicon icon-archive icon-2x pull-left"></i><h2>Packages</h2>
-              </div>
-              <div class="panel-body">
-		<div class="key-figures">
-		<ul>
-		<li></li>
-		<pre>$package_infos</pre>
-		</ul>
-		</div>
-              </div>
-              </div>
-            </div><!--/span-->
-	</div>
-EOF
-		}
+	}
 
 	if ($parts_info) {
 		print $fh <<EOF;
@@ -7060,6 +7037,51 @@ EOF
 EOF
 	}
 
+	if (exists $sysinfo{INSTALLATION}) {
+		my $package_infos = join('', @{$sysinfo{INSTALLATION}});
+		print $fh <<EOF;
+      <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="glyphicon icon-briefcase icon-2x pull-left"></i><h2>Packages</h2>
+              </div>
+              <div class="panel-body">
+		<div class="key-figures">
+		<ul>
+		<li></li>
+		<pre>$package_infos</pre>
+		</ul>
+		</div>
+              </div>
+              </div>
+            </div><!--/span-->
+	</div>
+EOF
+	}
+
+	if (exists $sysinfo{CRONTAB}) {
+		my $cron_infos = join('', @{$sysinfo{CRONTAB}});
+		print $fh <<EOF;
+      <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="glyphicon icon-coffee icon-2x pull-left"></i><h2>Crontab entries</h2>
+              </div>
+              <div class="panel-body">
+		<div class="key-figures">
+		<ul>
+		<li></li>
+		<pre>$cron_infos</pre>
+		</ul>
+		</div>
+              </div>
+              </div>
+            </div><!--/span-->
+	</div>
+EOF
+	}
 
 	print $fh <<EOF;
 </li>
