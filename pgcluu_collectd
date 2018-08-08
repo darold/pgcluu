@@ -79,6 +79,7 @@ my $TAR_PROG    = 'tar -czf';
 my $CAPTURE_DIR = '/tmp';
 my $DIFF_PROG   = 'diff -U 0';
 my $CRONUSER    = '';
+my $PKG_LIST_PROG  = '';
 
 # Stores starting time
 my $START_TIME = time();
@@ -376,7 +377,16 @@ my $result = GetOptions(
 	'ssh-user=s'     => \$SSH_USER,
 	'ssh-timeout=i'  => \$SSH_TIMEOUT,
 	'cron-user=s'    => \$CRONUSER,
+	'package-list=s' => \$PKG_LIST_PROG,
 ) or die &usage();
+
+# Autodetect package listing command to use
+if (!$PKG_LIST_PROG) {
+	$PKG_LIST_PROG = `which rpm dpkg`;
+	chomp($PKG_LIST_PROG);
+	$PKG_LIST_PROG .= ' -qa' if ($PKG_LIST_PROG =~ /\/rpm/);
+	$PKG_LIST_PROG .= ' -l' if ($PKG_LIST_PROG =~ /\/dpkg/);
+}
 
 # Set current username for cron listing
 if (!$CRONUSER) {
@@ -1580,27 +1590,27 @@ sub grab_os_information
 		$ret = `$cmd`;
 		push(@system, "/sys/kernel/mm/transparent_hugepage/khugepaged/defrag: " . $ret);
 	}
-    # Look at block devices informations
-    my @devices;
-    $cmd = 'ls /sys/block/';
-    foreach my $device ( `$cmd` ) {
-        my @row;
-        chomp($device);
-        push(@row , 'Device : ' . $device . "\n");
-        # Fetch scheduler setting
-        $cmd = 'cat /sys/block/' . $device . '/queue/scheduler';
-        push(@row , '/queue/scheduler : ' . `$cmd`);
-        # Fetch add_random setting
-        $cmd = 'cat /sys/block/' . $device . '/queue/add_random';
-        push(@row , '/queue/add_random : ' . `$cmd`);
-        # Fetch rq_affinity setting
-        $cmd = 'cat /sys/block/' . $device . '/queue/rq_affinity';
-        push(@row , '/queue/rq_affinity : ' . `$cmd`);
-        # Fetch rotational setting
-        $cmd = 'cat /sys/block/' . $device . '/queue/rotational';
-        push(@row , '/queue/rotational : ' . `$cmd`);
-        push(@devices, @row);
-    }
+	# Look at block devices informations
+	my @devices;
+	$cmd = 'ls /sys/block/';
+	foreach my $device ( `$cmd` ) {
+		my @row;
+		chomp($device);
+		push(@row , 'Device : ' . $device . "\n");
+		# Fetch scheduler setting
+		$cmd = 'cat /sys/block/' . $device . '/queue/scheduler';
+		push(@row , '/queue/scheduler : ' . `$cmd`);
+		# Fetch add_random setting
+		$cmd = 'cat /sys/block/' . $device . '/queue/add_random';
+		push(@row , '/queue/add_random : ' . `$cmd`);
+		# Fetch rq_affinity setting
+		$cmd = 'cat /sys/block/' . $device . '/queue/rq_affinity';
+		push(@row , '/queue/rq_affinity : ' . `$cmd`);
+		# Fetch rotational setting
+		$cmd = 'cat /sys/block/' . $device . '/queue/rotational';
+		push(@row , '/queue/rotational : ' . `$cmd`);
+		push(@devices, @row);
+	}
 	print OUT "[DEVICES]\n";
 	print OUT @devices;
 	# Look at uptime informations
@@ -1611,6 +1621,11 @@ sub grab_os_information
 	$cmd = "crontab -u $CRONUSER -l 2>/dev/null";
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 	my @crontab = `$cmd`;
+	# Get package installation information
+	$cmd = "$PKG_LIST_PROG 2>/dev/null | grep postgres";
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my @installation = `$cmd`;
+
 	print OUT "[CPU]\n";
 	print OUT @cpuinfo;
 	print OUT "[KERNEL]\n";
@@ -1635,6 +1650,8 @@ sub grab_os_information
 	print OUT @pslist;
 	print OUT "[CRONTAB]\n";
 	print OUT @crontab;
+	print OUT "[INSTALLATION]\n";
+	print OUT @installation;
 	
 	close(OUT);
 }
@@ -1702,6 +1719,11 @@ options:
                            this case pgcluu_collectd need to be run as root).
                            Default is to use USERNAME environment variable or
                            postgres when it is not defined.
+  --package-list=CMD       command to list PostgreSQL packages. Default is to
+                           autodetect package type and using command 'rpm -qa'
+                           or 'dpkg -l'. If you have an other system you can
+                           set a custom command. A filter on keyword 'postgres'
+			   is appended to the command: ' | grep postgres'.
   --help                   print usage
 
 Use those options to execute sar on the remote host defined by the -h option,

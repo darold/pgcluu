@@ -190,6 +190,11 @@ options:
   --pgservice NAME         Name of service inside of the pg_service.conf file.
   --exclude-time RANGE     exclude a laps of time by giving the start and end
 			   hours.
+  --package-list=CMD       command to list PostgreSQL packages. Default is to
+                           autodetect package type and using command 'rpm -qa'
+                           or 'dpkg -l'. If you have an other system you can
+                           set a custom command. A filter on keyword 'postgres'
+                           is appended to the command: ' | grep postgres'.
   --help                   print usage
 
 Use those options to execute sar on the remote host defined by the -h option,
