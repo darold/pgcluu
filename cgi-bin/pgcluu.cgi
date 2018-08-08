@@ -6639,6 +6639,29 @@ EOF
 EOF
 	}
 
+	if (exists $sysinfo{INSTALLATION}) {
+		my $package_infos = join('', @{$sysinfo{INSTALLATION}});
+		print <<EOF;
+      <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="glyphicon icon-archive icon-2x pull-left"></i><h2>Packages</h2>
+              </div>
+              <div class="panel-body">
+		<div class="key-figures">
+		<ul>
+		<li></li>
+		<pre>$package_infos</pre>
+		</ul>
+		</div>
+              </div>
+              </div>
+            </div><!--/span-->
+	</div>
+EOF
+	}
+
 	if ($parts_info) {
 		print <<EOF;
       <div class="row">
@@ -9750,20 +9773,20 @@ sub read_sysinfo_file
 				$sysinfo{$section}{$key} = $val;
 			}
 		}
-		if ($section eq 'KERNEL') {
+		elsif ($section eq 'KERNEL') {
 			my @kinf = split(/\s+/, $l);
 			$sysinfo{$section}{'hostname'} = $kinf[1];
 			$sysinfo{$section}{'kernel'} = "$kinf[0] $kinf[2] $kinf[3] $kinf[4]";
 			$sysinfo{$section}{'arch'} = "$kinf[-2] $kinf[-1]";
 		}
-		if ($section eq 'UPTIME') {
+		elsif ($section eq 'UPTIME') {
 			$sysinfo{$section}{'all'} = $l;
 			if ($l =~ /\s*([^,]+), (.*)/) {
 				$sysinfo{$section}{'uptime'} = $1;
 				$sysinfo{$section}{'infos'} = $2;
 			}
 		}
-		if ($section eq 'RELEASE') {
+		elsif ($section eq 'RELEASE') {
 			my ($key, $val) = split(/=/, $l);
 			if ($val) {
 				$val =~ s/"//g;
@@ -9773,7 +9796,7 @@ sub read_sysinfo_file
 				$sysinfo{RELEASE}{'version'} = '';
 			}
 		}
-		if ($section eq 'MEMORY') {
+		elsif ($section eq 'MEMORY') {
 			my ($key, $val) = split(/:\s+/, $l);
 			if ($val =~ s/ kB//) {
 				$sysinfo{$section}{lc($key)} = &pretty_print_size($val*1000);
@@ -9781,7 +9804,7 @@ sub read_sysinfo_file
 				$sysinfo{$section}{lc($key)} = $val;
 			}
 		}
-		if ($section eq 'DF') {
+		elsif ($section eq 'DF') {
 			next if ($l !~ /^[\s\/]/);
 			if ($l =~ s/^\s+//) {
 				$sysinfo{$section}[-1] =~ s/<\/tr>$/<td>/;
@@ -9790,18 +9813,15 @@ sub read_sysinfo_file
 			}
 			push(@{$sysinfo{$section}}, '<tr><td>' . join('</td><td>', split(/\s+/, $l)) . "</td></tr>");
 		}
-		if ($section eq 'MOUNT') {
+		elsif ($section eq 'MOUNT') {
 			next if ($l !~ /^\//);
 			push(@{$sysinfo{$section}}, '<tr><td>' . join('</td><td>', split(/\s+on\s+|\s+type\s+|\s+/, $l)) . '</td></tr>');
 		}
-		if ($section eq 'PCI') {
-			push(@{$sysinfo{$section}}, "$l\n");
-		}
-		if ($section eq 'SYSTEM') {
+		elsif ($section eq 'SYSTEM') {
 			my ($key, $val) = split(/\s*[=:]\s+/, $l);
 			$sysinfo{$section}{$key} = $val if ($key && defined $val);
 		}
-		if ($section eq 'PGVERSION') {
+		elsif ($section eq 'PGVERSION') {
 			$sysinfo{$section}{full_version} = $l;
 			if ($l =~ /^PostgreSQL (\d+)\.(\d+)\.(\d+)/) {
 				$sysinfo{$section}{major} = "$1.$2";
@@ -9820,10 +9840,10 @@ sub read_sysinfo_file
 				$sysinfo{$section}{minor} = '';
 			}
 		}
-		if ($section eq 'PGUPTIME') {
+		elsif ($section eq 'PGUPTIME') {
 			$sysinfo{PGVERSION}{uptime} = $l;
 		}
-		if ($section eq 'EXTENSION') {
+		elsif ($section eq 'EXTENSION') {
 			my ($db, @vals) = split(/[=,]+/, $l);
 			push(@{$sysinfo{$section}{$db}}, @vals);
 			foreach my $e (@vals) {
@@ -9831,23 +9851,23 @@ sub read_sysinfo_file
 			}
 
 		}
-		if ($section eq 'SCHEMA') {
+		elsif ($section eq 'SCHEMA') {
 			my ($db, @vals) = split(/[=,]+/, $l);
 			push(@{$sysinfo{$section}{$db}}, @vals);
 		}
-		if ($section eq 'PROCEDURE') {
+		elsif ($section eq 'PROCEDURE') {
 			my ($db, @vals) = split(/[=,]+/, $l);
 			push(@{$sysinfo{$section}{$db}}, @vals);
 		}
-		if ($section eq 'TRIGGER') {
+		elsif ($section eq 'TRIGGER') {
 			my ($db, $val) = split(/[=]+/, $l);
 			$sysinfo{$section}{$db} = $val;
 		}
-		if ($section eq 'PROCESS') {
+		elsif ($section eq 'PROCESS') {
 			my ($USER,$PID,$CPU,$MEM,$VSZ,$RSS,$TTY,$STAT,$START,$TIME,$COMMAND) = split(/\s+/, $l, 11);
 			push(@{$sysinfo{$section}}, '<tr><td>' . join('</td><td>', $USER,$PID,$CPU,$MEM,$VSZ,$RSS,$TTY,$STAT,$START,$TIME,$COMMAND) . '</td></tr>') if ($l !~/^USER/);
 		}
-		if ($section eq 'PARTITIONNED_TABLE') {
+		elsif ($section eq 'PARTITIONNED_TABLE') {
 			# limit split to 2 fields, check constraint can contains "="
 			my ($db, $csv) = split(/[=]/, $l, 2);
 
@@ -9860,8 +9880,11 @@ sub read_sysinfo_file
 				push(@{$OVERALL_STATS{'cluster'}{'partitionned_tables'}}, "$db.$parent") if (!grep(/^$db.$parent/, @{$OVERALL_STATS{'cluster'}{'partitionned_tables'}}));
 			}
 		}
-		if ($section =~ /PARTITION_IMPL (.*) (\d+)/) {
+		elsif ($section =~ /PARTITION_IMPL (.*) (\d+)/) {
 			$sysinfo{PARTITIONNED_TABLE}{$1}{$2}{implementation} .= "$l\n";
+		}
+		elsif ($section =~ /^(PCI|CRONTAB|INSTALLATION)$/) {
+			push(@{$sysinfo{$section}}, "$l\n");
 		}
 	}
 	close(IN);
