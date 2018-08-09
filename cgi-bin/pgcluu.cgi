@@ -8557,7 +8557,7 @@ sub compute_rw_device_stat
 		$data[5] ||= 0;
 		$data[6] ||= 0;
 		my $sector = 512;
-		$sector = 1 if ($SAR_UPPER_11_5_6);
+		$sector = 1024 if ($SAR_UPPER_11_5_6);
 		if ($ACTION ne 'home') {
 			$sar_rw_devices_stat{$data[2]}{$data[3]}{'rd_sec/s'} = ($data[5]*$sector);
 			$sar_rw_devices_stat{$data[2]}{$data[3]}{'wr_sec/s'} = ($data[6]*$sector);
