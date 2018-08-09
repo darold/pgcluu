@@ -7057,6 +7057,7 @@ EOF
 	      <li><span class="figure">$sysinfo{MEMORY}{'cached'}</span> <span class="figure-label">Cached</span></li>
 	      <li><span class="figure">$sysinfo{MEMORY}{'swaptotal'}</span> <span class="figure-label">Total swap</span></li>
 	      <li><span class="figure">$sysinfo{MEMORY}{'swapfree'}</span> <span class="figure-label">Free swap</span></li>
+	      <li><span class="figure">$sysinfo{MEMORY}{'pagetables'}</span> <span class="figure-label">Page Tables</span></li>
 EOF
 			if (exists $sysinfo{MEMORY}{'shmem'}) {
 				print <<EOF;
