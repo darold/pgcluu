@@ -181,6 +181,7 @@ our %sar_load_stat = ();
 our %sar_process_stat = ();
 our %sar_context_stat = ();
 our %sar_memory_stat = ();
+our %sar_dirty_stat = ();
 our %sar_swap_stat = ();
 our %sar_pageswap_stat = ();
 our %sar_block_stat = ();
@@ -197,6 +198,7 @@ our @sar_to_be_stored = (
 	'sar_process_stat',
 	'sar_context_stat',
 	'sar_memory_stat',
+	'sar_dirty_stat',
 	'sar_swap_stat',
 	'sar_pageswap_stat',
 	'sar_block_stat',
@@ -990,6 +992,13 @@ my %SAR_GRAPH_INFOS = (
 		'description' => 'Number of transfers per second that were issued to the device, multiple logical requests can be combined into a single I/O request to the device (a transfer is of indeterminate size).',
 		'ylabel' => 'Number of transfers per second',
 		'legends' => ['Tps'],
+	},
+	'18' => {
+		'name' =>  'system-dirty',
+		'title' => 'Dirty memory to be written',
+		'description' => 'Amount of memory in kilobytes waiting to get written back to the disk with amount of active and inactive memory.',
+		'ylabel' => 'Memory size',
+		'legends' => ['active','inactive','dirty'],
 	},
 
 );
@@ -2054,6 +2063,15 @@ sub set_overall_system_stat_from_binary
 
 		if (!exists $OVERALL_STATS{'system'}{'kbcached'} || ($OVERALL_STATS{'system'}{'kbcached'}[1] > $sar_memory_stat{$t}{'kbcached'})) {
 			@{$OVERALL_STATS{'system'}{'kbcached'}} = ($t, $sar_memory_stat{$t}{'kbcached'});
+		}
+	}
+	foreach my $t (sort {$a <=> $b} keys %sar_dirty_stat) {
+                # Skip unwanted lines
+                next if ($BEGIN && ($t < $BEGIN));
+                next if ($END   && ($t > $END));
+
+		if (!exists $OVERALL_STATS{'system'}{'kbdirty'} || ($OVERALL_STATS{'system'}{'kbdirty'}[1] < $sar_dirty_stat{$t}{'kbdirty'})) {
+			@{$OVERALL_STATS{'system'}{'kbdirty'}} = ($t, $sar_dirty_stat{$t}{'kbdirty'});
 		}
 	}
 	foreach my $t (sort {$a <=> $b} keys %sar_swap_stat) {
@@ -6347,6 +6365,11 @@ sub show_home
 		} else {
 			${$OVERALL_STATS{'system'}{'kbcached'}}[0] = localtime(${$OVERALL_STATS{'system'}{'kbcached'}}[0]/1000);
 		}
+		if (!exists $OVERALL_STATS{'system'}{'kbdirty'}) {
+			@{$OVERALL_STATS{'system'}{'kbdirty'}} = ('unknown', 0);
+		} else {
+			${$OVERALL_STATS{'system'}{'kbdirty'}}[0] = localtime(${$OVERALL_STATS{'system'}{'kbdirty'}}[0]/1000);
+		}
 		if (!exists $OVERALL_STATS{'system'}{'bread'}) {
 			@{$OVERALL_STATS{'system'}{'bread'}} = ('unknown', 0);
 		} else {
@@ -6388,6 +6411,7 @@ sub show_home
 		$overall_system_stats{write}[1] = &pretty_print_size($overall_system_stats{write}[1]);
 
 		@{$overall_system_stats{kbcached}} =  ($OVERALL_STATS{'system'}{'kbcached'}[0], &pretty_print_size($OVERALL_STATS{'system'}{'kbcached'}[1]));
+		@{$overall_system_stats{kbdirty}} =  ($OVERALL_STATS{'system'}{'kbdirty'}[0], &pretty_print_size($OVERALL_STATS{'system'}{'kbdirty'}[1]));
 		@{$overall_system_stats{bread}} =  ($OVERALL_STATS{'system'}{'bread'}[0], &pretty_print_size($OVERALL_STATS{'system'}{'bread'}[1]));
 		@{$overall_system_stats{bwrite}} =  ($OVERALL_STATS{'system'}{'bwrite'}[0], &pretty_print_size($OVERALL_STATS{'system'}{'bwrite'}[1]));
 	}
@@ -6590,6 +6614,7 @@ EOF
 		<li><span class="figure">$OVERALL_STATS{'system'}{'load'}[1]</span> <span class="figure-label">Highest system load</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'load'}[0])</span></li>
 		<li><span class="figure">$OVERALL_STATS{'system'}{'svctm'}[1] ms</span> <span class="figure-label">Highest device service time</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'svctm'}[0] on device $OVERALL_STATS{'system'}{'svctm'}[2])</span></li>
 		<li><span class="figure">$overall_system_stats{kbcached}[1]</span> <span class="figure-label">Lowest system cache</span><br/><span class="figure-date">($overall_system_stats{kbcached}[0])</span></li>
+		<li><span class="figure">$overall_system_stats{kbdirty}[1]</span> <span class="figure-label">Highest dirty memory</span><br/><span class="figure-date">($overall_system_stats{kbdirty}[0])</span></li>
 		<!-- li><span class="figure">$overall_system_stats{bread}[1]</span> <span class="figure-label">Highest block read</span><br/><span class="figure-date">($overall_system_stats{bread}[0])</span></li -->
 		<!-- li><span class="figure">$overall_system_stats{bwrite}[1]</span> <span class="figure-label">Highest block write</span><br/><span class="figure-date">($overall_system_stats{bwrite}[0])</span> </li -->
 		<li><span class="figure">$overall_system_stats{read}[1]</span> <span class="figure-label">Most read device</span><br/><span class="figure-date"> ($overall_system_stats{read}[0])</span></li>
@@ -7759,6 +7784,7 @@ AAAASUVORK5CYII=';
 		  <li id="menu-system-cpu"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-cpu&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Cpu</a></li>
                   <li class="divider"></li>
                   <li id="menu-system-memory"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-memory&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Memory</a></li>
+                  <li id="menu-system-dirty"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-dirty&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Dirty memory</a></li>
                   <li id="menu-system-swap"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-swap&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Swap</a></li>
                   <li class="divider"></li>
                   <li id="menu-system-load"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-load&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Load</a></li>
@@ -8182,7 +8208,7 @@ sub compute_context_report
 sub compute_memory_stat
 {
 	for (my $i = 0; $i <= $#_; $i++) {
-		# hostname;interval;timestamp;kbmemfree;kbmemused;%memused;kbbuffers;kbcached;kbcommit;%commit
+		# hostname;interval;timestamp;kbmemfree;kbmemused;%memused;kbbuffers;kbcached;kbcommit;%commit;kbactive;kbinact;kbdirty
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
 
@@ -8220,6 +8246,53 @@ sub compute_memory_report
 		$memory_stat{'kbbuffers'} =~ s/,$//;
 		$memory_stat{'kbmemfree'} =~ s/,$//;
 		print &jqplot_linegraph_array($IDX++, 'system-memory', $data_info, '', $memory_stat{'kbcached'}, $memory_stat{'kbbuffers'}, $memory_stat{'kbmemfree'});
+	}
+}
+
+sub compute_dirty_stat
+{
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;kbmemfree;kbmemused;%memused;kbbuffers;kbcached;kbcommit;%commit;kbactive;kbinact;kbdirty
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+
+		# New sar version has dirty dirty information: kbactive;kbinact;kbdirty
+		next if ($#data <= 9);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+
+		map { s/,/\./ } @data ;
+		my $kbdirty = ($data[12]*1024) || 0;
+		if ($ACTION ne 'home') {
+			$sar_dirty_stat{$data[2]}{'kbactive'}= ($data[10]*1024)||0;
+			$sar_dirty_stat{$data[2]}{'kbinact'} = ($data[11]*1024)||0;
+			$sar_dirty_stat{$data[2]}{'kbdirty'} = ($data[12]*1024)||0;
+		} else {
+			if ($kbdirty && (!exists $OVERALL_STATS{'system'}{'kbdirty'} || ($OVERALL_STATS{'system'}{'kbdirty'}[1] < $kbdirty))) {
+				@{$OVERALL_STATS{'system'}{'kbdirty'}} = ($data[2], $kbdirty);
+			}
+		}
+	}
+}
+
+sub compute_dirty_report
+{
+	my $data_info = shift();
+
+	my %dirty_stat = ();
+	foreach my $t (sort {$a <=> $b} keys %sar_dirty_stat) {
+		$dirty_stat{'kbactive'}.= '[' . $t . ',' . $sar_dirty_stat{$t}{'kbactive'} . '],';
+		$dirty_stat{'kbinact'} .= '[' . $t . ',' . $sar_dirty_stat{$t}{'kbinact'} . '],';
+		$dirty_stat{'kbdirty'} .= '[' . $t . ',' . $sar_dirty_stat{$t}{'kbdirty'} . '],';
+	}
+	%sar_dirty_stat = ();
+	if (scalar keys %dirty_stat > 0) {
+		$dirty_stat{'kbactive'} =~ s/,$//;
+		$dirty_stat{'kbinact'} =~ s/,$//;
+		$dirty_stat{'kbdirty'} =~ s/,$//;
+		print &jqplot_linegraph_array($IDX++, 'system-dirty', $data_info, '', $dirty_stat{'kbactive'}, $dirty_stat{'kbinact'}, $dirty_stat{'kbdirty'});
 	}
 }
 
@@ -8717,6 +8790,24 @@ sub compute_sarstat_stats
 	}
 
 	####
+	# Get dirty memory utilization
+	####
+	if ($data_info{name} eq 'system-dirty') {
+		my $command = "$SADF_PROG -t -d $file -- -r";
+		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute graphs for memory statistics
+		&compute_dirty_stat(@content);
+	}
+
+	####
 	# Get swap utilization
 	####
 	if ($data_info{name} eq 'system-swap') {
@@ -9177,6 +9268,16 @@ sub compute_sarfile_stats
 	}
 
 	####
+	# Set dirty memory utilization
+	####
+	if ($data_info{name} eq 'system-dirty') {
+
+		# Compute dirty memory statistics
+		&compute_dirty_stat(@{$fulldata{mem}});
+
+	}
+
+	####
 	# Set swap utilization
 	####
 	if ($data_info{name} eq 'system-swap') {
@@ -9380,6 +9481,16 @@ sub compute_sar_graph
 	}
 
 	####
+	# Show dirty memory utilization
+	####
+	if ($data_info{name} eq 'system-dirty') {
+
+		# Compute graphs for memory statistics
+		&compute_dirty_report(\%data_info);
+
+	}
+
+	####
 	# Show swap utilization
 	####
 	if ($data_info{name} eq 'system-swap') {
@@ -9556,7 +9667,7 @@ sub jqplot_linegraph_array
 		$title = $infos->{all_title};
 		$description = $infos->{all_description};
 	} else {
-		$title = sprintf($infos->{title}, $title || 'none');
+		$title = sprintf($infos->{title}, ($title || 'none'));
 	}
 
 	return &jqplot_linegraph($buttonid, $divid, $infos, $title, $description, \@data, \@legend);
@@ -9577,7 +9688,7 @@ sub jqplot_linegraph_hash
 		push(@legend, $id);
 		$i++;
 	}
-	$title = sprintf($infos->{title}, $title || $infos->{title} || 'none');
+	$title = sprintf($infos->{title}, ($title || $infos->{title} || 'none'));
 
 	return &jqplot_linegraph($buttonid, $divid, $infos, $title, $description, \@data, \@legend);
 }
