@@ -56,6 +56,8 @@ my $CACHE           = 0;
 my $MAX_INDEXES     = 5;
 my @DATABASE_LIST   = ();
 
+my $SAR_UPPER_11_5_6 = 0;
+
 my %RELKIND = (
 	'r' => 'tables',
 	'i' => 'indexes',
@@ -1546,6 +1548,11 @@ sub get_device_list
 		while (my $l = <IN>) {
 			chomp($l);
 			# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
+			# sysstat version 11.5.7:
+			# Replace "avgrq-sz" field (expressed in sectors) with "areq-sz" (expressed in kilobytes)
+			# Rename "avgqu-sz" field to "aqu-sz"
+			# "rd_sec/s" and "wr_sec/s" (expressed in sectors) fields have been replaced
+			# with "rkB/s" and "wkB/s" (expressed in kilobytes)
 			my @data = split(/;/, $l);
 			next if ($data[2] !~ /^\d+/);
 			if (!grep(m#^$data[3]$#, @dev_list)) {
@@ -8476,6 +8483,11 @@ sub compute_srvtime_stat
 
 	for (my $i = 0; $i <= $#_; $i++) {
 		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
+		# sysstat version 11.5.7:
+		# Replace "avgrq-sz" field (expressed in sectors) with "areq-sz" (expressed in kilobytes)
+		# Rename "avgqu-sz" field to "aqu-sz"
+		# "rd_sec/s" and "wr_sec/s" (expressed in sectors) fields have been replaced
+		# with "rkB/s" and "wkB/s" (expressed in kilobytes)
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
 
@@ -8526,6 +8538,11 @@ sub compute_rw_device_stat
 
 	for (my $i = 0; $i <= $#_; $i++) {
 		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
+		# sysstat version 11.5.7:
+		# Replace "avgrq-sz" field (expressed in sectors) with "areq-sz" (expressed in kilobytes)
+		# Rename "avgqu-sz" field to "aqu-sz"
+		# "rd_sec/s" and "wr_sec/s" (expressed in sectors) fields have been replaced
+		# with "rkB/s" and "wkB/s" (expressed in kilobytes)
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
 
@@ -8539,13 +8556,15 @@ sub compute_rw_device_stat
 		$data[4] ||= 0;
 		$data[5] ||= 0;
 		$data[6] ||= 0;
+		my $sector = 512;
+		$sector = 1 if ($SAR_UPPER_11_5_6);
 		if ($ACTION ne 'home') {
-			$sar_rw_devices_stat{$data[2]}{$data[3]}{'rd_sec/s'} = ($data[5]*512);
-			$sar_rw_devices_stat{$data[2]}{$data[3]}{'wr_sec/s'} = ($data[6]*512);
+			$sar_rw_devices_stat{$data[2]}{$data[3]}{'rd_sec/s'} = ($data[5]*$sector);
+			$sar_rw_devices_stat{$data[2]}{$data[3]}{'wr_sec/s'} = ($data[6]*$sector);
 			$sar_rw_devices_stat{$data[2]}{$data[3]}{'tps'}      = $data[4];
 		} else {
-			$OVERALL_STATS{'system'}{'devices'}{$data[3]}{read} += ($data[5]*512);
-			$OVERALL_STATS{'system'}{'devices'}{$data[3]}{write} += ($data[6]*512);
+			$OVERALL_STATS{'system'}{'devices'}{$data[3]}{read} += ($data[5]*$sector);
+			$OVERALL_STATS{'system'}{'devices'}{$data[3]}{write} += ($data[6]*$sector);
 			$OVERALL_STATS{'system'}{'devices'}{$data[3]}{tps} = $data[4] if (!$OVERALL_STATS{'system'}{'devices'}{$data[3]}{tps} || ($OVERALL_STATS{'system'}{'devices'}{$data[3]}{tps} < $data[4]))
 		}
 	}
@@ -8586,6 +8605,11 @@ sub compute_util_device_stat
 {
 	for (my $i = 0; $i <= $#_; $i++) {
 		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
+		# sysstat version 11.5.7:
+		# Replace "avgrq-sz" field (expressed in sectors) with "areq-sz" (expressed in kilobytes)
+		# Rename "avgqu-sz" field to "aqu-sz"
+		# "rd_sec/s" and "wr_sec/s" (expressed in sectors) fields have been replaced
+		# with "rkB/s" and "wkB/s" (expressed in kilobytes)
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
 
@@ -9129,6 +9153,17 @@ sub load_sarfile_stats
 		if ( ($l eq '') || ($l =~ /^\d+:\d+:\d+/) || ($l =~ /\d+[\-\/]\d+[\-\/]\d+/)) {
 			push(@content, $l);
 		}
+		# Look is the format of systat have changed
+		if ($l =~ m#wkB/s#) {
+			# Replace "rd_sec/s" and "wr_sec/s" fields with "rkB/s" and "wkB/s".
+			# fields are now expressed in kilobytes instead of sectors. This also make
+			# them consistent with iostat's output.
+			# Replace "avgrq-sz" field with "areq-sz". This field is now expressed in
+			# kilobytes instead of sectors and make it consistent with iostat's output.
+			# Rename "avgqu-sz" field to "aqu-sz" to make it consistent with iostat's
+			# output.
+			$SAR_UPPER_11_5_6 = 1;
+		}
 	}
 	$curfh->close();
 	$global_infos{'load_sarfile_stats'} = $offset;
@@ -9233,6 +9268,8 @@ sub load_sarfile_stats
 sub compute_sarfile_stats
 {
 	my ($file, %data_info) = @_;
+
+	$SAR_UPPER_11_5_6 = 0;
 
 	# Load sar statistics from file if not already done
 	my %fulldata = &load_sarfile_stats($file);
