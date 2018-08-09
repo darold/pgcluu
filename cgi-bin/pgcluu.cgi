@@ -939,9 +939,9 @@ my %SAR_GRAPH_INFOS = (
 	'10' => {
 		'name' =>  'system-runqueue',
 		'title' => 'Run queue length',
-		'description' => 'Number of tasks waiting for run time.',
+		'description' => 'Number of tasks waiting for run time and number of tasks currently blocked, waiting for I/O to complete (sysstat >= 9.1.7).',
 		'ylabel' => 'Run queue length',
-		'legends' => ['runq-sz'],
+		'legends' => ['runq-sz', 'blocked'],
 	},
 	'11' => {
 		'name' => 'system-page',
@@ -996,7 +996,7 @@ my %SAR_GRAPH_INFOS = (
 	'18' => {
 		'name' =>  'system-dirty',
 		'title' => 'Dirty memory to be written',
-		'description' => 'Amount of memory in kilobytes waiting to get written back to the disk with amount of active and inactive memory.',
+		'description' => 'Amount of memory in kilobytes waiting to get written back to the disk with amount of active and inactive memory (sysstat >= 10.1.2).',
 		'ylabel' => 'Memory size',
 		'legends' => ['active','inactive','dirty'],
 	},
@@ -2045,6 +2045,9 @@ sub set_overall_system_stat_from_binary
 
 		if (!exists $OVERALL_STATS{'system'}{'process'} || ($OVERALL_STATS{'system'}{'process'}[1] < $sar_process_stat{$t}{'plist-sz'})) {
 			@{$OVERALL_STATS{'system'}{'process'}} = ($t, $sar_process_stat{$t}{'plist-sz'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'blocked'} || ($OVERALL_STATS{'system'}{'blocked'}[1] < $sar_process_stat{$t}{'blocked'})) {
+			@{$OVERALL_STATS{'system'}{'blocked'}} = ($t, $sar_process_stat{$t}{'blocked'});
 		}
 	}
 	foreach my $t (sort {$a <=> $b} keys %sar_context_stat) {
@@ -6360,6 +6363,11 @@ sub show_home
 		} else {
 			${$OVERALL_STATS{'system'}{'load'}}[0] = localtime(${$OVERALL_STATS{'system'}{'load'}}[0]/1000);
 		}
+		if (!exists $OVERALL_STATS{'system'}{'blocked'}) {
+			@{$OVERALL_STATS{'system'}{'blocked'}} = ('unknown', 0);
+		} else {
+			${$OVERALL_STATS{'system'}{'blocked'}}[0] = localtime(${$OVERALL_STATS{'system'}{'blocked'}}[0]/1000);
+		}
 		if (!exists $OVERALL_STATS{'system'}{'kbcached'}) {
 			@{$OVERALL_STATS{'system'}{'kbcached'}} = ('unknown', 0);
 		} else {
@@ -6612,6 +6620,7 @@ EOF
 		<li></li>
 		<li><span class="figure">$OVERALL_STATS{'system'}{'cpu'}[1]%</span> <span class="figure-label">Highest CPU utilization</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'cpu'}[0])</span></li>
 		<li><span class="figure">$OVERALL_STATS{'system'}{'load'}[1]</span> <span class="figure-label">Highest system load</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'load'}[0])</span></li>
+		<li><span class="figure">$OVERALL_STATS{'system'}{'blocked'}[1]</span> <span class="figure-label">Highest blocked processes</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'blocked'}[0])</span></li>
 		<li><span class="figure">$OVERALL_STATS{'system'}{'svctm'}[1] ms</span> <span class="figure-label">Highest device service time</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'svctm'}[0] on device $OVERALL_STATS{'system'}{'svctm'}[2])</span></li>
 		<li><span class="figure">$overall_system_stats{kbcached}[1]</span> <span class="figure-label">Lowest system cache</span><br/><span class="figure-date">($overall_system_stats{kbcached}[0])</span></li>
 		<li><span class="figure">$overall_system_stats{kbdirty}[1]</span> <span class="figure-label">Highest dirty memory</span><br/><span class="figure-date">($overall_system_stats{kbdirty}[0])</span></li>
@@ -8070,7 +8079,7 @@ sub compute_cpu_report
 sub compute_load_stat
 {
 	for (my $i = 0; $i <= $#_; $i++) {
-		# hostname;interval;timestamp;runq-sz;plist-sz;ldavg-1;ldavg-5;ldavg-15
+		# hostname;interval;timestamp;runq-sz;plist-sz;ldavg-1;ldavg-5;ldavg-15;blocked
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
 
@@ -8116,7 +8125,7 @@ sub compute_process_stat
 {
 
 	for (my $i = 0; $i <= $#_; $i++) {
-		# hostname;interval;timestamp;runq-sz;plist-sz;ldavg-1;ldavg-5;ldavg-15
+		# hostname;interval;timestamp;runq-sz;plist-sz;ldavg-1;ldavg-5;ldavg-15;blocked
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
 
@@ -8129,9 +8138,17 @@ sub compute_process_stat
 		if ($ACTION ne 'home') {
 			$sar_process_stat{$data[2]}{'plist-sz'}= $data[4];
 			$sar_process_stat{$data[2]}{'runq-sz'} = ($data[3]||0);
+			if ($#data > 7) {
+				$sar_process_stat{$data[2]}{'blocked'} = ($data[8]||0);
+			} else {
+				$sar_process_stat{$data[2]}{'blocked'} = 0;
+			}
 		} else {
 			if (!exists $OVERALL_STATS{'system'}{'process'} || ($OVERALL_STATS{'system'}{'process'}[1] < $data[4])) {
 				@{$OVERALL_STATS{'system'}{'process'}} = ($data[2], $data[4]);
+			}
+			if (!exists $OVERALL_STATS{'system'}{'blocked'} || ($OVERALL_STATS{'system'}{'blocked'}[1] < $data[8])) {
+				@{$OVERALL_STATS{'system'}{'blocked'}} = ($data[2], $data[8]||0);
 			}
 		}
 	}
@@ -8145,6 +8162,7 @@ sub compute_process_report
 	foreach my $t (sort {$a <=> $b} keys %sar_process_stat) {
 		$process_stat{'plist-sz'} .= '[' . $t . ',' . $sar_process_stat{$t}{'plist-sz'} . '],' if (exists $sar_process_stat{$t}{'plist-sz'});
 		$process_stat{'runq-sz'}  .= '[' . $t . ',' . $sar_process_stat{$t}{'runq-sz'} . '],' if (exists $sar_process_stat{$t}{'runq-sz'});
+		$process_stat{'blocked'}  .= '[' . $t . ',' . $sar_process_stat{$t}{'blocked'} . '],' if (exists $sar_process_stat{$t}{'blocked'});
 	}
 	if (scalar keys %process_stat > 0) {
 		if ($data_info->{name} eq 'system-process') {
@@ -8152,7 +8170,8 @@ sub compute_process_report
 			print &jqplot_linegraph_array($IDX++, 'system-process', $data_info, '', $process_stat{'plist-sz'});
 		} elsif ($data_info->{name} eq 'system-runqueue') {
 			$process_stat{'runq-sz'} =~ s/,$//;
-			print &jqplot_linegraph_array($IDX++, 'system-runqueue', $data_info, '', $process_stat{'runq-sz'});
+			$process_stat{'blocked'} =~ s/,$//;
+			print &jqplot_linegraph_array($IDX++, 'system-runqueue', $data_info, '', $process_stat{'runq-sz'}, $process_stat{'blocked'});
 		}
 	}
 }
