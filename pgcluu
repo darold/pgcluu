@@ -2912,13 +2912,13 @@ sub pg_tablespace_size_report
 				$print_after .= "<p>$tbsp ($OVERALL_STATS{'tablespace'}{$tbsp}{location})</p>\n";
 			}
 		}
+		$data_info{$id}{print_after} = $print_after if ($print_after);
 	}
 	%all_tablespace_size = ();
 
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html", $src_base);
 	if (!$CAPTURE) {
 		print $fhcluster &jqplot_linegraph_hash($IDX++, 'tablespace-cluster-size', \%{$data_info{$id}}, 'all', %data);
-		print $fhcluster  $print_after;
 	} else {
 		my $header = '<tr><th>Tablespace Name</th><th>Location</th><th>Size</th></tr>';
 		if (scalar keys %{$OVERALL_STATS{'tablespace'}} == 0) {
@@ -6199,7 +6199,7 @@ sub pg_database_buffercache_report
 			my @graph_data = ();
 			foreach my $db (sort keys %shared_stat) {
 				next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
-				push(@{$data_info{$id}{legends}}, "% used by $db");
+				push(@{$data_info{$id}{legends}}, "$db");
 				$shared_stat{$db}{shared_buffers_used} =~ s/,$//;
 				push(@graph_data, $shared_stat{$db}{shared_buffers_used});
 			}
@@ -6209,7 +6209,7 @@ sub pg_database_buffercache_report
 			foreach my $db (sort keys %shared_stat) {
 				next if ($db eq 'all');
 				next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
-				push(@{$data_info{$id}{legends}}, "% of $db");
+				push(@{$data_info{$id}{legends}}, $db);
 				$shared_stat{$db}{database_loaded} =~ s/,$//;
 				push(@graph_data, $shared_stat{$db}{database_loaded});
 			}
@@ -6257,7 +6257,7 @@ sub pg_database_usagecount_report
 		if ($data_info{$id}{name} eq 'cluster-usagecount') {
 			my @graph_data = ();
 			foreach my $u (sort keys %shared_stat) {
-				push(@{$data_info{$id}{legends}}, "% of usagecount $u");
+				push(@{$data_info{$id}{legends}}, "$u");
 				$shared_stat{$u}{usagecount} =~ s/,$//;
 				push(@graph_data, $shared_stat{$u}{usagecount});
 			}
@@ -6305,7 +6305,7 @@ sub pg_database_isdirty_report
 		if ($data_info{$id}{name} eq 'cluster-isdirty') {
 			my @graph_data = ();
 			foreach my $u (sort keys %shared_stat) {
-				push(@{$data_info{$id}{legends}}, "% of usagecount $u");
+				push(@{$data_info{$id}{legends}}, "$u");
 				$shared_stat{$u}{usagecount} =~ s/,$//;
 				push(@graph_data, $shared_stat{$u}{usagecount});
 			}
@@ -9974,6 +9974,7 @@ sub jqplot_linegraph_hash
 	my @data = ();
 	my $i = 1;
 	my $description = $infos->{description} || '';
+	my $print_after = $infos->{print_after} || '';
 
 	foreach my $id (sort keys %data_h) {
 		$data_h{$id} ||= '';
@@ -9987,14 +9988,15 @@ sub jqplot_linegraph_hash
 		$title = $infos->{title};
 	}
 
-	return &jqplot_linegraph($buttonid, $divid, $infos, $title, $description, \@data, \@legend);
+	return &jqplot_linegraph($buttonid, $divid, $infos, $title, $description, \@data, \@legend, $print_after);
 }
 
 sub jqplot_linegraph
 {
-	my ($buttonid, $divid, $infos, $title, $description, $data, $legend) = @_;
+	my ($buttonid, $divid, $infos, $title, $description, $data, $legend, $print_after) = @_;
 
 	my $ylabel = $infos->{ylabel} || '';
+	$print_after ||= '';
 	my $str = '';
 	if (($divid !~ /\+$/) && ($divid !~ /^statio-/)) {
 		$str = qq{
@@ -10069,6 +10071,7 @@ add_download_button_event($buttonid, '$divid$buttonid', graph_${buttonid});
               </div>
             </div>
       </div>
+      $print_after
   </li>
 EOF
 	}
