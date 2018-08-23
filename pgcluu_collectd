@@ -1202,7 +1202,6 @@ sub create_sql_script
 		next if ($type =~ /^pgbouncer_|configuration_/);
 		next if (($type =~ /^(user|all)_/) && ($type !~ /^$STAT_TYPE/)); 
 		next if (($#METRICS >= 0) && !grep(/^$type$/, @METRICS));
-
 		my $sql = $METRICS_COMMANDS{$type}->{command}->();
 		if (!$sql) {
 			return;
@@ -1476,6 +1475,9 @@ sub has_pg_buffercache
 		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
 	chomp($hasit);
+	if (!$hasit) {
+		print STDERR "WARNING: you ask for pg_buffercache reports but pg_buffercache extention is not installed in the connection database. See -d option to set the startup connection database.\n";
+	}
 
 	return $hasit;
 }
@@ -2570,7 +2572,7 @@ sub dump_pgdatabase_buffercache
 		"round(100.0 * count(*) / (SELECT setting FROM pg_settings " .
 		"  WHERE name='shared_buffers')::integer,1) AS \"buffers %\", " .
 		"round(100.0 * count(*) * 8192 / pg_database_size(d.datname),1) AS \"database %\" " .
-		"FROM pg_database d INNER JOIN pg_buffercache b ON b.reldatabase=d.oid " . 
+		"FROM pg_database d INNER JOIN public.pg_buffercache b ON b.reldatabase=d.oid " . 
 		"GROUP BY d.datname " .
 		"ORDER BY 2,3 DESC"
 	);
@@ -2591,7 +2593,7 @@ sub dump_pgrelation_buffercache
 		"round(100.0 * count(*) / (SELECT setting FROM pg_settings " .
 		"  WHERE name='shared_buffers')::integer,1) AS \"buffers %\", " .
 		"round(100.0 * count(*) * 8192 / pg_relation_size(c.oid),1) AS \"relation %\" " .
-		"FROM pg_class c INNER JOIN pg_buffercache b ON b.relfilenode=c.relfilenode " . 
+		"FROM pg_class c INNER JOIN public.pg_buffercache b ON b.relfilenode=c.relfilenode " . 
 		"INNER JOIN pg_database d ON ( b.reldatabase=d.oid ) " .
 		"WHERE pg_relation_size(c.oid) > 0 " .
 #		"AND c.relname !~ '^pg_' " .
@@ -2613,7 +2615,7 @@ sub dump_pgdatabase_usercount
 		"SELECT date_trunc('seconds', now()), d.datname, usagecount, " .
 		"count(*) AS buffers, round(100.0 * count(*) / (SELECT setting FROM pg_settings " .
 		"  WHERE name='shared_buffers')::integer,1) AS \"buffers %\" " .
-		"FROM pg_database d INNER JOIN pg_buffercache b ON b.reldatabase=d.oid " . 
+		"FROM pg_database d INNER JOIN public.pg_buffercache b ON b.reldatabase=d.oid " . 
 		"GROUP BY d.datname, usagecount " .
 		"ORDER BY 2,3 DESC"
 	);
@@ -2631,7 +2633,7 @@ sub dump_pgdatabase_isdirty
 		"SELECT date_trunc('seconds', now()), d.datname, usagecount, isdirty, " .
 		"count(*) AS buffers, round(100.0 * count(*) / (SELECT setting FROM pg_settings " .
 		"  WHERE name='shared_buffers')::integer,1) AS \"buffers %\" " .
-		"FROM pg_database d INNER JOIN pg_buffercache b ON b.reldatabase=d.oid " . 
+		"FROM pg_database d INNER JOIN public.pg_buffercache b ON b.reldatabase=d.oid " . 
 		"GROUP BY d.datname, usagecount, isdirty " .
 		"ORDER BY 2,3,4 DESC"
 	);
