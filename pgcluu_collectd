@@ -1568,11 +1568,11 @@ sub grab_os_information
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 	my @meminfo = `$cmd`;
 	# Look at filesystem informations
-	$cmd = 'df -h 2>/dev/null';
+	$cmd = 'df -h | grep -v "/dev/loop" 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 	my @dfinfo = `$cmd`;
 	# Mount informations
-	$cmd = 'mount -l 2>/dev/null';
+	$cmd = 'mount -l  | grep -v "squashfs" 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 	my @mountinfo = `$cmd`;
 	# Fstab informations
@@ -1615,7 +1615,7 @@ sub grab_os_information
 	}
 	# Look at block devices informations
 	my @devices;
-	$cmd = 'ls /sys/block/';
+	$cmd = 'ls /sys/block/ | grep -v "^loop"';
 	foreach my $device ( `$cmd` ) {
 		my @row;
 		chomp($device);
