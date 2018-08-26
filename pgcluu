@@ -6814,6 +6814,8 @@ EOF
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'deadlocks'}</span> <span class="figure-label">Deadlocks</span></li>
 };
 		}
+		$deadlock_info = '' if ($sysinfo{CONFIGURATION}{'capture'});
+
 		my $extnum = $#{$OVERALL_STATS{'cluster'}{'extensions'}} + 1;
 		my $extensions_info = '';
 		if ($extnum) {
@@ -6877,9 +6879,15 @@ EOF
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'data_checksums'}</span> <span class="figure-label">Data checksums</span></li>
 		<li><span class="figure">$cluster_size</span> <span class="figure-label">Cluster size</span></li>
 		<li><span class="figure">$database_number</span> <span class="figure-label">Databases</span></li>
+EOF
+		if (!$sysinfo{CONFIGURATION}{'capture'}) {
+			print $fh <<EOF;
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'nbackend'}</span> <span class="figure-label">Connections</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'returned'}</span> <span class="figure-label">Tuples returned</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'cache_ratio'}</span> <span class="figure-label">Hit cache ratio</span></li>
+EOF
+		}
+		print $fh <<EOF;
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'unlogged'}</span> <span class="figure-label">Unlogged tables$unlogged_dblist</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'invalid_indexes'}</span> <span class="figure-label">Invalid indexes$invalid_dblist</span></li>
 		<li><span class="figure">$OVERALL_STATS{'cluster'}{'hash_indexes'}</span> <span class="figure-label">Hash indexes$hash_dblist</span></li>
@@ -6909,35 +6917,38 @@ EOF
 		<li><span class="figure">$overall_stat_databases{'size'}[1]</span> <span class="figure-label">Largest database</span><br/><span class="figure-date">($overall_stat_databases{'size'}[0])</span></li>
 EOF
 		}
-		if (exists $overall_stat_databases{'nbackend'}) {
-			print $fh <<EOF;
+
+		if (!$sysinfo{CONFIGURATION}{'capture'}) {
+			if (exists $overall_stat_databases{'nbackend'}) {
+				print $fh <<EOF;
 		<li><span class="figure">$overall_stat_databases{'nbackend'}[1]</span> <span class="figure-label">Most connections</span><br/><span class="figure-date">($overall_stat_databases{'nbackend'}[0])</span></li>
 EOF
-		}
-		if (exists $overall_stat_databases{'returned'}) {
-			print $fh qq{<li><span class="figure">$overall_stat_databases{'returned'}[1]</span> <span class="figure-label">Most tuples returned</span><br/><span class="figure-date">($overall_stat_databases{'returned'}[0])</span></li>
+			}
+			if (exists $overall_stat_databases{'returned'}) {
+				print $fh qq{<li><span class="figure">$overall_stat_databases{'returned'}[1]</span> <span class="figure-label">Most tuples returned</span><br/><span class="figure-date">($overall_stat_databases{'returned'}[0])</span></li>
 };
-		}
-		if (exists $overall_stat_databases{'cache_ratio'}) {
-			push(@{$overall_stat_databases{'cache_ratio'}}, '-', '-') if ($#{$overall_stat_databases{'cache_ratio'}} < 0);
-			print $fh <<EOF;
+			}
+			if (exists $overall_stat_databases{'cache_ratio'}) {
+				push(@{$overall_stat_databases{'cache_ratio'}}, '-', '-') if ($#{$overall_stat_databases{'cache_ratio'}} < 0);
+				print $fh <<EOF;
 		<li><span class="figure">$overall_stat_databases{'cache_ratio'}[1]%</span> <span class="figure-label">Worst cache utilization</span><br/><span class="figure-date">($overall_stat_databases{'cache_ratio'}[0])</span></li>
 EOF
-		}
-		if (exists $overall_stat_databases{'temp_files'} && $overall_stat_databases{'temp_files'}[1]) {
-			print $fh <<EOF;
+			}
+			if (exists $overall_stat_databases{'temp_files'} && $overall_stat_databases{'temp_files'}[1]) {
+				print $fh <<EOF;
 		<li><span class="figure">$overall_stat_databases{'temp_files'}[1]</span> <span class="figure-label">Most temporary files</span><br/><span class="figure-date">($overall_stat_databases{'temp_files'}[0])</span></li>
 EOF
-		}
-		if (exists $overall_stat_databases{'temp_bytes'} && $overall_stat_databases{'temp_bytes'}[1]) {
-			print $fh <<EOF;
+			}
+			if (exists $overall_stat_databases{'temp_bytes'} && $overall_stat_databases{'temp_bytes'}[1]) {
+				print $fh <<EOF;
 		<li><span class="figure">$overall_stat_databases{'temp_bytes'}[1]</span> <span class="figure-label">Most temporary bytes</span><br/><span class="figure-date">($overall_stat_databases{'temp_bytes'}[0])</span></li>
 EOF
-		}
-		if (exists $overall_stat_databases{'deadlocks'} && $overall_stat_databases{'deadlocks'}[1]) {
-			print $fh <<EOF;
+			}
+			if (exists $overall_stat_databases{'deadlocks'} && $overall_stat_databases{'deadlocks'}[1]) {
+				print $fh <<EOF;
 		<li><span class="figure">$overall_stat_databases{'deadlocks'}[1]</span> <span class="figure-label">Most deadlocks</span><br/><span class="figure-date">($overall_stat_databases{'deadlocks'}[0])</span></li>
 EOF
+			}
 		}
 		print $fh <<EOF;
 		$extensions_info
