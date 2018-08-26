@@ -870,6 +870,15 @@ sub collect_metrics
 		unlink("$OUT_DIR/sysinfo.txt");
 	}
 
+	# Store current pgcluu configuration
+	unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
+		&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
+		unlink_pid_and_exit("FATAL: can not write into file $OUT_DIR/sysinfo.txt, $!", 1);
+	}
+	print OUT "[CONFIGURATION]\n";
+	print OUT "capture=$CAPTURE\n";
+	close(OUT);
+
 	# Collect PostgreSQL global cluster infromation and save all into $OUT_DIR/sysinfo.txt
 	# Diff with old collected information will be saved to sysinfo.txt.diff
 	if (!$NO_DATABASE && ($PG_RET >= 0)) {
@@ -1146,19 +1155,25 @@ sub verify_action
 		return $ret;
 	}
 	# Only keep setting and configuration collect
-	if ($CAPTURE) {
-		foreach my $m (keys %METRICS_COMMANDS) {
-			delete $METRICS_COMMANDS{$m} if (($m ne 'configuration_stats') &&
-							 ($m ne 'pg_settings_stats') &&
-							 ($m ne 'pg_nondefault_settings_stats') &&
-							 (($m ne 'pg_db_role_setting_stats') || !&backend_minimum_version(9, 0)) &&
-							 ($m ne 'tablespace_size_stats') &&
-							 ($m ne 'database_size_stats') &&
-							 (($m ne 'replication_stats') || !&backend_minimum_version(9, 1))
-							);
-		}
-		return $ret;
-	}
+#	if ($CAPTURE) {
+#		foreach my $m (keys %METRICS_COMMANDS) {
+#			delete $METRICS_COMMANDS{$m} if (($m ne 'configuration_stats') &&
+#							 ($m ne 'pg_settings_stats') &&
+#							 ($m ne 'pg_nondefault_settings_stats') &&
+#							 (($m ne 'pg_db_role_setting_stats') || !&backend_minimum_version(9, 0)) &&
+#							 ($m ne 'tablespace_size_stats') &&
+#							 ($m ne 'database_size_stats') &&
+#							 ($m ne 'unused_indexes_stats') &&
+#							 ($m ne 'redundant_indexes_stats') &&
+#							 ($m ne 'invalid_indexes_stats') &&
+#							 ($m ne 'hash_indexes_stats') &&
+#							 ($m ne 'missing_fkindexes_stats') &&
+#							 ($m ne 'count_indexes_stats') &&
+#							 (($m ne 'replication_stats') || !&backend_minimum_version(9, 1))
+#							);
+#		}
+#		return $ret;
+#	}
 	if (!&backend_minimum_version(9, 4)) {
 		delete $METRICS_COMMANDS{'archiver_stats'};
 	}
