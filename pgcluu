@@ -1850,6 +1850,8 @@ sub get_device_list
 			# with "rkB/s" and "wkB/s" (expressed in kilobytes)
 			my @data = split(/;/, $l);
 			next if ($data[2] !~ /^\d+/);
+			# loop devices are excluded
+			next if ($data[3] =~ /^loop\d+/);
 			if (!grep(m#^$data[3]$#, @dev_list)) {
 				push(@dev_list, $data[3]);
 			} else {
@@ -8309,6 +8311,8 @@ sub device_in_report
 {
 	my $device = shift;
 
+	return 0 if ($device =~ /^loop\d+/);
+
 	return 1 if ($#INCLUDE_DEV == -1);
 
 	foreach my $g (@INCLUDE_DEV) {
@@ -8798,6 +8802,7 @@ sub compute_srvtime_report
 	%sar_srvtime_stat = ();
 	if (scalar keys %srvtime_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %srvtime_stat) {
+			next if ($n =~ /^loop\d+/);
 			if (!exists $DEVFH{$n}) {
 				push(@DEVICE_LIST, $n);
 				&init_device_output($#DEVICE_LIST, $src_base);
@@ -8857,6 +8862,7 @@ sub compute_rw_device_report
 
 	if (scalar keys %devices_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
+			next if ($n =~ /^loop\d+/);
 			if (!exists $DEVFH{$n}) {
 				push(@DEVICE_LIST, $n);
 				&init_device_output($#DEVICE_LIST, $src_base);
@@ -8909,6 +8915,7 @@ sub compute_util_device_report
 	%sar_util_devices_stat = ();
 	if (scalar keys %devices_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
+			next if ($n =~ /^loop\d+/);
 			if (!exists $DEVFH{$n}) {
 				push(@DEVICE_LIST, $n);
 				&init_device_output($#DEVICE_LIST, $src_base);
