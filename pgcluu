@@ -1668,7 +1668,10 @@ sub set_sysstat_file
 		exit 1;
 	}
 
-	print "DEBUG: sar/sadc file detected ", ($sar_file) ? $sar_file : $sadc_file, "\n" if ($DEBUG);
+	my $pfile = $sadc_file;
+	$pfile = $sar_file if ($sar_file);
+
+	print "DEBUG: sar/sadc file detected $pfile\n" if ($DEBUG);
 
 	return ($sar_file, $sadc_file);
 }
@@ -2176,7 +2179,9 @@ sub pg_stat_database
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_stat_database'}) ? $global_infos{'pg_stat_database'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_stat_database'} if (exists $global_infos{'pg_stat_database'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -2196,38 +2201,38 @@ sub pg_stat_database
 
 		if ($#data >= 8) {
 
-			(($data[8] - $start_vals{$data[2]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[2]}[8]);
+			if (($data[8] - $start_vals{$data[2]}[8]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[8] - $start_vals{$data[2]}[8]) };
 			$all_stat_database{$data[0]}{$data[2]}{returned} = $tmp_val;
 			$all_stat_database{$data[0]}{all}{returned} += $tmp_val;
 
-			(($data[9] - $start_vals{$data[2]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[2]}[9]);
+			if (($data[9] - $start_vals{$data[2]}[9]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[9] - $start_vals{$data[2]}[9]) };
 			$all_stat_database{$data[0]}{$data[2]}{fetched} = $tmp_val;
 			$all_stat_database{$data[0]}{all}{fetched} += $tmp_val;
 
 			# Gather insert statement
-			(($data[10] - $start_vals{$data[2]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[2]}[10]);
+			if (($data[10] - $start_vals{$data[2]}[10]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[10] - $start_vals{$data[2]}[10]) };
 			$all_stat_database{$data[0]}{$data[2]}{insert} = $tmp_val;
 			$all_stat_database{$data[0]}{all}{insert} += $tmp_val;
 
 			# Gather update statement
-			(($data[11] - $start_vals{$data[2]}[11]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[11] - $start_vals{$data[2]}[11]);
+			if (($data[11] - $start_vals{$data[2]}[11]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[11] - $start_vals{$data[2]}[11]) };
 			$all_stat_database{$data[0]}{$data[2]}{update} = $tmp_val;
 			$all_stat_database{$data[0]}{all}{update} += $tmp_val;
 
 			# Gather delete statement
-			(($data[12] - $start_vals{$data[2]}[12]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[12] - $start_vals{$data[2]}[12]);
+			if (($data[12] - $start_vals{$data[2]}[12]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[12] - $start_vals{$data[2]}[12]) };
 			$all_stat_database{$data[0]}{$data[2]}{delete} = $tmp_val;
 			$all_stat_database{$data[0]}{all}{delete} += $tmp_val;
 
 		}
 
 		# Gather blks_read
-		(($data[6] - $start_vals{$data[2]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[2]}[6]);
+		if (($data[6] - $start_vals{$data[2]}[6]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[6] - $start_vals{$data[2]}[6]) };
 		$all_stat_database{$data[0]}{$data[2]}{blks_read} = $tmp_val;
 		$all_stat_database{$data[0]}{all}{blks_read} += $tmp_val;
 
 		# Gather blks_hit
-		(($data[7] - $start_vals{$data[2]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[2]}[7]);
+		if (($data[7] - $start_vals{$data[2]}[7]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[7] - $start_vals{$data[2]}[7]) };
 		$all_stat_database{$data[0]}{$data[2]}{blks_hit} = $tmp_val;
 		$all_stat_database{$data[0]}{all}{blks_hit} += $tmp_val;
 
@@ -2238,14 +2243,14 @@ sub pg_stat_database
 		}
 
 		# Gather number of committed transaction
-		(($data[4] - $start_vals{$data[2]}[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals{$data[2]}[4]);
+		if (($data[4] - $start_vals{$data[2]}[4]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[4] - $start_vals{$data[2]}[4]) };
 		$all_stat_database{$data[0]}{$data[2]}{xact_commit} = $tmp_val;
 		$all_stat_database{$data[0]}{all}{xact_commit} += $tmp_val;
 		$all_stat_database{$data[0]}{$data[2]}{xact_throughput} = $tmp_val;
 		$all_stat_database{$data[0]}{all}{xact_throughput} += $tmp_val;
 
 		# Gather number of rollbacked transaction
-		(($data[5] - $start_vals{$data[2]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[2]}[5]);
+		if (($data[5] - $start_vals{$data[2]}[5]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[5] - $start_vals{$data[2]}[5]) };
 		$all_stat_database{$data[0]}{$data[2]}{xact_rollback} = $tmp_val;
 		$all_stat_database{$data[0]}{all}{xact_rollback} += $tmp_val;
 		$all_stat_database{$data[0]}{$data[2]}{xact_throughput} += $tmp_val;
@@ -2253,7 +2258,7 @@ sub pg_stat_database
 
 		# Gather number of canceled queries and stat reset
 		if ($#data >= 13) {
-			(($data[13] - $start_vals{$data[2]}[13]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[13] - $start_vals{$data[2]}[13]);
+			if (($data[13] - $start_vals{$data[2]}[13]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[13] - $start_vals{$data[2]}[13]) };
 			$all_stat_database{$data[0]}{$data[2]}{canceled_queries} = $tmp_val;
 			$all_stat_database{$data[0]}{all}{canceled_queries} += $tmp_val;
 			$OVERALL_STATS{'database'}{$data[2]}{'stat_reset'} = $data[14] if (!exists $OVERALL_STATS{'database'}{$data[2]}{'stat_reset'} || ($OVERALL_STATS{'database'}{$data[2]}{'stat_reset'} lt $data[14]));
@@ -2261,15 +2266,15 @@ sub pg_stat_database
 
 		# Gather number of temporary data and deadlock
 		if ($#data > 15) {
-			(($data[15] - $start_vals{$data[2]}[15]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[15] - $start_vals{$data[2]}[15]);
+			if (($data[15] - $start_vals{$data[2]}[15]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[15] - $start_vals{$data[2]}[15]) };
 			$all_stat_database{$data[0]}{$data[2]}{temp_files} = $tmp_val;
 			$all_stat_database{$data[0]}{all}{temp_files} += $tmp_val;
 
-			(($data[16] - $start_vals{$data[2]}[16]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[16] - $start_vals{$data[2]}[16]);
+			if (($data[16] - $start_vals{$data[2]}[16]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[16] - $start_vals{$data[2]}[16]) };
 			$all_stat_database{$data[0]}{$data[2]}{temp_bytes} = $tmp_val;
 			$all_stat_database{$data[0]}{all}{temp_bytes} += $tmp_val;
 
-			(($data[17] - $start_vals{$data[2]}[17]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[17] - $start_vals{$data[2]}[17]);
+			if (($data[17] - $start_vals{$data[2]}[17]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[17] - $start_vals{$data[2]}[17]) };
 			$all_stat_database{$data[0]}{$data[2]}{deadlocks} = $tmp_val;
 			$all_stat_database{$data[0]}{all}{deadlocks} += $tmp_val;
 		}
@@ -2559,7 +2564,9 @@ sub pg_stat_database_conflicts
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_stat_database_conflicts'}) ? $global_infos{'pg_stat_database_conflicts'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_stat_database_conflicts'} if (exists $global_infos{'pg_stat_database_conflicts'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -2570,23 +2577,23 @@ sub pg_stat_database_conflicts
 		# Get database size statistics
 		push(@{$start_vals{$data[2]}}, @data) if ($#{$start_vals{$data[2]}} < 0);
 
-		(($data[3] - $start_vals{$data[2]}[3]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3] - $start_vals{$data[2]}[3]);
+		if (($data[3] - $start_vals{$data[2]}[3]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[3] - $start_vals{$data[2]}[3]) };
 		$all_stat_database_conflicts{$data[2]}{$data[0]}{tablespace} += $tmp_val;
 		$all_stat_database_conflicts{'all'}{$data[0]}{tablespace} += $tmp_val;
 
-		(($data[4] - $start_vals{$data[2]}[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals{$data[2]}[4]);
+		if (($data[4] - $start_vals{$data[2]}[4]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[4] - $start_vals{$data[2]}[4]) };
 		$all_stat_database_conflicts{$data[2]}{$data[0]}{lock} += $tmp_val;
 		$all_stat_database_conflicts{'all'}{$data[0]}{lock} += $tmp_val;
 
-		(($data[5] - $start_vals{$data[2]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[2]}[5]);
+		if (($data[5] - $start_vals{$data[2]}[5]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[5] - $start_vals{$data[2]}[5]) };
 		$all_stat_database_conflicts{$data[2]}{$data[0]}{snapshot} += $tmp_val;
 		$all_stat_database_conflicts{'all'}{$data[0]}{snapshot} += $tmp_val;
 
-		(($data[6] - $start_vals{$data[2]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[2]}[6]);
+		if (($data[6] - $start_vals{$data[2]}[6]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[6] - $start_vals{$data[2]}[6]) };
 		$all_stat_database_conflicts{$data[2]}{$data[0]}{bufferpin} += $tmp_val;
 		$all_stat_database_conflicts{'all'}{$data[0]}{bufferpin} += $tmp_val;
 
-		(($data[7] - $start_vals{$data[2]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[2]}[7]);
+		if (($data[7] - $start_vals{$data[2]}[7]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[7] - $start_vals{$data[2]}[7]) };
 		$all_stat_database_conflicts{$data[2]}{$data[0]}{deadlock} += $tmp_val;
 		$all_stat_database_conflicts{'all'}{$data[0]}{deadlock} += $tmp_val;
 
@@ -2643,7 +2650,9 @@ sub pg_database_size
 	my %db_list = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_database_size'}) ? $global_infos{'pg_database_size'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_database_size'} if (exists $global_infos{'pg_database_size'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -2750,7 +2759,9 @@ sub pg_prepared_xact
 	my %db_list = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_prepared_xact'}) ? $global_infos{'pg_prepared_xact'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_prepared_xact'} if (exists $global_infos{'pg_prepared_xact'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -2865,7 +2876,9 @@ sub pg_tablespace_size
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	my $total_val = 0;
-	my $offset = (exists $global_infos{'pg_tablespace_size'}) ? $global_infos{'pg_tablespace_size'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_tablespace_size'} if (exists $global_infos{'pg_tablespace_size'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -2999,38 +3012,38 @@ sub pg_stat_user_tables
 		$all_stat_user_tables{$data[1]}{$data[4]}{last_autoanalyze} = $data[18] if ($data[18]);
 
 		# Get database statistics
-		(($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]);
+		if (($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]) };
 		$all_vacuum_stat{$data[1]}{$data[4]}{seq_scan} += $tmp_val;
 		$all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} = $data[5] || 0;
-		(($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]);
+		if (($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]) };
 		$all_vacuum_stat{$data[1]}{$data[4]}{idx_scan} += $tmp_val;
 		$all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} = $data[6] || 0;
-		(($data[9] - $start_vals{$data[1]}{$data[4]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[4]}[9]);
+		if (($data[9] - $start_vals{$data[1]}{$data[4]}[9]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[4]}[9]) };
 		$all_vacuum_stat{$data[1]}{$data[4]}{n_tup_ins} += $tmp_val;
 		$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} = $data[9] || 0;
-		(($data[10] - $start_vals{$data[1]}{$data[4]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[1]}{$data[4]}[10]);
+		if (($data[10] - $start_vals{$data[1]}{$data[4]}[10]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[10] - $start_vals{$data[1]}{$data[4]}[10]) };
 		$all_vacuum_stat{$data[1]}{$data[4]}{n_tup_upd} += $tmp_val;
 		$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} = $data[10] || 0;
-		(($data[11] - $start_vals{$data[1]}{$data[4]}[11]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[11] - $start_vals{$data[1]}{$data[4]}[11]);
+		if (($data[11] - $start_vals{$data[1]}{$data[4]}[11]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[11] - $start_vals{$data[1]}{$data[4]}[11]) };
 		$all_vacuum_stat{$data[1]}{$data[4]}{n_tup_del} += $tmp_val;
 		$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} = $data[11] || 0;
-		(($data[12] - $start_vals{$data[1]}{$data[4]}[12]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[12] - $start_vals{$data[1]}{$data[4]}[12]);
+		if (($data[12] - $start_vals{$data[1]}{$data[4]}[12]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[12] - $start_vals{$data[1]}{$data[4]}[12]) };
 		$all_vacuum_stat{$data[1]}{$data[4]}{n_tup_hot_upd} += $tmp_val;
 		$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} = $data[12] || 0;
 		$all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup} = $data[14];
 		$all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup} = $data[13];
 		$all_stat_user_tables{$data[1]}{$data[4]}{dead_vs_live} = sprintf("%.2f", ($data[14]*100)/(($data[13]+$data[14])||1));
 		if ($#data > 19) {
-			(($data[19] - $start_vals{$data[1]}{$data[4]}[19]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[19] - $start_vals{$data[1]}{$data[4]}[19]);
+			if (($data[19] - $start_vals{$data[1]}{$data[4]}[19]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[19] - $start_vals{$data[1]}{$data[4]}[19]) };
 			$all_vacuum_stat{$data[1]}{$data[4]}{vacuum_count} += $tmp_val;
 			$all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} = $data[19];
-			(($data[20] - $start_vals{$data[1]}{$data[4]}[20]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[20] - $start_vals{$data[1]}{$data[4]}[20]);
+			if (($data[20] - $start_vals{$data[1]}{$data[4]}[20]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[20] - $start_vals{$data[1]}{$data[4]}[20]) };
 			$all_vacuum_stat{$data[1]}{$data[4]}{autovacuum_count} += $tmp_val;
 			$all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} = $data[20];
-			(($data[21] - $start_vals{$data[1]}{$data[4]}[21]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[21] - $start_vals{$data[1]}{$data[4]}[21]);
+			if (($data[21] - $start_vals{$data[1]}{$data[4]}[21]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[21] - $start_vals{$data[1]}{$data[4]}[21]) };
 			$all_vacuum_stat{$data[1]}{$data[4]}{analyze_count} += $tmp_val;
 			$all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} = $data[21];
-			(($data[22] - $start_vals{$data[1]}{$data[4]}[22]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[22] - $start_vals{$data[1]}{$data[4]}[22]);
+			if (($data[22] - $start_vals{$data[1]}{$data[4]}[22]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[22] - $start_vals{$data[1]}{$data[4]}[22]) };
 			$all_vacuum_stat{$data[1]}{$data[4]}{autoanalyze_count} += $tmp_val;
 			$all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} = $data[22];
 		}
@@ -3243,13 +3256,13 @@ sub pg_stat_user_indexes
 		push(@{$start_vals{$data[1]}{$data[6]}}, @data) if ($#{$start_vals{$data[1]}{$data[6]}} < 0);
 
 		# Get database statistics
-		(($data[7] - $start_vals{$data[1]}{$data[6]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[6]}[7]);
+		if (($data[7] - $start_vals{$data[1]}{$data[6]}[7]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[6]}[7]) };
 		$all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} += $tmp_val;
 
-		(($data[8] - $start_vals{$data[1]}{$data[6]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[6]}[8]);
+		if (($data[8] - $start_vals{$data[1]}{$data[6]}[8]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[6]}[8]) };
 		$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} += $tmp_val;
 
-		(($data[9] - $start_vals{$data[1]}{$data[6]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[6]}[9]);
+		if (($data[9] - $start_vals{$data[1]}{$data[6]}[9]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[6]}[9]) };
 		$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} += $tmp_val;
 
 		@{$start_vals{$data[1]}{$data[6]}} = ();
@@ -3661,7 +3674,9 @@ sub pg_statio_user_tables
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_statio_user_tables'}) ? $global_infos{'pg_statio_user_tables'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_statio_user_tables'} if (exists $global_infos{'pg_statio_user_tables'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -3676,28 +3691,28 @@ sub pg_statio_user_tables
 		# Store interval between previous run
 		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{interval} = $data[0] - $start_vals{$data[1]}{$data[4]}[0];
 
-		(($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]);
+		if (($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]) };
 		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{heap_blks_read} = $tmp_val;
 
-		(($data[6] - $start_vals{$data[1]}{$data[4]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[1]}{$data[4]}[6]);
+		if (($data[6] - $start_vals{$data[1]}{$data[4]}[6]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[6] - $start_vals{$data[1]}{$data[4]}[6]) };
 		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{heap_blks_hit} = $tmp_val;
 
-		(($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]);
+		if (($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]) };
 		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{idx_blks_read} = $tmp_val;
 
-		(($data[8] - $start_vals{$data[1]}{$data[4]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[4]}[8]);
+		if (($data[8] - $start_vals{$data[1]}{$data[4]}[8]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[4]}[8]) };
 		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{idx_blks_hit} = $tmp_val;
 
-		(($data[9] - $start_vals{$data[1]}{$data[4]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[4]}[9]);
+		if (($data[9] - $start_vals{$data[1]}{$data[4]}[9]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[4]}[9]) };
 		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{toast_blks_read} = $tmp_val;
 
-		(($data[10] - $start_vals{$data[1]}{$data[4]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[1]}{$data[4]}[10]);
+		if (($data[10] - $start_vals{$data[1]}{$data[4]}[10]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[10] - $start_vals{$data[1]}{$data[4]}[10]) };
 		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{toast_blks_hit} = $tmp_val;
 
-		(($data[11] - $start_vals{$data[1]}{$data[4]}[11]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[11] - $start_vals{$data[1]}{$data[4]}[11]);
+		if (($data[11] - $start_vals{$data[1]}{$data[4]}[11]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[11] - $start_vals{$data[1]}{$data[4]}[11]) };
 		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{tidx_blks_read} = $tmp_val;
 
-		(($data[12] - $start_vals{$data[1]}{$data[4]}[12]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[12] - $start_vals{$data[1]}{$data[4]}[12]);
+		if (($data[12] - $start_vals{$data[1]}{$data[4]}[12]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[12] - $start_vals{$data[1]}{$data[4]}[12]) };
 		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{tidx_blks_hit} = $tmp_val;
 
 		@{$start_vals{$data[1]}{$data[4]}} = ();
@@ -3789,7 +3804,9 @@ sub pg_relation_buffercache
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_statio_user_tables'}) ? $global_infos{'pg_statio_user_tables'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_statio_user_tables'} if (exists $global_infos{'pg_statio_user_tables'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -3963,7 +3980,9 @@ sub pg_statio_user_indexes
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_statio_user_indexes'}) ? $global_infos{'pg_statio_user_indexes'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_statio_user_indexes'} if (exists $global_infos{'pg_statio_user_indexes'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -3980,10 +3999,10 @@ sub pg_statio_user_indexes
 
 		push(@{$start_vals{$data[1]}{$data[6]}}, @data) if ($#{$start_vals{$data[1]}{$data[6]}} < 0);
 
-		(($data[7] - $start_vals{$data[1]}{$data[6]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[6]}[7]);
+		if (($data[7] - $start_vals{$data[1]}{$data[6]}[7]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[6]}[7]) };
 		$all_statio_user_indexes{$data[0]}{$data[1]}{$data[6]}{idx_blks_read} = $tmp_val;
 
-		(($data[8] - $start_vals{$data[1]}{$data[6]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[6]}[8]);
+		if (($data[8] - $start_vals{$data[1]}{$data[6]}[8]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[6]}[8]) };
 		$all_statio_user_indexes{$data[0]}{$data[1]}{$data[6]}{idx_blks_hit} = $tmp_val;
 
 		@{$start_vals{$data[1]}{$data[6]}} = ();
@@ -4055,7 +4074,9 @@ sub pg_xlog_stat
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_xlog_stat'}) ? $global_infos{'pg_xlog_stat'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_xlog_stat'} if (exists $global_infos{'pg_xlog_stat'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -4116,7 +4137,9 @@ sub pg_stat_bgwriter
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_stat_bgwriter'}) ? $global_infos{'pg_stat_bgwriter'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_stat_bgwriter'} if (exists $global_infos{'pg_stat_bgwriter'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -4128,30 +4151,30 @@ sub pg_stat_bgwriter
 		# Store interval between previous run
 		$all_stat_bgwriter{$data[0]}{interval} = $data[0] - $start_vals[0];
 
-		(($data[1] - $start_vals[1]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[1] - $start_vals[1]);
+		if (($data[1] - $start_vals[1]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[1] - $start_vals[1]) };
 		$all_stat_bgwriter{$data[0]}{checkpoints_timed} = $tmp_val;
-		(($data[2] - $start_vals[2]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[2] - $start_vals[2]);
+		if (($data[2] - $start_vals[2]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[2] - $start_vals[2]) };
 		$all_stat_bgwriter{$data[0]}{checkpoints_req} = $tmp_val;
 		my $id = 0;
 		if ($#data > 10) {
 			$id += 2;
-			(($data[3] - $start_vals[3]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3] - $start_vals[3]);
+			if (($data[3] - $start_vals[3]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[3] - $start_vals[3]) };
 			$all_stat_bgwriter{$data[0]}{checkpoint_write_time} = $tmp_val;
-			(($data[4] - $start_vals[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals[4]);
+			if (($data[4] - $start_vals[4]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[4] - $start_vals[4]) };
 			$all_stat_bgwriter{$data[0]}{checkpoint_sync_time} = $tmp_val;
 		}
-		(($data[3+$id] - $start_vals[3+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3+$id] - $start_vals[3+$id]);
+		if (($data[3+$id] - $start_vals[3+$id]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[3+$id] - $start_vals[3+$id]) };
 		$all_stat_bgwriter{$data[0]}{buffers_checkpoint} = $tmp_val*8192;
-		(($data[4+$id] - $start_vals[4+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4+$id] - $start_vals[4+$id]);
+		if (($data[4+$id] - $start_vals[4+$id]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[4+$id] - $start_vals[4+$id]) };
 		$all_stat_bgwriter{$data[0]}{buffers_clean} = $tmp_val*8192;
-		(($data[5+$id] - $start_vals[5+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5+$id] - $start_vals[5+$id]);
+		if (($data[5+$id] - $start_vals[5+$id]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[5+$id] - $start_vals[5+$id]) };
 		$all_stat_bgwriter{$data[0]}{maxwritten_clean} = $tmp_val;
-		(($data[6+$id] - $start_vals[6+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6+$id] - $start_vals[6+$id]);
+		if (($data[6+$id] - $start_vals[6+$id]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[6+$id] - $start_vals[6+$id]) };
 		$all_stat_bgwriter{$data[0]}{buffers_backend} = $tmp_val*8192;
 		if ($#data >= 9) {
-			(($data[7+$id] - $start_vals[7+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7+$id] - $start_vals[7+$id]);
+			if (($data[7+$id] - $start_vals[7+$id]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[7+$id] - $start_vals[7+$id]) };
 			$all_stat_bgwriter{$data[0]}{buffers_backend_fsync} = $tmp_val;
-			(($data[8+$id] - $start_vals[8+$id]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8+$id] - $start_vals[8+$id]);
+			if (($data[8+$id] - $start_vals[8+$id]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[8+$id] - $start_vals[8+$id]) };
 			$all_stat_bgwriter{$data[0]}{buffers_alloc} = $tmp_val*8192;
 			$OVERALL_STATS{'bgwriter'}{stats_reset} = $data[9+$id] if (!exists $OVERALL_STATS{'bgwriter'}{stats_reset} || ($OVERALL_STATS{'bgwriter'}{stats_reset} lt $data[9+$id]));
 		}
@@ -4185,7 +4208,9 @@ sub pg_stat_bgwriter_report
 		$bgwriter_stat{maxwritten_clean} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . ($all_stat_bgwriter{$t}{maxwritten_clean}||0) . '],';
 		$bgwriter_stat{buffers_backend} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . int(($all_stat_bgwriter{$t}{buffers_backend}||0)/$all_stat_bgwriter{$t}{interval}) . '],';
 		$bgwriter_stat{buffers_alloc} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . int(($all_stat_bgwriter{$t}{buffers_alloc}||0)/$all_stat_bgwriter{$t}{interval}) . '],';
-		$bgwriter_stat{buffers_backend_fsync} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . ((exists $all_stat_bgwriter{$t}{buffers_backend_fsync}) ? $all_stat_bgwriter{$t}{buffers_backend_fsync} : '0') . '],';
+		my $buff_backend_fsync = '0';
+		$buff_backend_fsync = $all_stat_bgwriter{$t}{buffers_backend_fsync} if (exists $all_stat_bgwriter{$t}{buffers_backend_fsync});
+		$bgwriter_stat{buffers_backend_fsync} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . $buff_backend_fsync . '],';
 	}
 	%all_stat_bgwriter = ();
 
@@ -4232,7 +4257,9 @@ sub pg_stat_connections
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_stat_connections'}) ? $global_infos{'pg_stat_connections'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_stat_connections'} if (exists $global_infos{'pg_stat_connections'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -4326,11 +4353,11 @@ sub pg_stat_user_functions
 
 		push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
 
-		(($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]);
+		if (($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]) };
 		$all_stat_user_functions{$data[1]}{$data[4]}{calls} += $tmp_val;
-		(($data[6] - $start_vals{$data[1]}{$data[4]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[1]}{$data[4]}[6]);
+		if (($data[6] - $start_vals{$data[1]}{$data[4]}[6]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[6] - $start_vals{$data[1]}{$data[4]}[6]) };
 		$all_stat_user_functions{$data[1]}{$data[4]}{total_time} += $tmp_val;
-		(($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]);
+		if (($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]) };
 		$all_stat_user_functions{$data[1]}{$data[4]}{self_time} += $tmp_val;
 
 		@{$start_vals{$data[1]}{$data[4]}} = ();
@@ -4423,7 +4450,9 @@ sub pg_stat_replication
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_stat_replication'}) ? $global_infos{'pg_stat_replication'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_stat_replication'} if (exists $global_infos{'pg_stat_replication'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -4454,25 +4483,25 @@ sub pg_stat_replication
 			if (!$data[14]) {
 				$all_stat_replication{$data[0]}{$name}{replay_location} = 0;
 			} else {
-				((&getNumericalOffset($data[10]) - &getNumericalOffset($data[14])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[14]));
+				if ((&getNumericalOffset($data[10]) - &getNumericalOffset($data[14])) < 0) { $tmp_val = 0 } else { $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[14])) };
 				$all_stat_replication{$data[0]}{$name}{replay_location} = $tmp_val;
 			}
 			if (!$data[11]) {
 				$all_stat_replication{$data[0]}{$name}{sent_location} = 0;
 			} else {
-				((&getNumericalOffset($data[10]) - &getNumericalOffset($data[11])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[11]));
+				if ((&getNumericalOffset($data[10]) - &getNumericalOffset($data[11])) < 0) { $tmp_val = 0 } else { $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[11])) };
 				$all_stat_replication{$data[0]}{$name}{sent_location} = $tmp_val;
 			}
 			if (!$data[12]) {
 				$all_stat_replication{$data[0]}{$name}{write_location} = 0;
 			} else {
-				((&getNumericalOffset($data[10]) - &getNumericalOffset($data[12])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[12]));
+				if ((&getNumericalOffset($data[10]) - &getNumericalOffset($data[12])) < 0) { $tmp_val = 0 } else { $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[12])) };
 				$all_stat_replication{$data[0]}{$name}{write_location} = $tmp_val;
 			}
 			if (!$data[12]) {
 				$all_stat_replication{$data[0]}{$name}{flush_location} = 0;
 			} else {
-				((&getNumericalOffset($data[10]) - &getNumericalOffset($data[13])) < 0) ? $tmp_val = 0 : $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[13]));
+				if ((&getNumericalOffset($data[10]) - &getNumericalOffset($data[13])) < 0) { $tmp_val = 0 } else { $tmp_val = (&getNumericalOffset($data[10]) - &getNumericalOffset($data[13])) };
 				$all_stat_replication{$data[0]}{$name}{flush_location} = $tmp_val;
 			}
 			if ($sysinfo{CONFIGURATION}{'capture'}) {
@@ -4580,7 +4609,9 @@ sub pgbouncer_stats
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pgbouncer_stats'}) ? $global_infos{'pgbouncer_stats'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pgbouncer_stats'} if (exists $global_infos{'pgbouncer_stats'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -4822,7 +4853,9 @@ sub pgbouncer_req_stats
 	my @start_vals = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pgbouncer_req_stats'}) ? $global_infos{'pgbouncer_req_stats'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pgbouncer_req_stats'} if (exists $global_infos{'pgbouncer_req_stats'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -4837,28 +4870,28 @@ sub pgbouncer_req_stats
 		# Since 1.8:
 		# timestamp|database|total_xact_count|total_query_count|total_received|total_sent|total_xact_time|total_query_time|total_wait_time|avg_xact_count|avg_query_count|avg_recv|avg_sent|avg_xact_time|avg_query_time|avg_wait_time
 		if ($#data == 9) {
-			(($data[2] - $start_vals[2]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[2] - $start_vals[2]);
+			if (($data[2] - $start_vals[2]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[2] - $start_vals[2]) };
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_requests} += $tmp_val;
-			(($data[3] - $start_vals[3]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3] - $start_vals[3]);
+			if (($data[3] - $start_vals[3]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[3] - $start_vals[3]) };
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_received} += $tmp_val;
-			(($data[4] - $start_vals[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals[4]);
+			if (($data[4] - $start_vals[4]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[4] - $start_vals[4]) };
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_sent} += $tmp_val;
-			(($data[5] - $start_vals[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals[5]);
+			if (($data[5] - $start_vals[5]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[5] - $start_vals[5]) };
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_query_time} += $tmp_val;
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_req} += $data[6];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_recv} += $data[7];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_sent} += $data[8];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_query} += $data[9];
 		} else {
-			(($data[3] - $start_vals[3]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3] - $start_vals[3]);
+			if (($data[3] - $start_vals[3]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[3] - $start_vals[3]) };
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_requests} += $tmp_val;
-			(($data[4] - $start_vals[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals[4]);
+			if (($data[4] - $start_vals[4]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[4] - $start_vals[4]) };
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_received} += $tmp_val;
-			(($data[5] - $start_vals[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals[5]);
+			if (($data[5] - $start_vals[5]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[5] - $start_vals[5]) };
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_sent} += $tmp_val;
-			(($data[7] - $start_vals[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals[7]);
+			if (($data[7] - $start_vals[7]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[7] - $start_vals[7]) };
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_query_time} += $tmp_val;
-			(($data[8] - $start_vals[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals[8]);
+			if (($data[8] - $start_vals[8]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[8] - $start_vals[8]) };
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{total_wait_time} += $tmp_val;
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_query_count} += $data[10];
 			$all_pgbouncer_req_stats{$data[0]}{$data[1]}{avg_recv} += $data[11];
@@ -5083,7 +5116,9 @@ sub pg_stat_locks
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_stat_locks'}) ? $global_infos{'pg_stat_locks'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_stat_locks'} if (exists $global_infos{'pg_stat_locks'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -6168,7 +6203,9 @@ sub pg_database_buffercache
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_database_buffercache'}) ? $global_infos{'pg_database_buffercache'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_database_buffercache'} if (exists $global_infos{'pg_database_buffercache'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -6231,7 +6268,9 @@ sub pg_database_usagecount
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_database_usagecount'}) ? $global_infos{'pg_database_usagecount'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_database_usagecount'} if (exists $global_infos{'pg_database_usagecount'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -6279,7 +6318,9 @@ sub pg_database_isdirty
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_database_isdirty'}) ? $global_infos{'pg_database_isdirty'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_database_isdirty'} if (exists $global_infos{'pg_database_isdirty'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -6328,7 +6369,9 @@ sub pg_stat_archiver
 	my @start_vals = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = (exists $global_infos{'pg_stat_archiver'}) ? $global_infos{'pg_stat_archiver'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'pg_stat_archiver'} if (exists $global_infos{'pg_stat_archiver'});
+
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -6340,9 +6383,9 @@ sub pg_stat_archiver
 
 		# Get archiver size statistics
 		my $tmp_val = '';
-                (($data[1] - $start_vals[1]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[1] - $start_vals[1]);
+                if (($data[1] - $start_vals[1]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[1] - $start_vals[1]) };
 		$all_stat_archiver{$data[0]}{archived_count} = $tmp_val;
-                (($data[4] - $start_vals[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals[4]);
+                if (($data[4] - $start_vals[4]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[4] - $start_vals[4]) };
 		$all_stat_archiver{$data[0]}{failed_count} = $tmp_val;
 		$all_stat_archiver{$data[0]}{last_archived_wal} = $data[2];
 		$data[3] =~ s/\..*//;
@@ -9411,7 +9454,9 @@ sub load_sarfile_stats
 
 	# Load data from file
 	my @content = ();
-	my $offset = (exists $global_infos{'load_sarfile_stats'}) ? $global_infos{'load_sarfile_stats'} : 0;
+	my $offset = 0;
+	$offset = $global_infos{'load_sarfile_stats'} if (exists $global_infos{'load_sarfile_stats'});
+
 	my $curfh = open_filehdl("$file");
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
