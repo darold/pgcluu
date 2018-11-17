@@ -81,6 +81,7 @@ my $CAPTURE_DIR = '/tmp';
 my $DIFF_PROG   = 'diff -U 0';
 my $CRONUSER    = '';
 my $PKG_LIST_PROG  = '';
+my $DF_COMMAND  = 'LANG=C df --output="source,size,used,avail,itotal,iused,iavail,fstype,target" -x squashfs -x tmpfs -x devtmpfs';
 
 # Stores starting time
 my $START_TIME = time();
@@ -1043,6 +1044,25 @@ sub collect_metrics
 	if (!$DISABLE_SAR && $sar_command && ($sysstat_version > -1)) {
 		&dprint(`$sar_command`);
 	}
+
+	if (!$NO_SYSINFO) {
+		# Store filesystem use information
+		my @fsuse = `$DF_COMMAND 2>/dev/null`;
+		if ($#fsuse > 0) {
+			shift(@fsuse); # remove header
+			chomp(@fsuse);
+			my $ntime = &get_current_timestamp();
+			map { s/\s+/;/g; s/^/$ntime/; } @fsuse; # format output to csv
+			# Filesystem;1K-blocks;Used;Avail;Inodes;IUsed;IFree;Typer;Mounted on
+			unless(open(OUT, ">>$OUT_DIR/fs_stat_use.csv")) {
+				&dprint("FATAL: can not write into file $OUT_DIR/fs_stat_use.csv\n");
+				unlink_pid_and_exit("FATAL: can not write into file $OUT_DIR/fs_stat_use.csv, $!", 1);
+			}
+			print OUT join("\n", @fsuse), "\n";
+			close(OUT);
+		}
+	}
+
 }
 
 
@@ -1244,6 +1264,7 @@ sub create_sql_script
 		}
 		if (&backend_minimum_version(8, 2)) {
 			$sql_queries .= <<EOF
+\\o | cat > /dev/null
 $ALWAYS_SECURE_SEARCH_PATH_SQL
 -- $type
 \\o | cat $FILE_REDIR $OUT_DIR/$METRICS_COMMANDS{$type}->{output}
@@ -1254,6 +1275,7 @@ EOF
 			# 8.1 and lower doesn't support select statement into COPY
 			# we use a temporary table instead
 			$sql_queries .= <<EOF
+\\o | cat > /dev/null
 $ALWAYS_SECURE_SEARCH_PATH_SQL
 -- $type
 \\o | cat $FILE_REDIR $OUT_DIR/$METRICS_COMMANDS{$type}->{output}
@@ -1269,6 +1291,7 @@ EOF
 	if ($sql_queries && &backend_minimum_version(9, 0)) {
 		$sql_queries = "SET application_name TO pgcluu;\n" . $sql_queries;
 	}
+
 	return $sql_queries
 }
 
