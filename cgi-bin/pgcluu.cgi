@@ -55,6 +55,7 @@ my $ZCAT_PROG       = '/bin/zcat';
 my $CACHE           = 0;
 my $MAX_INDEXES     = 5;
 my @DATABASE_LIST   = ();
+my @DEVICE_SPACE_LIST = ();
 
 my $SAR_UPPER_11_5_6 = 0;
 
@@ -192,6 +193,7 @@ our %sar_rw_devices_stat = ();
 our %sar_util_devices_stat = ();
 our %sar_networks_stat = ();
 our %sar_neterror_stat = ();
+our %sar_space_devices_stat = ();
 
 our @sar_to_be_stored = (
 	'global_infos',
@@ -208,7 +210,8 @@ our @sar_to_be_stored = (
 	'sar_rw_devices_stat',
 	'sar_util_devices_stat',
 	'sar_networks_stat',
-	'sar_neterror_stat'
+	'sar_neterror_stat',
+	'sar_space_devices_stat'
 );
 
 our %sysinfo   = (); # Hash used to store system information
@@ -1002,7 +1005,13 @@ my %SAR_GRAPH_INFOS = (
 		'ylabel' => 'Memory size',
 		'legends' => ['active','inactive','dirty'],
 	},
-
+	'19' => {
+		'name' =>  'system-space',
+		'title' => 'Disk space utilization on device %s',
+		'description' => 'Percentage of disk space and inode used on the device. Close to 100% mean no more space or inode left.',
+		'ylabel' => 'Percentage used',
+		'legends' => ['Space', 'Inode'],
+	},
 );
 
 # Set CGI handle and retrieve current params states
@@ -1231,6 +1240,9 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			foreach my $d (@IFACE_LIST = &get_interface_list($sar_file, $sadc_file)) {
 				push(@IFACE_LIST, $d) if (!grep(/^$d$/, @IFACE_LIST));
 			}
+			foreach my $d (&get_device_space_list($sar_file, $sadc_file)) {
+				push(@DEVICE_SPACE_LIST, $d) if (!grep(/^$d$/, @DEVICE_SPACE_LIST));
+			}
 		}
 	}
 
@@ -1241,11 +1253,13 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
                 if ($#binfiles >= 0) {
 			@DEVICE_LIST = ();
 			@IFACE_LIST = ();
+			@DEVICE_SPACE_LIST = ();
                         print STDERR "DEBUG: Loading Sar statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
                         &load_sar_binary($in_dir);
                         # Look for disk device and network interface from global info
                         push(@DEVICE_LIST, @{$global_infos{DEVICE_LIST}}) if (exists $global_infos{DEVICE_LIST});
                         push(@IFACE_LIST, @{$global_infos{IFACE_LIST}}) if (exists $global_infos{IFACE_LIST});
+                        push(@DEVICE_SPACE_LIST, @{$global_infos{DEVICE_SPACE_LIST}}) if (exists $global_infos{DEVICE_SPACE_LIST});
 			if (($TIMEZONE eq '00') && $global_infos{timezone}) {
 				$TIMEZONE = $global_infos{timezone};
 			}
@@ -1555,6 +1569,7 @@ sub get_device_list
 			# with "rkB/s" and "wkB/s" (expressed in kilobytes)
 			my @data = split(/;/, $l);
 			next if ($data[2] !~ /^\d+/);
+			next if ( $data[3] =~ /^loop\d+/);
 			if (!grep(m#^$data[3]$#, @dev_list)) {
 				push(@dev_list, $data[3]);
 			} else {
@@ -1606,13 +1621,98 @@ sub get_device_list
 				my @values = ();
 				push(@values, split(m#\s+#, $l));
 				last if ($#values != $#headers);
+				next if ( $values[1] =~ /^loop\d+/);
 				if (!grep(m#^$values[1]$#, @dev_list)) {
 					push(@dev_list, $values[1]);
 				}
 			}
 		}
 		close(IN);
+	}
 
+	return @dev_list;
+}
+
+sub get_device_space_list
+{
+	my ($sar_file, $sadc_file) = @_;
+
+	my @dev_list = ();
+
+	if ($sadc_file && -f "$sadc_file") {
+
+		my $command = "$SADF_PROG -t -P ALL -d $sadc_file -- -F -p";
+		print STDERR "DEBUG: looking for device list using command $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		while (my $l = <IN>) {
+			chomp($l);
+			# hostname;interval;timestamp;MBfsfree;MBfsused;%fsused;%ufsused;Ifree;Iused;%Iused;FILESYSTEM
+			my @data = split(/;/, $l);
+			next if ($data[2] !~ /^\d+/);
+			$data[10] =~ s/.*\///;
+			next if ($data[10] =~ /^loop\d+/);
+			if (!grep(m#^$data[10]$#, @dev_list)) {
+				push(@dev_list, $data[10]);
+			} else {
+				last;
+			}
+		}
+		close(IN);
+
+	} elsif ($sar_file && -f "$sar_file") {
+
+		print STDERR "DEBUG: looking for devices in sar file $sar_file\n" if ($DEBUG);
+		# Load data from file
+		if (!&is_compressed($sar_file)) {
+			if (!open(IN, "$sar_file")) {
+				die "FATAL: can't read input file $sar_file: $!\n";
+			}
+		} else {
+			if (!open(IN, "$ZCAT_PROG $sar_file |")) {
+				die "FATAL: can't read pipe from command: $ZCAT_PROG $sar_file, $!\n";
+			}
+		}
+		my $type = '';
+		my @headers = ();
+		while (my $l = <IN>) {
+			chomp($l);
+			$l =~ s/\r//;
+			# Skip kernel header part
+			if ($l !~ /^\d+:\d+:\d+/) {
+				next;
+			}
+			# Format timestamp when AM or PM is used
+			$l =~ s/^(\d+:\d+:\d+)\s(AM|PM)/$1/;
+
+			last if ($l =~ m#CPU\s+# && $#headers > 0);
+			if ($l =~ m#MBfsfree\s+#) {
+				if ($#headers == -1) {
+					push(@headers, split(m#\s+#, $l));
+					next;
+				} else {
+					last;
+				}
+			}
+			# Empty line, maybe the end of a report
+			if (($l eq '') && ($#headers >= 0)) {
+				last;
+			}
+			# Get all values reported
+			if ($#headers >= 0) {
+				my @values = ();
+				push(@values, split(m#\s+#, $l));
+				last if ($#values != $#headers);
+				$values[8] =~ s/.*\///;
+				next if ( $values[8] =~ /^loop\d+/);
+				if (!grep(m#^$values[8]$#, @dev_list)) {
+					push(@dev_list, $values[8]);
+				}
+			}
+		}
+		close(IN);
 	}
 
 	return @dev_list;
@@ -6413,6 +6513,17 @@ sub show_home
 				}
 			}
 		}
+		if (exists $OVERALL_STATS{'system'}{'space'}) {
+			foreach my $d (sort keys %{$OVERALL_STATS{'system'}{'space'}}) {
+				if (! exists $overall_system_stats{'fsused'} || ($overall_system_stats{'fsused'}[1] < $OVERALL_STATS{'system'}{'space'}{$d}{'fsused'})) {
+					@{$overall_system_stats{'fsused'}} = ($d, $OVERALL_STATS{'system'}{'space'}{$d}{'fsused'});
+				}
+				if (! exists $overall_system_stats{'iused'} || ($overall_system_stats{'iused'}[1] < $OVERALL_STATS{'system'}{'space'}{$d}{'iused'})) {
+					@{$overall_system_stats{'iused'}} = ($d, $OVERALL_STATS{'system'}{'space'}{$d}{'iused'});
+				}
+			}
+		}
+
 		if (!exists $overall_system_stats{read}) {
 			@{$overall_system_stats{read}} = ('unknown', 0);
 		}
@@ -6422,6 +6533,13 @@ sub show_home
 		if (!exists $overall_system_stats{tps}) {
 			@{$overall_system_stats{tps}} = ('unknown', 0);
 		}
+		if (!exists $overall_system_stats{fsused}) {
+			@{$overall_system_stats{fsused}} = ('unknown', 0);
+		}
+		if (!exists $overall_system_stats{iused}) {
+			@{$overall_system_stats{iused}} = ('unknown', 0);
+		}
+
 		$overall_system_stats{read}[1] = &pretty_print_size($overall_system_stats{read}[1]);
 		$overall_system_stats{write}[1] = &pretty_print_size($overall_system_stats{write}[1]);
 
@@ -7847,11 +7965,41 @@ AAAASUVORK5CYII=';
 			  </li>
 };
 		}
-		if ($#IFACE_LIST >= 0) {
-			$menu_str .= qq{
+		$menu_str .= qq{
 		    </ul>
 		  </li>
 } if ($#DEVICE_LIST >= 0);
+
+		$idx = 0;
+		for (my $i = 0; $i <= $#DEVICE_SPACE_LIST; $i++) {
+			my $md = $i % 10;
+			if ($md == 0) {
+				$idx++;
+				if ($i > 0) {
+					$menu_str .= qq{
+		    </ul>
+		  </li>
+};
+				}
+				my $lbl = '';
+				$lbl = " (part $idx)" if ($#DEVICE_SPACE_LIST >= 10);
+				$menu_str .= qq{
+		  <li id="menu-device-space-$idx" class="dropdown-submenu">
+		     <a href="#" tabindex="-1">Disk space utilization $lbl</a>
+		      <ul class="dropdown-menu">
+};
+			}
+			$menu_str .= qq{
+			     <li id="menu-system-space"><a href="" onclick="document.location.href='$SCRIPT_NAME?dev=$DEVICE_SPACE_LIST[$i]&action=system-space&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Device $DEVICE_SPACE_LIST[$i]</a></li>
+};
+		}
+		$menu_str .= qq{
+		    </ul>
+		  </li>
+} if ($#DEVICE_SPACE_LIST >= 0);
+		if ($#IFACE_LIST >= 0) {
+
+
 			$menu_str .= qq{
 		  <li id="menu-network" class="dropdown-submenu">
 		     <a href="#" tabindex="-1">Network </a>
@@ -7877,7 +8025,7 @@ AAAASUVORK5CYII=';
 		$menu_str .= qq{
                 </ul>
               </li>
-};
+} if ($#IFACE_LIST >= 0);
 	}
 	my $begin_date = '';
         $begin_date = "$o_year-$o_month-$o_day $o_hour:$o_min" if ($BEGIN && $o_year);
@@ -8602,6 +8750,58 @@ sub compute_rw_device_report
 	}
 }
 
+sub compute_space_device_stat
+{
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;MBfsfree;MBfsused;%fsused;%ufsused;Ifree;Iused;%Iused;FILESYSTEM
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+		$data[10] =~ s/.*\///;
+		next if ($data[10] =~ /^(loop|tmpfs|udev)/);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+		next if (!&device_in_report($data[3]));
+
+		next if ($DEVICE && ($data[10] ne $DEVICE));
+
+		if ($ACTION ne 'home') {
+			$sar_space_devices_stat{$data[2]}{$data[10]}{'%fsused'} = $data[5];
+			$sar_space_devices_stat{$data[2]}{$data[10]}{'%iused'} = $data[9];
+		} else {
+			$OVERALL_STATS{'system'}{'space'}{$data[10]}{fsused} = $data[5] if (!exists $OVERALL_STATS{'system'}{'space'}{$data[10]}{fsused} || $data[5] > $OVERALL_STATS{'system'}{'space'}{$data[10]}{fsused});
+			$OVERALL_STATS{'system'}{'space'}{$data[10]}{iused} = $data[9] if (!exists $OVERALL_STATS{'system'}{'space'}{$data[10]}{iused} || $data[9] > $OVERALL_STATS{'system'}{'space'}{$data[10]}{iused});
+		}
+	}
+}
+
+sub compute_space_device_report
+{
+	my $data_info = shift();
+	my $src_base = shift();
+
+	my %devices_stat = ();
+	foreach my $t (sort {$a <=> $b} keys %sar_space_devices_stat) {
+		foreach my $dev (keys %{$sar_space_devices_stat{$t}}) {
+			if ($data_info->{name} eq 'system-space') { 
+				$devices_stat{$dev}{'%fsused'} .= '[' . $t . ',' . $sar_space_devices_stat{$t}{$dev}{'%fsused'} . '],';
+				$devices_stat{$dev}{'%iused'} .= '[' . $t . ',' . $sar_space_devices_stat{$t}{$dev}{'%iused'} . '],';
+			}
+		}
+	}
+
+	if (scalar keys %devices_stat > 0) {
+		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
+			if ($data_info->{name} eq 'system-space') { 
+				$devices_stat{$n}{'%fsused'} =~ s/,$//;
+				$devices_stat{$n}{'%iused'} =~ s/,$//;
+				print &jqplot_linegraph_array($IDX++, 'system-space', $data_info, $n, $devices_stat{$n}{'%fsused'}, $devices_stat{$n}{'%iused'});
+			}
+		}
+	}
+}
+
 sub compute_util_device_stat
 {
 	for (my $i = 0; $i <= $#_; $i++) {
@@ -9004,6 +9204,23 @@ sub compute_sarstat_stats
 		&compute_block_stat(@content);
 	}
 
+	####
+	# Get Device space utilization
+	####
+	if ($data_info{name} eq 'system-space') {
+		my $command = "$SADF_PROG -t -P ALL -d $file -- -F -p";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+		       die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute disk space use per devices statistics
+		&compute_space_device_stat(@content);
+	}
 
 	####
 	# Get per device TPS utilization
@@ -9128,6 +9345,9 @@ sub find_report_type
 	# New in 8.1.7
 	} elsif ($data =~ m#active\/s\s+#) {
 		$type = 'tcp';
+	# Since 11.1.4
+	} elsif ($data =~ m#\%ufsused#) {
+		$type = 'space';
 	}
 
 	return $type;
@@ -9375,11 +9595,31 @@ sub compute_sarfile_stats
 	}
 
 	####
+	# Set Device disk space utilization
+	####
+	if ($data_info{name} eq 'system-space') {
+
+		# Compute disk space use per devices statistics
+		&compute_space_device_stat(@{$fulldata{space}});
+
+	}
+
+	####
 	# Set Device read/write utilization
 	####
 	if ($data_info{name} eq 'system-rwdevice') {
 
 		# Compute I/O per devices statistics
+		&compute_rw_device_stat(@{$fulldata{dev}});
+
+	}
+
+	####
+	# Set Device throughput
+	####
+	if ($data_info{name} eq 'system-tpsdevice') {
+
+		# Compute TPS per devices statistics
 		&compute_rw_device_stat(@{$fulldata{dev}});
 
 	}
@@ -9420,19 +9660,8 @@ sub compute_sarfile_stats
 
 	}
 
-
 	####
-	# Set Device read/write utilization
-	####
-	if ($data_info{name} eq 'system-tpsdevice') {
-
-		# Compute I/O per devices statistics
-		&compute_rw_device_stat(@{$fulldata{dev}});
-
-	}
-
-	####
-	# Set Device utilization
+	# Set Device CPU utilization
 	####
 	if ($data_info{name} eq 'system-cpudevice') {
 
@@ -9595,6 +9824,16 @@ sub compute_sar_graph
 
 		# Compute graphs for service time per device statistics
 		&compute_srvtime_report(\%data_info, $src_base);
+
+	}
+
+	####
+	# Show Device space utilization
+	####
+	if ($data_info{name} eq 'system-space') {
+
+		# Compute graphs for I/O per devices statistics
+		&compute_space_device_report(\%data_info, $src_base);
 
 	}
 
@@ -10191,7 +10430,6 @@ sub clear_db_stats
 	}		
 }
 
-
 # Initialise global variables storing statistics
 sub clear_stats
 {
@@ -10255,7 +10493,6 @@ sub dump_sys_binary
         }, $lfh) || die ("Couldn't save binary data to «$in_dir/$outfile»!\n");
 	$lfh->close;
 }
-
 
 # Load statistics from pg cache into memory
 sub load_pg_binary

@@ -193,6 +193,7 @@ our %sar_pageswap_stat = ();
 our %sar_block_stat = ();
 our %sar_srvtime_stat = ();
 our %sar_rw_devices_stat = ();
+our %sar_space_devices_stat = ();
 our %sar_util_devices_stat = ();
 our %sar_networks_stat = ();
 our %sar_neterror_stat = ();
@@ -210,6 +211,7 @@ our @sar_to_be_stored = (
 	'sar_block_stat',
 	'sar_srvtime_stat',
 	'sar_rw_devices_stat',
+	'sar_space_devices_stat',
 	'sar_util_devices_stat',
 	'sar_networks_stat',
 	'sar_neterror_stat'
@@ -1028,7 +1030,13 @@ my %SAR_GRAPH_INFOS = (
 		'ylabel' => 'Memory size',
 		'legends' => ['active','inactive','dirty'],
 	},
-
+	'19' => {
+		'name' =>  'system-space',
+		'title' => 'Disk space utilization on device %s',
+		'description' => 'Percentage of disk space and inode used on the device. Close to 100% mean no more space or inode left.',
+		'ylabel' => 'Percentage used',
+		'legends' => ['Space', 'Inode'],
+	},
 );
 
 my $COPYRIGHT = qq{
@@ -1409,7 +1417,6 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			# Look for disk device and network interface from global info
 			push(@DEVICE_LIST, @{$global_infos{DEVICE_LIST}}) if (exists $global_infos{DEVICE_LIST});
 			push(@IFACE_LIST, @{$global_infos{IFACE_LIST}}) if (exists $global_infos{IFACE_LIST});
-
 		}
 		# In cache/binary mode we can not process sadc binary data file
 		if (($#binfiles == -1) && -f "$sadc_file") {
@@ -1736,6 +1743,7 @@ sub init_device_output
 	}
 	&html_header($DEVFH{$DEVICE_LIST[$i]}, $src_base);
 	$DEVFH{$DEVICE_LIST[$i]}->print("<ul id=\"slides\">\n");
+
 }
 
 sub init_iface_output
@@ -1905,14 +1913,15 @@ sub get_device_list
 				my @values = ();
 				push(@values, split(m#\s+#, $l));
 				last if ($#values != $#headers);
+				next if ( $values[1] =~ /^loop\d+/);
 				if (!grep(m#^$values[1]$#, @dev_list)) {
 					push(@dev_list, $values[1]);
 				}
 			}
 		}
 		close(IN);
-
 	}
+
 	return @dev_list;
 }
 
@@ -6780,19 +6789,35 @@ sub generate_html_index
 		} elsif (${$OVERALL_STATS{'system'}{'svctm'}}[0] !~ /\D/) {
 			${$OVERALL_STATS{'system'}{'svctm'}}[0] = localtime(${$OVERALL_STATS{'system'}{'svctm'}}[0]/1000);
 		}
+
 		if (exists $OVERALL_STATS{'system'}{'devices'}) {
+
 			foreach my $d (sort keys %{$OVERALL_STATS{'system'}{'devices'}}) {
-				if (! exists $overall_system_stats{read} || ($overall_system_stats{read}[1] < $OVERALL_STATS{'system'}{'devices'}{$d}{read})) {
-					@{$overall_system_stats{read}} = ($d, $OVERALL_STATS{'system'}{'devices'}{$d}{read});
-				}
-				if (! exists $overall_system_stats{write} || ($overall_system_stats{write}[1] < $OVERALL_STATS{'system'}{'devices'}{$d}{write})) {
-					@{$overall_system_stats{write}} = ($d, $OVERALL_STATS{'system'}{'devices'}{$d}{write});
-				}
-				if (! exists $overall_system_stats{tps} || ($overall_system_stats{tps}[1] < $OVERALL_STATS{'system'}{'devices'}{$d}{tps})) {
-					@{$overall_system_stats{tps}} = ($d, $OVERALL_STATS{'system'}{'devices'}{$d}{tps});
+				if (exists $OVERALL_STATS{'system'}{'devices'}{$d}{read}) {
+					if (! exists $overall_system_stats{read} || ($overall_system_stats{read}[1] < $OVERALL_STATS{'system'}{'devices'}{$d}{read})) {
+						@{$overall_system_stats{read}} = ($d, $OVERALL_STATS{'system'}{'devices'}{$d}{read});
+					}
+					if (! exists $overall_system_stats{write} || ($overall_system_stats{write}[1] < $OVERALL_STATS{'system'}{'devices'}{$d}{write})) {
+						@{$overall_system_stats{write}} = ($d, $OVERALL_STATS{'system'}{'devices'}{$d}{write});
+					}
+					if (! exists $overall_system_stats{tps} || ($overall_system_stats{tps}[1] < $OVERALL_STATS{'system'}{'devices'}{$d}{tps})) {
+						@{$overall_system_stats{tps}} = ($d, $OVERALL_STATS{'system'}{'devices'}{$d}{tps});
+					}
 				}
 			}
 		}
+
+		if (exists $OVERALL_STATS{'system'}{'space'}) {
+			foreach my $d (sort keys %{$OVERALL_STATS{'system'}{'space'}}) {
+				if (! exists $overall_system_stats{'fsused'} || ($overall_system_stats{'fsused'}[1] < $OVERALL_STATS{'system'}{'space'}{$d}{'fsused'})) {
+					@{$overall_system_stats{'fsused'}} = ($d, $OVERALL_STATS{'system'}{'space'}{$d}{'fsused'});
+				}
+				if (! exists $overall_system_stats{'iused'} || ($overall_system_stats{'iused'}[1] < $OVERALL_STATS{'system'}{'space'}{$d}{'iused'})) {
+					@{$overall_system_stats{'iused'}} = ($d, $OVERALL_STATS{'system'}{'space'}{$d}{'iused'});
+				}
+			}
+		}
+
 		if (!exists $overall_system_stats{read}) {
 			@{$overall_system_stats{read}} = ('unknown', 0);
 		}
@@ -6801,6 +6826,12 @@ sub generate_html_index
 		}
 		if (!exists $overall_system_stats{tps}) {
 			@{$overall_system_stats{tps}} = ('unknown', 0);
+		}
+		if (!exists $overall_system_stats{fsused}) {
+			@{$overall_system_stats{fsused}} = ('unknown', 0);
+		}
+		if (!exists $overall_system_stats{iused}) {
+			@{$overall_system_stats{iused}} = ('unknown', 0);
 		}
 		$overall_system_stats{tps}[1] = ($overall_system_stats{tps}[1]||0);
 		$overall_system_stats{read}[1] = &pretty_print_size($overall_system_stats{read}[1]);
@@ -8268,6 +8299,7 @@ sub generate_html_menu
 			my $disable_device_read_write = ' class="disabled"';
 			my $disable_device_tps = ' class="disabled"';
 			my $disable_device_service_time = ' class="disabled"';
+			my $disable_device_space = ' class="disabled"';
 			if (open(IN, "$OUTPUT_DIR/system-device$i.html")) {
 				while (<IN>) {
 					if (/<div id="device-cpu">/) {
@@ -8278,6 +8310,8 @@ sub generate_html_menu
 						$disable_device_tps = '';
 					} elsif (/<div id="device-service_time">/) {
 						$disable_device_service_time = '';
+					} elsif (/<div id="device-space">/) {
+						$disable_device_space = '';
 					}
 				}
 				close(IN);
@@ -8290,6 +8324,7 @@ sub generate_html_menu
 			      <li id="menu-device-read_write"$disable_device_read_write><a href="system-device$i.html#device-read_write">Read/write bytes per second</a></li>
 			      <li id="menu-device-tps"$disable_device_tps><a href="system-device$i.html#device-tps">Transfert per second</a></li>
 			      <li id="menu-device-service_time"$disable_device_service_time><a href="system-device$i.html#device-service_time">Average service time</a></li>
+			      <li id="menu-device-space"$disable_device_space><a href="system-device$i.html#device-space">Disk space utilization</a></li>
 			      </ul>
 			  </li>
 };
@@ -8333,6 +8368,24 @@ sub generate_html_menu
 		    </ul>
 		  </li>
 } if ($#IFACE_LIST >= 0);
+		if (scalar keys %sar_space_devices_stat > 0){
+			$menu_str .= qq{
+		  <li id="menu-space" class="dropdown-submenu">
+		     <a href="#" tabindex="-1">Disk space use </a>
+		      <ul class="dropdown-menu">
+};
+			foreach my $dev (sort keys %{$OVERALL_STATS{'system'}{'space'}}) {
+				next if (!&interface_in_report($dev));
+				$menu_str .= qq{
+			      <li id="menu-space-$dev"><a href="system-space-$dev.html#space-used">Device $dev</a></li>
+};
+			}
+			$menu_str .= qq{
+		      </ul>
+		    </li>
+};
+		}
+
 		$menu_str .= qq{
                 </ul>
               </li>
@@ -8922,6 +8975,46 @@ sub compute_rw_device_report
 	}
 }
 
+sub compute_space_device_report
+{
+	my $data_info = shift();
+	my $src_base = shift();
+
+	my %devices_stat = ();
+	foreach my $t (sort {$a <=> $b} keys %sar_space_devices_stat) {
+		foreach my $dev (keys %{$sar_space_devices_stat{$t}}) {
+			if ($data_info->{name} eq 'system-space') { 
+				$OVERALL_STATS{'system'}{'space'}{$dev}{'fsused'} = $sar_space_devices_stat{$t}{$dev}{'%fsused'} if (!exists $OVERALL_STATS{'system'}{'space'}{$dev}{'fsused'} || $sar_space_devices_stat{$t}{$dev}{'%fsused'} > $OVERALL_STATS{'system'}{'space'}{$dev}{'fsused'});
+				$OVERALL_STATS{'system'}{'space'}{$dev}{'iused'} = $sar_space_devices_stat{$t}{$dev}{'%iused'} if (!exists $OVERALL_STATS{'system'}{'space'}{$dev}{'iused'} || $sar_space_devices_stat{$t}{$dev}{'%iused'} > $OVERALL_STATS{'system'}{'space'}{$dev}{'iused'});
+				$devices_stat{$dev}{'%fsused'} .= '[' . $t . ',' . $sar_space_devices_stat{$t}{$dev}{'%fsused'} . '],';
+				$devices_stat{$dev}{'%iused'} .= '[' . $t . ',' . $sar_space_devices_stat{$t}{$dev}{'%iused'} . '],';
+			}
+		}
+	}
+
+	if (scalar keys %devices_stat > 0) {
+		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
+			next if ($n =~ /^loop\d+/);
+			# Open a filehandle for each database
+			my $fh = new IO::File ">$OUTPUT_DIR/system-space-$n.html";
+			if (not defined $fh) {
+				die "FATAL: can't write to $OUTPUT_DIR/system-space-$n.html, $!\n";
+			}
+			&html_header($fh, $src_base);
+			$fh->print("<ul id=\"slides\">\n");
+			if ($data_info->{name} eq 'system-space') { 
+				$devices_stat{$n}{'%fsused'} =~ s/,$//;
+				$devices_stat{$n}{'%iused'} =~ s/,$//;
+				$fh->print( &jqplot_linegraph_array($IDX++, 'device-space', $data_info, $n, $devices_stat{$n}{'%fsused'}, $devices_stat{$n}{'%iused'}) );
+
+			}
+			$fh->print("</ul>\n");
+			&html_footer($fh, $n);
+			$fh->close;
+		}
+	}
+}
+
 sub compute_util_device_stat
 {
 	for (my $i = 0; $i <= $#_; $i++) {
@@ -8966,6 +9059,24 @@ sub compute_util_device_report
 			$devices_stat{$n}{'%util'} =~ s/,$//;
 			$DEVFH{$n}->print( &jqplot_linegraph_array($IDX++, 'device-cpu', $data_info, $n, $devices_stat{$n}{'%util'}) );
 		}
+	}
+}
+
+sub compute_space_device_stat
+{
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;MBfsfree;MBfsused;%fsused;%ufsused;Ifree;Iused;%Iused;FILESYSTEM
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+		$data[10] =~ s/.*\///;
+		next if ($data[10] =~ /^(loop|tmpfs|udev)/);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+		next if (!&device_in_report($data[10]));
+		$sar_space_devices_stat{$data[2]}{$data[10]}{'%fsused'} = $data[5];
+		$sar_space_devices_stat{$data[2]}{$data[10]}{'%iused'} = $data[9];
 	}
 }
 
@@ -9298,6 +9409,23 @@ sub compute_sarstat_stats
 		&compute_srvtime_stat(@content);
 	}
 
+	####
+	# Get Device space utilization
+	####
+	if ($data_info{name} eq 'system-space') {
+		my $command = "$SADF_PROG -t -P ALL -d $file -- -F -p";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute disk space use per devices statistics
+		&compute_space_device_stat(@content);
+	}
 
 	####
 	# Get Device block read/write utilization
@@ -9320,7 +9448,7 @@ sub compute_sarstat_stats
 	####
 	# Get per device TPS utilization
 	####
-	if ($data_info{name} eq 'system-tpsdevice') {
+	if ($data_info{name} eq 'system-tpsdevice' && scalar keys %sar_rw_devices_stat == 0) {
 		my $command = "$SADF_PROG -t -P ALL -d $file -- -d -p";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
@@ -9440,6 +9568,9 @@ sub find_report_type
 	# New in 8.1.7
 	} elsif ($data =~ m#active\/s\s+#) {
 		$type = 'tcp';
+	# Since 11.1.4
+	} elsif ($data =~ m#\%ufsused#) {
+		$type = 'space';
 	}
 
 	return $type;
@@ -9708,6 +9839,16 @@ sub compute_sarfile_stats
 
 
 	####
+	# Set Device disk space utilization
+	####
+	if ($data_info{name} eq 'system-space') {
+
+		# Compute disk space use per devices statistics
+		&compute_space_device_stat(@{$fulldata{space}});
+
+	}
+
+	####
 	# Set Device service time
 	####
 	if ($data_info{name} eq 'system-srvtime') {
@@ -9730,7 +9871,7 @@ sub compute_sarfile_stats
 	####
 	# Set Device read/write utilization
 	####
-	if ($data_info{name} eq 'system-tpsdevice') {
+	if ($data_info{name} eq 'system-tpsdevice' && scalar keys %sar_rw_devices_stat == 0) {
 
 		# Compute I/O per devices statistics
 		&compute_rw_device_stat(@{$fulldata{dev}});
@@ -9921,6 +10062,16 @@ sub compute_sar_graph
 
 		# Compute graphs for I/O per devices statistics
 		&compute_rw_device_report(\%data_info, $src_base);
+
+	}
+
+	####
+	# Show Device space utilization
+	####
+	if ($data_info{name} eq 'system-space') {
+
+		# Compute graphs for I/O per devices statistics
+		&compute_space_device_report(\%data_info, $src_base);
 
 	}
 
