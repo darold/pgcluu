@@ -1429,7 +1429,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 		} elsif (-f "$sar_file" && (($#binfiles == -1) || ($sar_file !~ /\.gz$/)) ) {
 			print "DEBUG: looking for sar text data file $sar_file\n" if ($DEBUG);
 			foreach my $id (sort keys %SAR_GRAPH_INFOS) {
-				&compute_sarfile_stats($sar_file, %{$SAR_GRAPH_INFOS{$id}});
+				&compute_sarfile_stats($sar_file, $in_dir, %{$SAR_GRAPH_INFOS{$id}});
 			}
 			%fulldata = ();
 		}
@@ -9708,14 +9708,52 @@ sub load_sarfile_stats
 
 }
 
+sub load_fsuse_stats
+{
+	my ($file) = @_;
+
+	my $interval = 0;
+	my $hostname = 'unknown';
+	my @fsdata = ();
+
+	# Load data from file
+	my @content = ();
+	my $offset = (exists $global_infos{'load_fsuse_stats'}) ? $global_infos{'load_fsuse_stats'} : 0;
+	my $curfh = open_filehdl("$file");
+	print STDERR "DEBUG: Starting to read $file from offset $offset\n" if ($DEBUG);
+	$curfh->seek($offset,0);
+	my $first = 0;
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		chomp($l);
+		$l =~ s/\r//;
+		push(@content, $l);
+		$l =~ s/,/\./g;
+		# Add the header
+		push(@fsdata, "hostname;interval;timestamp;MBfsfree;MBfsused;%fsused;%ufsused;Ifree;Iused;%Iused;FILESYSTEM") if (!$first);
+		push(@fsdata, $l);
+		$first++;
+	}
+	$curfh->close();
+	$global_infos{'load_fsuse_stats'} = $offset;
+
+	return @fsdata;
+}
+
 sub compute_sarfile_stats
 {
-	my ($file, %data_info) = @_;
+	my ($file, $in_dir, %data_info) = @_;
 
 	$SAR_UPPER_11_5_6 = 0;
 
 	# Load sar statistics from file if not already done
 	load_sarfile_stats($file) if (scalar keys %fulldata == 0);
+
+	# With old sar version there is no filesystem use stats
+	# pgcluu_collectd may have save these stat in file fs_stat_use.csv
+	if (-e "$in_dir/fs_stat_use.csv") {
+		push(@{$fulldata{'system-space'}}, &load_fsuse_stats("$in_dir/fs_stat_use.csv"));
+	}
 
 	####
 	# Set CPU utilization

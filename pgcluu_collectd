@@ -1046,7 +1046,7 @@ sub collect_metrics
 		&dprint(`$sar_command`);
 	}
 
-	if (!$NO_SYSINFO && $sysstat_version lt "11.1.4") {
+	if (!$NO_SYSINFO && $sysstat_version lt "11.7.4") {
 		# Store filesystem use information
 		my @fsuse = `$DF_COMMAND 2>/dev/null`;
 		if ($#fsuse > 0) {
