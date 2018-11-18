@@ -605,7 +605,7 @@ sub terminate
 	&dprint("LOG: Received terminating signal.\n");
 
 	if (-f $PIDFILE) {
-		unlink("$PIDFILE") or &dprint("ERROR: Unable to remove pid file $PIDFILE, $!\n");
+		unlink("$PIDFILE");
 	}
 
 	# Wait for all child processes to die except for the logger
@@ -878,6 +878,7 @@ sub collect_metrics
 	}
 	print OUT "[CONFIGURATION]\n";
 	print OUT "capture=$CAPTURE\n";
+	print OUT "sysstat=$sysstat_version\n" if ($sysstat_version);
 	close(OUT);
 
 	# Collect PostgreSQL global cluster infromation and save all into $OUT_DIR/sysinfo.txt
@@ -1041,18 +1042,18 @@ sub collect_metrics
 	}
 
 	# Collecting system statistics
-	if (!$DISABLE_SAR && $sar_command && ($sysstat_version > -1)) {
+	if (!$DISABLE_SAR && $sar_command && $sysstat_version) {
 		&dprint(`$sar_command`);
 	}
 
-	if (!$NO_SYSINFO && $sysstat_version > 10) {
+	if (!$NO_SYSINFO && $sysstat_version lt "11.1.4") {
 		# Store filesystem use information
 		my @fsuse = `$DF_COMMAND 2>/dev/null`;
 		if ($#fsuse > 0) {
 			shift(@fsuse); # remove header
 			chomp(@fsuse);
 			my $ntime = &get_current_timestamp();
-			map { s/\s+/;/g; s/^/$ntime/; } @fsuse; # format output to csv
+			map { s/\s+/;/g; s/^/$ntime;/; } @fsuse; # format output to csv
 			# Filesystem;1K-blocks;Used;Avail;Inodes;IUsed;IFree;Typer;Mounted on
 			unless(open(OUT, ">>$OUT_DIR/fs_stat_use.csv")) {
 				&dprint("FATAL: can not write into file $OUT_DIR/fs_stat_use.csv\n");
@@ -1574,20 +1575,19 @@ sub is_superuser
 
 sub sysstat_version
 {
+	my $ver = 0;
 	if (!$DISABLE_SAR) {
 		my $ver_command = "LC_ALL=C $SAR_PROG -V 2>&1";
 		$ver_command = $sshcmd . ' "' . $ver_command . '"' if ($sshcmd) ;
-		my $ver = 0;
 		$ver = `$ver_command | grep "sysstat version"`;
 		if ($?) {
 			&dprint("ERROR: $SAR_PROG execution failure: $!\n");
-			return -1;
-		}
-		if ($ver =~ m!^sysstat version (\d+)\.!) {
-			return $1;
+			$ver = 0;
+		} elsif ($ver =~ m!^sysstat version ([\.\d]+)!) {
+			$ver = $1;
 		}
 	}
-	return -1;
+	return $ver;
 }
 
 sub grab_os_information
