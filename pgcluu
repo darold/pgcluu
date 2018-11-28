@@ -8299,7 +8299,6 @@ sub generate_html_menu
 			my $disable_device_read_write = ' class="disabled"';
 			my $disable_device_tps = ' class="disabled"';
 			my $disable_device_service_time = ' class="disabled"';
-			my $disable_device_space = ' class="disabled"';
 			if (open(IN, "$OUTPUT_DIR/system-device$i.html")) {
 				while (<IN>) {
 					if (/<div id="device-cpu">/) {
@@ -8310,8 +8309,6 @@ sub generate_html_menu
 						$disable_device_tps = '';
 					} elsif (/<div id="device-service_time">/) {
 						$disable_device_service_time = '';
-					} elsif (/<div id="device-space">/) {
-						$disable_device_space = '';
 					}
 				}
 				close(IN);
@@ -8324,7 +8321,6 @@ sub generate_html_menu
 			      <li id="menu-device-read_write"$disable_device_read_write><a href="system-device$i.html#device-read_write">Read/write bytes per second</a></li>
 			      <li id="menu-device-tps"$disable_device_tps><a href="system-device$i.html#device-tps">Transfert per second</a></li>
 			      <li id="menu-device-service_time"$disable_device_service_time><a href="system-device$i.html#device-service_time">Average service time</a></li>
-			      <li id="menu-device-space"$disable_device_space><a href="system-device$i.html#device-space">Disk space utilization</a></li>
 			      </ul>
 			  </li>
 };
