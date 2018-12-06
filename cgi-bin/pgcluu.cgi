@@ -1812,7 +1812,7 @@ sub write_database_info
 	my $nsch = $#{$sysinfo{SCHEMA}{$db}} + 1;
 	my $schlist = join(',', @{$sysinfo{SCHEMA}{$db}});
 	$schlist = ' (' . $schlist . ')' if ($schlist);
-	my $procount = $#{$sysinfo{PROCEDURE}{$db}} + 1;
+	my $procount = $sysinfo{PROCEDURE}{$db} || 0;
 	my $trigcount = $sysinfo{TRIGGER}{$db} || 0;
 	my $last_vacuum = $OVERALL_STATS{'database'}{$db}{last_vacuum} || '-';
 	my $last_analyze = $OVERALL_STATS{'database'}{$db}{last_analyze} || '-';
@@ -6236,13 +6236,7 @@ sub pg_stat_statements_report
 	return if (!$db);
 
 	my $id = &get_data_id('database-queries', %data_info);
-	my $header = qq{
-					<th>Query</th>
-					<th>Calls</th>
-					<th>Avg time</th>
-					<th>Total time</th>
-					<th>Rows</th>
-};
+	my $header = '';
 	if (exists $all_stat_statements{$db}) {
 		if (exists $all_stat_statements{$db}{has_temp}) {
 			$header .= qq{<th>Temp blocks written</th>};
@@ -6273,7 +6267,12 @@ sub pg_stat_statements_report
 			<table class="table table-striped sortable" id="$db-$data_info{$id}{name}-table">
 				<thead>
 					<tr>
+					<th>Calls</th>
+					<th>Avg time</th>
+					<th>Total time</th>
+					<th>Rows</th>
 					$header
+					<th>Query</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -6293,7 +6292,7 @@ sub pg_stat_statements_report
 
 			my $query = $q;
 			$query =~ s/#SMCLN#/;/g;
-			print "<tr><th width=\"50%\">$query</th><td>$all_stat_statements{$db}{$q}{calls}</td><td>" . &format_duration(int($all_stat_statements{$db}{$q}{total_time}/($all_stat_statements{$db}{$q}{calls}||1))) . "</td><td>" . &format_duration($all_stat_statements{$db}{$q}{total_time}) . "</td><td>$all_stat_statements{$db}{$q}{rows}</td>$additional_cols</tr>\n";
+			print "<tr><td>$all_stat_statements{$db}{$q}{calls}</td><td>" . &format_duration(int($all_stat_statements{$db}{$q}{total_time}/($all_stat_statements{$db}{$q}{calls}||1))) . "</td><td>" . &format_duration($all_stat_statements{$db}{$q}{total_time}) . "</td><td>$all_stat_statements{$db}{$q}{rows}</td>$additional_cols<th>$query</th></tr>\n";
 		}
 		print qq{
 				</tbody>
@@ -10207,10 +10206,12 @@ sub read_sysinfo
 {
 	my $in_dir = shift;
 
-	my @toclear = qw/DF MOUNT EXTENSION SCHEMA PROCEDURE PROCESS PCI CRONTAB INSTALLATION/;
-	foreach (@toclear) {
-		@{$sysinfo{$_}} = () if (exists $sysinfo{$_});
+	# Empty arrays before filling them
+	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA/;
+	foreach my $s (@toclear) {
+		delete $sysinfo{$s};
 	}
+
 	print STDERR "DEBUG: Looking for system information in directory $in_dir\n" if ($DEBUG);
 	if (-e "$in_dir/sys_cache.bin") {
 		print STDERR "DEBUG: Loading system information from cache file $in_dir/sys_cache.bin\n" if ($DEBUG);
@@ -10328,19 +10329,26 @@ sub read_sysinfo_file
 		}
 		elsif ($section eq 'EXTENSION') {
 			my ($db, @vals) = split(/[=,]+/, $l);
-			push(@{$sysinfo{$section}{$db}}, @vals);
 			foreach my $e (@vals) {
+				push(@{$sysinfo{$section}{$db}}, $e) if (!grep(/^$e$/, @{$sysinfo{$section}{$db}}));
 				push(@{$OVERALL_STATS{'cluster'}{'extensions'}}, $e) if (!grep(/^$e$/, @{$OVERALL_STATS{'cluster'}{'extensions'}}));
 			}
 
 		}
 		elsif ($section eq 'SCHEMA') {
 			my ($db, @vals) = split(/[=,]+/, $l);
-			push(@{$sysinfo{$section}{$db}}, @vals);
+			foreach my $s (@vals) {
+				push(@{$sysinfo{$section}{$db}}, $s) if (!grep(/^$s$/, @{$sysinfo{$section}{$db}}));
+			}
 		}
 		elsif ($section eq 'PROCEDURE') {
-			my ($db, @vals) = split(/[=,]+/, $l);
-			push(@{$sysinfo{$section}{$db}}, @vals);
+			if ($l =~ /^([^=]+)=(\d+)$/) {
+				$sysinfo{$section}{$1} = $2;
+			} else {
+				# Backward compatibility with version 2.4
+				my ($db, @vals) = split(/[=,]+/, $l);
+				$sysinfo{$section}{$db} = $#vals + 1;
+			}
 		}
 		elsif ($section eq 'TRIGGER') {
 			my ($db, $val) = split(/[=]+/, $l);
@@ -10701,28 +10709,43 @@ sub load_sysinfo_binary
 	$lfh->close();
 	my %_sysinfo = %{$stats{sysinfo}};
 
+	# Empty arrays before filling them
+	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA/;
+	foreach my $s (@toclear) {
+		delete $sysinfo{$s};
+	}
+
 	# Load other storages
 	foreach my $s (keys %_sysinfo) {
-		if ($_sysinfo{$s} =~ /HASH/) {
+		if ($_sysinfo{$s} =~ /^HASH/) {
 			foreach my $n (keys %{$_sysinfo{$s}}) {
-				if ($_sysinfo{$s}{$n} =~ /HASH/) {
+				if ($_sysinfo{$s}{$n} =~ /^HASH/) {
 					foreach my $k (keys %{$_sysinfo{$s}{$n}}) {
-						$sysinfo{$s}{$n}{$k} = $_sysinfo{$s}{$n}{$k};
+						if ($_sysinfo{$s}{$n}{$k} =~ /^HASH/) {
+							foreach my $j (keys %{$_sysinfo{$s}{$n}{$k}}) {
+								if ($_sysinfo{$s}{$n}{$k}{$j} =~ /^HASH/) {
+									foreach my $i (keys %{$_sysinfo{$s}{$n}{$k}{$j}}) {
+										$sysinfo{$s}{$n}{$k}{$j}{$i} = $_sysinfo{$s}{$n}{$k}{$j}{$i};
+									}
+								} else {
+									$sysinfo{$s}{$n}{$k}{$j} = $_sysinfo{$s}{$n}{$k}{$j};
+								}
+							}
+						} else {
+							$sysinfo{$s}{$n}{$k} = $_sysinfo{$s}{$n}{$k};
+						}
 					}
-				} elsif ($_sysinfo{$s}{$n} =~ /ARRAY/) {
-					foreach my $k (@{$_sysinfo{$s}{$n}}) {
-						push(@{$sysinfo{$s}{$n}}, $k);
-					}
+				} elsif ($_sysinfo{$s}{$n} =~ /^ARRAY/) {
+					push(@{$sysinfo{$s}{$n}}, @{$_sysinfo{$s}{$n}});
 				} else {
 					$sysinfo{$s}{$n} = $_sysinfo{$s}{$n};
 				}
 			}
-		} elsif ($_sysinfo{$s} =~ /ARRAY/) {
-			foreach my $k (@{$_sysinfo{$s}}) {
-				push(@{$sysinfo{$s}}, $k);
-			}
+		} elsif ($_sysinfo{$s} =~ /^ARRAY/) {
+			push(@{$sysinfo{$s}}, @{$_sysinfo{$s}});
 		}
 	}
+
 }
 
 sub empty_dataset

@@ -4227,6 +4227,8 @@ sub pg_stat_bgwriter_report
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster.html", $src_base);
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		if ($data_info{$id}{name} eq 'database-checkpoints') {
+			my $bkup0 = $data_info{$id}{legends}[0];
+			my $bkup1 = $data_info{$id}{legends}[1];
 			if ($total_checkpoint) {
 				$data_info{$id}{legends}[0] .= ' (' . sprintf("%0.2f", $data{'Checkpoint timed'}*100/($total_checkpoint||1)) . '%)';
 				$data_info{$id}{legends}[1] .= ' (' . sprintf("%0.2f", $data{'Checkpoint requested'}*100/($total_checkpoint||1)) . '%)';
@@ -4234,6 +4236,8 @@ sub pg_stat_bgwriter_report
 			$bgwriter_stat{checkpoints_timed} =~ s/,$// if (exists $bgwriter_stat{checkpoints_timed});
 			$bgwriter_stat{checkpoints_req} =~ s/,$// if (exists $bgwriter_stat{checkpoints_req});
 			print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-checkpoints', \%{$data_info{$id}}, '', $bgwriter_stat{checkpoints_timed}, $bgwriter_stat{checkpoints_req});
+			$data_info{$id}{legends}[0] = $bkup0;
+			$data_info{$id}{legends}[1] = $bkup1;
 		} elsif ($data_info{$id}{name} eq 'database-checkpoints_time') {
 			if (exists $bgwriter_stat{checkpoint_write_time}) {
 				$bgwriter_stat{checkpoint_sync_time} =~ s/,$//;
@@ -6552,12 +6556,12 @@ sub pg_stat_statements_report
 			<table class="table table-striped sortable" id="$db-$data_info{$id}{name}-table">
 				<thead>
 					<tr>
-					<th>Query</th>
 					<th>Calls</th>
 					<th>Avg time</th>
 					<th>Total time</th>
 					<th>Rows</th>
 					$header
+					<th>Query</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -6576,7 +6580,7 @@ sub pg_stat_statements_report
 				}
 				my $query = $q;
 				$query =~ s/#SMCLN#/;/g;
-				$dbfh->print( "<tr><th width=\"50%\">$query</th><td>$all_stat_statements{$db}{$q}{calls}</td><td>" . &format_duration(int($all_stat_statements{$db}{$q}{total_time}/($all_stat_statements{$db}{$q}{calls}||1))) . "</td><td>" . &format_duration($all_stat_statements{$db}{$q}{total_time}) . "</td><td>$all_stat_statements{$db}{$q}{rows}</td>$additional_cols</tr>\n");
+				$dbfh->print( "<tr><td>$all_stat_statements{$db}{$q}{calls}</td><td>" . &format_duration(int($all_stat_statements{$db}{$q}{total_time}/($all_stat_statements{$db}{$q}{calls}||1))) . "</td><td>" . &format_duration($all_stat_statements{$db}{$q}{total_time}) . "</td><td>$all_stat_statements{$db}{$q}{rows}</td>$additional_cols<th>$query</th></tr>\n");
 			}
 			$dbfh->print( qq{
 				</tbody>
@@ -10412,9 +10416,9 @@ sub read_sysinfo
 {
         my $in_dir = shift;
 
-	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION/;
-	foreach (@toclear) {
-		@{$sysinfo{$_}} = () if (exists $sysinfo{$_});
+	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA/;
+	foreach my $s (@toclear) {
+		delete $sysinfo{$s};
 	}
 
         print STDERR "DEBUG: Looking for system information in directory $in_dir\n" if ($DEBUG);
@@ -10537,14 +10541,16 @@ sub read_sysinfo_file
 		}
 		elsif ($section eq 'EXTENSION') {
 			my ($db, @vals) = split(/[=,]+/, $l);
-			push(@{$sysinfo{$section}{$db}}, @vals);
 			foreach my $e (@vals) {
+				push(@{$sysinfo{$section}{$db}}, $e) if (!grep(/^$e$/, @{$sysinfo{$section}{$db}}));
 				push(@{$OVERALL_STATS{'cluster'}{'extensions'}}, $e) if (!grep(/^$e$/, @{$OVERALL_STATS{'cluster'}{'extensions'}}));
 			}
 		}
 		elsif ($section eq 'SCHEMA') {
 			my ($db, @vals) = split(/[=,]+/, $l);
-			push(@{$sysinfo{$section}{$db}}, @vals);
+			foreach my $s (@vals) {
+				push(@{$sysinfo{$section}{$db}}, $s) if (!grep(/^$s$/, @{$sysinfo{$section}{$db}}));
+			}
 		}
 		elsif ($section eq 'PROCEDURE') {
 			if ($l =~ /^([^=]+)=(\d+)$/) {
@@ -10910,15 +10916,22 @@ sub load_sysinfo_binary
 	my %stats = %{ fd_retrieve($lfh) };
 	$lfh->close();
 	my %_sysinfo = %{$stats{sysinfo}};
-	# Load other storages
+
+	# Empty arrays before filling them
+	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA/;
+	foreach my $s (@toclear) {
+		delete $sysinfo{$s};
+	}
+
+	# Load sysinfo storages
 	foreach my $s (keys %_sysinfo) {
-		if ($_sysinfo{$s} =~ /HASH/) {
+		if ($_sysinfo{$s} =~ /^HASH/) {
 			foreach my $n (keys %{$_sysinfo{$s}}) {
-				if ($_sysinfo{$s}{$n} =~ /HASH/) {
+				if ($_sysinfo{$s}{$n} =~ /^HASH/) {
 					foreach my $k (keys %{$_sysinfo{$s}{$n}}) {
-						if ($_sysinfo{$s}{$n}{$k} =~ /HASH/) {
+						if ($_sysinfo{$s}{$n}{$k} =~ /^HASH/) {
 							foreach my $j (keys %{$_sysinfo{$s}{$n}{$k}}) {
-								if ($_sysinfo{$s}{$n}{$k}{$j} =~ /HASH/) {
+								if ($_sysinfo{$s}{$n}{$k}{$j} =~ /^HASH/) {
 									foreach my $i (keys %{$_sysinfo{$s}{$n}{$k}{$j}}) {
 										$sysinfo{$s}{$n}{$k}{$j}{$i} = $_sysinfo{$s}{$n}{$k}{$j}{$i};
 									}
@@ -10930,18 +10943,14 @@ sub load_sysinfo_binary
 							$sysinfo{$s}{$n}{$k} = $_sysinfo{$s}{$n}{$k};
 						}
 					}
-				} elsif ($_sysinfo{$s}{$n} =~ /ARRAY/) {
-					foreach my $k (@{$_sysinfo{$s}{$n}}) {
-						push(@{$sysinfo{$s}{$n}}, $k);
-					}
+				} elsif ($_sysinfo{$s}{$n} =~ /^ARRAY/) {
+					push(@{$sysinfo{$s}{$n}}, @{$_sysinfo{$s}{$n}});
 				} else {
 					$sysinfo{$s}{$n} = $_sysinfo{$s}{$n};
 				}
 			}
-		} elsif ($_sysinfo{$s} =~ /ARRAY/) {
-			foreach my $k (@{$_sysinfo{$s}}) {
-				push(@{$sysinfo{$s}}, $k);
-			}
+		} elsif ($_sysinfo{$s} =~ /^ARRAY/) {
+			push(@{$sysinfo{$s}}, @{$_sysinfo{$s}});
 		}
 	}
 	foreach my $db (keys %{$sysinfo{EXTENSION}}) {
