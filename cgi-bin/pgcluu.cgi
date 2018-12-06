@@ -9359,6 +9359,7 @@ sub load_sarfile_stats
 
 	my $interval = 0;
 	my $hostname = 'unknown';
+	my $has_changed = 0;
 
 	# Load data from file
 	my @content = ();
@@ -9370,12 +9371,12 @@ sub load_sarfile_stats
 		$offset += length($l);
 		chomp($l);
 		$l =~ s/\r//;
-		# Skip kernel header part
+		# Prevent non relevant lines from being loaded into memory
 		if ( ($l eq '') || ($l =~ /^\d+:\d+:\d+/) || ($l =~ /\d+[\-\/]\d+[\-\/]\d+/)) {
 			push(@content, $l);
 		}
 		# Look is the format of systat have changed
-		if ($l =~ m#wkB/s#) {
+		if (!$has_changed && $l =~ m#wkB/s#) {
 			# Replace "rd_sec/s" and "wr_sec/s" fields with "rkB/s" and "wkB/s".
 			# fields are now expressed in kilobytes instead of sectors. This also make
 			# them consistent with iostat's output.
@@ -9384,6 +9385,7 @@ sub load_sarfile_stats
 			# Rename "avgqu-sz" field to "aqu-sz" to make it consistent with iostat's
 			# output.
 			$SAR_UPPER_11_5_6 = 1;
+			$has_changed = 1; # we don't expect several sar version upgrade on a single file
 		}
 	}
 	$curfh->close();
@@ -9432,8 +9434,8 @@ sub load_sarfile_stats
 			@headers = ();
 			next;
 		}
-		# Remove average header if any
-		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /^\D:\s+/) ) {
+		# Remove average/summary header if any
+		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /^\D+:\s+/) ) {
 			$type = '';
 			@headers = ();
 			next;
@@ -9466,6 +9468,8 @@ sub load_sarfile_stats
 
 		if ($#values != $#headers) {
 			warn "ERROR: Parsing of sar output reports different values than headers allow. ($#values != $#headers)\n";
+			warn "INFO: sar output file was $file\n";
+			warn "INFO: Line was: $content[$i]\n";
 			die "Header: " . join(';', @headers) . " | Values: " . join(';', @values) . "\n";
 		}
 		if ($timestamp =~ /(\d+:\d+:\d+)/) {
