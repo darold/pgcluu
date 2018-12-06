@@ -7541,8 +7541,11 @@ AAAASUVORK5CYII=';
         <div class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
               <li id="menu-home" class="dropdown"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=home&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Home</a></li>
-              <li id="menu-info" class="dropdown"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=sysinfo&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">SysInfo</a></li>
 };
+	$menu_str .= qq{
+              <li id="menu-info" class="dropdown"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=sysinfo&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">SysInfo</a></li>
+} if ($#DATABASE_LIST >= 0 || $#DEVICE_LIST >= 0);
+
 	if ($#DATABASE_LIST >= 0) {
 
 		$menu_str .= qq{
@@ -7911,7 +7914,7 @@ AAAASUVORK5CYII=';
 };
 	}
 
-	if (!$DISABLE_SAR) {
+	if (!$DISABLE_SAR  && $#DEVICE_LIST >= 0) {
 		$menu_str .= qq{
               <li id="menu-system" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">System <b class="caret"></b></a>
@@ -8026,7 +8029,12 @@ AAAASUVORK5CYII=';
                 </ul>
               </li>
 } if ($#IFACE_LIST >= 0);
+		$menu_str .= qq{
+                </ul>
+              </li>
+} if ($#IFACE_LIST < 0 and $#DEVICE_LIST < 0 and $#DEVICE_SPACE_LIST <= 0);
 	}
+
 	my $begin_date = '';
         $begin_date = "$o_year-$o_month-$o_day $o_hour:$o_min" if ($BEGIN && $o_year);
 	my $end_date = '';
