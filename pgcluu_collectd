@@ -562,7 +562,7 @@ if (!$CAPTURE) {
 }
 
 # Generate the sar command
-my $def_sar_command = "LC_ALL=C $SAR_PROG -t -p -A 1 0";
+my $def_sar_command = "LC_ALL=C $SAR_PROG -t -p -A 1 1";
 my $sshcmd = '';
 # Set command to execute sar remotely using ssh if necessary 
 if ($USE_SSH) {
