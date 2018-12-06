@@ -10207,6 +10207,10 @@ sub read_sysinfo
 {
 	my $in_dir = shift;
 
+	my @toclear = qw/DF MOUNT EXTENSION SCHEMA PROCEDURE PROCESS PCI CRONTAB INSTALLATION/;
+	foreach (@toclear) {
+		@{$sysinfo{$_}} = () if (exists $sysinfo{$_});
+	}
 	print STDERR "DEBUG: Looking for system information in directory $in_dir\n" if ($DEBUG);
 	if (-e "$in_dir/sys_cache.bin") {
 		print STDERR "DEBUG: Loading system information from cache file $in_dir/sys_cache.bin\n" if ($DEBUG);
