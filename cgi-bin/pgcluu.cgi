@@ -1927,8 +1927,8 @@ sub pg_stat_database
 		$OVERALL_STATS{'end_date'} = $data[0] if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} lt $data[0]));
 
 		# Store interval between previous run
-		$all_stat_database{$data[0]}{$data[2]}{interval} = $data[0] - $start_vals{$data[2]}[0];
-		$all_stat_database{$data[0]}{all}{interval} = $data[0] - $start_vals{$data[2]}[0];
+		$all_stat_database{$data[0]}{$data[2]}{interval} = ($data[0] - $start_vals{$data[2]}[0])/1000;
+		$all_stat_database{$data[0]}{all}{interval} = ($data[0] - $start_vals{$data[2]}[0])/1000;
 
 		if ($#data >= 8) {
 
@@ -3405,7 +3405,7 @@ sub pg_statio_user_tables
 		push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
 
 		# Store interval between previous run
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{interval} = $data[0] - $start_vals{$data[1]}{$data[4]}[0];
+		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{interval} = ($data[0] - $start_vals{$data[1]}{$data[4]}[0])/1000;
 
 		(($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]);
 		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{heap_blks_read} = $tmp_val;
@@ -3685,7 +3685,7 @@ sub pg_statio_user_indexes
 		push(@{$start_vals{$data[1]}{$data[6]}}, @data) if ($#{$start_vals{$data[1]}{$data[6]}} < 0);
 
 		# Store interval between previous run
-		$all_statio_user_indexes{$data[0]}{$data[1]}{$data[6]}{interval} = $data[0] - $start_vals{$data[1]}{$data[6]}[0];
+		$all_statio_user_indexes{$data[0]}{$data[1]}{$data[6]}{interval} = ($data[0] - $start_vals{$data[1]}{$data[6]}[0])/1000;
 
 		(($data[7] - $start_vals{$data[1]}{$data[6]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[6]}[7]);
 		$all_statio_user_indexes{$data[0]}{$data[1]}{$data[6]}{idx_blks_read} = $tmp_val;
@@ -3835,7 +3835,7 @@ sub pg_stat_bgwriter
 		push(@start_vals, @data) if ($#start_vals < 0);
 
 		# Store interval between previous run
-		$all_stat_bgwriter{$data[0]}{interval} = $data[0] - $start_vals[0];
+		$all_stat_bgwriter{$data[0]}{interval} = ($data[0] - $start_vals[0])/1000;
 
 		(($data[1] - $start_vals[1]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[1] - $start_vals[1]);
 		$all_stat_bgwriter{$data[0]}{checkpoints_timed} = $tmp_val;
@@ -4156,7 +4156,7 @@ sub pg_stat_replication
 			push(@start_vals, @data) if ($#start_vals < 0);
 
 			# Store interval between previous run
-			$all_stat_replication{$data[0]}{interval} = $data[0] - $start_vals[0];
+			$all_stat_replication{$data[0]}{interval} = ($data[0] - $start_vals[0])/1000;
 
 			$all_stat_replication{$data[0]}{master_location} = &getNumericalOffset($data[10]) - &getNumericalOffset($start_vals[10]) if (! exists $all_stat_replication{$data[0]}{master_location});
 			next if (!$data[14] && !$data[11] && !$data[12] && !$data[13]);
