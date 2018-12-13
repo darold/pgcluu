@@ -1,3 +1,26 @@
+2018-12-13 - Version 2.9 released
+
+This release is a minor release that fix a major issue in the
+interval detection. This This led to a bad scale in bg_writter,
+replication and most database statistics reports. Everybody must
+upgrade immediately.
+
+It also fixes some issues reported by users since last release:
+
+  - Improve devices list retrieving and fix several menu issues.
+  - Fix checkpoint counter legend.
+  - Move query in pg_stat_statements at the right of the table for
+    better readability.
+  - Fix report of disk use, mounted devices, running processes,
+    crontab and installed package to avoid duplicate entries.
+  - Empty SysInfo arrays before reading sysinfo file, this prevent
+    duplicate data.
+  - Improve parsing of sar file.
+  - Fix interval that was set in milliseconds instead of second.
+    This conduct to wrong scale (ex: Kb instead of Gb) in bg_writter,
+    replication and database statistics reports. Thanks to Guillaume
+    Lelarge for the report.
+
 2018-11-28 - Version 2.8 released
 
 This release is a minor release that fix some issues reported by

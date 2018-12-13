@@ -23,7 +23,7 @@ use POSIX qw(locale_h sys_wait_h ceil strftime);
 setlocale(LC_ALL, 'C');
 use Storable qw(store_fd fd_retrieve);
 
-$VERSION = '2.8';
+$VERSION = '2.9';
 $PROGRAM = 'pgCluu';
 
 my $OUTPUT_DIR      = '';
