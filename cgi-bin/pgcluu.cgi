@@ -14,6 +14,8 @@ use vars qw($VERSION $PROGRAM $CONFIG_FILE);
 use strict qw(vars);
 use warnings;
 
+no warnings 'redundant';
+
 use CGI;
 use IO::File;
 use Getopt::Long qw(:config bundling no_ignore_case_always);
@@ -1155,15 +1157,37 @@ $in_dir .= "/$WORK_DIRS[-1]" if ($#WORK_DIRS >= 0);
 ####
 &html_header();
 
+####
+# Load global information to be able to compose application menus
+####
+if ($#WORK_DIRS >= 0)
+{
+	&read_sysinfo($in_dir);
+	foreach my $db (keys %{$sysinfo{EXTENSION}}) {
+		push(@DATABASE_LIST, $db) if (!grep(/^$db$/, @DATABASE_LIST));
+	}
+
+	# Load global information from cache file
+	if (-e "$in_dir/global_infos.bin")
+	{
+		print STDERR "DEBUG: Loading global information from cache files $in_dir/global_infos.bin\n" if ($DEBUG);
+		&load_sar_binary($in_dir, 'global_infos');
+		# Look for disk device and network interface from global info
+		push(@DEVICE_LIST, @{$global_infos{DEVICE_LIST}}) if (exists $global_infos{DEVICE_LIST});
+		push(@IFACE_LIST, @{$global_infos{IFACE_LIST}}) if (exists $global_infos{IFACE_LIST});
+		push(@DEVICE_SPACE_LIST, @{$global_infos{DEVICE_SPACE_LIST}}) if (exists $global_infos{DEVICE_SPACE_LIST});
+	} else {
+
+		# Look for disk device and network interface from the sar file
+		if (!$DISABLE_SAR && -e "$in_dir/sar_stats.dat") {
+			&set_device_list("$in_dir/sar_stats.dat");
+		}
+	}
+}
+
 #### Show about page and exit
 if ($ACTION eq 'about') {
 	&show_about();
-	if ($#WORK_DIRS >= 0) {
-		&read_sysinfo($in_dir);
-		foreach my $db (keys %{$sysinfo{EXTENSION}}) {
-			push(@DATABASE_LIST, $db) if (!grep(/^$db$/, @DATABASE_LIST));
-		}
-	}
 	&html_footer();
 	exit 0;
 }
@@ -1178,18 +1202,14 @@ if ($#WORK_DIRS < 0) {
 
 #### Show system related information
 if ($ACTION eq 'sysinfo') {
-	&read_sysinfo($in_dir);
-	foreach my $db (keys %{$sysinfo{EXTENSION}}) {
-		push(@DATABASE_LIST, $db) if (!grep(/^$db$/, @DATABASE_LIST));
-	}
 	&show_sysinfo($in_dir);
 	&html_footer();
 	exit 0;
 }
 
 #### Load statistics from all required directories following the time selection
-foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
-
+foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
+{
 	# Set absolute path to the working directory
 	$in_dir = "$INPUT_DIR/$WORK_DIRS[$dx]";
 
@@ -1205,7 +1225,10 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 	}
 
 	# Set database list from all visited directory to build menu
+	%sysinfo = ();
 	&read_sysinfo($in_dir);
+	@DATABASE_LIST = ();
+	%global_infos = ();
 	foreach my $db (keys %{$sysinfo{EXTENSION}}) {
 		push(@DATABASE_LIST, $db) if (!grep(/^$db$/, @DATABASE_LIST));
 	}
@@ -1217,7 +1240,8 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 	# Detect timezone from csv file when there is no cache file and
 	# look for disk device and network interface from the sar file
-	if ($#binfiles == -1) {
+	if ($#binfiles == -1)
+	{
 		if ($STATS_TIMEZONE eq '00') {
 			if (-e "$in_dir/pg_stat_database.csv" && !-z "$in_dir/pg_stat_database.csv") {
 				$STATS_TIMEZONE = &detect_timezone("$in_dir/pg_stat_database.csv");
@@ -1234,21 +1258,16 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 		# Look for disk device and network interface from the sar file
 		if (!$DISABLE_SAR) {
-			foreach my $d (&get_device_list($sar_file, $sadc_file)) {
-				push(@DEVICE_LIST, $d) if (!grep(/^$d$/, @DEVICE_LIST));
-			}
-			foreach my $d (@IFACE_LIST = &get_interface_list($sar_file, $sadc_file)) {
-				push(@IFACE_LIST, $d) if (!grep(/^$d$/, @IFACE_LIST));
-			}
-			foreach my $d (&get_device_space_list($sar_file, $sadc_file)) {
-				push(@DEVICE_SPACE_LIST, $d) if (!grep(/^$d$/, @DEVICE_SPACE_LIST));
-			}
+			@DEVICE_LIST = ();
+			@IFACE_LIST = ();
+			@DEVICE_SPACE_LIST = ();
+			&set_device_list($sar_file, $sadc_file);
 		}
+
 	}
 
 	# Action to perform when a sar statistics is requested
 	if (($ACTION eq 'home') || ($ACTION =~ /^(system|device|network)-/)) {
-
                 # Load statistics from cache files
                 if ($#binfiles >= 0) {
 			@DEVICE_LIST = ();
@@ -1545,11 +1564,9 @@ sub get_data_id
 	return -1;
 }
 
-sub get_device_list
+sub set_device_list
 {
 	my ($sar_file, $sadc_file) = @_;
-
-	my @dev_list = ();
 
 	if ($sadc_file && -f "$sadc_file") {
 
@@ -1562,21 +1579,38 @@ sub get_device_list
 		while (my $l = <IN>) {
 			chomp($l);
 			# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
-			# sysstat version 11.5.7:
-			# Replace "avgrq-sz" field (expressed in sectors) with "areq-sz" (expressed in kilobytes)
-			# Rename "avgqu-sz" field to "aqu-sz"
-			# "rd_sec/s" and "wr_sec/s" (expressed in sectors) fields have been replaced
-			# with "rkB/s" and "wkB/s" (expressed in kilobytes)
 			my @data = split(/;/, $l);
 			next if ($data[2] !~ /^\d+/);
 			next if ( $data[3] =~ /^loop\d+/);
-			if (!grep(m#^$data[3]$#, @dev_list)) {
-				push(@dev_list, $data[3]);
+			if (!grep(m#^$data[3]$#, @DEVICE_LIST)) {
+				push(@DEVICE_LIST, $data[3]);
 			} else {
 				last;
 			}
 		}
 		close(IN);
+
+		$command = "$SADF_PROG -t -P ALL -d $sadc_file -- -n DEV";
+		print STDERR "DEBUG: looking for network device list using command $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		while (my $l = <IN>) {
+			chomp($l);
+			#hostname;interval;timestamp;IFACE;rxpck/s;txpck/s;...
+			my @data = split(/;/, $l);
+			next if ($data[2] !~ /^\d+/);
+			if (!grep(m#^$data[3]$#, @IFACE_LIST)) {
+				push(@IFACE_LIST, $data[3]);
+			} else {
+				last;
+			}
+		}
+		close(IN);
+
+		# There is no information about disk space device in sadc file
+		#@DEVICE_SPACE_LIST = ...;
 
 	} elsif ($sar_file && -f "$sar_file") {
 
@@ -1592,212 +1626,42 @@ sub get_device_list
 			}
 		}
 		my $type = '';
-		my @headers = ();
-		while (my $l = <IN>) {
+		while (my $l = <IN>)
+		{
 			chomp($l);
 			$l =~ s/\r//;
-			# Skip kernel header part
-			if ($l !~ /^\d+:\d+:\d+/) {
+
+			# We only read the first sar report to extract device name
+			last if ($l !~ /^Average/);
+
+			# Skip non relevant part
+			if ($l !~ /^\d+:\d+:\d+/ || !$l) {
 				next;
 			}
-			# Format timestamp when AM or PM is used
-			$l =~ s/^(\d+:\d+:\d+)\s(AM|PM)/$1/;
 
-			last if ($l =~ m#IFACE\s+#);
-			if ($l =~ m#DEV\s+#) {
-				if ($#headers == -1) {
-					push(@headers, split(m#\s+#, $l));
-					next;
-				} else {
-					last;
-				}
+			# Get device type from reports headers
+			if ($l =~ m#(DEV|IFACE|FILESYSTEM)\s+#) {
+				$type = $1;
+				next;
 			}
-			# Empty line, maybe the end of a report
-			if (($l eq '') && ($#headers >= 0)) {
-				last;
-			}
-			# Get all values reported
-			if ($#headers >= 0) {
-				my @values = ();
-				push(@values, split(m#\s+#, $l));
-				last if ($#values != $#headers);
-				next if ( $values[1] =~ /^loop\d+/);
-				if (!grep(m#^$values[1]$#, @dev_list)) {
-					push(@dev_list, $values[1]);
-				}
+
+			# Extract values from the current line
+			my @values = ();
+			push(@values, split(m#\s+#, $l));
+			next if ( $values[1] =~ /^loop\d+/); # skip loop device
+
+			# Set device list following the type
+			if ($type eq 'DEV') {
+				push(@DEVICE_LIST, $values[1]) if (!grep(/^$values[1]$/, @DEVICE_LIST));
+			} elsif ($type eq 'IFACE') {
+				push(@IFACE_LIST, $values[1]) if (!grep(/^$values[1]$/, @IFACE_LIST));
+			} elsif ($type eq 'FILESYSTEM') {
+				push(@DEVICE_SPACE_LIST, $values[8]) if (!grep(/^$values[8]$/, @DEVICE_SPACE_LIST));
 			}
 		}
 		close(IN);
 	}
-
-	return @dev_list;
 }
-
-sub get_device_space_list
-{
-	my ($sar_file, $sadc_file) = @_;
-
-	my @dev_list = ();
-
-	if ($sadc_file && -f "$sadc_file") {
-
-		my $command = "$SADF_PROG -t -P ALL -d $sadc_file -- -F -p";
-		print STDERR "DEBUG: looking for device list using command $command'\n" if ($DEBUG);
-		# Load data from file
-		if (!open(IN, "$command |")) {
-			die "FATAL: can't read output from command ($command): $!\n";
-		}
-		while (my $l = <IN>) {
-			chomp($l);
-			# hostname;interval;timestamp;MBfsfree;MBfsused;%fsused;%ufsused;Ifree;Iused;%Iused;FILESYSTEM
-			my @data = split(/;/, $l);
-			next if ($data[2] !~ /^\d+/);
-			$data[10] =~ s/.*\///;
-			next if ($data[10] =~ /^loop\d+/);
-			if (!grep(m#^$data[10]$#, @dev_list)) {
-				push(@dev_list, $data[10]);
-			} else {
-				last;
-			}
-		}
-		close(IN);
-
-	} elsif ($sar_file && -f "$sar_file") {
-
-		print STDERR "DEBUG: looking for devices in sar file $sar_file\n" if ($DEBUG);
-		# Load data from file
-		if (!&is_compressed($sar_file)) {
-			if (!open(IN, "$sar_file")) {
-				die "FATAL: can't read input file $sar_file: $!\n";
-			}
-		} else {
-			if (!open(IN, "$ZCAT_PROG $sar_file |")) {
-				die "FATAL: can't read pipe from command: $ZCAT_PROG $sar_file, $!\n";
-			}
-		}
-		my $type = '';
-		my @headers = ();
-		while (my $l = <IN>) {
-			chomp($l);
-			$l =~ s/\r//;
-			# Skip kernel header part
-			if ($l !~ /^\d+:\d+:\d+/) {
-				next;
-			}
-			# Format timestamp when AM or PM is used
-			$l =~ s/^(\d+:\d+:\d+)\s(AM|PM)/$1/;
-
-			last if ($l =~ m#CPU\s+# && $#headers > 0);
-			if ($l =~ m#MBfsfree\s+#) {
-				if ($#headers == -1) {
-					push(@headers, split(m#\s+#, $l));
-					next;
-				} else {
-					last;
-				}
-			}
-			# Empty line, maybe the end of a report
-			if (($l eq '') && ($#headers >= 0)) {
-				last;
-			}
-			# Get all values reported
-			if ($#headers >= 0) {
-				my @values = ();
-				push(@values, split(m#\s+#, $l));
-				last if ($#values != $#headers);
-				$values[8] =~ s/.*\///;
-				next if ( $values[8] =~ /^loop\d+/);
-				if (!grep(m#^$values[8]$#, @dev_list)) {
-					push(@dev_list, $values[8]);
-				}
-			}
-		}
-		close(IN);
-	}
-
-	return @dev_list;
-}
-
-sub get_interface_list
-{
-	my ($sar_file, $sadc_file) = @_;
-
-	my @dev_list = ();
-
-	if ($sadc_file && -f "$sadc_file") {
-
-		my $command = "$SADF_PROG -t -P ALL -d $sadc_file -- -n DEV";
-		print STDERR "DEBUG: looking for device list using command $command'\n" if ($DEBUG);
-		# Load data from file
-		if (!open(IN, "$command |")) {
-			die "FATAL: can't read output from command ($command): $!\n";
-		}
-		while (my $l = <IN>) {
-			chomp($l);
-			# hostname;interval;timestamp;IFACE;rxpck/s;txpck/s;rxkB/s;txkB/s;rxcmp/s;txcmp/s;rxmcst/s
-			my @data = split(/;/, $l);
-			next if ($data[2] !~ /^\d+/);
-			if (!grep(m#^$data[3]$#, @dev_list)) {
-				push(@dev_list, $data[3]);
-			} else {
-				last;
-			}
-		}
-		close(IN);
-
-	} elsif ($sar_file && -f "$sar_file") {
-
-		# Load data from file
-		if (!&is_compressed($sar_file)) {
-			if (!open(IN, "$sar_file")) {
-				die "FATAL: can't read input file $sar_file: $!\n";
-			}
-		} else {
-			if (!open(IN, "$ZCAT_PROG $sar_file |")) {
-				die "FATAL: can't read input file $sar_file: $!\n";
-			}
-		}
-		my $type = '';
-		my @headers = ();
-		while (my $l = <IN>) {
-			chomp($l);
-			$l =~ s/\r//;
-			# Skip kernel header part
-			if ($l !~ /^\d+:\d+:\d+/) {
-				next;
-			}
-			# Format timestamp when AM or PM is used
-			$l =~ s/^(\d+:\d+:\d+)\s(AM|PM)/$1/;
-
-			if ($l =~ m#IFACE\s+#) {
-				if ($#headers == -1) {
-					push(@headers, split(m#\s+#, $l));
-					next;
-				} else {
-					last;
-				}
-			}
-			# Empty line, maybe the end of a report
-			if (($l eq '') && ($#headers >= 0)) {
-				last;
-			}
-			# Get all values reported
-			if ($#headers >= 0) {
-				my @values = ();
-				push(@values, split(m#\s+#, $l));
-				last if ($#values != $#headers);
-				if (!grep(m#^$values[1]$#, @dev_list)) {
-					push(@dev_list, $values[1]);
-				}
-			}
-		}
-		close(IN);
-
-	}
-
-	return @dev_list;
-}
-
 
 sub write_database_info
 {
@@ -7913,7 +7777,7 @@ AAAASUVORK5CYII=';
 };
 	}
 
-	if (!$DISABLE_SAR  && $#DEVICE_LIST >= 0) {
+	if (!$DISABLE_SAR && $#DEVICE_LIST >= 0) {
 		$menu_str .= qq{
               <li id="menu-system" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">System <b class="caret"></b></a>
@@ -7999,9 +7863,8 @@ AAAASUVORK5CYII=';
 		    </ul>
 		  </li>
 } if ($#DEVICE_SPACE_LIST >= 0);
+
 		if ($#IFACE_LIST >= 0) {
-
-
 			$menu_str .= qq{
 		  <li id="menu-network" class="dropdown-submenu">
 		     <a href="#" tabindex="-1">Network </a>
@@ -8020,18 +7883,15 @@ AAAASUVORK5CYII=';
 };
 			}
 			$menu_str .= qq{
-		    </ul>
-		  </li>
+                </ul>
+              </li>
 };
 		}
+
 		$menu_str .= qq{
                 </ul>
               </li>
-} if ($#IFACE_LIST >= 0);
-		$menu_str .= qq{
-                </ul>
-              </li>
-} if ($#IFACE_LIST < 0 and $#DEVICE_LIST < 0 and $#DEVICE_SPACE_LIST <= 0);
+};
 	}
 
 	my $begin_date = '';
@@ -8040,22 +7900,22 @@ AAAASUVORK5CYII=';
         $end_date = "$e_year-$e_month-$e_day $e_hour:$e_min" if ($END && $e_year);
 
 	$menu_str .= qq{
-              <li id="menu-about" class="dropdown"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=about&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">About</a></li>
-              <li id="menu-time" class="dropdown">
-                <a href="#" class="dropdown-toggle" data-toggle="dropdown">Time selector <b class="caret"></b></a>
-                <ul class="dropdown-menu">
-		  <li id="menu-time-year"><a href="" onclick="custom_date('year'); return false;">Year</a></li>
-		  <li id="menu-time-month"><a href="" onclick="custom_date('month'); return false;">Month</a></li>
-		  <li id="menu-time-week"><a href="" onclick="custom_date('week'); return false;">Week</a></li>
-		  <li id="menu-time-day"><a href="" onclick="custom_date('day'); return false;">Day</a></li>
-		  <li id="menu-time-backward"><a href="" onclick="go_backward(); return false;">Backward</a></li>
-		  <li id="menu-time-forward"><a href="" onclick="go_forward(); return false;">Forward</a></li>
-		</ul>
-	      </li>
-          </ul>
-        </div><!--/.nav-collapse -->
+          <li id="menu-about" class="dropdown"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=about&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">About</a></li>
+          <li id="menu-time" class="dropdown">
+            <a href="#" class="dropdown-toggle" data-toggle="dropdown">Time selector <b class="caret"></b></a>
+            <ul class="dropdown-menu">
+               <li id="menu-time-year"><a href="" onclick="custom_date('year'); return false;">Year</a></li>
+	       <li id="menu-time-month"><a href="" onclick="custom_date('month'); return false;">Month</a></li>
+	       <li id="menu-time-week"><a href="" onclick="custom_date('week'); return false;">Week</a></li>
+	       <li id="menu-time-day"><a href="" onclick="custom_date('day'); return false;">Day</a></li>
+	       <li id="menu-time-backward"><a href="" onclick="go_backward(); return false;">Backward</a></li>
+	       <li id="menu-time-forward"><a href="" onclick="go_forward(); return false;">Forward</a></li>
+ 	    </ul>
+	 </li>
+      </ul>
+     </div><!--/.nav-collapse -->
 
-        <div class="navbar-collapse collapse pull-right">
+     <div class="navbar-collapse collapse pull-right">
           <ul class="nav navbar-nav">
               <li id="menu-time" class="dropdown" style="color: #ffffff;">
 		<table><tr><td>
@@ -8067,9 +7927,7 @@ AAAASUVORK5CYII=';
 		</td></tr></table>
 	      </li>
           </ul>
-        </div><!--/.nav-collapse -->
-      </div>
-    </div>
+     </div><!--/.nav-collapse -->
 </div><!-- div navigation -->
 
 <script type="text/javascript">
@@ -10576,7 +10434,7 @@ sub load_pg_binary
 			my %_global_infos = %{$stats{global_infos}} ;
 			foreach my $inf (keys %_global_infos) {
 				if ($_global_infos{$inf} =~ /ARRAY/) {
-					push(@{$inf}, @{$_global_infos{$inf}});
+					push(@{$global_infos{$inf}}, @{$_global_infos{$inf}});
 				} else {
 					$global_infos{$inf} = $_global_infos{$inf};
 				}
@@ -10647,9 +10505,10 @@ sub load_pg_binary
 # Load statistics from sar cache into memory
 sub load_sar_binary
 {
-        my ($in_dir) = @_;
+        my ($in_dir, $varname) = @_;
 
 	foreach my $name (@sar_to_be_stored) {
+		next if ($varname && $name ne $varname); # Just load the requested binary file
 		my %stats = ();
 		if (-e "$in_dir/$name.bin") {
 			my $lfh = new IO::File "<$in_dir/$name.bin";
@@ -10666,7 +10525,7 @@ sub load_sar_binary
 			my %_global_infos = %{$stats{global_infos}} ;
 			foreach my $inf (keys %_global_infos) {
 				if ($_global_infos{$inf} =~ /ARRAY/) {
-					push(@{$inf}, @{$_global_infos{$inf}});
+					push(@{$global_infos{$inf}}, @{$_global_infos{$inf}});
 				} else {
 					$global_infos{$inf} = $_global_infos{$inf};
 				}
