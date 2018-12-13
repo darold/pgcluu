@@ -53,6 +53,7 @@ my $SADC_INPUT_FILE = '';
 my $SAR_INPUT_FILE  = '';
 our @DEVICE_LIST    = ();
 our @IFACE_LIST     = ();
+our @DEVICE_SPACE_LIST = ();
 my $ZCAT_PROG       = '/bin/zcat';
 my $CACHE           = 0;
 my $CLEAN           = 0;
@@ -1277,8 +1278,10 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 			# Look for disk device and network interface from the sar file
 			if (!$DISABLE_SAR) {
-				@DEVICE_LIST = &get_device_list($sar_file, $sadc_file);
-				@IFACE_LIST = &get_interface_list($sar_file, $sadc_file);
+				@DEVICE_LIST = ();
+				@IFACE_LIST = ();
+				@DEVICE_SPACE_LIST = ();
+				&set_device_list($sar_file, $sadc_file);
 			}
 
 			# Enable capture mode if all data file are not present
@@ -1409,6 +1412,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 		@DEVICE_LIST = ();
 		@IFACE_LIST = ();
+		@DEVICE_SPACE_LIST = ();
 
 		#Load statistics from cache files
 		if ($#binfiles >= 0) {
@@ -1417,6 +1421,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			# Look for disk device and network interface from global info
 			push(@DEVICE_LIST, @{$global_infos{DEVICE_LIST}}) if (exists $global_infos{DEVICE_LIST});
 			push(@IFACE_LIST, @{$global_infos{IFACE_LIST}}) if (exists $global_infos{IFACE_LIST});
+			push(@DEVICE_SPACE_LIST, @{$global_infos{DEVICE_SPACE_LIST}}) if (exists $global_infos{DEVICE_SPACE_LIST});
 		}
 		# In cache/binary mode we can not process sadc binary data file
 		if (($#binfiles == -1) && -f "$sadc_file") {
@@ -1444,6 +1449,9 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			}
 			foreach my $d (@IFACE_LIST) {
 				push(@{$global_infos{IFACE_LIST}}, $d) if (!grep(/^$d$/, @{$global_infos{IFACE_LIST}}));
+			}
+			foreach my $d (@DEVICE_SPACE_LIST) {
+				push(@{$global_infos{DEVICE_SPACE_LIST}}, $d) if (!grep(/^$d$/, @{$global_infos{DEVICE_SPACE_LIST}}));
 			}
 			&dump_sar_binary($in_dir);
 
@@ -1836,43 +1844,57 @@ sub get_data_id
 	return -1;
 }
 
-sub get_device_list
+sub set_device_list
 {
 	my ($sar_file, $sadc_file) = @_;
-
-	my @dev_list = ();
 
 	if ($sadc_file && -f "$sadc_file") {
 
 		my $command = "$SADF_PROG -t -P ALL -d $sadc_file -- -d -p";
-		print "DEBUG: looking for device list using command $command'\n" if ($DEBUG);
+		print STDERR "DEBUG: looking for device list using command $command'\n" if ($DEBUG);
 		# Load data from file
 		if (!open(IN, "$command |")) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
 		while (my $l = <IN>) {
 			chomp($l);
-			$l =~ s/\r//;
 			# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
-			# sysstat version 11.5.7:
-			# Replace "avgrq-sz" field (expressed in sectors) with "areq-sz" (expressed in kilobytes)
-			# Rename "avgqu-sz" field to "aqu-sz"
-			# "rd_sec/s" and "wr_sec/s" (expressed in sectors) fields have been replaced
-			# with "rkB/s" and "wkB/s" (expressed in kilobytes)
 			my @data = split(/;/, $l);
 			next if ($data[2] !~ /^\d+/);
-			# loop devices are excluded
-			next if ($data[3] =~ /^loop\d+/);
-			if (!grep(m#^$data[3]$#, @dev_list)) {
-				push(@dev_list, $data[3]);
+			next if ( $data[3] =~ /^loop\d+/);
+			if (!grep(m#^$data[3]$#, @DEVICE_LIST)) {
+				push(@DEVICE_LIST, $data[3]);
 			} else {
 				last;
 			}
 		}
 		close(IN);
 
+		$command = "$SADF_PROG -t -P ALL -d $sadc_file -- -n DEV";
+		print STDERR "DEBUG: looking for network device list using command $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		while (my $l = <IN>) {
+			chomp($l);
+			#hostname;interval;timestamp;IFACE;rxpck/s;txpck/s;...
+			my @data = split(/;/, $l);
+			next if ($data[2] !~ /^\d+/);
+			if (!grep(m#^$data[3]$#, @IFACE_LIST)) {
+				push(@IFACE_LIST, $data[3]);
+			} else {
+				last;
+			}
+		}
+		close(IN);
+
+		# There is no information about disk space device in sadc file
+		#@DEVICE_SPACE_LIST = ...;
+
 	} elsif ($sar_file && -f "$sar_file") {
 
+		print STDERR "DEBUG: looking for devices in sar file $sar_file\n" if ($DEBUG);
 		# Load data from file
 		if (!&is_compressed($sar_file)) {
 			if (!open(IN, "$sar_file")) {
@@ -1884,128 +1906,42 @@ sub get_device_list
 			}
 		}
 		my $type = '';
-		my @headers = ();
-		while (my $l = <IN>) {
+		while (my $l = <IN>)
+		{
 			chomp($l);
 			$l =~ s/\r//;
-			# Skip kernel header part
-			if ($l !~ /^\d+:\d+:\d+/) {
+
+			# We only read the first sar report to extract device name
+			last if ($l !~ /^Average/);
+
+			# Skip non relevant part
+			if ($l !~ /^\d+:\d+:\d+/ || !$l) {
 				next;
 			}
-			# Format timestamp when AM or PM is used
-			$l =~ s/^(\d+:\d+:\d+)\s(AM|PM)/$1/;
 
-			last if ($l =~ m#IFACE\s+#);
-			if ($l =~ m#DEV\s+#) {
-				if ($#headers == -1) {
-					push(@headers, split(m#\s+#, $l));
-					next;
-				} else {
-					last;
-				}
+			# Get device type from reports headers
+			if ($l =~ m#(DEV|IFACE|FILESYSTEM)\s+#) {
+				$type = $1;
+				next;
 			}
-			# Empty line, maybe the end of a report
-			if (($l eq '') && ($#headers >= 0)) {
-				last;
-			}
-			# Get all values reported
-			if ($#headers >= 0) {
-				my @values = ();
-				push(@values, split(m#\s+#, $l));
-				last if ($#values != $#headers);
-				next if ( $values[1] =~ /^loop\d+/);
-				if (!grep(m#^$values[1]$#, @dev_list)) {
-					push(@dev_list, $values[1]);
-				}
+
+			# Extract values from the current line
+			my @values = ();
+			push(@values, split(m#\s+#, $l));
+			next if ( $values[1] =~ /^loop\d+/); # skip loop device
+
+			# Set device list following the type
+			if ($type eq 'DEV') {
+				push(@DEVICE_LIST, $values[1]) if (!grep(/^$values[1]$/, @DEVICE_LIST));
+			} elsif ($type eq 'IFACE') {
+				push(@IFACE_LIST, $values[1]) if (!grep(/^$values[1]$/, @IFACE_LIST));
+			} elsif ($type eq 'FILESYSTEM') {
+				push(@DEVICE_SPACE_LIST, $values[8]) if (!grep(/^$values[8]$/, @DEVICE_SPACE_LIST));
 			}
 		}
 		close(IN);
 	}
-
-	return @dev_list;
 }
-
-sub get_interface_list
-{
-	my ($sar_file, $sadc_file) = @_;
-
-	my @dev_list = ();
-
-	if ($sadc_file && -f "$sadc_file") {
-
-		my $command = "$SADF_PROG -t -P ALL -d $sadc_file -- -n DEV";
-		print "DEBUG: looking for device list using command $command'\n" if ($DEBUG);
-		# Load data from file
-		if (!open(IN, "$command |")) {
-			die "FATAL: can't read output from command ($command): $!\n";
-		}
-		while (my $l = <IN>) {
-			chomp($l);
-			$l =~ s/\r//;
-			# hostname;interval;timestamp;IFACE;rxpck/s;txpck/s;rxkB/s;txkB/s;rxcmp/s;txcmp/s;rxmcst/s
-			my @data = split(/;/, $l);
-			next if ($data[2] !~ /^\d+/);
-			if (!grep(m#^$data[3]$#, @dev_list)) {
-				push(@dev_list, $data[3]);
-			} else {
-				last;
-			}
-		}
-		close(IN);
-
-	} elsif ($sar_file && -f "$sar_file") {
-
-		# Load data from file
-		if (!&is_compressed($sar_file)) {
-			if (!open(IN, "$sar_file")) {
-				die "FATAL: can't read input file $sar_file: $!\n";
-			}
-		} else {
-			if (!open(IN, "$ZCAT_PROG $sar_file |")) {
-				die "FATAL: can't read input file $sar_file: $!\n";
-			}
-		}
-		my $type = '';
-		my @headers = ();
-		while (my $l = <IN>) {
-			chomp($l);
-			$l =~ s/\r//;
-			# Skip kernel header part
-			if ($l !~ /^\d+:\d+:\d+/) {
-				next;
-			}
-			# Format timestamp when AM or PM is used
-			$l =~ s/^(\d+:\d+:\d+)\s(AM|PM)/$1/;
-
-			if ($l =~ m#IFACE\s+#) {
-				if ($#headers == -1) {
-					push(@headers, split(m#\s+#, $l));
-					next;
-				} else {
-					last;
-				}
-			}
-			# Empty line, maybe the end of a report
-			if (($l eq '') && ($#headers >= 0)) {
-				last;
-			}
-			# Get all values reported
-			if ($#headers >= 0) {
-				my @values = ();
-				push(@values, split(m#\s+#, $l));
-				last if ($#values != $#headers);
-				if (!grep(m#^$values[1]$#, @dev_list)) {
-					push(@dev_list, $values[1]);
-				}
-			}
-		}
-		close(IN);
-
-	}
-
-	return @dev_list;
-}
-
 
 sub write_database_info
 {
@@ -8333,6 +8269,7 @@ sub generate_html_menu
 		    </ul>
 		  </li>
 } if ($#DEVICE_LIST >= 0);
+
 		my $disable_network = ' disabled';
 		$disable_network = '' if (($#IFACE_LIST >= 0) || (!$SADC_INPUT_FILE && $SAR_INPUT_FILE));
 		$menu_str .= qq{
@@ -8394,6 +8331,7 @@ sub generate_html_menu
 	$menu_str .= qq{
               <li id="menu-about" class="dropdown"><a href="index.html#about">About</a></li>
           </ul>
+	  </li>
         </div><!--/.nav-collapse -->
       </div>
     </div>
@@ -8995,6 +8933,9 @@ sub compute_space_device_report
 	if (scalar keys %devices_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
 			next if ($n =~ /^loop\d+/);
+			if (!grep(/^$n$/, @DEVICE_SPACE_LIST)) {
+				push(@DEVICE_SPACE_LIST, $n);
+			}
 			# Open a filehandle for each database
 			my $fh = new IO::File ">$OUTPUT_DIR/system-space-$n.html";
 			if (not defined $fh) {
@@ -9017,6 +8958,8 @@ sub compute_space_device_report
 
 sub compute_util_device_stat
 {
+	my %devices = ();
+
 	for (my $i = 0; $i <= $#_; $i++) {
 		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
 		# sysstat version 11.5.7:
@@ -9034,6 +8977,10 @@ sub compute_util_device_stat
 
 		map { s/,/\./ } @data ;
 		$sar_util_devices_stat{$data[2]}{$data[3]}{'%util'} = ($data[11]||0);
+		$devices{$data[3]} = 1;
+	}
+	foreach my $k (keys %devices) {
+		push(@DEVICE_LIST, $k) if (!grep(/^$k$/, @DEVICE_LIST));
 	}
 }
 
@@ -9064,6 +9011,7 @@ sub compute_util_device_report
 
 sub compute_space_device_stat
 {
+	my %devices = ();
 	for (my $i = 0; $i <= $#_; $i++) {
 		# hostname;interval;timestamp;MBfsfree;MBfsused;%fsused;%ufsused;Ifree;Iused;%Iused;FILESYSTEM
 		my @data = split(/;/, $_[$i]);
@@ -9077,11 +9025,19 @@ sub compute_space_device_stat
 		next if (!&device_in_report($data[10]));
 		$sar_space_devices_stat{$data[2]}{$data[10]}{'%fsused'} = $data[5];
 		$sar_space_devices_stat{$data[2]}{$data[10]}{'%iused'} = $data[9];
+		$devices{$data[10]} = 1;
+	}
+	foreach my $k (keys %devices) {
+		if (!grep(/^$k$/, @DEVICE_SPACE_LIST)) {
+			push(@DEVICE_SPACE_LIST, $k) if (!grep(/^$k$/, @DEVICE_SPACE_LIST));
+		}
 	}
 }
 
 sub compute_network_stat
 {
+	my %devices = ();
+
 	for (my $i = 0; $i <= $#_; $i++) {
 		# hostname;interval;timestamp;IFACE;rxpck/s;txpck/s;rxkB/s;txkB/s;rxcmp/s;txcmp/s;rxmcst/s
 		my @data = split(/;/, $_[$i]);
@@ -9095,6 +9051,10 @@ sub compute_network_stat
 		map { s/,/\./ } @data ;
 		$sar_networks_stat{$data[2]}{$data[3]}{'rxkB/s'} = ($data[6]*1024);
 		$sar_networks_stat{$data[2]}{$data[3]}{'txkB/s'} = ($data[7]*1024);
+		$devices{$data[3]} = 1;
+	}
+	foreach my $k (keys %devices) {
+		push(@IFACE_LIST, $k) if (!grep(/^$k$/, @IFACE_LIST));
 	}
 }
 
@@ -11339,6 +11299,7 @@ sub build_daily_binary
 			# Reset global variables before processing a new work dir
 			&clear_stats();
 			@DEVICE_LIST = ();
+			@DEVICE_SPACE_LIST = ();
 			@IFACE_LIST = ();
 
 			# Switch to next day
