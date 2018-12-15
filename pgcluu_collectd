@@ -384,7 +384,7 @@ my $result = GetOptions(
 
 # Autodetect package listing command to use
 if (!$PKG_LIST_PROG) {
-	$PKG_LIST_PROG = `which rpm dpkg`;
+	$PKG_LIST_PROG = `which rpm dpkg 2>/dev/null`;
 	chomp($PKG_LIST_PROG);
 	$PKG_LIST_PROG .= ' -qa' if ($PKG_LIST_PROG =~ /\/rpm/);
 	$PKG_LIST_PROG .= ' -l' if ($PKG_LIST_PROG =~ /\/dpkg/);
@@ -1683,9 +1683,12 @@ sub grab_os_information
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 	my @crontab = `$cmd`;
 	# Get package installation information
-	$cmd = "$PKG_LIST_PROG 2>/dev/null | grep postgres";
-	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
-	my @installation = `$cmd`;
+	my @installation = ();
+	if ($PKG_LIST_PROG) {
+		$cmd = "$PKG_LIST_PROG 2>/dev/null | grep postgres";
+		$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+		@installation = `$cmd`;
+	}
 
 	print OUT "[CPU]\n";
 	print OUT @cpuinfo;
