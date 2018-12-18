@@ -801,16 +801,9 @@ while (1) {
 	&spawn_collect(sub {
 		&collect_metrics();
 	});
-	# Wait for the process to terminate
-	while ($COLLECT_PID) {
-		my $kid = waitpid(-1, WNOHANG);
-		if ($kid > 0) {
-			if ($COLLECT_PID = $kid) {
-				$COLLECT_PID = 0;
-			}
-		}
-		sleep(1);
-	}
+
+	# Wait for all child process to terminate
+	&wait_all_childs();
 
 	if (!$CAPTURE) {
 		# Lookup if output dir size is upper than limit
