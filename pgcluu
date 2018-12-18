@@ -80,7 +80,6 @@ our %all_stat_database = ();
 our %all_stat_database_conflicts = ();
 our %all_database_size = ();
 our %all_tablespace_size = ();
-our %all_vacuum_stat = ();
 our %all_stat_user_tables = ();
 our %all_stat_user_indexes = ();
 our %all_stat_invalid_indexes = ();
@@ -135,7 +134,6 @@ our @pg_to_be_stored = (
 	'all_stat_database_conflicts',
 	'all_database_size',
 	'all_tablespace_size',
-	'all_vacuum_stat',
 	'all_stat_user_tables',
 	'all_stat_user_indexes',
 	'all_stat_invalid_indexes',
@@ -2932,70 +2930,159 @@ sub pg_stat_user_tables
 	my %start_vals = ();
 	my $tmp_val = 0;
 
-	# Load data from file
-	my $curfh = open_filehdl("$in_dir/$file");
-	while (my $l = <$curfh>) {
-		chomp($l);
-		next if (!$l);
-		my @data = split(/;/, $l);
-		next if (!&normalize_line(\@data));
+	# Load data from single file (obsolete)
+	if (!-e "$in_dir/end-$file")
+	{
+		my $curfh = open_filehdl("$in_dir/$file");
+		while (my $l = <$curfh>) {
+			chomp($l);
+			next if (!$l);
+			my @data = split(/;/, $l);
+			next if (!&normalize_line(\@data));
 
-		# timestamp | dbname | relid | schemaname | relname | seq_scan | seq_tup_read | idx_scan | idx_tup_fetch | n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | last_vacuum | last_autovacuum | last_analyze | last_autoanalyze | vacuum_count | autovacuum_count | analyze_count | autoanalyze_count
+			# timestamp | dbname | relid | schemaname | relname | seq_scan | seq_tup_read | idx_scan | idx_tup_fetch | n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | last_vacuum | last_autovacuum | last_analyze | last_autoanalyze | vacuum_count | autovacuum_count | analyze_count | autoanalyze_count
 
-		$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} = $data[15] if (!$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} || ($data[15] gt $OVERALL_STATS{'database'}{$data[1]}{last_vacuum}));
-		$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} = $data[16] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} || ($data[16] gt $OVERALL_STATS{'database'}{$data[1]}{last_autovacuum}));
-		$OVERALL_STATS{'database'}{$data[1]}{last_analyze} = $data[17] if (!$OVERALL_STATS{'database'}{$data[1]}{last_analyze} || ($data[17] gt $OVERALL_STATS{'database'}{$data[1]}{last_analyze}));
-		$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} = $data[18] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} || ($data[18] gt $OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze}));
+			$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} = $data[15] if (!$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} || ($data[15] gt $OVERALL_STATS{'database'}{$data[1]}{last_vacuum}));
+			$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} = $data[16] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} || ($data[16] gt $OVERALL_STATS{'database'}{$data[1]}{last_autovacuum}));
+			$OVERALL_STATS{'database'}{$data[1]}{last_analyze} = $data[17] if (!$OVERALL_STATS{'database'}{$data[1]}{last_analyze} || ($data[17] gt $OVERALL_STATS{'database'}{$data[1]}{last_analyze}));
+			$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} = $data[18] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} || ($data[18] gt $OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze}));
 
-		$data[4] = "$data[3].$data[4]";
-		push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
+			$data[4] = "$data[3].$data[4]";
+			push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
 
-		# Stores last manual vacuum/analyze
-		$all_stat_user_tables{$data[1]}{$data[4]}{last_vacuum} = $data[15] if ($data[15]);
-		$all_stat_user_tables{$data[1]}{$data[4]}{last_autovacuum} = $data[16] if ($data[16]);
-		$all_stat_user_tables{$data[1]}{$data[4]}{last_analyze} = $data[17] if ($data[17]);
-		$all_stat_user_tables{$data[1]}{$data[4]}{last_autoanalyze} = $data[18] if ($data[18]);
+			# Stores last manual vacuum/analyze
+			$all_stat_user_tables{$data[1]}{$data[4]}{last_vacuum} = $data[15] if ($data[15]);
+			$all_stat_user_tables{$data[1]}{$data[4]}{last_autovacuum} = $data[16] if ($data[16]);
+			$all_stat_user_tables{$data[1]}{$data[4]}{last_analyze} = $data[17] if ($data[17]);
+			$all_stat_user_tables{$data[1]}{$data[4]}{last_autoanalyze} = $data[18] if ($data[18]);
 
-		# Get database statistics
-		if (($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]) };
-		$all_vacuum_stat{$data[1]}{$data[4]}{seq_scan} += $tmp_val;
-		$all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} = $data[5] || 0;
-		if (($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]) };
-		$all_vacuum_stat{$data[1]}{$data[4]}{idx_scan} += $tmp_val;
-		$all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} = $data[6] || 0;
-		if (($data[9] - $start_vals{$data[1]}{$data[4]}[9]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[4]}[9]) };
-		$all_vacuum_stat{$data[1]}{$data[4]}{n_tup_ins} += $tmp_val;
-		$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} = $data[9] || 0;
-		if (($data[10] - $start_vals{$data[1]}{$data[4]}[10]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[10] - $start_vals{$data[1]}{$data[4]}[10]) };
-		$all_vacuum_stat{$data[1]}{$data[4]}{n_tup_upd} += $tmp_val;
-		$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} = $data[10] || 0;
-		if (($data[11] - $start_vals{$data[1]}{$data[4]}[11]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[11] - $start_vals{$data[1]}{$data[4]}[11]) };
-		$all_vacuum_stat{$data[1]}{$data[4]}{n_tup_del} += $tmp_val;
-		$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} = $data[11] || 0;
-		if (($data[12] - $start_vals{$data[1]}{$data[4]}[12]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[12] - $start_vals{$data[1]}{$data[4]}[12]) };
-		$all_vacuum_stat{$data[1]}{$data[4]}{n_tup_hot_upd} += $tmp_val;
-		$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} = $data[12] || 0;
-		$all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup} = $data[14];
-		$all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup} = $data[13];
-		$all_stat_user_tables{$data[1]}{$data[4]}{dead_vs_live} = sprintf("%.2f", ($data[14]*100)/(($data[13]+$data[14])||1));
-		if ($#data > 19) {
-			if (($data[19] - $start_vals{$data[1]}{$data[4]}[19]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[19] - $start_vals{$data[1]}{$data[4]}[19]) };
-			$all_vacuum_stat{$data[1]}{$data[4]}{vacuum_count} += $tmp_val;
-			$all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} = $data[19];
-			if (($data[20] - $start_vals{$data[1]}{$data[4]}[20]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[20] - $start_vals{$data[1]}{$data[4]}[20]) };
-			$all_vacuum_stat{$data[1]}{$data[4]}{autovacuum_count} += $tmp_val;
-			$all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} = $data[20];
-			if (($data[21] - $start_vals{$data[1]}{$data[4]}[21]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[21] - $start_vals{$data[1]}{$data[4]}[21]) };
-			$all_vacuum_stat{$data[1]}{$data[4]}{analyze_count} += $tmp_val;
-			$all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} = $data[21];
-			if (($data[22] - $start_vals{$data[1]}{$data[4]}[22]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[22] - $start_vals{$data[1]}{$data[4]}[22]) };
-			$all_vacuum_stat{$data[1]}{$data[4]}{autoanalyze_count} += $tmp_val;
-			$all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} = $data[22];
+			# Get database statistics
+			if (($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]) };
+			$all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} += $tmp_val;
+			if (($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]) };
+			$all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} += $tmp_val;
+			if (($data[9] - $start_vals{$data[1]}{$data[4]}[9]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[4]}[9]) };
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} += $tmp_val;
+			if (($data[10] - $start_vals{$data[1]}{$data[4]}[10]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[10] - $start_vals{$data[1]}{$data[4]}[10]) };
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} += $tmp_val;
+			if (($data[11] - $start_vals{$data[1]}{$data[4]}[11]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[11] - $start_vals{$data[1]}{$data[4]}[11]) };
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} += $tmp_val;
+			if (($data[12] - $start_vals{$data[1]}{$data[4]}[12]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[12] - $start_vals{$data[1]}{$data[4]}[12]) };
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} += $tmp_val;
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup} = $data[14];
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup} = $data[13];
+			$all_stat_user_tables{$data[1]}{$data[4]}{dead_vs_live} = sprintf("%.2f", ($data[14]*100)/(($data[13]+$data[14])||1));
+			if ($#data > 19) {
+				if (($data[19] - $start_vals{$data[1]}{$data[4]}[19]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[19] - $start_vals{$data[1]}{$data[4]}[19]) };
+				$all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} += $tmp_val;
+				if (($data[20] - $start_vals{$data[1]}{$data[4]}[20]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[20] - $start_vals{$data[1]}{$data[4]}[20]) };
+				$all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} += $tmp_val;
+				if (($data[21] - $start_vals{$data[1]}{$data[4]}[21]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[21] - $start_vals{$data[1]}{$data[4]}[21]) };
+				$all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} += $tmp_val;
+				if (($data[22] - $start_vals{$data[1]}{$data[4]}[22]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[22] - $start_vals{$data[1]}{$data[4]}[22]) };
+				$all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} += $tmp_val;
+			}
+			@{$start_vals{$data[1]}{$data[4]}} = ();
+			push(@{$start_vals{$data[1]}{$data[4]}}, @data);
 		}
-		@{$start_vals{$data[1]}{$data[4]}} = ();
-		push(@{$start_vals{$data[1]}{$data[4]}}, @data);
+		$curfh->close();
+	} else {
+		# Read start file
+		my $curfh = open_filehdl("$in_dir/$file");
+		while (my $l = <$curfh>) {
+			chomp($l);
+			next if (!$l);
+			my @data = split(/;/, $l);
+			next if (!&normalize_line(\@data));
+
+			# timestamp | dbname | relid | schemaname | relname | seq_scan | seq_tup_read | idx_scan | idx_tup_fetch | n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | last_vacuum | last_autovacuum | last_analyze | last_autoanalyze | vacuum_count | autovacuum_count | analyze_count | autoanalyze_count
+
+			$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} = $data[15] if (!$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} || ($data[15] gt $OVERALL_STATS{'database'}{$data[1]}{last_vacuum}));
+			$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} = $data[16] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} || ($data[16] gt $OVERALL_STATS{'database'}{$data[1]}{last_autovacuum}));
+			$OVERALL_STATS{'database'}{$data[1]}{last_analyze} = $data[17] if (!$OVERALL_STATS{'database'}{$data[1]}{last_analyze} || ($data[17] gt $OVERALL_STATS{'database'}{$data[1]}{last_analyze}));
+			$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} = $data[18] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} || ($data[18] gt $OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze}));
+
+			$data[4] = "$data[3].$data[4]";
+
+			# Stores last manual vacuum/analyze
+			$all_stat_user_tables{$data[1]}{$data[4]}{last_vacuum} = $data[15] if ($data[15]);
+			$all_stat_user_tables{$data[1]}{$data[4]}{last_autovacuum} = $data[16] if ($data[16]);
+			$all_stat_user_tables{$data[1]}{$data[4]}{last_analyze} = $data[17] if ($data[17]);
+			$all_stat_user_tables{$data[1]}{$data[4]}{last_autoanalyze} = $data[18] if ($data[18]);
+
+			# Get database statistics
+			$all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} = $data[5];
+			$all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} = $data[6];
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} = $data[9];
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} = $data[10];
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} = $data[11];
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} = $data[12];
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup} = $data[14];
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup} = $data[13];
+			$all_stat_user_tables{$data[1]}{$data[4]}{dead_vs_live} = sprintf("%.2f", ($data[14]*100)/(($data[13]+$data[14])||1));
+			if ($#data > 19) {
+				$all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} = $data[19];
+				$all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} = $data[20];
+				$all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} = $data[21];
+				$all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} = $data[22];
+			}
+		}
+		$curfh->close();
+
+		# Read end file and set the final value
+		$curfh = open_filehdl("$in_dir/end-$file");
+		while (my $l = <$curfh>) {
+			chomp($l);
+			next if (!$l);
+			my @data = split(/;/, $l);
+			next if (!&normalize_line(\@data));
+
+			# timestamp | dbname | relid | schemaname | relname | seq_scan | seq_tup_read | idx_scan | idx_tup_fetch | n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | last_vacuum | last_autovacuum | last_analyze | last_autoanalyze | vacuum_count | autovacuum_count | analyze_count | autoanalyze_count
+
+			$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} = $data[15] if (!$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} || ($data[15] gt $OVERALL_STATS{'database'}{$data[1]}{last_vacuum}));
+			$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} = $data[16] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} || ($data[16] gt $OVERALL_STATS{'database'}{$data[1]}{last_autovacuum}));
+			$OVERALL_STATS{'database'}{$data[1]}{last_analyze} = $data[17] if (!$OVERALL_STATS{'database'}{$data[1]}{last_analyze} || ($data[17] gt $OVERALL_STATS{'database'}{$data[1]}{last_analyze}));
+			$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} = $data[18] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} || ($data[18] gt $OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze}));
+
+			$data[4] = "$data[3].$data[4]";
+
+			# Stores last manual vacuum/analyze
+			$all_stat_user_tables{$data[1]}{$data[4]}{last_vacuum} = $data[15] if ($data[15]);
+			$all_stat_user_tables{$data[1]}{$data[4]}{last_autovacuum} = $data[16] if ($data[16]);
+			$all_stat_user_tables{$data[1]}{$data[4]}{last_analyze} = $data[17] if ($data[17]);
+			$all_stat_user_tables{$data[1]}{$data[4]}{last_autoanalyze} = $data[18] if ($data[18]);
+
+			# Get database statistics
+			$all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} = $data[5] - $all_stat_user_tables{$data[1]}{$data[4]}{seq_scan};
+			$all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} = $data[5] if ($all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} < 0);
+			$all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} = $data[6] - $all_stat_user_tables{$data[1]}{$data[4]}{idx_scan};
+			$all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} = $data[6] if ($all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} < 0);
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} = $data[9] - $all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins};
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} = $data[9] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} < 0);
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} = $data[10] - $all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd};
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} = $data[10] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} < 0);
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} = $data[11] - $all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del};
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} = $data[11] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} < 0);
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} = $data[12] - $all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd};
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} = $data[12] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} < 0);
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup} = $data[14] - $all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup};
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup} = $data[14] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup} < 0);
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup} = $data[13] - $all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup};
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup} = $data[13] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup} < 0);
+			$all_stat_user_tables{$data[1]}{$data[4]}{dead_vs_live} = sprintf("%.2f", ($data[14]*100)/(($data[13]+$data[14])||1));
+			if ($#data > 19) {
+				$all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} = $data[19] - $all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count};
+				$all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} = $data[19] if ($all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} < 0);
+				$all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} = $data[20] - $all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count};
+				$all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} = $data[20] if ($all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} < 0);
+				$all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} = $data[21] - $all_stat_user_tables{$data[1]}{$data[4]}{analyze_count};
+				$all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} = $data[21] if ($all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} < 0);
+				$all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} = $data[22] - $all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count};
+				$all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} = $data[22] if ($all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} < 0);
+			}
+		}
+		$curfh->close();
 	}
-	$curfh->close();
 }
 
 sub pg_stat_all_tables
@@ -3011,16 +3098,16 @@ sub pg_stat_user_tables_report
 	return if ($NO_TB_STAT);
 
 	my $do_vacuum = 0;
-	foreach my $db (keys %all_vacuum_stat) {
-		foreach my $t (keys %{$all_vacuum_stat{$db}}) {
-			foreach my $k (keys %{$all_vacuum_stat{$db}{$t}}) {
-				if (($k =~ /vacuum|analyze/) && $all_vacuum_stat{$db}{$t}{$k}) {
+	foreach my $db (keys %all_stat_user_tables) {
+		foreach my $t (keys %{$all_stat_user_tables{$db}}) {
+			foreach my $k (keys %{$all_stat_user_tables{$db}{$t}}) {
+				if (($k =~ /vacuum|analyze/) && $all_stat_user_tables{$db}{$t}{$k}) {
 					$do_vacuum = 1;
 				}
 			}
 		}
 	}
-	foreach my $db (keys %all_vacuum_stat) {
+	foreach my $db (keys %all_stat_user_tables) {
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^table-/);
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
@@ -3089,40 +3176,28 @@ sub pg_stat_user_tables_report
 				<tbody>
 };
 			my $has_table_data = 0;
-			foreach my $tb (sort keys %{$all_vacuum_stat{$db}}) {
+			foreach my $tb (sort keys %{$all_stat_user_tables{$db}}) {
 				next if ($tb eq 'all');
 				next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
 				my $table_data = '';
 				if ($data_info{$id}{name} eq 'table-indexes') {
-					if (!$all_vacuum_stat{$db}{$tb}{seq_scan} && !$all_vacuum_stat{$db}{$tb}{idx_scan}) {
+					if (!$all_stat_user_tables{$db}{$tb}{idx_scan} && !$all_stat_user_tables{$db}{$tb}{seq_scan}) {
 						next;
-						foreach ('idx_scan','seq_scan') {
-							$all_stat_user_tables{$db}{$tb}{$_} ||= 0;
-						}
-						$all_stat_user_tables{$db}{$tb}{idx_scan_vs_seq_scan} = sprintf("%0.2f", ($all_stat_user_tables{$db}{$tb}{idx_scan}*100)/(($all_stat_user_tables{$db}{$tb}{seq_scan}+$all_stat_user_tables{$db}{$tb}{idx_scan})||1));
-						$table_data = qq{<tr><th>$tb</th><td>$all_stat_user_tables{$db}{$tb}{seq_scan}</td><td>$all_stat_user_tables{$db}{$tb}{idx_scan}</td><td>$all_stat_user_tables{$db}{$tb}{idx_scan_vs_seq_scan}%</td></tr>};
-					} else {
-						$has_table_data = 1;
-						foreach ('idx_scan','seq_scan') {
-							$all_vacuum_stat{$db}{$tb}{$_} ||= 0;
-						}
-						$all_vacuum_stat{$db}{$tb}{idx_scan_vs_seq_scan} = sprintf("%0.2f", ($all_vacuum_stat{$db}{$tb}{idx_scan}*100)/(($all_vacuum_stat{$db}{$tb}{seq_scan}+$all_vacuum_stat{$db}{$tb}{idx_scan})||1));
-						$table_data = qq{<tr><th>$tb</th><td>$all_vacuum_stat{$db}{$tb}{seq_scan}</td><td>$all_vacuum_stat{$db}{$tb}{idx_scan}</td><td>$all_vacuum_stat{$db}{$tb}{idx_scan_vs_seq_scan}%</td></tr>};
 					}
+					$has_table_data = 1;
+					foreach ('idx_scan','seq_scan') {
+						$all_stat_user_tables{$db}{$tb}{$_} ||= 0;
+					}
+					$all_stat_user_tables{$db}{$tb}{idx_scan_vs_seq_scan} = sprintf("%0.2f", ($all_stat_user_tables{$db}{$tb}{idx_scan}*100)/(($all_stat_user_tables{$db}{$tb}{seq_scan}+$all_stat_user_tables{$db}{$tb}{idx_scan})||1));
+					$table_data = qq{<tr><th>$tb</th><td>$all_stat_user_tables{$db}{$tb}{seq_scan}</td><td>$all_stat_user_tables{$db}{$tb}{idx_scan}</td><td>$all_stat_user_tables{$db}{$tb}{idx_scan_vs_seq_scan}%</td></tr>};
 				} elsif ($data_info{$id}{name} eq 'table-query-tuples') {
-					if (!$all_vacuum_stat{$db}{$tb}{n_tup_ins} && !$all_vacuum_stat{$db}{$tb}{n_tup_upd} && !$all_vacuum_stat{$db}{$tb}{n_tup_del} && !$all_vacuum_stat{$db}{$tb}{n_tup_hot_upd}) {
+					if (!$all_stat_user_tables{$db}{$tb}{n_tup_ins} && !$all_stat_user_tables{$db}{$tb}{n_tup_upd} && !$all_stat_user_tables{$db}{$tb}{n_tup_del} && !$all_stat_user_tables{$db}{$tb}{n_tup_hot_upd}) {
 						next;
-						foreach ('n_tup_ins','n_tup_upd','n_tup_del','n_tup_hot_upd') {
-							$all_stat_user_tables{$db}{$tb}{$_} ||= 0;
-						}
-						$table_data = qq{<tr><th>$tb</th><td>$all_stat_user_tables{$db}{$tb}{n_tup_ins}</td><td>$all_stat_user_tables{$db}{$tb}{n_tup_upd}</td><td>$all_stat_user_tables{$db}{$tb}{n_tup_del}</td><td>$all_stat_user_tables{$db}{$tb}{n_tup_hot_upd}</td></tr>};
-					} else {
-						$has_table_data = 1;
-						foreach ('n_tup_ins','n_tup_upd','n_tup_del','n_tup_hot_upd') {
-							$all_vacuum_stat{$db}{$tb}{$_} ||= 0;
-						}
-						$table_data = qq{<tr><th>$tb</th><td>$all_vacuum_stat{$db}{$tb}{n_tup_ins}</td><td>$all_vacuum_stat{$db}{$tb}{n_tup_upd}</td><td>$all_vacuum_stat{$db}{$tb}{n_tup_del}</td><td>$all_vacuum_stat{$db}{$tb}{n_tup_hot_upd}</td></tr>};
 					}
+					foreach ('n_tup_ins','n_tup_upd','n_tup_del','n_tup_hot_upd') {
+						$all_stat_user_tables{$db}{$tb}{$_} ||= 0;
+					}
+					$table_data = qq{<tr><th>$tb</th><td>$all_stat_user_tables{$db}{$tb}{n_tup_ins}</td><td>$all_stat_user_tables{$db}{$tb}{n_tup_upd}</td><td>$all_stat_user_tables{$db}{$tb}{n_tup_del}</td><td>$all_stat_user_tables{$db}{$tb}{n_tup_hot_upd}</td></tr>};
 				} elsif ($data_info{$id}{name} eq 'table-kind-tuples') {
 					if (!$all_stat_user_tables{$db}{$tb}{n_live_tup} && !$all_stat_user_tables{$db}{$tb}{n_dead_tup}) {
 						next;
@@ -3133,19 +3208,13 @@ sub pg_stat_user_tables_report
 					}
 					$table_data = qq{<tr><th>$tb</th><td>$all_stat_user_tables{$db}{$tb}{n_live_tup}</td><td>$all_stat_user_tables{$db}{$tb}{n_dead_tup}</td><td>$all_stat_user_tables{$db}{$tb}{dead_vs_live}%</td></tr>};
 				} elsif ( $do_vacuum && ($data_info{$id}{name} eq 'table-vacuums-analyzes') ) {
-					if (!$all_vacuum_stat{$db}{$tb}{vacuum_count} && !$all_vacuum_stat{$db}{$tb}{autovacuum_count} && !$all_vacuum_stat{$db}{$tb}{analyze_count} && !$all_vacuum_stat{$db}{$tb}{analyze_count}) {
+					if (!$all_stat_user_tables{$db}{$tb}{vacuum_count} && !$all_stat_user_tables{$db}{$tb}{autovacuum_count} && !$all_stat_user_tables{$db}{$tb}{analyze_count} && !$all_stat_user_tables{$db}{$tb}{analyze_count}) {
 						next;
-						foreach ('vacuum_count','autovacuum_count','analyze_count','autoanalyze_count') {
-							$all_stat_user_tables{$db}{$tb}{$_} ||= 0;
-						}
-						$table_data = qq{<tr><th>$tb</th><td>$all_stat_user_tables{$db}{$tb}{vacuum_count}</td><td>$all_stat_user_tables{$db}{$tb}{autovacuum_count}</td><td>$all_stat_user_tables{$db}{$tb}{analyze_count}</td><td>$all_stat_user_tables{$db}{$tb}{autoanalyze_count}</td>};
-					} else  {
-						$has_table_data = 1;
-						foreach ('vacuum_count','autovacuum_count','analyze_count','autoanalyze_count') {
-							$all_vacuum_stat{$db}{$tb}{$_} ||= 0;
-						}
-						$table_data = qq{<tr><th>$tb</th><td>$all_vacuum_stat{$db}{$tb}{vacuum_count}</td><td>$all_vacuum_stat{$db}{$tb}{autovacuum_count}</td><td>$all_vacuum_stat{$db}{$tb}{analyze_count}</td><td>$all_vacuum_stat{$db}{$tb}{autoanalyze_count}</td>};
 					}
+					foreach ('vacuum_count','autovacuum_count','analyze_count','autoanalyze_count') {
+						$all_stat_user_tables{$db}{$tb}{$_} ||= 0;
+					}
+					$table_data = qq{<tr><th>$tb</th><td>$all_stat_user_tables{$db}{$tb}{vacuum_count}</td><td>$all_stat_user_tables{$db}{$tb}{autovacuum_count}</td><td>$all_stat_user_tables{$db}{$tb}{analyze_count}</td><td>$all_stat_user_tables{$db}{$tb}{autoanalyze_count}</td>};
 					foreach ('last_vacuum','last_autovacuum','last_analyze','last_autoanalyze') {
 						$all_stat_user_tables{$db}{$tb}{$_} ||= '-';
 					}
@@ -3155,7 +3224,7 @@ sub pg_stat_user_tables_report
 					print $fhtable qq{$table_data};
 				}
 			}
-			if (!scalar keys %{$all_vacuum_stat{$db}} || !$has_table_data) {
+			if (!scalar keys %{$all_stat_user_tables{$db}} || !$has_table_data) {
 				print $fhtable qq{<tr><td$colspan><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td></tr>};
 			}
 			print $fhtable qq{
@@ -3188,32 +3257,74 @@ sub pg_stat_user_indexes
 	my %start_vals = ();
 	my $tmp_val = 0;
 
-	# Load data from file
-	my $curfh = open_filehdl("$in_dir/$file");
-	while (my $l = <$curfh>) {
-		chomp($l);
-		next if (!$l);
-		my @data = split(/;/, $l);
-		next if (!&normalize_line(\@data));
+	# Load data from single file (obsolete)
+	if (!-e "$in_dir/end-$file")
+	{
+		my $curfh = open_filehdl("$in_dir/$file");
+		while (my $l = <$curfh>) {
+			chomp($l);
+			next if (!$l);
+			my @data = split(/;/, $l);
+			next if (!&normalize_line(\@data));
 
-		# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | idx_tup_read | idx_tup_fetch
-		$data[6] = "$data[4].$data[5].$data[6]";
-		push(@{$start_vals{$data[1]}{$data[6]}}, @data) if ($#{$start_vals{$data[1]}{$data[6]}} < 0);
+			# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | idx_tup_read | idx_tup_fetch
+			$data[6] = "$data[4].$data[5].$data[6]";
+			push(@{$start_vals{$data[1]}{$data[6]}}, @data) if ($#{$start_vals{$data[1]}{$data[6]}} < 0);
 
-		# Get database statistics
-		if (($data[7] - $start_vals{$data[1]}{$data[6]}[7]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[6]}[7]) };
-		$all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} += $tmp_val;
+			# Get database statistics
+			if (($data[7] - $start_vals{$data[1]}{$data[6]}[7]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[6]}[7]) };
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} += $tmp_val;
 
-		if (($data[8] - $start_vals{$data[1]}{$data[6]}[8]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[6]}[8]) };
-		$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} += $tmp_val;
+			if (($data[8] - $start_vals{$data[1]}{$data[6]}[8]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[6]}[8]) };
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} += $tmp_val;
 
-		if (($data[9] - $start_vals{$data[1]}{$data[6]}[9]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[6]}[9]) };
-		$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} += $tmp_val;
+			if (($data[9] - $start_vals{$data[1]}{$data[6]}[9]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[6]}[9]) };
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} += $tmp_val;
 
-		@{$start_vals{$data[1]}{$data[6]}} = ();
-		push(@{$start_vals{$data[1]}{$data[6]}}, @data);
+			@{$start_vals{$data[1]}{$data[6]}} = ();
+			push(@{$start_vals{$data[1]}{$data[6]}}, @data);
+		}
+		$curfh->close();
+	} else {
+		# Read start file
+		my $curfh = open_filehdl("$in_dir/$file");
+		while (my $l = <$curfh>) {
+			chomp($l);
+			next if (!$l);
+			my @data = split(/;/, $l);
+			next if (!&normalize_line(\@data));
+
+			# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | idx_tup_read | idx_tup_fetch
+			$data[6] = "$data[4].$data[5].$data[6]";
+
+			# Get database statistics
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} = $data[7];
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} = $data[8];
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} = $data[9];
+		}
+		$curfh->close();
+
+		# Read end file and set the final value
+		$curfh = open_filehdl("$in_dir/end-$file");
+		while (my $l = <$curfh>) {
+			chomp($l);
+			next if (!$l);
+			my @data = split(/;/, $l);
+			next if (!&normalize_line(\@data));
+
+			# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | idx_tup_read | idx_tup_fetch
+			$data[6] = "$data[4].$data[5].$data[6]";
+
+			# Get database statistics
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} = $data[7] - $all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan};
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} = $data[7] if ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} < 0);
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} = $data[8] - $all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read};
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} = $data[8] if ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} < 0);
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} = $data[9] - $all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch};
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} = $data[9] if ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} < 0);
+		}
+		$curfh->close();
 	}
-	$curfh->close();
 }
 
 sub pg_stat_all_indexes
@@ -4289,31 +4400,71 @@ sub pg_stat_user_functions
 
 	%all_stat_user_functions = ();
 
-	# Load data from file
-	my $curfh = open_filehdl("$in_dir/$file");
-	while (my $l = <$curfh>) {
-		chomp($l);
-		next if (!$l);
-		my @data = split(/;/, $l);
-		next if (!&normalize_line(\@data));
+	# Load data from single file (obsolete)
+	if (!-e "$in_dir/end-$file")
+	{
+		my $curfh = open_filehdl("$in_dir/$file");
+		while (my $l = <$curfh>) {
+			chomp($l);
+			next if (!$l);
+			my @data = split(/;/, $l);
+			next if (!&normalize_line(\@data));
 
-		# timestamp | datname | funcid | schemaname | funcname | calls | total_time | self_time
-		$data[4] = "$data[3].$data[4]";
+			# timestamp | datname | funcid | schemaname | funcname | calls | total_time | self_time
+			$data[4] = "$data[3].$data[4]";
 
-		push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
+			push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
 
-		if (($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]) };
-		$all_stat_user_functions{$data[1]}{$data[4]}{calls} += $tmp_val;
-		if (($data[6] - $start_vals{$data[1]}{$data[4]}[6]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[6] - $start_vals{$data[1]}{$data[4]}[6]) };
-		$all_stat_user_functions{$data[1]}{$data[4]}{total_time} += $tmp_val;
-		if (($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]) };
-		$all_stat_user_functions{$data[1]}{$data[4]}{self_time} += $tmp_val;
+			if (($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]) };
+			$all_stat_user_functions{$data[1]}{$data[4]}{calls} += $tmp_val;
+			if (($data[6] - $start_vals{$data[1]}{$data[4]}[6]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[6] - $start_vals{$data[1]}{$data[4]}[6]) };
+			$all_stat_user_functions{$data[1]}{$data[4]}{total_time} += $tmp_val;
+			if (($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]) };
+			$all_stat_user_functions{$data[1]}{$data[4]}{self_time} += $tmp_val;
 
-		@{$start_vals{$data[1]}{$data[4]}} = ();
-		push(@{$start_vals{$data[1]}{$data[4]}}, @data);
+			@{$start_vals{$data[1]}{$data[4]}} = ();
+			push(@{$start_vals{$data[1]}{$data[4]}}, @data);
 
+		}
+		$curfh->close();
+	} else {
+		# Read start file
+		my $curfh = open_filehdl("$in_dir/$file");
+		while (my $l = <$curfh>) {
+			chomp($l);
+			next if (!$l);
+			my @data = split(/;/, $l);
+			next if (!&normalize_line(\@data));
+
+			# timestamp | datname | funcid | schemaname | funcname | calls | total_time | self_time
+			$data[4] = "$data[3].$data[4]";
+
+			$all_stat_user_functions{$data[1]}{$data[4]}{calls}      = $data[5];
+			$all_stat_user_functions{$data[1]}{$data[4]}{total_time} = $data[6];
+			$all_stat_user_functions{$data[1]}{$data[4]}{self_time}  = $data[7];
+		}
+		$curfh->close();
+
+		# Read end file and set the final value
+		$curfh = open_filehdl("$in_dir/end-$file");
+		while (my $l = <$curfh>) {
+			chomp($l);
+			next if (!$l);
+			my @data = split(/;/, $l);
+			next if (!&normalize_line(\@data));
+
+			# timestamp | datname | funcid | schemaname | funcname | calls | total_time | self_time
+			$data[4] = "$data[3].$data[4]";
+
+			$all_stat_user_functions{$data[1]}{$data[4]}{calls}      = $data[5] - $all_stat_user_functions{$data[1]}{$data[4]}{calls};
+			$all_stat_user_functions{$data[1]}{$data[4]}{calls}      = $data[5] if ($all_stat_user_functions{$data[1]}{$data[4]}{calls} < 0);
+			$all_stat_user_functions{$data[1]}{$data[4]}{total_time} = $data[6] - $all_stat_user_functions{$data[1]}{$data[4]}{total_time};
+			$all_stat_user_functions{$data[1]}{$data[4]}{total_time} = $data[6] if ($all_stat_user_functions{$data[1]}{$data[4]}{total_time} < 0);
+			$all_stat_user_functions{$data[1]}{$data[4]}{self_time}  = $data[7] - $all_stat_user_functions{$data[1]}{$data[4]}{self_time};
+			$all_stat_user_functions{$data[1]}{$data[4]}{self_time}  = $data[7] if ($all_stat_user_functions{$data[1]}{$data[4]}{self_time} < 0);
+		}
+		$curfh->close();
 	}
-	$curfh->close();
 }
 
 sub pg_stat_all_functions
