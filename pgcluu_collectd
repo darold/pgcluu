@@ -128,71 +128,85 @@ my %METRICS_COMMANDS = (
 		'output' => 'pg_stat_all_tables.csv',
 		'command' => 'dump_pgstattables',
 		'repeat'  => 1,
+		'start-end' => 1,
 	},
 	'user_tables_stats' => {
 		'output' => 'pg_stat_user_tables.csv',
 		'command' => 'dump_pgstattables_user',
 		'repeat'  => 1,
+		'start-end' => 1,
 	},
 	'all_tables_io_stats' => {
 		'output' => 'pg_statio_all_tables.csv',
 		'command' => 'dump_pgstatiotables',
 		'repeat'  => 1,
+		'start-end' => 1,
 	},
 	'user_tables_io_stats' => {
 		'output' => 'pg_statio_user_tables.csv',
 		'command' => 'dump_pgstatiotables_user',
 		'repeat'  => 1,
+		'start-end' => 1,
 	},
 	'all_indexes_stats' => {
 		'output' => 'pg_stat_all_indexes.csv',
 		'command' => 'dump_pgstatindexes',
 		'repeat'  => 1,
+		'start-end' => 1,
 	},
 	'user_indexes_stats' => {
 		'output' => 'pg_stat_user_indexes.csv',
 		'command' => 'dump_pgstatindexes_user',
 		'repeat'  => 1,
+		'start-end' => 1,
 	},
 	'all_indexes_io_stats' => {
 		'output' => 'pg_statio_all_indexes.csv',
 		'command' => 'dump_pgstatioindexes',
 		'repeat'  => 1,
+		'start-end' => 1,
 	},
 	'user_indexes_io_stats' => {
 		'output' => 'pg_statio_user_indexes.csv',
 		'command' => 'dump_pgstatioindexes_user',
 		'repeat'  => 1,
+		'start-end' => 1,
 	},
 	'all_sequences_io_stats' => {
 		'output' => 'pg_statio_all_sequences.csv',
 		'command' => 'dump_pgstatiosequences',
 		'repeat'  => 1,
+		'start-end' => 1,
 	},
 	'user_sequences_io_stats' => {
 		'output' => 'pg_statio_user_sequences.csv',
 		'command' => 'dump_pgstatiosequences_user',
 		'repeat'  => 1,
+		'start-end' => 1,
 	},
 	'functions_stats' => {
 		'output' => 'pg_stat_user_functions.csv',
 		'command' => 'dump_pgstatuserfunctions',
 		'repeat'  => 1,
+		'start-end' => 1,
 	},
 	'xact_functions_stats' => {
 		'output' => 'pg_stat_xact_user_functions.csv',
 		'command' => 'dump_pgstatxactuserfunctions',
 		'repeat'  => 1,
+		'start-end' => 1,
 	},
 	'all_xact_tables_stats' => {
 		'output' => 'pg_stat_xact_all_tables.csv',
 		'command' => 'dump_pgstatxacttables',
 		'repeat'  => 1,
+		'start-end' => 1,
 	},
 	'user_xact_tables_stats' => {
 		'output' => 'pg_stat_xact_user_tables.csv',
 		'command' => 'dump_pgstatxacttables_user',
 		'repeat'  => 1,
+		'start-end' => 1,
 	},
 	'class_size_stats' => {
 		'output'  => 'pg_class_size.csv',
@@ -937,7 +951,7 @@ sub collect_metrics
 
 	# Remove files that must be overriden
 	foreach my $type (sort {$a cmp $b} keys %METRICS_COMMANDS) {
-		if (($METRICS_COMMANDS{$type}->{override}) && -e "$OUT_DIR/$METRICS_COMMANDS{$type}->{output}") {
+		if ($METRICS_COMMANDS{$type}->{override} && -e "$OUT_DIR/$METRICS_COMMANDS{$type}->{output}") {
 			unlink("$OUT_DIR/$METRICS_COMMANDS{$type}->{output}");
 		}
 	}
@@ -1256,12 +1270,23 @@ sub create_sql_script
 		if (!$sql) {
 			return;
 		}
+		my $file_output = $METRICS_COMMANDS{$type}->{output};
+		# Metrics that must be saved at start and end only
+		if ($METRICS_COMMANDS{$type}->{'start-end'}
+			&& -e "$OUT_DIR/$METRICS_COMMANDS{$type}->{output}")
+		{
+			# Add a prefix to end file so that the first file will be preserved
+			$file_output = 'end-' . $METRICS_COMMANDS{$type}->{output};
+			# and this one is overridden each time, we only keep the last one
+			unlink("$OUT_DIR/$file_output");
+		}
+
 		if (&backend_minimum_version(8, 2)) {
 			$sql_queries .= <<EOF
 \\o | cat > /dev/null
 $ALWAYS_SECURE_SEARCH_PATH_SQL
 -- $type
-\\o | cat $FILE_REDIR $OUT_DIR/$METRICS_COMMANDS{$type}->{output}
+\\o | cat $FILE_REDIR $OUT_DIR/$file_output
 COPY ($sql) TO STDOUT CSV DELIMITER ';';
 
 EOF
@@ -1272,7 +1297,7 @@ EOF
 \\o | cat > /dev/null
 $ALWAYS_SECURE_SEARCH_PATH_SQL
 -- $type
-\\o | cat $FILE_REDIR $OUT_DIR/$METRICS_COMMANDS{$type}->{output}
+\\o | cat $FILE_REDIR $OUT_DIR/$file_output
 BEGIN;
 CREATE TEMPORARY TABLE __pgcluu as $sql;
 COPY __pgcluu TO STDOUT CSV DELIMITER ';';
@@ -2000,7 +2025,7 @@ sub dump_pgstatindexes
 		"SELECT date_trunc('seconds', now()), current_database(), * " .
 		"FROM pg_stat_${type}_indexes " .
 		"WHERE schemaname <> 'information_schema' " .
-		"ORDER BY schemaname, relname"
+		"ORDER BY schemaname, relname, indexrelname"
 	);
 
 	return $sql;
@@ -2036,7 +2061,7 @@ sub dump_pgstatioindexes
 		"SELECT date_trunc('seconds', now()), current_database(), * " .
 		"FROM pg_statio_${type}_indexes " .
 		"WHERE schemaname <> 'information_schema' " .
-		"ORDER BY schemaname, relname"
+		"ORDER BY schemaname, relname, indexrelname"
 	);
 
 	return $sql;
