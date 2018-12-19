@@ -953,10 +953,9 @@ my %SAR_GRAPH_INFOS = (
 	'11' => {
 		'name' => 'system-page',
 		'title' => 'System cache statistics',
-		'description' => 'Total number of kilobytes the system paged in/out from/to disk per second, and number of major faults the system has made per second, those which have required loading a memory page from disk.',
+		'description' => 'Total number of kilobytes the system paged in/out from/to disk per second.',
 		'ylabel' => 'Size paged',
-		'y2label' => 'Number of faults',
-		'legends' => [ 'pgpgin/s', 'pgpgout/s', 'page faults/s' ],
+		'legends' => [ 'pgpgin/s', 'pgpgout/s' ],
 	},
 	'12' => {
 		'name' => 'network-utilization',
@@ -1014,8 +1013,14 @@ my %SAR_GRAPH_INFOS = (
 		'ylabel' => 'Percentage used',
 		'legends' => ['Space', 'Inode'],
 	},
+	'20' => {
+		'name' => 'system-fault',
+		'title' => 'System page fault/freed statistics',
+		'description' => 'Total number of major and minor faults the system has made per second. Major are those which have required loading a memory page from disk and minor from cache. Total number of pages placed on the free list by the system per second. Dataset "minflt/s" is calculated as result of "fault/s - majflt/s".',
+		'ylabel' => 'Number of faults',
+		'legends' => [ 'majflt/s', 'minflt/s', 'pgfree/s' ],
+	},
 );
-
 # Set CGI handle and retrieve current params states
 my $cgi = new CGI;
 my $SCRIPT_NAME = $cgi->url() || '';
@@ -1163,26 +1168,6 @@ $in_dir .= "/$WORK_DIRS[-1]" if ($#WORK_DIRS >= 0);
 if ($#WORK_DIRS >= 0)
 {
 	&read_sysinfo($in_dir);
-	foreach my $db (keys %{$sysinfo{EXTENSION}}) {
-		push(@DATABASE_LIST, $db) if (!grep(/^$db$/, @DATABASE_LIST));
-	}
-
-	# Load global information from cache file
-	if (-e "$in_dir/global_infos.bin")
-	{
-		print STDERR "DEBUG: Loading global information from cache files $in_dir/global_infos.bin\n" if ($DEBUG);
-		&load_sar_binary($in_dir, 'global_infos');
-		# Look for disk device and network interface from global info
-		push(@DEVICE_LIST, @{$global_infos{DEVICE_LIST}}) if (exists $global_infos{DEVICE_LIST});
-		push(@IFACE_LIST, @{$global_infos{IFACE_LIST}}) if (exists $global_infos{IFACE_LIST});
-		push(@DEVICE_SPACE_LIST, @{$global_infos{DEVICE_SPACE_LIST}}) if (exists $global_infos{DEVICE_SPACE_LIST});
-	} else {
-
-		# Look for disk device and network interface from the sar file
-		if (!$DISABLE_SAR && -e "$in_dir/sar_stats.dat") {
-			&set_device_list("$in_dir/sar_stats.dat");
-		}
-	}
 }
 
 #### Show about page and exit
@@ -1224,14 +1209,15 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 		next;
 	}
 
-	# Set database list from all visited directory to build menu
+	# Set system information, database list
+	# and global information to build menu
 	%sysinfo = ();
-	&read_sysinfo($in_dir);
-	@DATABASE_LIST = ();
 	%global_infos = ();
-	foreach my $db (keys %{$sysinfo{EXTENSION}}) {
-		push(@DATABASE_LIST, $db) if (!grep(/^$db$/, @DATABASE_LIST));
-	}
+	@DATABASE_LIST = ();
+	@DEVICE_LIST = ();
+	@IFACE_LIST = ();
+	@DEVICE_SPACE_LIST = ();
+	&read_sysinfo($in_dir);
 
 	# Set default sysstat file to read (binary or text format)
 	# an extract the disk devices and network interfaces list
@@ -1258,9 +1244,6 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 
 		# Look for disk device and network interface from the sar file
 		if (!$DISABLE_SAR) {
-			@DEVICE_LIST = ();
-			@IFACE_LIST = ();
-			@DEVICE_SPACE_LIST = ();
 			&set_device_list($sar_file, $sadc_file);
 		}
 
@@ -1270,22 +1253,15 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 	if (($ACTION eq 'home') || ($ACTION =~ /^(system|device|network)-/)) {
                 # Load statistics from cache files
                 if ($#binfiles >= 0) {
-			@DEVICE_LIST = ();
-			@IFACE_LIST = ();
-			@DEVICE_SPACE_LIST = ();
                         print STDERR "DEBUG: Loading Sar statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
                         &load_sar_binary($in_dir);
-                        # Look for disk device and network interface from global info
-                        push(@DEVICE_LIST, @{$global_infos{DEVICE_LIST}}) if (exists $global_infos{DEVICE_LIST});
-                        push(@IFACE_LIST, @{$global_infos{IFACE_LIST}}) if (exists $global_infos{IFACE_LIST});
-                        push(@DEVICE_SPACE_LIST, @{$global_infos{DEVICE_SPACE_LIST}}) if (exists $global_infos{DEVICE_SPACE_LIST});
+			# Set timezone
 			if (($TIMEZONE eq '00') && $global_infos{timezone}) {
 				$TIMEZONE = $global_infos{timezone};
 			}
 			if (($STATS_TIMEZONE eq '00') && $global_infos{stats_timezone}) {
 				$STATS_TIMEZONE = $global_infos{stats_timezone};
 			}
-
                 }
 
 		# Home page is built from cache file or from csv file, not both
@@ -1312,13 +1288,14 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 	}
 
 	# Action to perform when a PostgreSQL statistics is requested
-	if (($ACTION eq 'home') || ($ACTION eq 'database-info') || ($ACTION !~ /^(system|device|network)-/)) {
+	if (($ACTION ne 'home') || ($ACTION !~ /^(system|device|network)-/)) {
 
 		# Load statistics from cache files
 		if ($#binfiles > 0) {
 			print STDERR "DEBUG: Loading PostgreSQL statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
 			&load_pg_binary($in_dir);
 
+			# Set timezone
 			if (($TIMEZONE eq '00') && $global_infos{timezone}) {
 				$TIMEZONE = $global_infos{timezone};
 			}
@@ -1467,7 +1444,7 @@ sub set_sysstat_file
 			$sar_file = "$input_dir/" . 'sar_stats.dat.gz';
 		}
 		if (!$sadc_file && !$sar_file) {
-			$DISABLE_SAR = 1;
+			$DISABLE_SAR = 1 if (!-e "$input_dir/sar_cpu_stat.bin");
 			return;
 		}
 	} else {
@@ -2071,6 +2048,8 @@ sub set_overall_system_stat_from_binary
 		$sar_pageswap_stat{$t}{'pgpgin'} ||= 0;
 		$sar_pageswap_stat{$t}{'pgpgout'} ||= 0;
 		$sar_pageswap_stat{$t}{'majflt'} ||= 0;
+		$sar_pageswap_stat{$t}{'minflt'} ||= 0;
+		$sar_pageswap_stat{$t}{'pgfree'} ||= 0;
 		if (!exists $OVERALL_STATS{'system'}{'pgpgin'} || ($OVERALL_STATS{'system'}{'pgpgin'}[1] < $sar_pageswap_stat{$t}{'pgpgin'})) {
 			@{$OVERALL_STATS{'system'}{'pgpgin'}} = ($t, $sar_pageswap_stat{$t}{'pgpgin'});
 		}
@@ -2079,6 +2058,12 @@ sub set_overall_system_stat_from_binary
 		}
 		if (!exists $OVERALL_STATS{'system'}{'majflt'} || ($OVERALL_STATS{'system'}{'majflt'}[1] < $sar_pageswap_stat{$t}{'majflt'})) {
 			@{$OVERALL_STATS{'system'}{'majflt'}} = ($t, $sar_pageswap_stat{$t}{'majflt'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'minflt'} || ($OVERALL_STATS{'system'}{'minflt'}[1] < $sar_pageswap_stat{$t}{'minflt'})) {
+			@{$OVERALL_STATS{'system'}{'minflt'}} = ($t, $sar_pageswap_stat{$t}{'minflt'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'pgfree'} || ($OVERALL_STATS{'system'}{'pgfree'}[1] < $sar_pageswap_stat{$t}{'pgfree'})) {
+			@{$OVERALL_STATS{'system'}{'pgfree'}} = ($t, $sar_pageswap_stat{$t}{'pgfree'});
 		}
 	}
 	foreach my $t (sort {$a <=> $b} keys %sar_block_stat) {
@@ -7796,10 +7781,12 @@ AAAASUVORK5CYII=';
                   <li class="divider"></li>
                   <li id="menu-system-block"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-block&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Blocks</a></li>
                   <li id="menu-system-tps"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-tps&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Transfers per second</a></li>
-                  <li id="menu-system-page"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-page&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Pages</a></li>
+                  <li id="menu-system-page"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-page&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Pages in/out</a></li>
+                  <li id="menu-system-fault"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-fault&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Pages faults</a></li>
                   <li class="divider"></li>
 };
 		my $idx = 0;
+		@DEVICE_LIST = sort @DEVICE_LIST;
 		for (my $i = 0; $i <= $#DEVICE_LIST; $i++) {
 			next if (!&device_in_report($DEVICE_LIST[$i]));
 			my $md = $i % 10;
@@ -7837,6 +7824,7 @@ AAAASUVORK5CYII=';
 } if ($#DEVICE_LIST >= 0);
 
 		$idx = 0;
+		@DEVICE_SPACE_LIST = sort @DEVICE_SPACE_LIST;
 		for (my $i = 0; $i <= $#DEVICE_SPACE_LIST; $i++) {
 			my $md = $i % 10;
 			if ($md == 0) {
@@ -7870,6 +7858,7 @@ AAAASUVORK5CYII=';
 		     <a href="#" tabindex="-1">Network </a>
 		      <ul class="dropdown-menu">
 };
+			@IFACE_LIST = sort @IFACE_LIST;
 			for (my $i = 0; $i <= $#IFACE_LIST; $i++) {
 				next if (!&interface_in_report($IFACE_LIST[$i]));
 				$menu_str .= qq{
@@ -8395,11 +8384,9 @@ sub compute_page_stat
 		map { s/,/\./ } @data ;
 		$data[3] ||= 0;
 		$data[4] ||= 0;
-		$data[6] ||= 0;
 		if ($ACTION ne 'home') {
 			$sar_pageswap_stat{$data[2]}{'pgpgin/s'}  = $data[3];
 			$sar_pageswap_stat{$data[2]}{'pgpgout/s'} = $data[4];
-			$sar_pageswap_stat{$data[2]}{'majflt/s'}  = $data[6];
 		} else {
 			if (!exists $OVERALL_STATS{'system'}{'pgpgin'} || ($OVERALL_STATS{'system'}{'pgpgin'}[1] < $data[3])) {
 				@{$OVERALL_STATS{'system'}{'pgpgin'}} = ($data[2], $data[3]);
@@ -8407,8 +8394,38 @@ sub compute_page_stat
 			if (!exists $OVERALL_STATS{'system'}{'pgpgout'} || ($OVERALL_STATS{'system'}{'pgpgout'}[1] < $data[4])) {
 				@{$OVERALL_STATS{'system'}{'pgpgout'}} = ($data[2], $data[4]);
 			}
+		}
+	}
+}
+
+sub compute_fault_stat
+{
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;pgpgin/s;pgpgout/s;fault/s;majflt/s;pgfree/s;pgscank/s;pgscand/s;pgsteal/s;%vmeff
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+
+		map { s/,/\./ } @data ;
+		$data[5] ||= 0;
+		$data[6] ||= 0;
+		$data[7] ||= 0;
+		if ($ACTION ne 'home') {
+			$sar_pageswap_stat{$data[2]}{'majflt/s'}  = $data[6];
+			$sar_pageswap_stat{$data[2]}{'minflt/s'}   = ($data[5]-$data[6]);
+			$sar_pageswap_stat{$data[2]}{'pgfree/s'}  = $data[7];
+		} else {
 			if (!exists $OVERALL_STATS{'system'}{'majflt'} || ($OVERALL_STATS{'system'}{'majflt'}[1] < $data[6])) {
 				@{$OVERALL_STATS{'system'}{'majflt'}} = ($data[2], $data[6]);
+			}
+			if (!exists $OVERALL_STATS{'system'}{'minflt'} || ($OVERALL_STATS{'system'}{'minflt'}[1] < $data[5])) {
+				@{$OVERALL_STATS{'system'}{'minflt'}} = ($data[2], $data[5]);
+			}
+			if (!exists $OVERALL_STATS{'system'}{'pgfree'} || ($OVERALL_STATS{'system'}{'pgfree'}[1] < $data[7])) {
+				@{$OVERALL_STATS{'system'}{'pgfree'}} = ($data[2], $data[7]);
 			}
 		}
 	}
@@ -8422,14 +8439,29 @@ sub compute_page_report
 	foreach my $t (sort {$a <=> $b} keys %sar_pageswap_stat) {
 		$pageswap_stat{'pgpgin/s'}  .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgpgin/s'} . '],';
 		$pageswap_stat{'pgpgout/s'} .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgpgout/s'} . '],';
-		$pageswap_stat{'majflt/s'}  .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'majflt/s'} . '],';
 	}
-	%sar_pageswap_stat = ();
 	if (scalar keys %pageswap_stat > 0) {
 		$pageswap_stat{'pgpgin/s'} =~ s/,$//;
 		$pageswap_stat{'pgpgout/s'} =~ s/,$//;
+		print &jqplot_linegraph_array($IDX++, 'system-page', $data_info, '', $pageswap_stat{'pgpgin/s'}, $pageswap_stat{'pgpgout/s'});
+	}
+}
+
+sub compute_fault_report
+{
+	my $data_info = shift();
+
+	my %pageswap_stat = ();
+	foreach my $t (sort {$a <=> $b} keys %sar_pageswap_stat) {
+		$pageswap_stat{'majflt/s'}  .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'majflt/s'} . '],';
+		$pageswap_stat{'minflt/s'}   .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'minflt/s'} . '],';
+		$pageswap_stat{'pgfree/s'}  .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgfree/s'} . '],';
+	}
+	if (scalar keys %pageswap_stat > 0) {
 		$pageswap_stat{'majflt/s'} =~ s/,$//;
-		print &jqplot_linegraph_array($IDX++, 'system-page', $data_info, '', $pageswap_stat{'pgpgin/s'}, $pageswap_stat{'pgpgout/s'}, $pageswap_stat{'majflt/s'});
+		$pageswap_stat{'minflt/s'} =~ s/,$//;
+		$pageswap_stat{'pgfree/s'} =~ s/,$//;
+		print &jqplot_linegraph_array($IDX++, 'system-free', $data_info, '', $pageswap_stat{'majflt/s'}, $pageswap_stat{'minflt/s'}, $pageswap_stat{'pgfree/s'});
 	}
 }
 
@@ -8950,6 +8982,20 @@ sub compute_sarstat_stats
 
 		# Compute page swap statistics
 		&compute_page_stat(@content);
+	}
+	if ($data_info{name} eq 'system-fault') {
+		my $command = "$SADF_PROG -t -d $file -- -B";
+		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute page swap statistics
+		&compute_fault_stat(@content);
 	}
 
 	####
@@ -9477,6 +9523,13 @@ sub compute_sarfile_stats
 		&compute_page_stat(@{$fulldata{page}});
 
 	}
+	if ($data_info{name} eq 'system-fault') {
+
+		# Compute page swap statistics
+		&compute_fault_stat(@{$fulldata{page}});
+
+	}
+
 
 	####
 	# Set block in/out
@@ -9699,6 +9752,13 @@ sub compute_sar_graph
 		&compute_page_report(\%data_info);
 
 	}
+	if ($data_info{name} eq 'system-fault') {
+
+		# Compute graphs for page swap statistics
+		&compute_fault_report(\%data_info);
+
+	}
+
 
 	####
 	# Show block in/out
@@ -10083,6 +10143,41 @@ sub read_sysinfo
 		print STDERR "DEBUG: Loading system information from file $in_dir/sysinfo.txt.gz\n" if ($DEBUG);
 		%sysinfo = &read_sysinfo_file("$in_dir/sysinfo.txt.gz");
 		$sysinfo{RELEASE}{'name'} ||= 'unknown';
+	}
+
+	foreach my $db (keys %{$sysinfo{EXTENSION}}) {
+		push(@DATABASE_LIST, $db) if (!grep(/^$db$/, @DATABASE_LIST));
+	}
+
+	# Load global information from cache file
+	if (-e "$in_dir/global_infos.bin")
+	{
+		print STDERR "DEBUG: Loading global information from cache files $in_dir/global_infos.bin\n" if ($DEBUG);
+		&load_sar_binary($in_dir, 'global_infos');
+
+		# Look for disk device and network interface from global info
+		if (exists $global_infos{DEVICE_LIST}) {
+			foreach my $d (@{$global_infos{DEVICE_LIST}}) {
+				push(@DEVICE_LIST, $d) if (!grep(/^$d$/, @DEVICE_LIST));
+			}
+		}
+		if (exists $global_infos{IFACE_LIST}) {
+			foreach my $d (@{$global_infos{IFACE_LIST}}) {
+				push(@IFACE_LIST, $d) if (!grep(/^$d$/, @IFACE_LIST));
+			}
+		}
+		if (exists $global_infos{DEVICE_SPACE_LIST}) {
+			foreach my $d (@{$global_infos{DEVICE_SPACE_LIST}}) {
+				push(@DEVICE_SPACE_LIST, $d) if (!grep(/^$d$/, @DEVICE_SPACE_LIST));
+			}
+		}
+
+	} else {
+
+		# Look for disk device and network interface from the sar file
+		if (!$DISABLE_SAR && -e "$in_dir/sar_stats.dat") {
+			&set_device_list("$in_dir/sar_stats.dat");
+		}
 	}
 }
 

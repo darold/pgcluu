@@ -975,10 +975,9 @@ my %SAR_GRAPH_INFOS = (
 	'11' => {
 		'name' => 'system-page',
 		'title' => 'System cache statistics',
-		'description' => 'Total number of kilobytes the system paged in/out from/to disk per second, and number of major faults the system has made per second, those which have required loading a memory page from disk.',
+		'description' => 'Total number of kilobytes the system paged in/out from/to disk per second.',
 		'ylabel' => 'Size paged',
-		'y2label' => 'Number of faults',
-		'legends' => [ 'pgpgin/s', 'pgpgout/s', 'page faults/s' ],
+		'legends' => [ 'pgpgin/s', 'pgpgout/s' ],
 	},
 	'12' => {
 		'name' => 'network-utilization',
@@ -1035,6 +1034,13 @@ my %SAR_GRAPH_INFOS = (
 		'description' => 'Percentage of disk space and inode used on the device. Close to 100% mean no more space or inode left.',
 		'ylabel' => 'Percentage used',
 		'legends' => ['Space', 'Inode'],
+	},
+	'20' => {
+		'name' => 'system-fault',
+		'title' => 'System page fault/freed statistics',
+		'description' => 'Total number of major and minor faults the system has made per second. Major are those which have required loading a memory page from disk and minor from cache. Total number of pages placed on the free list by the system per second. Dataset "minflt/s" is calculated as result of "fault/s - majflt/s".',
+		'ylabel' => 'Number of faults',
+		'legends' => [ 'majflt/s', 'minflt/s', 'pgfree/s' ],
 	},
 );
 
@@ -8317,6 +8323,7 @@ sub generate_html_menu
 		my $disable_block = ' class="disabled"';
 		my $disable_tps = ' class="disabled"';
 		my $disable_page = ' class="disabled"';
+		my $disable_fault = ' class="disabled"';
 		if (open(IN, "$OUTPUT_DIR/system.html")) {
 			while (<IN>) {
 				if (/<div id="system-cpu">/) {
@@ -8343,6 +8350,8 @@ sub generate_html_menu
 					$disable_tps = '';
 				} elsif (/<div id="system-page">/) {
 					$disable_page = '';
+				} elsif (/<div id="system-fault">/) {
+					$disable_fault = '';
 				}
 			}
 			close(IN);
@@ -8365,7 +8374,8 @@ sub generate_html_menu
                   <li class="divider"></li>
                   <li id="menu-system-block"$disable_block><a href="system.html#system-block">Blocks</a></li>
                   <li id="menu-system-tps"$disable_tps><a href="system.html#system-tps">Transfers per second</a></li>
-                  <li id="menu-system-page"$disable_page><a href="system.html#system-page">Pages</a></li>
+                  <li id="menu-system-page"$disable_page><a href="system.html#system-page">Pages in/out</a></li>
+                  <li id="menu-system-fault"$disable_page><a href="system.html#system-fault">Pages faults</a></li>
                   <li class="divider"></li>
 };
 		my $idx = 0;
@@ -8863,7 +8873,24 @@ sub compute_page_stat
 		map { s/,/\./ } @data ;
 		$sar_pageswap_stat{$data[2]}{'pgpgin/s'}  = ($data[3]||0);
 		$sar_pageswap_stat{$data[2]}{'pgpgout/s'} = ($data[4]||0);
+	}
+}
+
+sub compute_fault_stat
+{
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;pgpgin/s;pgpgout/s;fault/s;majflt/s;pgfree/s;pgscank/s;pgscand/s;pgsteal/s;%vmeff
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+
+		map { s/,/\./ } @data ;
 		$sar_pageswap_stat{$data[2]}{'majflt/s'}  = ($data[6]||0);
+		$sar_pageswap_stat{$data[2]}{'minflt/s'}   = (($data[5]-$data[6])||0);
+		$sar_pageswap_stat{$data[2]}{'pgfree/s'}  = ($data[7]||0);
 	}
 }
 
@@ -8879,19 +8906,41 @@ sub compute_page_report
 		if (!exists $OVERALL_STATS{'system'}{'pgpgout'} || ($OVERALL_STATS{'system'}{'pgpgout'}[1] < $sar_pageswap_stat{$t}{'pgpgout/s'})) {
 			@{$OVERALL_STATS{'system'}{'pgpgout'}} = ($t, $sar_pageswap_stat{$t}{'pgpgout/s'});
 		}
-		if (!exists $OVERALL_STATS{'system'}{'majflt'} || ($OVERALL_STATS{'system'}{'majflt'}[1] < $sar_pageswap_stat{$t}{'majflt/s'})) {
-			@{$OVERALL_STATS{'system'}{'majflt'}} = ($t, $sar_pageswap_stat{$t}{'majflt/s'});
-		}
 		$pageswap_stat{'pgpgin/s'}  .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgpgin/s'} . '],';
 		$pageswap_stat{'pgpgout/s'} .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgpgout/s'} . '],';
-		$pageswap_stat{'majflt/s'}  .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'majflt/s'} . '],';
 	}
-	%sar_pageswap_stat = ();
 	if (scalar keys %pageswap_stat > 0) {
 		$pageswap_stat{'pgpgin/s'} =~ s/,$//;
 		$pageswap_stat{'pgpgout/s'} =~ s/,$//;
+		print $FH &jqplot_linegraph_array($IDX++, 'system-page', $data_info, '', $pageswap_stat{'pgpgin/s'}, $pageswap_stat{'pgpgout/s'});
+	}
+}
+
+sub compute_fault_report
+{
+	my $data_info = shift();
+
+	my %pageswap_stat = ();
+	foreach my $t (sort {$a <=> $b} keys %sar_pageswap_stat) {
+		if (!exists $OVERALL_STATS{'system'}{'majflt'} || ($OVERALL_STATS{'system'}{'majflt'}[1] < $sar_pageswap_stat{$t}{'majflt/s'})) {
+			@{$OVERALL_STATS{'system'}{'majflt'}} = ($t, $sar_pageswap_stat{$t}{'majflt/s'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'minflt'} || ($OVERALL_STATS{'system'}{'minflt'}[1] < $sar_pageswap_stat{$t}{'minflt/s'})) {
+			@{$OVERALL_STATS{'system'}{'minflt'}} = ($t, $sar_pageswap_stat{$t}{'minflt/s'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'pgfree'} || ($OVERALL_STATS{'system'}{'pgfree'}[1] < $sar_pageswap_stat{$t}{'pgfree/s'})) {
+			@{$OVERALL_STATS{'system'}{'pgfree'}} = ($t, $sar_pageswap_stat{$t}{'pgfree/s'});
+		}
+		$pageswap_stat{'majflt/s'}  .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'majflt/s'} . '],';
+		$pageswap_stat{'minflt/s'}   .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'minflt/s'} . '],';
+		$pageswap_stat{'pgfree/s'}   .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgfree/s'} . '],';
+	}
+	%sar_pageswap_stat = ();
+	if (scalar keys %pageswap_stat > 0) {
 		$pageswap_stat{'majflt/s'} =~ s/,$//;
-		print $FH &jqplot_linegraph_array($IDX++, 'system-page', $data_info, '', $pageswap_stat{'pgpgin/s'}, $pageswap_stat{'pgpgout/s'}, $pageswap_stat{'majflt/s'});
+		$pageswap_stat{'minflt/s'} =~ s/,$//;
+		$pageswap_stat{'pgfree/s'} =~ s/,$//;
+		print $FH &jqplot_linegraph_array($IDX++, 'system-fault', $data_info, '', $pageswap_stat{'majflt/s'}, $pageswap_stat{'minflt/s'}, $pageswap_stat{'pgfree/s'});
 	}
 }
 
@@ -9467,6 +9516,20 @@ sub compute_sarstat_stats
 		# Compute page swap statistics
 		&compute_page_stat(@content);
 	}
+	if ($data_info{name} eq 'system-fault') {
+		my $command = "$SADF_PROG -t -d $file -- -B";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute page swap statistics
+		&compute_fault_stat(@content);
+	}
 
 	####
 	# Get block in/out
@@ -9971,6 +10034,12 @@ sub compute_sarfile_stats
 		&compute_page_stat(@{$fulldata{page}});
 
 	}
+	if ($data_info{name} eq 'system-fault') {
+
+		# Compute page swap statistics
+		&compute_fault_stat(@{$fulldata{page}});
+
+	}
 
 	####
 	# Set block in/out
@@ -9991,7 +10060,6 @@ sub compute_sarfile_stats
 		&compute_block_stat(@{$fulldata{io}});
 
 	}
-
 
 	####
 	# Set Device disk space utilization
@@ -10166,6 +10234,12 @@ sub compute_sar_graph
 
 		# Compute graphs for page swap statistics
 		&compute_page_report(\%data_info);
+
+	}
+	if ($data_info{name} eq 'system-fault') {
+
+		# Compute graphs for page swap statistics
+		&compute_fault_report(\%data_info);
 
 	}
 
@@ -10906,7 +10980,7 @@ sub load_pg_binary
 			my %_global_infos = %{$stats{global_infos}} ;
 			foreach my $inf (keys %_global_infos) {
 				if ($_global_infos{$inf} =~ /ARRAY/) {
-					push(@{$inf}, @{$_global_infos{$inf}});
+					push(@{$global_infos{$inf}}, @{$_global_infos{$inf}});
 				} else {
 					$global_infos{$inf} = $_global_infos{$inf};
 				}
@@ -10990,7 +11064,7 @@ sub load_sar_binary
 			my %_global_infos = %{$stats{global_infos}} ;
 			foreach my $inf (keys %_global_infos) {
 				if ($_global_infos{$inf} =~ /ARRAY/) {
-					push(@{$inf}, @{$_global_infos{$inf}});
+					push(@{$global_infos{$inf}}, @{$_global_infos{$inf}});
 				} else {
 					$global_infos{$inf} = $_global_infos{$inf};
 				}
