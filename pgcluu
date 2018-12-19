@@ -3194,6 +3194,7 @@ sub pg_stat_user_tables_report
 					if (!$all_stat_user_tables{$db}{$tb}{n_tup_ins} && !$all_stat_user_tables{$db}{$tb}{n_tup_upd} && !$all_stat_user_tables{$db}{$tb}{n_tup_del} && !$all_stat_user_tables{$db}{$tb}{n_tup_hot_upd}) {
 						next;
 					}
+					$has_table_data = 1;
 					foreach ('n_tup_ins','n_tup_upd','n_tup_del','n_tup_hot_upd') {
 						$all_stat_user_tables{$db}{$tb}{$_} ||= 0;
 					}
@@ -3211,6 +3212,7 @@ sub pg_stat_user_tables_report
 					if (!$all_stat_user_tables{$db}{$tb}{vacuum_count} && !$all_stat_user_tables{$db}{$tb}{autovacuum_count} && !$all_stat_user_tables{$db}{$tb}{analyze_count} && !$all_stat_user_tables{$db}{$tb}{analyze_count}) {
 						next;
 					}
+					$has_table_data = 1;
 					foreach ('vacuum_count','autovacuum_count','analyze_count','autoanalyze_count') {
 						$all_stat_user_tables{$db}{$tb}{$_} ||= 0;
 					}
