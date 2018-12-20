@@ -1015,10 +1015,18 @@ my %SAR_GRAPH_INFOS = (
 	},
 	'20' => {
 		'name' => 'system-fault',
-		'title' => 'System page fault/freed statistics',
-		'description' => 'Total number of major and minor faults the system has made per second. Major are those which have required loading a memory page from disk and minor from cache. Total number of pages placed on the free list by the system per second. Dataset "minflt/s" is calculated as result of "fault/s - majflt/s".',
+		'title' => 'System page fault statistics',
+		'description' => 'Total number of major and minor faults the system has made per second. Major are those which have required loading a memory page from disk and minor from cache. Dataset "minflt/s" is calculated as result of "fault/s - majflt/s".',
 		'ylabel' => 'Number of faults',
-		'legends' => [ 'majflt/s', 'minflt/s', 'pgfree/s' ],
+		'legends' => [ 'majflt/s', 'minflt/s' ],
+	},
+	'21' => {
+		'name' => 'system-scanpage',
+		'title' => 'System page scanned statistics',
+		'description' => 'Total number of pages scanned by the kswapd daemon and number of pages scanned directly per second. Number of pages the system has reclaimed from cache (pagecache and swapcache) per second to satisfy its memory demands. "%vmeff" is the efficiency of page reclaim. If it is near 100% then almost every page coming off the tail of the inactive list is being reaped. If it gets too low (e.g. less than 30%) then the virtual memory is having some difficulty.',
+		'ylabel' => 'Number of pages',
+		'y2label' => 'Percents',
+		'legends' => [ 'pgscank/s', 'pgscand/s', 'pgsteal/s', '%vmeff' ],
 	},
 );
 # Set CGI handle and retrieve current params states
@@ -2050,6 +2058,10 @@ sub set_overall_system_stat_from_binary
 		$sar_pageswap_stat{$t}{'majflt'} ||= 0;
 		$sar_pageswap_stat{$t}{'minflt'} ||= 0;
 		$sar_pageswap_stat{$t}{'pgfree'} ||= 0;
+		$sar_pageswap_stat{$t}{'pgscank'} ||= 0;
+		$sar_pageswap_stat{$t}{'pgscand'} ||= 0;
+		$sar_pageswap_stat{$t}{'pgsteal'} ||= 0;
+		$sar_pageswap_stat{$t}{'vmeff'} ||= 0;
 		if (!exists $OVERALL_STATS{'system'}{'pgpgin'} || ($OVERALL_STATS{'system'}{'pgpgin'}[1] < $sar_pageswap_stat{$t}{'pgpgin'})) {
 			@{$OVERALL_STATS{'system'}{'pgpgin'}} = ($t, $sar_pageswap_stat{$t}{'pgpgin'});
 		}
@@ -2064,6 +2076,18 @@ sub set_overall_system_stat_from_binary
 		}
 		if (!exists $OVERALL_STATS{'system'}{'pgfree'} || ($OVERALL_STATS{'system'}{'pgfree'}[1] < $sar_pageswap_stat{$t}{'pgfree'})) {
 			@{$OVERALL_STATS{'system'}{'pgfree'}} = ($t, $sar_pageswap_stat{$t}{'pgfree'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'pgscank'} || ($OVERALL_STATS{'system'}{'pgscank'}[1] < $sar_pageswap_stat{$t}{'pgscank'})) {
+			@{$OVERALL_STATS{'system'}{'pgscank'}} = ($t, $sar_pageswap_stat{$t}{'pgscank'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'pgscand'} || ($OVERALL_STATS{'system'}{'pgscand'}[1] < $sar_pageswap_stat{$t}{'pgscand'})) {
+			@{$OVERALL_STATS{'system'}{'pgscand'}} = ($t, $sar_pageswap_stat{$t}{'pgscand'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'pgsteal'} || ($OVERALL_STATS{'system'}{'pgsteal'}[1] < $sar_pageswap_stat{$t}{'pgsteal'})) {
+			@{$OVERALL_STATS{'system'}{'pgsteal'}} = ($t, $sar_pageswap_stat{$t}{'pgsteal'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'vmeff'} || ($OVERALL_STATS{'system'}{'vmeff'}[1] < $sar_pageswap_stat{$t}{'vmeff'})) {
+			@{$OVERALL_STATS{'system'}{'vmeff'}} = ($t, $sar_pageswap_stat{$t}{'vmeff'});
 		}
 	}
 	foreach my $t (sort {$a <=> $b} keys %sar_block_stat) {
@@ -7781,8 +7805,14 @@ AAAASUVORK5CYII=';
                   <li class="divider"></li>
                   <li id="menu-system-block"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-block&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Blocks</a></li>
                   <li id="menu-system-tps"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-tps&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Transfers per second</a></li>
-                  <li id="menu-system-page"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-page&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Pages in/out</a></li>
-                  <li id="menu-system-fault"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-fault&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Pages faults</a></li>
+		  <li id="menu-system-pageall" class="dropdown-submenu">
+		  <a href="#" tabindex="-1">Pages</a>
+		  <ul class="dropdown-menu">
+			  <li id="menu-system-page"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-page&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Pages in/out</a></li>
+			  <li id="menu-system-fault"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-fault&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Pages faults</a></li>
+			  <li id="menu-system-scanpage"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-scanpage&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Pages scanned</a></li>
+		  </ul>
+		  </li>
                   <li class="divider"></li>
 };
 		my $idx = 0;
@@ -8412,20 +8442,58 @@ sub compute_fault_stat
 		map { s/,/\./ } @data ;
 		$data[5] ||= 0;
 		$data[6] ||= 0;
-		$data[7] ||= 0;
 		if ($ACTION ne 'home') {
 			$sar_pageswap_stat{$data[2]}{'majflt/s'}  = $data[6];
 			$sar_pageswap_stat{$data[2]}{'minflt/s'}   = ($data[5]-$data[6]);
-			$sar_pageswap_stat{$data[2]}{'pgfree/s'}  = $data[7];
 		} else {
 			if (!exists $OVERALL_STATS{'system'}{'majflt'} || ($OVERALL_STATS{'system'}{'majflt'}[1] < $data[6])) {
 				@{$OVERALL_STATS{'system'}{'majflt'}} = ($data[2], $data[6]);
 			}
-			if (!exists $OVERALL_STATS{'system'}{'minflt'} || ($OVERALL_STATS{'system'}{'minflt'}[1] < $data[5])) {
-				@{$OVERALL_STATS{'system'}{'minflt'}} = ($data[2], $data[5]);
+			if (!exists $OVERALL_STATS{'system'}{'minflt'} || ($OVERALL_STATS{'system'}{'minflt'}[1] < ($data[5]-$data[6]))) {
+				@{$OVERALL_STATS{'system'}{'minflt'}} = ($data[2], ($data[5]-$data[6]));
 			}
+		}
+	}
+}
+
+sub compute_scanpage_stat
+{
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;pgpgin/s;pgpgout/s;fault/s;majflt/s;pgfree/s;pgscank/s;pgscand/s;pgsteal/s;%vmeff
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+
+		map { s/,/\./ } @data ;
+		$data[7] ||= 0;
+		$data[8] ||= 0;
+		$data[9] ||= 0;
+		$data[10] ||= 0;
+		$data[11] ||= 0;
+		if ($ACTION ne 'home') {
+			$sar_pageswap_stat{$data[2]}{'pgfree/s'}   = $data[7];
+			$sar_pageswap_stat{$data[2]}{'pgscank/s'}  = $data[8];
+			$sar_pageswap_stat{$data[2]}{'pgscand/s'}  = $data[9];
+			$sar_pageswap_stat{$data[2]}{'pgsteal/s'}  = $data[10];
+			$sar_pageswap_stat{$data[2]}{'%vmeff'}     = $data[11];
+		} else {
 			if (!exists $OVERALL_STATS{'system'}{'pgfree'} || ($OVERALL_STATS{'system'}{'pgfree'}[1] < $data[7])) {
 				@{$OVERALL_STATS{'system'}{'pgfree'}} = ($data[2], $data[7]);
+			}
+			if (!exists $OVERALL_STATS{'system'}{'pgscank'} || ($OVERALL_STATS{'system'}{'pgscank'}[1] < $data[8])) {
+				@{$OVERALL_STATS{'system'}{'pgscank'}} = ($data[2], $data[8]);
+			}
+			if (!exists $OVERALL_STATS{'system'}{'pgscand'} || ($OVERALL_STATS{'system'}{'pgscand'}[1] < $data[9])) {
+				@{$OVERALL_STATS{'system'}{'pgscand'}} = ($data[2], $data[9]);
+			}
+			if (!exists $OVERALL_STATS{'system'}{'pgsteal'} || ($OVERALL_STATS{'system'}{'pgsteal'}[1] < $data[10])) {
+				@{$OVERALL_STATS{'system'}{'pgsteal'}} = ($data[2], $data[10]);
+			}
+			if (!exists $OVERALL_STATS{'system'}{'vmeff'} || ($OVERALL_STATS{'system'}{'vmeff'}[1] < $data[11])) {
+				@{$OVERALL_STATS{'system'}{'vmeff'}} = ($data[2], $data[11]);
 			}
 		}
 	}
@@ -8455,15 +8523,36 @@ sub compute_fault_report
 	foreach my $t (sort {$a <=> $b} keys %sar_pageswap_stat) {
 		$pageswap_stat{'majflt/s'}  .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'majflt/s'} . '],';
 		$pageswap_stat{'minflt/s'}   .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'minflt/s'} . '],';
-		$pageswap_stat{'pgfree/s'}  .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgfree/s'} . '],';
 	}
 	if (scalar keys %pageswap_stat > 0) {
 		$pageswap_stat{'majflt/s'} =~ s/,$//;
 		$pageswap_stat{'minflt/s'} =~ s/,$//;
-		$pageswap_stat{'pgfree/s'} =~ s/,$//;
-		print &jqplot_linegraph_array($IDX++, 'system-free', $data_info, '', $pageswap_stat{'majflt/s'}, $pageswap_stat{'minflt/s'}, $pageswap_stat{'pgfree/s'});
+		print &jqplot_linegraph_array($IDX++, 'system-fault', $data_info, '', $pageswap_stat{'majflt/s'}, $pageswap_stat{'minflt/s'});
 	}
 }
+
+sub compute_scanpage_report
+{
+	my $data_info = shift();
+
+	my %pageswap_stat = ();
+	foreach my $t (sort {$a <=> $b} keys %sar_pageswap_stat) {
+		$pageswap_stat{'pgfree/s'}   .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgfree/s'} . '],';
+		$pageswap_stat{'pgscank/s'}  .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgscank/s'} . '],';
+		$pageswap_stat{'pgscand/s'}  .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgscand/s'} . '],';
+		$pageswap_stat{'pgsteal/s'}  .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgsteal/s'} . '],';
+		$pageswap_stat{'%vmeff'}     .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'%vmeff'} . '],';
+	}
+	if (scalar keys %pageswap_stat > 0) {
+		$pageswap_stat{'pgfree/s'} =~ s/,$//;
+		$pageswap_stat{'pgscank/s'} =~ s/,$//;
+		$pageswap_stat{'pgscand/s'} =~ s/,$//;
+		$pageswap_stat{'pgsteal/s'} =~ s/,$//;
+		$pageswap_stat{'%vmeff'} =~ s/,$//;
+		print &jqplot_linegraph_array($IDX++, 'system-scanpage', $data_info, '', $pageswap_stat{'pgscank/s'}, $pageswap_stat{'pgscand/s'}, $pageswap_stat{'pgsteal/s'}, $pageswap_stat{'%vmeff'});
+	}
+}
+
 
 sub compute_block_stat
 {
@@ -8997,6 +9086,21 @@ sub compute_sarstat_stats
 		# Compute page swap statistics
 		&compute_fault_stat(@content);
 	}
+	if ($data_info{name} eq 'system-scanpage') {
+		my $command = "$SADF_PROG -t -d $file -- -B";
+		print STDERR "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute page swap statistics
+		&compute_scanpage_stat(@content);
+	}
+
 
 	####
 	# Get block in/out
@@ -9529,6 +9633,12 @@ sub compute_sarfile_stats
 		&compute_fault_stat(@{$fulldata{page}});
 
 	}
+	if ($data_info{name} eq 'system-scanpage') {
+
+		# Compute page swap statistics
+		&compute_scanpage_stat(@{$fulldata{page}});
+
+	}
 
 
 	####
@@ -9756,6 +9866,12 @@ sub compute_sar_graph
 
 		# Compute graphs for page swap statistics
 		&compute_fault_report(\%data_info);
+
+	}
+	if ($data_info{name} eq 'system-scanpage') {
+
+		# Compute graphs for page swap statistics
+		&compute_scanpage_report(\%data_info);
 
 	}
 
