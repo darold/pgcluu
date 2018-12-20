@@ -1037,10 +1037,18 @@ my %SAR_GRAPH_INFOS = (
 	},
 	'20' => {
 		'name' => 'system-fault',
-		'title' => 'System page fault/freed statistics',
-		'description' => 'Total number of major and minor faults the system has made per second. Major are those which have required loading a memory page from disk and minor from cache. Total number of pages placed on the free list by the system per second. Dataset "minflt/s" is calculated as result of "fault/s - majflt/s".',
+		'title' => 'System page fault statistics',
+		'description' => 'Total number of major and minor faults the system has made per second. Major are those which have required loading a memory page from disk and minor from cache. Dataset "minflt/s" is calculated as result of "fault/s - majflt/s".',
 		'ylabel' => 'Number of faults',
-		'legends' => [ 'majflt/s', 'minflt/s', 'pgfree/s' ],
+		'legends' => [ 'majflt/s', 'minflt/s' ],
+	},
+	'21' => {
+		'name' => 'system-scanpage',
+		'title' => 'System page scanned statistics',
+		'description' => 'Total number of pages scanned by the kswapd daemon and number of pages scanned directly per second. Number of pages the system has reclaimed from cache (pagecache and swapcache) per second to satisfy its memory demands.',
+		'ylabel' => 'Number of pages',
+		'y2label' => 'Percents',
+		'legends' => [ 'pgscank/s', 'pgscand/s', 'pgsteal/s', '%vmeff' ],
 	},
 );
 
@@ -8324,6 +8332,7 @@ sub generate_html_menu
 		my $disable_tps = ' class="disabled"';
 		my $disable_page = ' class="disabled"';
 		my $disable_fault = ' class="disabled"';
+		my $disable_scanpage = ' class="disabled"';
 		if (open(IN, "$OUTPUT_DIR/system.html")) {
 			while (<IN>) {
 				if (/<div id="system-cpu">/) {
@@ -8352,6 +8361,8 @@ sub generate_html_menu
 					$disable_page = '';
 				} elsif (/<div id="system-fault">/) {
 					$disable_fault = '';
+				} elsif (/<div id="system-scanpage">/) {
+					$disable_scanpage = '';
 				}
 			}
 			close(IN);
@@ -8374,8 +8385,14 @@ sub generate_html_menu
                   <li class="divider"></li>
                   <li id="menu-system-block"$disable_block><a href="system.html#system-block">Blocks</a></li>
                   <li id="menu-system-tps"$disable_tps><a href="system.html#system-tps">Transfers per second</a></li>
-                  <li id="menu-system-page"$disable_page><a href="system.html#system-page">Pages in/out</a></li>
-                  <li id="menu-system-fault"$disable_page><a href="system.html#system-fault">Pages faults</a></li>
+		  <li id="menu-system-pageall" class="dropdown-submenu">
+		     <a href="#" tabindex="-1">Pages</a>
+		      <ul class="dropdown-menu">
+			  <li id="menu-system-page"$disable_page><a href="system.html#system-page">Pages in/out</a></li>
+			  <li id="menu-system-fault"$disable_fault><a href="system.html#system-fault">Pages faults</a></li>
+			  <li id="menu-system-scanpage"$disable_scanpage><a href="system.html#system-scanpage">Pages scan</a></li>
+		      </ul>
+		  </li>
                   <li class="divider"></li>
 };
 		my $idx = 0;
@@ -8890,7 +8907,26 @@ sub compute_fault_stat
 		map { s/,/\./ } @data ;
 		$sar_pageswap_stat{$data[2]}{'majflt/s'}  = ($data[6]||0);
 		$sar_pageswap_stat{$data[2]}{'minflt/s'}   = (($data[5]-$data[6])||0);
+	}
+}
+
+sub compute_scanpage_stat
+{
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;pgpgin/s;pgpgout/s;fault/s;majflt/s;pgfree/s;pgscank/s;pgscand/s;pgsteal/s;%vmeff
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+
+		map { s/,/\./ } @data ;
 		$sar_pageswap_stat{$data[2]}{'pgfree/s'}  = ($data[7]||0);
+		$sar_pageswap_stat{$data[2]}{'pgscank/s'}  = ($data[8]||0);
+		$sar_pageswap_stat{$data[2]}{'pgscand/s'}  = ($data[9]||0);
+		$sar_pageswap_stat{$data[2]}{'pgsteal/s'}  = ($data[10]||0);
+		$sar_pageswap_stat{$data[2]}{'%vmeff'}  = ($data[11]||0);
 	}
 }
 
@@ -8928,19 +8964,51 @@ sub compute_fault_report
 		if (!exists $OVERALL_STATS{'system'}{'minflt'} || ($OVERALL_STATS{'system'}{'minflt'}[1] < $sar_pageswap_stat{$t}{'minflt/s'})) {
 			@{$OVERALL_STATS{'system'}{'minflt'}} = ($t, $sar_pageswap_stat{$t}{'minflt/s'});
 		}
-		if (!exists $OVERALL_STATS{'system'}{'pgfree'} || ($OVERALL_STATS{'system'}{'pgfree'}[1] < $sar_pageswap_stat{$t}{'pgfree/s'})) {
-			@{$OVERALL_STATS{'system'}{'pgfree'}} = ($t, $sar_pageswap_stat{$t}{'pgfree/s'});
-		}
 		$pageswap_stat{'majflt/s'}  .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'majflt/s'} . '],';
 		$pageswap_stat{'minflt/s'}   .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'minflt/s'} . '],';
-		$pageswap_stat{'pgfree/s'}   .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgfree/s'} . '],';
 	}
-	%sar_pageswap_stat = ();
 	if (scalar keys %pageswap_stat > 0) {
 		$pageswap_stat{'majflt/s'} =~ s/,$//;
 		$pageswap_stat{'minflt/s'} =~ s/,$//;
+		print $FH &jqplot_linegraph_array($IDX++, 'system-fault', $data_info, '', $pageswap_stat{'majflt/s'}, $pageswap_stat{'minflt/s'});
+	}
+}
+
+sub compute_scanpage_report
+{
+	my $data_info = shift();
+
+	my %pageswap_stat = ();
+	foreach my $t (sort {$a <=> $b} keys %sar_pageswap_stat) {
+		if (!exists $OVERALL_STATS{'system'}{'pgfree'} || ($OVERALL_STATS{'system'}{'pgfree'}[1] < $sar_pageswap_stat{$t}{'pgfree/s'})) {
+			@{$OVERALL_STATS{'system'}{'pgfree'}} = ($t, $sar_pageswap_stat{$t}{'pgfree/s'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'pgscank'} || ($OVERALL_STATS{'system'}{'pgscank'}[1] < $sar_pageswap_stat{$t}{'pgscank/s'})) {
+			@{$OVERALL_STATS{'system'}{'pgscank'}} = ($t, $sar_pageswap_stat{$t}{'pgscank/s'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'pgscand'} || ($OVERALL_STATS{'system'}{'pgscand'}[1] < $sar_pageswap_stat{$t}{'pgscand/s'})) {
+			@{$OVERALL_STATS{'system'}{'pgscand'}} = ($t, $sar_pageswap_stat{$t}{'pgscand/s'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'pgsteal'} || ($OVERALL_STATS{'system'}{'pgsteal'}[1] < $sar_pageswap_stat{$t}{'pgsteal/s'})) {
+			@{$OVERALL_STATS{'system'}{'pgsteal'}} = ($t, $sar_pageswap_stat{$t}{'pgsteal/s'});
+		}
+		if (!exists $OVERALL_STATS{'system'}{'vmeff'} || ($OVERALL_STATS{'system'}{'vmeff'}[1] < $sar_pageswap_stat{$t}{'%vmeff'})) {
+			@{$OVERALL_STATS{'system'}{'vmeff'}} = ($t, $sar_pageswap_stat{$t}{'%vmeff'});
+		}
+		$pageswap_stat{'pgfree/s'}   .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgfree/s'} . '],';
+		$pageswap_stat{'pgscank/s'}   .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgscank/s'} . '],';
+		$pageswap_stat{'pgscand/s'}   .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgscand/s'} . '],';
+		$pageswap_stat{'pgsteal/s'}   .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'pgsteal/s'} . '],';
+		$pageswap_stat{'%vmeff'}   .= '[' . $t . ',' . $sar_pageswap_stat{$t}{'%vmeff'} . '],';
+	}
+	%sar_pageswap_stat = ();
+	if (scalar keys %pageswap_stat > 0) {
 		$pageswap_stat{'pgfree/s'} =~ s/,$//;
-		print $FH &jqplot_linegraph_array($IDX++, 'system-fault', $data_info, '', $pageswap_stat{'majflt/s'}, $pageswap_stat{'minflt/s'}, $pageswap_stat{'pgfree/s'});
+		$pageswap_stat{'pgscank/s'} =~ s/,$//;
+		$pageswap_stat{'pgscand/s'} =~ s/,$//;
+		$pageswap_stat{'pgsteal/s'} =~ s/,$//;
+		$pageswap_stat{'%vmeff'} =~ s/,$//;
+		print $FH &jqplot_linegraph_array($IDX++, 'system-scanpage', $data_info, '', $pageswap_stat{'pgscank/s'}, $pageswap_stat{'pgscand/s'}, $pageswap_stat{'pgsteal/s'}, $pageswap_stat{'%vmeff'});
 	}
 }
 
@@ -9530,6 +9598,20 @@ sub compute_sarstat_stats
 		# Compute page swap statistics
 		&compute_fault_stat(@content);
 	}
+	if ($data_info{name} eq 'system-scanpage') {
+		my $command = "$SADF_PROG -t -d $file -- -B";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute page swap statistics
+		&compute_scanpage_stat(@content);
+	}
 
 	####
 	# Get block in/out
@@ -10040,6 +10122,12 @@ sub compute_sarfile_stats
 		&compute_fault_stat(@{$fulldata{page}});
 
 	}
+	if ($data_info{name} eq 'system-scanpage') {
+
+		# Compute page swap statistics
+		&compute_scanpage_stat(@{$fulldata{page}});
+
+	}
 
 	####
 	# Set block in/out
@@ -10240,6 +10328,12 @@ sub compute_sar_graph
 
 		# Compute graphs for page swap statistics
 		&compute_fault_report(\%data_info);
+
+	}
+	if ($data_info{name} eq 'system-scanpage') {
+
+		# Compute graphs for page swap statistics
+		&compute_scanpage_report(\%data_info);
 
 	}
 
