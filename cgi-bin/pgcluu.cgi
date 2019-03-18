@@ -461,7 +461,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'statio-table',
 			'title' => 'Statistics about I/O on %s',
-			'description' => 'Number of disk blocks read from this table or all indexes on this table versus number of buffer hits in a table or all indexes of this table.',
+			'description' => 'Number of disk blocks read from table or all indexes on this table versus number of buffer hits at end of the audit period.',
 			'ylabel' => 'Number per second',
 			'legends' => ['heap_blks_read','heap_blks_hit','idx_blks_read','idx_blks_hit'],
 			'active' => 1,
@@ -484,7 +484,7 @@ my %DB_GRAPH_INFOS = (
 		'1' => {
 			'name' =>  'statio-index',
 			'title' => 'Statistics about I/O on %s',
-			'description' => 'Number of disk blocks read from this index versus number of buffer hits in this index.',
+			'description' => 'Number of disk blocks read from this index versus number of buffer hits in this index at end of the audit period.',
 			'ylabel' => 'Number per second',
 			'legends' => ['idx_blks_read','idx_blks_hit'],
 			'active' => 1,
@@ -2833,7 +2833,7 @@ sub pg_stat_user_tables_report
 				$table_data .= qq{<td>$all_stat_user_tables{$db}{$tb}{last_vacuum}</td><td>$all_stat_user_tables{$db}{$tb}{last_autovacuum}</td><td>$all_stat_user_tables{$db}{$tb}{last_analyze}</td><td>$all_stat_user_tables{$db}{$tb}{last_autoanalyze}</td></tr>};
 			}
 			if ($table_data) {
-				print qq{$table_data};
+				print $table_data;
 			}
 		}
 		print qq{
@@ -2959,7 +2959,7 @@ sub pg_stat_user_indexes_report
 				$table_data = qq{<tr><th>$idx</th><td>$all_stat_user_indexes{$db}{$idx}{idx_scan}</td><td>$all_stat_user_indexes{$db}{$idx}{idx_tup_read}</td><td>$all_stat_user_indexes{$db}{$idx}{idx_tup_fetch}</td></tr>};
 			}
 			if ($table_data) {
-				print qq{$table_data} if ($table_data);
+				print $table_data;
 			}
 		}
 		print qq{
@@ -3278,31 +3278,31 @@ sub pg_statio_user_tables
 		push(@{$start_vals{$data[1]}{$data[4]}}, @data) if ($#{$start_vals{$data[1]}{$data[4]}} < 0);
 
 		# Store interval between previous run
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{interval} = ($data[0] - $start_vals{$data[1]}{$data[4]}[0])/1000;
+		$all_statio_user_tables{$data[1]}{$data[4]}{interval} = ($data[0] - $start_vals{$data[1]}{$data[4]}[0])/1000;
 
 		(($data[5] - $start_vals{$data[1]}{$data[4]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[1]}{$data[4]}[5]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{heap_blks_read} = $tmp_val;
+		$all_statio_user_tables{$data[1]}{$data[4]}{heap_blks_read} += $tmp_val;
 
 		(($data[6] - $start_vals{$data[1]}{$data[4]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[1]}{$data[4]}[6]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{heap_blks_hit} = $tmp_val;
+		$all_statio_user_tables{$data[1]}{$data[4]}{heap_blks_hit} += $tmp_val;
 
 		(($data[7] - $start_vals{$data[1]}{$data[4]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[4]}[7]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{idx_blks_read} = $tmp_val;
+		$all_statio_user_tables{$data[1]}{$data[4]}{idx_blks_read} += $tmp_val;
 
 		(($data[8] - $start_vals{$data[1]}{$data[4]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[4]}[8]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{idx_blks_hit} = $tmp_val;
+		$all_statio_user_tables{$data[1]}{$data[4]}{idx_blks_hit} += $tmp_val;
 
 		(($data[9] - $start_vals{$data[1]}{$data[4]}[9]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[9] - $start_vals{$data[1]}{$data[4]}[9]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{toast_blks_read} = $tmp_val;
+		$all_statio_user_tables{$data[1]}{$data[4]}{toast_blks_read} += $tmp_val;
 
 		(($data[10] - $start_vals{$data[1]}{$data[4]}[10]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[10] - $start_vals{$data[1]}{$data[4]}[10]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{toast_blks_hit} = $tmp_val;
+		$all_statio_user_tables{$data[1]}{$data[4]}{toast_blks_hit} += $tmp_val;
 
 		(($data[11] - $start_vals{$data[1]}{$data[4]}[11]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[11] - $start_vals{$data[1]}{$data[4]}[11]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{tidx_blks_read} = $tmp_val;
+		$all_statio_user_tables{$data[1]}{$data[4]}{tidx_blks_read} += $tmp_val;
 
 		(($data[12] - $start_vals{$data[1]}{$data[4]}[12]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[12] - $start_vals{$data[1]}{$data[4]}[12]);
-		$all_statio_user_tables{$data[0]}{$data[1]}{$data[4]}{tidx_blks_hit} = $tmp_val;
+		$all_statio_user_tables{$data[1]}{$data[4]}{tidx_blks_hit} += $tmp_val;
 
 		@{$start_vals{$data[1]}{$data[4]}} = ();
 		push(@{$start_vals{$data[1]}{$data[4]}}, @data);
@@ -3320,53 +3320,80 @@ sub pg_statio_user_tables_report
 
 	return if (!$db);
 
-	my %is_used = ();
-	my %is_toast = ();
-	my %statio_usertable = ();
-	my $tz = ($STATS_TIMEZONE*3600*1000);
-	foreach my $t (sort {$a <=> $b} keys %all_statio_user_tables) {
-		foreach my $obj (keys %{ $all_statio_user_tables{$t}{$db} }) {
-			next if (!$statio_usertable{$db}{$obj}{interval});
-			$statio_usertable{$db}{$obj}{heap_blks_read} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_read}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
-			$statio_usertable{$db}{$obj}{heap_blks_hit} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_hit}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
-			$statio_usertable{$db}{$obj}{idx_blks_read} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_read}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
-			$statio_usertable{$db}{$obj}{idx_blks_hit} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_hit}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
-			$statio_usertable{$db}{$obj}{toast_blks_read} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_read}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
-			$statio_usertable{$db}{$obj}{toast_blks_hit} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_hit}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
-			$statio_usertable{$db}{$obj}{tidx_blks_read} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_read}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
-			$statio_usertable{$db}{$obj}{tidx_blks_hit} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_hit}||0)/$statio_usertable{$db}{$obj}{interval}) . '],';
-			$is_used{$db}{$obj}{is_used} += ($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{heap_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{idx_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_hit}||0);
-			if (!$is_toast{$db}{$obj}{is_toast}) {
-				$is_toast{$db}{$obj}{is_toast} += ($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{toast_blks_hit}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_read}||0)+($all_statio_user_tables{$t}{$db}{$obj}{tidx_blks_hit}||0);
-			}
-		}
-	}
-	%all_statio_user_tables = ();
-
-	my $id = &get_data_id('statio-table', %data_info);
-	if (exists $is_used{$db}) {
-		my $rank = 1;
-		foreach my $tb (sort {$is_used{$db}{$b} <=> $is_used{$db}{$a} } keys %{$is_used{$db}}) {
+	foreach my $id (sort {$a <=> $b} keys %data_info) {
+		next if ($id ne $ID_ACTION);
+		next if ($data_info{$id}{name} !~ /^statio-table/);
+		next if ($data_info{$id}{name} ne $REAL_ACTION);
+		my $colspan = '';
+		my $table_header = qq{
+					<th>Schema.Table</th>
+					<th>Table blocks read</th>
+					<th>Table blocks hit</th>
+					<th>Index blocks read</th>
+					<th>Index blocks hit</th>
+};
+		print qq{
+<ul id="slides">
+<li class="slide active-slide" id="$data_info{$id}{name}-slide">
+      <div id="$data_info{$id}{name}"><br/><br/><br/><br/></div>
+<div class="row">
+    <div class="col-md-12">
+      <div class="panel panel-default">
+      <div class="panel-heading">
+	<h2>$data_info{$id}{menu} on $db database tables</h2>
+	<p>$data_info{$id}{description}</p>
+      </div>
+      <div class="panel-body">
+	<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+		<div class="span11">
+			<table class="table table-striped sortable" id="$db-$data_info{$id}{name}-table">
+				<thead>
+					<tr>
+					$table_header
+					</tr>
+				</thead>
+				<tbody>
+};
+		my $data_found = 0;
+		foreach my $tb (sort keys %{$all_statio_user_tables{$db}}) {
+			next if ($tb eq 'all');
 			next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
-			last if ($TOP_STAT && ($rank > $TOP_STAT));
-			my $graph_data = '';
-			foreach ('heap_blks_read','heap_blks_hit','idx_blks_read','idx_blks_hit','toast_blks_read','toast_blks_hit','tidx_blks_read','tidx_blks_hit') {
-				$statio_usertable{$db}{$tb}{$_} =~ s/,$//;
-			}
+			my $table_data = '';
+			$all_statio_user_tables{$db}{$tb}{idx_blks_read} ||= 0;
+			$all_statio_user_tables{$db}{$tb}{heap_blks_read} ||= 0;
+			$all_statio_user_tables{$db}{$tb}{heap_blks_hit} ||= 0;
+			$all_statio_user_tables{$db}{$tb}{idx_blks_hit} ||= 0;
+			$all_statio_user_tables{$db}{$tb}{toast_blks_read} ||= 0;
+			$all_statio_user_tables{$db}{$tb}{toast_blks_hit} ||= 0;
+			$all_statio_user_tables{$db}{$tb}{tidx_blks_read} ||= 0;
+			$all_statio_user_tables{$db}{$tb}{tidx_blks_hit} ||= 0;
 			# if this is a toast table override the normal table values for easy use
-			if (exists $is_toast{$db}{$tb}) {
-				$statio_usertable{$db}{$tb}{heap_blks_read} = $statio_usertable{$db}{$tb}{toast_blks_read};
-				$statio_usertable{$db}{$tb}{heap_blks_hit} = $statio_usertable{$db}{$tb}{toast_blks_hit};
-				$statio_usertable{$db}{$tb}{idx_blks_read} = $statio_usertable{$db}{$tb}{tidx_blks_read};
-				$statio_usertable{$db}{$tb}{idx_blks_hit} = $statio_usertable{$db}{$tb}{tidx_blks_hit};
+			if ($all_statio_user_tables{$db}{$tb}{toast_blks_read} || $all_statio_user_tables{$db}{$tb}{toast_blks_hit} || $all_statio_user_tables{$db}{$tb}{tidx_blks_read} || $all_statio_user_tables{$db}{$tb}{tidx_blks_hit} ) {
+				$table_data = qq{<tr><th>$tb</th><td>$all_statio_user_tables{$db}{$tb}{toast_blks_read}</td><td>$all_statio_user_tables{$db}{$tb}{toast_blks_hit}</td><td>$all_statio_user_tables{$db}{$tb}{tidx_blks_read}</td><td>$all_statio_user_tables{$db}{$tb}{tidx_blks_hit}</td></tr>};
+			} else {
+				$table_data = qq{<tr><th>$tb</th><td>$all_statio_user_tables{$db}{$tb}{heap_blks_read}</td><td>$all_statio_user_tables{$db}{$tb}{heap_blks_hit}</td><td>$all_statio_user_tables{$db}{$tb}{idx_blks_read}</td><td>$all_statio_user_tables{$db}{$tb}{idx_blks_hit}</td></tr>};
 			}
-			print &jqplot_linegraph_array($IDX++, 'statio-table', \%{$data_info{$id}}, $tb, $statio_usertable{$db}{$tb}{heap_blks_read},$statio_usertable{$db}{$tb}{heap_blks_hit},$statio_usertable{$db}{$tb}{idx_blks_read},$statio_usertable{$db}{$tb}{idx_blks_hit});
-			delete $statio_usertable{$db}{$tb};
-			$rank++;
+			if ($table_data) {
+				print $table_data;
+				$data_found = 1;
+			}
 		}
-	} else {
-		print &empty_dataset('statio-index', \%{$data_info{$id}}, 'indexes');
+		if ($data_found) {
+			$table_header = qq{<td><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td>};
+		}
+		print qq{
+				</tbody>
+			</table>
+		</div>
+	</div>
+	</div>
+    </div>
+</div>
+</li>
+</ul>
+};
 	}
+	%all_stat_user_tables = ();
 }
 
 # Compute stats for relation buffer cache
@@ -3487,7 +3514,7 @@ sub pg_relation_buffercache_report
 			}
 			$rank++;
 			if ($table_data) {
-				print qq{$table_data} if ($table_data);
+				print $table_data;
 			}
 		}
 		print qq{
@@ -3558,13 +3585,13 @@ sub pg_statio_user_indexes
 		push(@{$start_vals{$data[1]}{$data[6]}}, @data) if ($#{$start_vals{$data[1]}{$data[6]}} < 0);
 
 		# Store interval between previous run
-		$all_statio_user_indexes{$data[0]}{$data[1]}{$data[6]}{interval} = ($data[0] - $start_vals{$data[1]}{$data[6]}[0])/1000;
+		$all_statio_user_indexes{$data[1]}{$data[6]}{interval} = ($data[0] - $start_vals{$data[1]}{$data[6]}[0])/1000;
 
 		(($data[7] - $start_vals{$data[1]}{$data[6]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[1]}{$data[6]}[7]);
-		$all_statio_user_indexes{$data[0]}{$data[1]}{$data[6]}{idx_blks_read} = $tmp_val;
+		$all_statio_user_indexes{$data[1]}{$data[6]}{idx_blks_read} += $tmp_val;
 
 		(($data[8] - $start_vals{$data[1]}{$data[6]}[8]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[8] - $start_vals{$data[1]}{$data[6]}[8]);
-		$all_statio_user_indexes{$data[0]}{$data[1]}{$data[6]}{idx_blks_hit} = $tmp_val;
+		$all_statio_user_indexes{$data[1]}{$data[6]}{idx_blks_hit} += $tmp_val;
 
 		@{$start_vals{$data[1]}{$data[6]}} = ();
 		push(@{$start_vals{$data[1]}{$data[6]}}, @data);
@@ -3582,38 +3609,70 @@ sub pg_statio_user_indexes_report
 
 	return if (!$db);
 
-	my %statio_userindex = ();
-	my %is_used = ();
-	my $tz = ($STATS_TIMEZONE*3600*1000);
-	foreach my $t (sort {$a <=> $b} keys %all_statio_user_indexes) {
-		foreach my $obj (keys %{ $all_statio_user_indexes{$t}{$db} }) {
-			next if (!$statio_userindex{$db}{$obj}{interval});
-			$statio_userindex{$db}{$obj}{idx_blks_read} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_indexes{$t}{$db}{$obj}{idx_blks_read}||0)/$statio_userindex{$db}{$obj}{interval}) . '],';
-			$statio_userindex{$db}{$obj}{idx_blks_hit} .= '[' . ($t - $tz) . ',' . int(($all_statio_user_indexes{$t}{$db}{$obj}{idx_blks_hit}||0)/$statio_userindex{$db}{$obj}{interval}) . '],';
-			$is_used{$db}{$obj} += ($all_statio_user_indexes{$t}{$db}{$obj}{idx_blks_hit}||0)+($all_statio_user_indexes{$t}{$db}{$obj}{idx_blks_read}||0);
+	foreach my $id (sort {$a <=> $b} keys %data_info) {
+		next if ($id ne $ID_ACTION);
+		next if ($data_info{$id}{name} !~ /^statio-index/);
+		my $table_header = '';
+		my $colspan =  ' colspan="4"';
+		if ($data_info{$id}{name} eq 'index-scan') {
+			$table_header = qq{
+					<th>Schema.Table.Index</th>
+					<th>Index blocks read</th>
+					<th>Index blocks hits</th>
+};
 		}
-	}
-	%all_statio_user_indexes = ();
-
-	my $id = &get_data_id('statio-index', %data_info);
-
-	if (exists $is_used{$db}) {
-		my $rank = 1;
-		foreach my $tb (sort {$is_used{$db}{$b} <=> $is_used{$db}{$a} } keys %{$is_used{$db}}) {
-			next if (($#INCLUDE_TB >= 0) && !grep(/^$tb$/, @INCLUDE_TB));
-			last if ($TOP_STAT && ($rank > $TOP_STAT));
-			my $graph_data = '';
-			foreach ('idx_blks_read','idx_blks_hit') {
-				$statio_userindex{$db}{$tb}{$_} =~ s/,$//;
+		print qq{
+<ul id="slides">
+<li class="slide active-slide" id="$data_info{$id}{name}-slide">
+      <div id="$data_info{$id}{name}"><br/><br/><br/><br/></div>
+<div class="row">
+    <div class="col-md-12">
+      <div class="panel panel-default">
+      <div class="panel-heading">
+	<h2>$data_info{$id}{menu} on $db database indexes</h2>
+	<p>$data_info{$id}{description}</p>
+      </div>
+      <div class="panel-body">
+	<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+		<div class="span11">
+			<table class="table table-striped sortable" id="$db-$data_info{$id}{name}-table">
+				<thead>
+					<tr>
+						$table_header
+					</tr>
+				</thead>
+				<tbody>
+};
+		my $found_table_stat = 0;
+		foreach my $idx (sort keys %{$all_statio_user_indexes{$db}}) {
+			next if ($idx eq 'all');
+			next if (($#INCLUDE_TB >= 0) && !grep(/^$idx$/, @INCLUDE_TB));
+			my $table_data = '';
+			if (!$all_statio_user_indexes{$db}{$idx}{idx_blks_read} && !$all_statio_user_indexes{$db}{$idx}{idx_blks_hit}) {
+				next;
 			}
-			print &jqplot_linegraph_array($IDX++, 'statio-index', \%{$data_info{$id}}, $tb, $statio_userindex{$db}{$tb}{idx_blks_read},$statio_userindex{$db}{$tb}{idx_blks_hit});
-			delete $statio_userindex{$db}{$tb};
-			$rank++;
+			$table_data = qq{<tr><th>$idx</th><td>$all_statio_user_indexes{$db}{$idx}{idx_blks_read}</td><td>$all_statio_user_indexes{$db}{$idx}{idx_blks_hit}</td></tr>};
+			if ($table_data) {
+				print $table_data;
+				$found_table_stat = 1;
+			}
 		}
-	} else {
-		print &empty_dataset('statio-index', \%{$data_info{$id}}, 'indexes');
+		if (!$found_table_stat) {
+			$table_header = qq{<td><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td>};
+		}
+		print qq{
+				</tbody>
+			</table>
+		</div>
+	</div>
+	</div>
+    </div>
+</div>
+</li>
+</ul>
+};
 	}
-
+	%all_stat_user_indexes = ();
 }
 
 # Compute statistics of xlog cluster
@@ -4613,7 +4672,7 @@ sub pg_class_size_report
 					$table_data = "<tr><th>$tb</th><td>" . &pretty_print_size($all_class_size{$db}{$k}{$tb}{size}) . "</td><td>" . int($all_class_size{$db}{$k}{$tb}{tuples}) . "</td><td>$all_class_size{$db}{$k}{$tb}{width}</td></tr>\n";
 				}
 				if ($table_data) {
-					print qq{$table_data} if ($table_data);
+					print $table_data;
 				}
 			}
 			if (!$found_table_stat) {
