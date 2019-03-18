@@ -188,6 +188,8 @@ COLLECTING STATISTICS
                                or 'dpkg -l'. If you have an other system you can
                                set a custom command. A filter on keyword 'postgres'
                                is appended to the command: ' | grep postgres'.
+      --retention NDAYS        number of rolling days to keep in data directory in
+                               incremental mode. Default is to store indefinitely.
       --help                   print usage
 
     Use those options to execute sar on the remote host defined by the -h
