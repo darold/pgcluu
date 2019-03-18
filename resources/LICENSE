@@ -56,6 +56,11 @@ jquery.*:
   * Released under the MIT license
   * http://jquery.org/license
 
+sorttable.js:
+  Copyright (c) 1997-date Stuart Langridge
+  Code downloaded from the Browser Experiments section of kryogenix.org is
+  licenced under the so-called MIT licence.
+
 underscore.js:
   (c) 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
   //     Underscore may be freely distributed under the MIT license.
