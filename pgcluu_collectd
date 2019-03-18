@@ -68,6 +68,7 @@ my $END_AFTER_COUNTER = 0;
 my $NO_DATABASE = 0;
 my $D_ROTATE    = 0;
 my $H_ROTATE    = 0;
+my $RETENTION   = 0;
 my $OUT_DIR     = '.';
 my $COMPRESS    = 0;
 my $OLD_OUT_DIR = '';
@@ -394,7 +395,13 @@ my $result = GetOptions(
 	'ssh-timeout=i'  => \$SSH_TIMEOUT,
 	'cron-user=s'    => \$CRONUSER,
 	'package-list=s' => \$PKG_LIST_PROG,
+	'retention=i'    => \$RETENTION,
 ) or die &usage();
+
+# Clean retention value
+if ($RETENTION) {
+	$RETENTION =~ s/[+\-]//g;
+}
 
 # Autodetect package listing command to use
 if (!$PKG_LIST_PROG) {
@@ -810,6 +817,19 @@ while (1) {
 
 	# stores previous directory to check when rotated files must compressed
 	$OLD_OUT_DIR = $OUT_DIR;
+
+	# If we have a retention limit remove everything older
+	if ($RETENTION > 0 && $OUTPUT_DIR && $year) {
+		# We don't use the output directory as root dir but the year
+		# subdirectory. Rewind to previous year first in case we have
+		# year overlap.
+		$year--;
+		if (-d "$OUTPUT_DIR/$year") {
+			`find $OUTPUT_DIR/$year/ -name '*' -mtime +$RETENTION -delete`;
+		}
+		$year++;
+		`find $OUTPUT_DIR/$year/ -name '*' -mtime +$RETENTION -delete`;
+	}
 
 	# Collect all metrics about the cluster
 	&spawn_collect(sub {
@@ -1806,6 +1826,8 @@ options:
                            or 'dpkg -l'. If you have an other system you can
                            set a custom command. A filter on keyword 'postgres'
 			   is appended to the command: ' | grep postgres'.
+  --retention NDAYS        number of rolling days to keep in data directory in
+                           incremental mode. Default is to store indefinitely.
   --help                   print usage
 
 Use those options to execute sar on the remote host defined by the -h option,
