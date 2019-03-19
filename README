@@ -246,44 +246,62 @@ COLLECTING STATISTICS
 
     or by sending sigterm to the pgcluu_collectd's pid.
 
+    You can run the collector in incremental mode using a daily or a hourly
+    statistics rotation:
+
+            pgcluu_collectd -D -i 60 /tmp/stat_db1/ --rotate-daily
+
+    On a server with huge activity you may want to use --rotate-hourly and
+    compression mode with --compress option. If you have limited disk space
+    you can restrict the retention time of statistics files using option
+    --retention with the storage day limit.
+
   Statistics files
     The output directory with all statistics collected should look likes:
 
             /tmp/stat_db1/
-            |--- pgbouncer.ini
-            |--- pgbouncer_req_stats.csv
-            |--- pgbouncer_stats.csv
-            |--- pg_class_size.csv
-            |--- pg_database_buffercache.csv
-            |--- pg_database_isdirty.csv
-            |--- pg_database_size.csv
-            |--- pg_database_usagecount.csv
-            |--- pg_hba.conf
-            |--- pg_ident.conf
-            |--- pg_relation_buffercache.csv
-            |--- pg_settings.csv
-            |--- pg_db_role_setting.csv
-            |--- pg_stat_bgwriter.csv
-            |--- pg_stat_connections.csv
-            |--- pg_stat_database_conflicts.csv
-            |--- pg_stat_database.csv
-            |--- pg_statio_user_indexes.csv
-            |--- pg_statio_user_sequences.csv
-            |--- pg_statio_user_tables.csv
-            |--- pg_stat_locks.csv
-            |--- pg_stat_missing_fkindexes.csv
-            |--- pg_stat_redundant_indexes.csv
-            |--- pg_stat_replication.csv
-            |--- pg_stat_statements.csv
-            |--- pg_stat_unused_indexes.csv
-            |--- pg_stat_user_functions.csv
-            |--- pg_stat_user_indexes.csv
-            |--- pg_stat_user_tables.csv
-            |--- pg_tablespace_size.csv
-            |--- pg_xlog_stat.csv
-            |--- postgresql.conf
-            |--- sar_stats.dat
-            |--- sysinfo.txt
+             |-- end-pg_statio_user_indexes.csv
+             |-- end-pg_statio_user_sequences.csv
+             |-- end-pg_statio_user_tables.csv
+             |-- end-pg_stat_user_functions.csv
+             |-- end-pg_stat_user_indexes.csv
+             |-- end-pg_stat_user_tables.csv
+             |-- end-pg_stat_xact_user_functions.csv
+             |-- end-pg_stat_xact_user_tables.csv
+             |-- fs_stat_use.csv
+             |-- pg_class_size.csv
+             |-- pg_database_size.csv
+             |-- pg_db_role_setting.csv
+             |-- pg_nondefault_settings.csv
+             |-- pg_prepared_xact.csv
+             |-- pg_settings.csv
+             |-- pg_stat_archiver.csv
+             |-- pg_stat_bgwriter.csv
+             |-- pg_stat_connections.csv
+             |-- pg_stat_count_indexes.csv
+             |-- pg_stat_database_conflicts.csv
+             |-- pg_stat_database.csv
+             |-- pg_stat_hash_indexes.csv
+             |-- pg_stat_invalid_indexes.csv
+             |-- pg_statio_user_indexes.csv
+             |-- pg_statio_user_sequences.csv
+             |-- pg_statio_user_tables.csv
+             |-- pg_stat_locks.csv
+             |-- pg_stat_missing_fkindexes.csv
+             |-- pg_stat_redundant_indexes.csv
+             |-- pg_stat_replication.csv
+             |-- pg_stat_unlogged.csv
+             |-- pg_stat_unused_indexes.csv
+             |-- pg_stat_user_functions.csv
+             |-- pg_stat_user_indexes.csv
+             |-- pg_stat_user_tables.csv
+             |-- pg_stat_xact_user_functions.csv
+             |-- pg_stat_xact_user_tables.csv
+             |-- pg_tablespace_size.csv
+             |-- pg_xlog_stat.csv
+             |-- postgresql.conf
+             |-- sar_stats.dat
+             |-- sysinfo.txt
 
     Then now you can proceed with pgcluu to generate reports.
 
@@ -291,11 +309,33 @@ COLLECTING STATISTICS
     When used the --rotate-daily or --rotate-hourly commands line option
     will force pgcluu_collectd to rotate daily or hourly all statistic's
     files. In this case, statistics files will be created in a subdirectory
-    based on rotation frequency, output_dir/year/month/day[/hour].
+    based on rotation frequency, output_dir/year/month/day[/hour]. This is
+    called the incremental mode.
 
     To save filesystem space it is possible to enable compression of all
     rotated files during the rotation process. Just activate the -z or
-    --compress command line option.
+    --compress command line option. You can also use the --retention option
+    to set the storage time limit in days.
+
+  Incremental mode
+    This mode is enabled when --rotate-daily or --rotate-hourly command line
+    options are used. It allow pgcluu to build reports incrementally by days
+    or hours.
+
+    The daily or hourly basis statistic storage also allow the use of the
+    CGI script pgcluu.cgi to have dynamic reports and temporal search. See
+    "Using dynamic mode" chapter.
+
+    When used the --rotate-daily or --rotate-hourly commands line option
+    will force pgcluu_collectd to rotate daily or hourly all statistic's
+    files. In this case, statistics files will be created in a subdirectory
+    based on rotation frequency, output_dir/year/month/day[/hour]. This is
+    called the incremental mode.
+
+    To save filesystem space it is possible to enable compression of all
+    rotated files during the rotation process. Just activate the -z or
+    --compress command line option. You can also use the --retention option
+    to set the storage time limit in days.
 
   Capture mode
     The goal of this mode is to be able to obtain a simple report about the
@@ -312,6 +352,7 @@ COLLECTING STATISTICS
     automatically detect this mode.
 
 GENERATING REPORTS
+  Static HTML reports
     To generate a pgCluu report about a PostgreSQL Cluster you must, at
     least, have a directory that contains all data files generated by
     pgcluu_collectd or pgstats. In this directory, if you have a file named
@@ -319,14 +360,14 @@ GENERATING REPORTS
     taken to build report about system utilization. If you just want to make
     a report from a sar file use the -i or -I options.
 
-    usage: pgcluu [options] [-i sar_file [--from-sa-file] | -I sadc_file]
-    [input_dir]
+    usage: pgcluu [options] [-i sar_file | -I sadc_file] [input_dir]
 
             input_dir: directory where pgcluu_collectd or pgstats and sar data
                        files are stored.
 
     options: -b, --begin datetime start date/time for the data to be parsed.
-    -d, --db-only dbname Only report for the whole cluster and the given
+    -C, --cache generate cache files only (.bin), no html output. -d,
+    --db-only dbname only report for the whole cluster and the given
     database name. You can use it multiple time or give a comma separated
     list of database name. -D, --device-only dev only report I/O stats for a
     particular device You can use it multiple time or give a comma separated
@@ -338,7 +379,7 @@ GENERATING REPORTS
     -n, --top-number Top number of tables or indexes I/O stats to show.
     Default is set to top 10. Set it to 0 to show all. -N, --network-only
     iface only report stats for a particular network interface. You can use
-    it multiple time or give a comma separated list of network ingterface,
+    it multiple times or give a comma separated list of network interfaces,
     ex: eth0,eth1. -o, --output=DIR output directory -r, --reverse-date By
     default pgcluu look at mm/dd/yy format in sar file. When enabled pgcluu
     will look at dd/mm/yy format. -s, --sadf=BIN path to the sadf sysstat
@@ -348,11 +389,16 @@ GENERATING REPORTS
     name. You can use it multiple time or give a comma separated list of
     database name. -T, --no-table Do not report statistics related to
     tables. -v, --verbose Print out debug informations. -V, --version Show
-    pgcluu_collectd version and exit. -z, --timezone +/-XX Set the number of
-    hour(s) from GMT of the timezone. Use this to adjust date/time from the
-    sar output, pgcluu use GMT time to draw charts. --from-sa-file instruct
-    pgcluu that file specified by the -i option uses the standard system
-    activity daily data file. --help print usage
+    pgcluu version and exit. -z, --timezone +/-XX Set the number of hour(s)
+    from GMT of the timezone. Use this to adjust date/time from the sar
+    output, pgcluu use GMT time to draw charts. -Z, --stats-timezone +/-XX
+    Set the number of hour(s) from GMT of the timezone. Use this to adjust
+    date/time from the cluster and system stats output, pgcluu use GMT time.
+    --from-sa-file instruct pgcluu that file specified by the -i option uses
+    the standard system activity daily data file. --charset used to set the
+    HTML charset to be used. Default: utf-8. --retention NDAYS number of
+    rolling days to keep in report directory. Default is to store
+    indefinitely. --help print usage
 
     For example, you can generate all HTML reports from data files stored
     into /tmp/stat_db1/ with the following commands:
@@ -374,13 +420,94 @@ GENERATING REPORTS
             sar -p -A -f /var/log/sa/sa18 > /root/my_sar_file.txt
             pgcluu -o /tmp/report_sar/ -i /root/my_sar_file.txt --from-sa-file
 
-    and directly from a sa binary file:
+    and from a sa binary file:
 
             pgcluu -o /tmp/report_sar/ -i /var/log/sysstat/sa22
 
-    or the same sa text file if you don't have the same version of sysstat:
+    or the sa text file if you don't have the same version of sysstat:
 
-            pgcluu -o /tmp/report_sar/ -i /var/log/sysstat/sar22 --from-sa-file
+            pgcluu -o /tmp/report_sar/ -i /var/log/sysstat/sar23 --from-sa-file
+
+    If pgcluu_collectd have been run in incremental mode you can limit the
+    number of retention days used for the reports:
+
+            pgcluu -o /tmp/report_sar/ /tmp/stat_db1/ --retention 30
+
+    A static report will be built for each day or hour following the
+    rotation used with pgcluu_collectd.
+
+  Dynamic reports (CGI)
+    Dynamics reports are build by a CGI script named pgcluu.cgi that can be
+    found in the cgi-bin repository of the source code. It allow you to
+    select the time period to build reports and to look at all differents
+    reports for this period just as with static HTML reports. After
+    installation from sources or binary packages the CGI might be found in
+    /usr/lib/cgi-bin/pgcluu.cgi or /var/www/cgi-bin/pgcluu.cgi following
+    your distribution.
+
+    To use pgCluu in CGI mode, you need a Web server (here we use Apache)
+    and a cron task to build the cache periodically.
+
+    First enable CGI mode.
+
+            sudo a2enmod cgi
+            sudo service apache2 restart
+
+    Then the CGI need to find the statistics directory where pgcluu_collectd
+    mostly /var/lib/pgcluu/data/. The content of this repository must be
+    readable by the apache user (www-data).
+
+    Take care to restrict access to your server and the CGI as information
+    about your database and server are exposed in the reports.
+
+    The CGI script, pgcluu.cgi, use resources files (CSS and javascript).
+    They are stored in the cgi-bin/rsc/ directory of the source
+    distribution. Install this repository onto the DocumentRoot of your Web
+    server, for example:
+
+            sudo mkdir /var/www/pgcluu/
+            sudo cp -rf cgi-bin/rsc /var/www/pgcluu/
+
+    Then edit /etc/pgcluu.conf, copy it from sources cgi-bin/pgcluu.conf if
+    it doesn't exists. Change the RSC_BASE and INPUT_DIR configuration
+    directive to match your installation. Here in our example:
+
+            RSC_BASE        /pgcluu/rsc/
+            INPUT_DIR       /var/lib/pgcluu/data
+
+    Now we can start the data collection.
+
+    To let pgCluu start collecting data, you can use the following command
+    (you can change it to however you like). We will need postgres user for
+    this.
+
+            sudo su - postgres
+            /usr/local/bin/pgcluu_collectd -D -i 60 --rotate-daily /var/lib/pgcluu/data
+
+    This will rotate you data daily. This is also the default in the systemd
+    service file.
+
+    Plugging the CGI directly to the CSV statistics files will result in
+    very slow generation reports. To improve speed caching must be used, you
+    must execute periodically pgcluu in cache mode. Run it manually the
+    first time
+
+            /usr/local/bin/pgcluu --cache /var/lib/pgcluu/data
+
+    then add a cron task to execute the command each five or ten minutes:
+
+            */5 * * * * /usr/local/bin/pgcluu --cache /var/lib/pgcluu/data
+
+    To see your reports, go to the following URL:
+
+            http://localhost/cgi-bin/pgcluu.cgi
+
+    Or change localhost by your fqdn server name.
+
+    Note that here pgcluu_collectd and pgcluu scripts are found in
+    /usr/local/bin/ which is the default for an installation from sources
+    but with an installation from binary package you might find them into
+    /usr/bin/.
 
 LICENSE
     Copyright (c) 2012-2018, Gilles Darold
