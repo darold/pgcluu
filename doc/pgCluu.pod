@@ -123,6 +123,11 @@ your needs. To install them after editing use commands below:
 	systemctl start pgcluu_collectd.service
 	systemctl start pgcluu.timer
 
+Be warn that storing indefinitely statistics with pgcluu_collectd can fill
+you disk space in the short or medium term. You have to remove obsolete
+statistics manually using a cront job or using the embedded retention feature
+by adding option '--retention ndays' to pgcluu_collectd call.
+
 =head1 COLLECTING STATISTICS
 
 To generate reports about your PostgreSQL Cluster Utilization you must collect

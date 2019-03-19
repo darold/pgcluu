@@ -117,6 +117,12 @@ USAGE
             systemctl start pgcluu_collectd.service
             systemctl start pgcluu.timer
 
+    Be warn that storing indefinitely statistics with pgcluu_collectd can
+    fill you disk space in the short or medium term. You have to remove
+    obsolete statistics manually using a cront job or using the embedded
+    retention feature by adding option '--retention ndays' to
+    pgcluu_collectd call.
+
 COLLECTING STATISTICS
     To generate reports about your PostgreSQL Cluster Utilization you must
     collect statistics before. pgcluu_collectd is here for that. It can be
