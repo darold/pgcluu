@@ -1875,8 +1875,19 @@ Then after some time and activities on the database, stop the daemon as follow:
         pgcluu_collectd -k
 
 or by sending sigterm to the pgcluu_collectd's pid.
+
+You can run the collector in incremental mode using a daily or a hourly statistics
+rotation:
+
+	pgcluu_collectd -D -i 60 /tmp/stat_db1/ --rotate-daily
+
+On a server with huge activity you may want to use --rotate-hourly and compression
+mode with --compress option. If you have limited disk space you can restrict the
+retention time of statistics files using option --retention with the storage day
+limit.
+
 };
-    exit 1
+    exit 1;
 }
 
 sub dprint
