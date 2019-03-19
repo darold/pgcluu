@@ -1621,7 +1621,8 @@ exit 0;
 
 #----------------------------------------------------------------------------------
 
-sub usage {
+sub usage
+{
     print qq{
 usage: $0 [options] [-i sar_file | -I sadc_file] [input_dir]
 
@@ -1701,6 +1702,13 @@ or the sa text file if you don't have the same version of sysstat:
 
         pgcluu -o /tmp/report_sar/ -i /var/log/sysstat/sar23 --from-sa-file
 
+If pgcluu_collectd have been run in incremental mode you can limit the number
+of retention days used for the reports:
+
+	pgcluu -o /tmp/report_sar/ /tmp/stat_db1/ --retention 30
+
+A static report will be built for each day or hour following the rotation
+used with pgcluu_collectd.
 };
     exit 0;
 }
