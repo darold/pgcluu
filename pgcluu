@@ -2983,7 +2983,6 @@ sub pg_tablespace_size_report
     </div>
 };
 	}
-	print $fhcluster "</li>\n";
 	$fhcluster->close();
 }
 
@@ -8609,7 +8608,6 @@ sub generate_html_menu
 	$menu_str .= qq{
               <li id="menu-about" class="dropdown"><a href="index.html#about">About</a></li>
           </ul>
-	  </li>
         </div><!--/.nav-collapse -->
       </div>
     </div>
