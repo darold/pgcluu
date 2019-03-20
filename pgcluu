@@ -37,7 +37,6 @@ my @INCLUDE_DEV     = ();
 my @INCLUDE_IFACE   = ();
 my $IMG_FORMAT      = 'png';
 my $FH              = undef;
-my %DEVFH           = ();
 my $IDX             = 1;
 my $HELP            = 0;
 my $SHOW_VER        = 0;
@@ -1516,57 +1515,17 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 		} else {
 
-			# Open filehandle
-			$FH = new IO::File ">$OUTPUT_DIR/system.html";
-			if (not defined $FH) {
-				die "FATAL: can't write to $OUTPUT_DIR/system.html, $!\n";
-			}
-			# Generate the html header for each sar devices statistics report
-			&html_header($FH, $src_base);
-			print $FH "<ul id=\"slides\">\n";
-			for (my $i = 0; $i <= $#DEVICE_LIST; $i++) {
-				&init_device_output($i, $src_base);
-			}
-			for (my $i = 0; $i <= $#IFACE_LIST; $i++) {
-				# Open a filehandle for each network devices
-				$DEVFH{$IFACE_LIST[$i]} = new IO::File ">$OUTPUT_DIR/network-device$i.html";
-				if (not defined $DEVFH{$IFACE_LIST[$i]}) {
-					die "FATAL: can't write to $OUTPUT_DIR/network-device$i.html, $!\n";
-				}
-				&html_header($DEVFH{$IFACE_LIST[$i]}, $src_base);
-				$DEVFH{$IFACE_LIST[$i]}->print("<ul id=\"slides\">\n");
-			}
-
 			# Build sar statistics graphs
 			print "DEBUG: Building sar statistics reports\n" if ($DEBUG);
 			foreach my $id (sort keys %SAR_GRAPH_INFOS) {
 				&compute_sar_graph($src_base, %{$SAR_GRAPH_INFOS{$id}});
 			}
-
-			# Write html footer in all reports
-			print $FH "</ul>\n";
-			&html_footer($FH);
-			$FH->close;
 		}
 	}
 
 	if (!$CACHE) {
 
 		if ($OUTPUT_DIR) {
-
-			# Terminate all database statistic file
-			foreach my $dev (@IFACE_LIST) {
-				$DEVFH{$dev}->print("</ul>\n");
-				&html_footer($DEVFH{$dev}, $dev);
-				$DEVFH{$dev}->close;
-			}
-			# Terminate all database statistic file
-			foreach my $dev (@DEVICE_LIST) {
-				$DEVFH{$dev}->print("</ul>\n");
-				&html_footer($DEVFH{$dev}, $dev);
-				$DEVFH{$dev}->close;
-			}
-			%DEVFH = ();
 
 			# Generate main index
 			&generate_html_index($in_dir, $src_base);
@@ -1600,6 +1559,7 @@ $menu
 
 	# In cache mode if the --clean	option is enable we need to remove data file
 	} elsif ($CLEAN && $CACHE) {
+
 		print "DEBUG: removing all csv and data files from $in_dir.\n" if ($DEBUG);
 		opendir(DIR, "$in_dir") || die "FATAL: can't opendir $in_dir: $!";
 		my @file_list = grep { !/^.*\.bin$/ && -f "$in_dir/$_"; } readdir(DIR);
@@ -1809,36 +1769,6 @@ sub end_html_file
 	$fhdb->print("</ul>\n");
 	&html_footer($fhdb);
 	$fhdb->close;
-}
-
-
-sub init_device_output
-{
-	my $i = shift;
-	my $src_base = shift;
-
-	# Open a filehandle for each database
-	$DEVFH{$DEVICE_LIST[$i]} = new IO::File ">$OUTPUT_DIR/system-device$i.html";
-	if (not defined $DEVFH{$DEVICE_LIST[$i]}) {
-		die "FATAL: can't write to $OUTPUT_DIR/system-device$i.html, $!\n";
-	}
-	&html_header($DEVFH{$DEVICE_LIST[$i]}, $src_base);
-	$DEVFH{$DEVICE_LIST[$i]}->print("<ul id=\"slides\">\n");
-
-}
-
-sub init_iface_output
-{
-	my $i = shift;
-	my $src_base = shift;
-
-	# Open a filehandle for each database
-	$DEVFH{$IFACE_LIST[$i]} = new IO::File ">$OUTPUT_DIR/network-device$i.html";
-	if (not defined $DEVFH{$IFACE_LIST[$i]}) {
-		die "FATAL: can't write to $OUTPUT_DIR/network-device$i.html, $!\n";
-	}
-	&html_header($DEVFH{$IFACE_LIST[$i]}, $src_base);
-	$DEVFH{$IFACE_LIST[$i]}->print("<ul id=\"slides\">\n");
 }
 
 
@@ -8464,64 +8394,73 @@ sub generate_html_menu
 		my $disable_page = ' class="disabled"';
 		my $disable_fault = ' class="disabled"';
 		my $disable_scanpage = ' class="disabled"';
-		if (open(IN, "$OUTPUT_DIR/system.html")) {
-			while (<IN>) {
-				if (/<div id="system-cpu">/) {
-					$disable_cpu = '';
-				} elsif (/<div id="system-memory">/) {
-					$disable_memory = '';
-				} elsif (/<div id="system-swap">/) {
-					$disable_swap = '';
-				} elsif (/<div id="system-dirty">/) {
-					$disable_dirty = '';
-				} elsif (/<div id="system-load">/) {
-					$disable_load = '';
-				} elsif (/<div id="system-process">/) {
-					$disable_process = '';
-				} elsif (/<div id="system-runqueue">/) {
-					$disable_runqueue = '';
-				} elsif (/<div id="system-cswch">/) {
-					$disable_cswch = '';
-				} elsif (/<div id="system-pcrea">/) {
-					$disable_pcrea = '';
-				} elsif (/<div id="system-block">/) {
-					$disable_block = '';
-				} elsif (/<div id="system-tps">/) {
-					$disable_tps = '';
-				} elsif (/<div id="system-page">/) {
-					$disable_page = '';
-				} elsif (/<div id="system-fault">/) {
-					$disable_fault = '';
-				} elsif (/<div id="system-scanpage">/) {
-					$disable_scanpage = '';
-				}
-			}
-			close(IN);
+		if (-e "$OUTPUT_DIR/system-cpu.html") {
+			$disable_cpu = '';
 		}
+		if (-e "$OUTPUT_DIR/system-memory.html") {
+			$disable_memory = '';
+		}
+		if (-e "$OUTPUT_DIR/system-swap.html") {
+			$disable_swap = '';
+		}
+		if (-e "$OUTPUT_DIR/system-dirty.html") {
+			$disable_dirty = '';
+		}
+		if (-e "$OUTPUT_DIR/system-load.html") {
+			$disable_load = '';
+		}
+		if (-e "$OUTPUT_DIR/system-process.html") {
+			$disable_process = '';
+		}
+		if (-e "$OUTPUT_DIR/system-runqueue.html") {
+			$disable_runqueue = '';
+		}
+		if (-e "$OUTPUT_DIR/system-cswch.html") {
+			$disable_cswch = '';
+		}
+		if (-e "$OUTPUT_DIR/system-pcrea.html") {
+			$disable_pcrea = '';
+		}
+		if (-e "$OUTPUT_DIR/system-block.html") {
+			$disable_block = '';
+		}
+		if (-e "$OUTPUT_DIR/system-tps.html") {
+			$disable_tps = '';
+		}
+		if (-e "$OUTPUT_DIR/system-page.html") {
+			$disable_page = '';
+		}
+		if (-e "$OUTPUT_DIR/system-fault.html") {
+			$disable_fault = '';
+		}
+		if (-e "$OUTPUT_DIR/system-scanpage.html") {
+			$disable_scanpage = '';
+		}
+
 		$menu_str .= qq{
               <li id="menu-system" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">System <b class="caret"></b></a>
                 <ul class="dropdown-menu">
-		  <li id="menu-system-cpu"$disable_cpu><a href="system.html#system-cpu">Cpu</a></li>
+		  <li id="menu-system-cpu"$disable_cpu><a href="system-cpu.html">Cpu</a></li>
                   <li class="divider"></li>
-                  <li id="menu-system-memory"$disable_memory><a href="system.html#system-memory">Memory</a></li>
-                  <li id="menu-system-dirty"$disable_dirty><a href="system.html#system-dirty">Dirty memory</a></li>
-                  <li id="menu-system-swap"$disable_swap><a href="system.html#system-swap">Swap</a></li>
+                  <li id="menu-system-memory"$disable_memory><a href="system-memory.html">Memory</a></li>
+                  <li id="menu-system-dirty"$disable_dirty><a href="system-dirty.html">Dirty memory</a></li>
+                  <li id="menu-system-swap"$disable_swap><a href="system-swap.html">Swap</a></li>
                   <li class="divider"></li>
-                  <li id="menu-system-load"$disable_load><a href="system.html#system-load">Load</a></li>
-                  <li id="menu-system-process"$disable_process><a href="system.html#system-process">Task list</a></li>
-                  <li id="menu-system-runqueue"$disable_runqueue><a href="system.html#system-runqueue">Run queue</a></li>
-                  <li id="menu-system-cswch"$disable_cswch><a href="system.html#system-cswch">Context switches</a></li>
-                  <li id="menu-system-pcrea"$disable_pcrea><a href="system.html#system-pcrea">Tasks created per second</a></li>
+                  <li id="menu-system-load"$disable_load><a href="system-load.html">Load</a></li>
+                  <li id="menu-system-process"$disable_process><a href="system-process.html">Task list</a></li>
+                  <li id="menu-system-runqueue"$disable_runqueue><a href="system-runqueue.html">Run queue</a></li>
+                  <li id="menu-system-cswch"$disable_cswch><a href="system-cswch.html">Context switches</a></li>
+                  <li id="menu-system-pcrea"$disable_pcrea><a href="system-pcrea.html">Tasks created per second</a></li>
                   <li class="divider"></li>
-                  <li id="menu-system-block"$disable_block><a href="system.html#system-block">Blocks</a></li>
-                  <li id="menu-system-tps"$disable_tps><a href="system.html#system-tps">Transfers per second</a></li>
+                  <li id="menu-system-block"$disable_block><a href="system-block.html">Blocks</a></li>
+                  <li id="menu-system-tps"$disable_tps><a href="system-tps.html">Transfers per second</a></li>
 		  <li id="menu-system-pageall" class="dropdown-submenu">
 		     <a href="#" tabindex="-1">Pages</a>
 		      <ul class="dropdown-menu">
-			  <li id="menu-system-page"$disable_page><a href="system.html#system-page">Pages in/out</a></li>
-			  <li id="menu-system-fault"$disable_fault><a href="system.html#system-fault">Pages faults</a></li>
-			  <li id="menu-system-scanpage"$disable_scanpage><a href="system.html#system-scanpage">Pages scan</a></li>
+			  <li id="menu-system-page"$disable_page><a href="system-page.html">Pages in/out</a></li>
+			  <li id="menu-system-fault"$disable_fault><a href="system-fault.html">Pages faults</a></li>
+			  <li id="menu-system-scanpage"$disable_scanpage><a href="system-scanpage.html">Pages scan</a></li>
 		      </ul>
 		  </li>
                   <li class="divider"></li>
@@ -8550,28 +8489,26 @@ sub generate_html_menu
 			my $disable_device_read_write = ' class="disabled"';
 			my $disable_device_tps = ' class="disabled"';
 			my $disable_device_service_time = ' class="disabled"';
-			if (open(IN, "$OUTPUT_DIR/system-device$i.html")) {
-				while (<IN>) {
-					if (/<div id="device-cpu">/) {
-						$disable_device_cpu = '';
-					} elsif (/<div id="device-read_write">/) {
-						$disable_device_read_write = '';
-					} elsif (/<div id="device-tps">/) {
-						$disable_device_tps = '';
-					} elsif (/<div id="device-service_time">/) {
-						$disable_device_service_time = '';
-					}
-				}
-				close(IN);
+			if (-e "$OUTPUT_DIR/system-cpudevice-$DEVICE_LIST[$i].html") {
+				$disable_device_cpu = '';
+			}
+			if (-e "$OUTPUT_DIR/system-device-$DEVICE_LIST[$i].html") {
+				$disable_device_read_write = '';
+			}
+			if (-e "$OUTPUT_DIR/system-tpsdevice-$DEVICE_LIST[$i].html") {
+				$disable_device_tps = '';
+			}
+			if (-e "$OUTPUT_DIR/system-srvtime-$DEVICE_LIST[$i].html") {
+				$disable_device_service_time = '';
 			}
 			$menu_str .= qq{
 			  <li id="menu-device$i" class="dropdown-submenu">
 			     <a href="#" tabindex="-1">$DEVICE_LIST[$i] </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-device-cpu"$disable_device_cpu><a href="system-device$i.html#device-cpu">Cpu utilization</a></li>
-			      <li id="menu-device-read_write"$disable_device_read_write><a href="system-device$i.html#device-read_write">Read/write bytes per second</a></li>
-			      <li id="menu-device-tps"$disable_device_tps><a href="system-device$i.html#device-tps">Transfert per second</a></li>
-			      <li id="menu-device-service_time"$disable_device_service_time><a href="system-device$i.html#device-service_time">Average service time</a></li>
+			      <li id="menu-device-cpu"$disable_device_cpu><a href="system-cpudevice-$DEVICE_LIST[$i].html">Cpu utilization</a></li>
+			      <li id="menu-device-read_write"$disable_device_read_write><a href="system-device-$DEVICE_LIST[$i].html">Read/write bytes per second</a></li>
+			      <li id="menu-device-tps"$disable_device_tps><a href="system-tpsdevice-$DEVICE_LIST[$i].html">Transfert per second</a></li>
+			      <li id="menu-device-service_time"$disable_device_service_time><a href="system-srvtime-$DEVICE_LIST[$i].html">Average service time</a></li>
 			      </ul>
 			  </li>
 };
@@ -8592,22 +8529,18 @@ sub generate_html_menu
 			next if (!&interface_in_report($IFACE_LIST[$i]));
 			my $disable_network_utilization = ' class="disabled"';
 			my $disable_network_error = ' class="disabled"';
-			if (open(IN, "$OUTPUT_DIR/network-device$i.html")) {
-				while (<IN>) {
-					if (/<div id="network-utilization">/) {
-						$disable_network_utilization = '';
-					} elsif (/<div id="network-error">/) {
-						$disable_network_error = '';
-					}
-				}
-				close(IN);
+			if (-e "$OUTPUT_DIR/network-utilization-$IFACE_LIST[$i].html") {
+				$disable_network_utilization = '';
+			}
+			if (-e "$OUTPUT_DIR/network-error-$IFACE_LIST[$i].html") {
+				$disable_network_error = '';
 			}
 			$menu_str .= qq{
 			  <li id="menu-device$i" class="dropdown-submenu">
 			     <a href="#" tabindex="-1">$IFACE_LIST[$i] </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-network-utilization"$disable_network_utilization><a href="network-device$i.html#network-utilization">Network utilization</a></li>
-			      <li id="menu-network-error"$disable_network_error><a href="network-device$i.html#network-error">Network errors</a></li>
+			      <li id="menu-network-utilization"$disable_network_utilization><a href="network-utilization-$IFACE_LIST[$i].html">Network utilization</a></li>
+			      <li id="menu-network-error"$disable_network_error><a href="network-error-$IFACE_LIST[$i].html">Network errors</a></li>
 			      </ul>
 			  </li>
 };
@@ -9258,13 +9191,20 @@ sub compute_srvtime_report
 	if (scalar keys %srvtime_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %srvtime_stat) {
 			next if ($n =~ /^loop\d+/);
-			if (!exists $DEVFH{$n}) {
-				push(@DEVICE_LIST, $n);
-				&init_device_output($#DEVICE_LIST, $src_base);
-			}
+			push(@DEVICE_LIST, $n) if (!grep(/^$n$/, @DEVICE_LIST));
 			$srvtime_stat{$n}{'await'} =~ s/,$//;
 			$srvtime_stat{$n}{'svctm'} =~ s/,$//;
-			$DEVFH{$n}->print( &jqplot_linegraph_array($IDX++, 'device-service_time', $data_info, $n, $srvtime_stat{$n}{'await'}, $srvtime_stat{$n}{'svctm'}) );
+			# Open a filehandle for each database
+			my $fh = new IO::File ">$OUTPUT_DIR/$data_info->{name}-$n.html";
+			if (not defined $fh) {
+				die "FATAL: can't write to $OUTPUT_DIR/$data_info->{name}-$n.html, $!\n";
+			}
+			&html_header($fh, $src_base);
+			$fh->print("<ul id=\"slides\">\n");
+			$fh->print( &jqplot_linegraph_array($IDX++, 'device-service_time', $data_info, $n, $srvtime_stat{$n}{'await'}, $srvtime_stat{$n}{'svctm'}) );
+                        $fh->print("</ul>\n");
+                        &html_footer($fh, $n);
+                        $fh->close;
 		}
 	}
 }
@@ -9318,18 +9258,52 @@ sub compute_rw_device_report
 	if (scalar keys %devices_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
 			next if ($n =~ /^loop\d+/);
-			if (!exists $DEVFH{$n}) {
-				push(@DEVICE_LIST, $n);
-				&init_device_output($#DEVICE_LIST, $src_base);
+
+			push(@DEVICE_LIST, $n) if (!grep(/^$n$/, @DEVICE_LIST));
+
+			# Open a filehandle for each database
+			my $fh = new IO::File ">$OUTPUT_DIR/$data_info->{name}-$n.html";
+			if (not defined $fh) {
+				die "FATAL: can't write to $OUTPUT_DIR/$data_info->{name}-$n.html, $!\n";
 			}
+			&html_header($fh, $src_base);
+			$fh->print("<ul id=\"slides\">\n");
 			if ($data_info->{name} eq 'system-device') { 
 				$devices_stat{$n}{'rd_sec/s'} =~ s/,$//;
 				$devices_stat{$n}{'wr_sec/s'} =~ s/,$//;
-				$DEVFH{$n}->print( &jqplot_linegraph_array($IDX++, 'device-read_write', $data_info, $n, $devices_stat{$n}{'rd_sec/s'}, $devices_stat{$n}{'wr_sec/s'}) );
+				$fh->print( &jqplot_linegraph_array($IDX++, 'device-read_write', $data_info, $n, $devices_stat{$n}{'rd_sec/s'}, $devices_stat{$n}{'wr_sec/s'}) );
 			} elsif ($data_info->{name} eq 'system-tpsdevice') {
 				$devices_stat{$n}{'tps'} =~ s/,$//;
-				$DEVFH{$n}->print( &jqplot_linegraph_array($IDX++, 'device-tps', $data_info, $n, $devices_stat{$n}{'tps'}) );
+				$fh->print( &jqplot_linegraph_array($IDX++, 'device-tps', $data_info, $n, $devices_stat{$n}{'tps'}) );
 			}
+                        $fh->print("</ul>\n");
+                        &html_footer($fh, $n);
+                        $fh->close;
+		}
+	}
+}
+
+sub compute_space_device_stat
+{
+	my %devices = ();
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;MBfsfree;MBfsused;%fsused;%ufsused;Ifree;Iused;%Iused;FILESYSTEM
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+		$data[10] =~ s/.*\///;
+		next if ($data[10] =~ /^(loop|tmpfs|udev)/);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+		next if (!&device_in_report($data[10]));
+		$sar_space_devices_stat{$data[2]}{$data[10]}{'%fsused'} = $data[5];
+		$sar_space_devices_stat{$data[2]}{$data[10]}{'%iused'} = $data[9];
+		$devices{$data[10]} = 1;
+	}
+	foreach my $k (keys %devices) {
+		if (!grep(/^$k$/, @DEVICE_SPACE_LIST)) {
+			push(@DEVICE_SPACE_LIST, $k) if (!grep(/^$k$/, @DEVICE_SPACE_LIST));
 		}
 	}
 }
@@ -9420,37 +9394,21 @@ sub compute_util_device_report
 	if (scalar keys %devices_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %devices_stat) {
 			next if ($n =~ /^loop\d+/);
-			if (!exists $DEVFH{$n}) {
-				push(@DEVICE_LIST, $n);
-				&init_device_output($#DEVICE_LIST, $src_base);
+
+			push(@DEVICE_LIST, $n) if (!grep(/^$n$/, @DEVICE_LIST));
+
+			# Open a filehandle for each database
+			my $fh = new IO::File ">$OUTPUT_DIR/$data_info->{name}-$n.html";
+			if (not defined $fh) {
+				die "FATAL: can't write to $OUTPUT_DIR/$data_info->{name}-$n.html, $!\n";
 			}
+			&html_header($fh, $src_base);
+			$fh->print("<ul id=\"slides\">\n");
 			$devices_stat{$n}{'%util'} =~ s/,$//;
-			$DEVFH{$n}->print( &jqplot_linegraph_array($IDX++, 'device-cpu', $data_info, $n, $devices_stat{$n}{'%util'}) );
-		}
-	}
-}
-
-sub compute_space_device_stat
-{
-	my %devices = ();
-	for (my $i = 0; $i <= $#_; $i++) {
-		# hostname;interval;timestamp;MBfsfree;MBfsused;%fsused;%ufsused;Ifree;Iused;%Iused;FILESYSTEM
-		my @data = split(/;/, $_[$i]);
-		next if ($data[2] !~ /^\d+/);
-		$data[10] =~ s/.*\///;
-		next if ($data[10] =~ /^(loop|tmpfs|udev)/);
-
-		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
-		next if (!&device_in_report($data[10]));
-		$sar_space_devices_stat{$data[2]}{$data[10]}{'%fsused'} = $data[5];
-		$sar_space_devices_stat{$data[2]}{$data[10]}{'%iused'} = $data[9];
-		$devices{$data[10]} = 1;
-	}
-	foreach my $k (keys %devices) {
-		if (!grep(/^$k$/, @DEVICE_SPACE_LIST)) {
-			push(@DEVICE_SPACE_LIST, $k) if (!grep(/^$k$/, @DEVICE_SPACE_LIST));
+			$fh->print( &jqplot_linegraph_array($IDX++, 'device-cpu', $data_info, $n, $devices_stat{$n}{'%util'}) );
+                        $fh->print("</ul>\n");
+                        &html_footer($fh, $n);
+                        $fh->close;
 		}
 	}
 }
@@ -9495,13 +9453,22 @@ sub compute_network_report
 	
 	if (scalar keys %networks_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %networks_stat) {
-			if (!exists $DEVFH{$n}) {
-				push(@IFACE_LIST, $n);
-				&init_iface_output($#IFACE_LIST, $src_base);
+
+			push(@IFACE_LIST, $n) if (!grep(/^$n$/, @IFACE_LIST));
+
+			# Open a filehandle for each database
+			my $fh = new IO::File ">$OUTPUT_DIR/$data_info->{name}-$n.html";
+			if (not defined $fh) {
+				die "FATAL: can't write to $OUTPUT_DIR/$data_info->{name}-$n.html, $!\n";
 			}
+			&html_header($fh, $src_base);
+			$fh->print("<ul id=\"slides\">\n");
 			$networks_stat{$n}{'rxkB/s'} =~ s/,$//;
 			$networks_stat{$n}{'txkB/s'} =~ s/,$//;
-			$DEVFH{$n}->print( &jqplot_linegraph_array($IDX++, 'network-utilization', $data_info, $n, $networks_stat{$n}{'rxkB/s'}, $networks_stat{$n}{'txkB/s'}) ) if (exists $DEVFH{$n});
+			$fh->print( &jqplot_linegraph_array($IDX++, 'network-utilization', $data_info, $n, $networks_stat{$n}{'rxkB/s'}, $networks_stat{$n}{'txkB/s'}) );
+                        $fh->print("</ul>\n");
+                        &html_footer($fh, $n);
+                        $fh->close;
 		}
 	}
 }
@@ -9540,14 +9507,23 @@ sub compute_network_error_report
 	}
 	if (scalar keys %errors_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %errors_stat) {
-			if (!exists $DEVFH{$n}) {
-				push(@IFACE_LIST, $n);
-				&init_iface_output($#IFACE_LIST, $src_base);
+			push(@IFACE_LIST, $n) if (!grep(/^$n$/, @IFACE_LIST));
+
+			# Open a filehandle for each database
+			my $fh = new IO::File ">$OUTPUT_DIR/$data_info->{name}-$n.html";
+			if (not defined $fh) {
+				die "FATAL: can't write to $OUTPUT_DIR/$data_info->{name}-$n.html, $!\n";
 			}
+			&html_header($fh, $src_base);
+			$fh->print("<ul id=\"slides\">\n");
 			$errors_stat{$n}{'rxerr/s'} =~ s/,$//;
 			$errors_stat{$n}{'txerr/s'} =~ s/,$//;
 			$errors_stat{$n}{'coll/s'} =~ s/,$//;
-			$DEVFH{$n}->print( &jqplot_linegraph_array($IDX++, 'network-error', $data_info, $n, $errors_stat{$n}{'rxerr/s'}, $errors_stat{$n}{'txerr/s'}, $errors_stat{$n}{'coll/s'}) ) if (exists $DEVFH{$n});
+			$fh->print( &jqplot_linegraph_array($IDX++, 'network-error', $data_info, $n, $errors_stat{$n}{'rxerr/s'}, $errors_stat{$n}{'txerr/s'}, $errors_stat{$n}{'coll/s'}) );
+			$fh->print("</ul>\n");
+                        &html_footer($fh, $n);
+                        $fh->close;
+
 		}
 	}
 }
@@ -9801,24 +9777,6 @@ sub compute_sarstat_stats
 	}
 
 	####
-	# Get Device service time
-	####
-	if ($data_info{name} eq 'system-srvtime') {
-		my $command = "$SADF_PROG -t -P ALL -d $file -- -d -p";
-		print "DEBUG: running $command'\n" if ($DEBUG);
-		# Load data from file
-		if (!open(IN, "$command |")) {
-			die "FATAL: can't read output from command ($command): $!\n";
-		}
-		my @content = <IN>;
-		close(IN);
-		chomp(@content);
-
-		# Compute service time per devices statistics
-		&compute_srvtime_stat(@content);
-	}
-
-	####
 	# Get Device space utilization
 	####
 	if ($data_info{name} eq 'system-space') {
@@ -9834,24 +9792,6 @@ sub compute_sarstat_stats
 
 		# Compute disk space use per devices statistics
 		&compute_space_device_stat(@content);
-	}
-
-	####
-	# Get Device block read/write utilization
-	####
-	if ($data_info{name} eq 'system-device') {
-		my $command = "$SADF_PROG -t -P ALL -d $file -- -d -p";
-		print "DEBUG: running $command'\n" if ($DEBUG);
-		# Load data from file
-		if (!open(IN, "$command |")) {
-			die "FATAL: can't read output from command ($command): $!\n";
-		}
-		my @content = <IN>;
-		close(IN);
-		chomp(@content);
-
-		# Compute I/O per devices statistics
-		&compute_rw_device_stat(@content);
 	}
 
 	####
@@ -9871,6 +9811,44 @@ sub compute_sarstat_stats
 		# Compute I/O per devices statistics
 		&compute_rw_device_stat(@content);
 	}
+
+	####
+	# Get Device service time
+	####
+	if ($data_info{name} eq 'system-srvtime') {
+		my $command = "$SADF_PROG -t -P ALL -d $file -- -d -p";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute service time per devices statistics
+		&compute_srvtime_stat(@content);
+	}
+
+
+	####
+	# Get Device block read/write utilization
+	####
+	if ($data_info{name} eq 'system-device') {
+		my $command = "$SADF_PROG -t -P ALL -d $file -- -d -p";
+		print "DEBUG: running $command'\n" if ($DEBUG);
+		# Load data from file
+		if (!open(IN, "$command |")) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <IN>;
+		close(IN);
+		chomp(@content);
+
+		# Compute I/O per devices statistics
+		&compute_rw_device_stat(@content);
+	}
+
 
 	####
 	# Get Device utilization
@@ -10378,6 +10356,18 @@ sub compute_sar_graph
 {
 	my ($src_base, %data_info) = @_;
 
+	if (!grep(/^$data_info{name}$/, 'system-srvtime', 'system-device', 'system-tpsdevice', 'system-cpudevice', 'network-utilization', 'network-error'))
+	{
+		# Open global filehandle
+		$FH = new IO::File ">$OUTPUT_DIR/$data_info{name}.html";
+		if (not defined $FH) {
+			die "FATAL: can't write to $OUTPUT_DIR/system.html, $!\n";
+		}
+		# Generate the html header for each sar devices statistics report
+		&html_header($FH, $src_base);
+		print $FH "<ul id=\"slides\">\n";
+	}
+
 	####
 	# Show CPU utilization
 	####
@@ -10510,6 +10500,25 @@ sub compute_sar_graph
 
 	}
 
+	####
+	# Show per device TPS utilization
+	####
+	if ($data_info{name} eq 'system-tpsdevice') {
+
+		# Compute graphs for I/O per devices statistics
+		&compute_rw_device_report(\%data_info, $src_base);
+
+	}
+
+	####
+	# Show Device space utilization
+	####
+	if ($data_info{name} eq 'system-space') {
+
+		# Compute graphs for I/O per devices statistics
+		&compute_space_device_report(\%data_info, $src_base);
+
+	}
 
 	####
 	# Show Device service time
@@ -10531,25 +10540,6 @@ sub compute_sar_graph
 
 	}
 
-	####
-	# Show per device TPS utilization
-	####
-	if ($data_info{name} eq 'system-tpsdevice') {
-
-		# Compute graphs for I/O per devices statistics
-		&compute_rw_device_report(\%data_info, $src_base);
-
-	}
-
-	####
-	# Show Device space utilization
-	####
-	if ($data_info{name} eq 'system-space') {
-
-		# Compute graphs for I/O per devices statistics
-		&compute_space_device_report(\%data_info, $src_base);
-
-	}
 
 	####
 	# Show Device utilization
@@ -10581,6 +10571,13 @@ sub compute_sar_graph
 
 	}
 
+	if (!grep(/^$data_info{name}$/, 'system-srvtime', 'system-device', 'system-tpsdevice', 'system-cpudevice', 'network-utilization', 'network-error'))
+	{
+		# Write html footer in all reports
+		print $FH "</ul>\n";
+		&html_footer($FH);
+		$FH->close;
+	}
 }
 
 sub convert_time
