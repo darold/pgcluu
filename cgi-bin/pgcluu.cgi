@@ -9385,6 +9385,8 @@ sub find_report_type
 		$type = 'scpu';
 	} elsif ($data =~ m#CPU\s+w#) {
 		$type = 'wcpu';
+	} elsif ($data =~ m#CPU\s+t#) {
+		$type = 'tcpu';
 	} elsif ($data =~ m#CPU\s+#) {
 		$type = 'cpu';
 	} elsif ($data =~ m#INTR\s+#) {

@@ -66,8 +66,14 @@ sorttable.js:
 
 wget https://kryogenix.org/code/browser/sorttable/sorttable.js -O /home/git/pgcluu/resources/sorttable.js
 
+w3.js:
+------
+
+wget  https://www.w3schools.com/lib/w3.js -O /home/git/pgcluu/resources/w3.js
+
 Then file are minified using yui-compressor and the font embedded using the
 Perl script tools/updt_embedded_rsc.pl This script also embedded all minified
 files into the pgcluu Perl script and copy those files into the cgi-bin/resources/
 directory.
+
 

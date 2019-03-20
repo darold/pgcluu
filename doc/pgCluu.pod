@@ -473,7 +473,7 @@ First enable CGI mode.
 
 Then the CGI need to find the statistics directory where pgcluu_collectd
 mostly /var/lib/pgcluu/data/. The content of this repository must be
-readable by the apache user (www-data).
+readable by the Apache user (www-data).
 
 Take care to restrict access to your server and the CGI as information
 about your database and server are exposed in the reports.
@@ -492,7 +492,8 @@ to match your installation. Here in our example:
 	RSC_BASE	/pgcluu/rsc/
 	INPUT_DIR	/var/lib/pgcluu/data
 
-Now we can start the data collection.
+Now we can start the data collection. For the moment pgcluu.conf is only
+read by the CGI pgcluu.cgi but this might change in the future.
 
 To let pgCluu start collecting data, you can use the following command
 (you can change it to however you like). We will need postgres user for this.

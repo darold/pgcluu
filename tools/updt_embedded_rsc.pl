@@ -20,7 +20,7 @@ my $DEST_TMP_FILE = 'pgcluu.new';
 my $CGI_DEST_DIR = 'cgi-bin/rsc';
 
 # Ordered resources files list
-my @rsc_list = qw(jquery.jqplot.css jquery.js jquery.jqplot.js jqplot.pieRenderer.js jqplot.barRenderer.js jqplot.dateAxisRenderer.js jqplot.canvasTextRenderer.js jqplot.categoryAxisRenderer.js jqplot.canvasAxisTickRenderer.js jqplot.canvasAxisLabelRenderer.js jqplot.highlighter.js jqplot.highlighter.js jqplot.cursor.js jqplot.pointLabels.js bean.js underscore.js bootstrap.css bootstrap-datetimepicker.css fontawesome.css bootstrap.js bootstrap-datetimepicker.js pgcluu_slide.js pgcluu.css pgcluu.js sorttable.js);
+my @rsc_list = qw(jquery.jqplot.css jquery.js jquery.jqplot.js jqplot.pieRenderer.js jqplot.barRenderer.js jqplot.dateAxisRenderer.js jqplot.canvasTextRenderer.js jqplot.categoryAxisRenderer.js jqplot.canvasAxisTickRenderer.js jqplot.canvasAxisLabelRenderer.js jqplot.highlighter.js jqplot.highlighter.js jqplot.cursor.js jqplot.pointLabels.js bean.js underscore.js bootstrap.css bootstrap-datetimepicker.css fontawesome.css bootstrap.js bootstrap-datetimepicker.js pgcluu_slide.js pgcluu.css pgcluu.js sorttable.js w3.js);
 my @min_rsc_list = ();
 
 if (!-d $RSC_DIR) {
