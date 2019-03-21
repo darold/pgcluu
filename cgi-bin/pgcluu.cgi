@@ -7845,7 +7845,7 @@ AAAASUVORK5CYII=';
 };
 	}
 
-	if (!$DISABLE_SAR && $#DEVICE_LIST >= 0) {
+	if (!$DISABLE_SAR) {
 		$menu_str .= qq{
               <li id="menu-system" class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">System <b class="caret"></b></a>
@@ -7978,7 +7978,7 @@ AAAASUVORK5CYII=';
         $end_date = "$e_year-$e_month-$e_day $e_hour:$e_min" if ($END && $e_year);
 
 	$menu_str .= qq{
-          <li id="menu-about" class="dropdown"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=about&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">About</a></li>
+          <!-- li id="menu-about" class="dropdown"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=about&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">About</a></li -->
           <li id="menu-time" class="dropdown">
             <a href="#" class="dropdown-toggle" data-toggle="dropdown">Time selector <b class="caret"></b></a>
             <ul class="dropdown-menu">
@@ -8050,6 +8050,8 @@ function custom_date( kind ) {
     document.getElementById('start-date').value = document.getElementById('start-date').value;
     document.getElementById('end-date').value = (new Date(toDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
     document.getElementById('end-date').value = document.getElementById('end-date').value;
+    // Then submit immediately
+    document.location.href='$SCRIPT_NAME?db=$DATABASE&dev=$DEVICE&action=$ACTION&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value;
   }
 
   function go_forward() {
