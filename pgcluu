@@ -2097,7 +2097,11 @@ sub compute_postgresql_stat
 	$fctname =~ s/\.csv(\.gz)?//;
 	$fctname =~ s/\.gz//;
 	$fctname =~ s/\./_/g;
-	$fctname->($in_dir, $file);
+	my $offset = 0;
+	$offset = $global_infos{"$in_dir/$file"} if (exists $global_infos{"$in_dir/$file"});
+	# Call the function associated to the action and get back the new offset
+	# offset is used in incremental mode to avoir parsing the entire file.
+	$global_infos{"$in_dir/$file"} = $fctname->($in_dir, $file, $offset);
 }
 
 sub compute_postgresql_report
@@ -2120,16 +2124,13 @@ sub compute_postgresql_report
 # Compute statistics of database statistics
 sub pg_stat_database
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	my %start_vals = ();
 	my %db_list = ();
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_stat_database'} if (exists $global_infos{'pg_stat_database'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -2231,13 +2232,14 @@ sub pg_stat_database
 		push(@{$start_vals{$data[2]}}, @data);
 	}
 	$curfh->close();
-	$global_infos{'pg_stat_database'} = $offset;
 
 	# Store the full list of database
 	foreach my $d (keys %db_list) {
 		push(@global_databases, $d) if (!grep/^$d$/, @global_databases);
 	}
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
+
+	return $offset || 0;
 
 }
 
@@ -2506,15 +2508,12 @@ sub pg_stat_database_report
 # Compute statistics of database conflict statistics
 sub pg_stat_database_conflicts
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	my %start_vals = ();
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_stat_database_conflicts'} if (exists $global_infos{'pg_stat_database_conflicts'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -2550,7 +2549,8 @@ sub pg_stat_database_conflicts
 
 	}
 	$curfh->close();
-	$global_infos{'pg_stat_database_conflicts'} = $offset;
+
+	return $offset || 0;
 }
 
 # Compute graphs of database conflict statistics
@@ -2593,14 +2593,11 @@ sub pg_stat_database_conflicts_report
 # Compute statistics of database size statistics
 sub pg_database_size
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	my %db_list = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_database_size'} if (exists $global_infos{'pg_database_size'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -2616,13 +2613,14 @@ sub pg_database_size
 		$all_database_size{$data[0]}{'all'} += $data[3];
 	}
 	$curfh->close();
-	$global_infos{'pg_database_size'} = $offset;
 
 	# Store the full list of database
 	foreach my $d (keys %db_list) {
 		push(@global_databases, $d) if (!grep/^$d$/, @global_databases);
 	}
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
+
+	return $offset || 0;
 }
 
 # Compute graphs of database size statistics
@@ -2702,14 +2700,11 @@ sub pg_database_size_report
 # Compute statistics of prepared transaction statistics
 sub pg_prepared_xact
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	my %db_list = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_prepared_xact'} if (exists $global_infos{'pg_prepared_xact'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -2727,13 +2722,14 @@ sub pg_prepared_xact
 		$all_prepared_xact{$data[0]}{'all'}{oldest} = $data[3] if (!$all_prepared_xact{$data[0]}{'all'}{oldest} || $all_prepared_xact{$data[0]}{'all'}{oldest} <= $data[3]);
 	}
 	$curfh->close();
-	$global_infos{'pg_prepared_xact'} = $offset;
 
 	# Store the full list of database
 	foreach my $d (keys %db_list) {
 		push(@global_databases, $d) if (!grep/^$d$/, @global_databases);
 	}
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
+
+	return $offset || 0;
 }
 
 # Compute graphs of database size statistics
@@ -2819,14 +2815,11 @@ sub pg_prepared_xact_report
 # Compute statistics of tablespace size
 sub pg_tablespace_size
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	my $total_val = 0;
-	my $offset = 0;
-	$offset = $global_infos{'pg_tablespace_size'} if (exists $global_infos{'pg_tablespace_size'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -2844,8 +2837,8 @@ sub pg_tablespace_size
 	}
 	$curfh->close();
 	push(@global_tbspnames, 'all') if ($#global_tbspnames > 0);
-	$global_infos{'pg_tablespace_size'} = $offset;
 
+	return $offset || 0;
 }
 
 # Compute graphs of tablespace size
@@ -3728,7 +3721,7 @@ sub pg_stat_hash_indexes_report
 # Compute stats for table I/O
 sub pg_statio_user_tables
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	return if ($NO_TB_STAT);
 
@@ -3736,9 +3729,6 @@ sub pg_statio_user_tables
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_statio_user_tables'} if (exists $global_infos{'pg_statio_user_tables'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -3782,7 +3772,7 @@ sub pg_statio_user_tables
 	}
 	$curfh->close();
 
-	$global_infos{'pg_statio_user_tables'} = $offset;
+	return $offset || 0;
 }
 
 # Compute report for table I/O
@@ -3877,7 +3867,7 @@ sub pg_statio_user_tables_report
 # Compute stats for relation buffer cache
 sub pg_relation_buffercache
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	return if ($NO_TB_STAT);
 
@@ -3885,9 +3875,6 @@ sub pg_relation_buffercache
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_statio_user_tables'} if (exists $global_infos{'pg_statio_user_tables'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -3904,7 +3891,8 @@ sub pg_relation_buffercache
 
 	}
 	$curfh->close();
-	$global_infos{'pg_relation_buffercache'} = $offset;
+
+	return $offset || 0;
 }
 
 # Compute report for relation buffer cache
@@ -4053,7 +4041,7 @@ sub pg_relation_buffercache_report
 # Compute stats for index I/O
 sub pg_statio_user_indexes
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	return if ($NO_TB_STAT);
 
@@ -4061,9 +4049,6 @@ sub pg_statio_user_indexes
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_statio_user_indexes'} if (exists $global_infos{'pg_statio_user_indexes'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -4091,7 +4076,7 @@ sub pg_statio_user_indexes
 	}
 	$curfh->close();
 
-	$global_infos{'pg_statio_user_indexes'} = $offset;
+	return $offset || 0;
 }
 
 # Compute report for index I/O
@@ -4175,13 +4160,10 @@ sub pg_statio_user_indexes_report
 # Compute statistics of xlog cluster
 sub pg_xlog_stat
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_xlog_stat'} if (exists $global_infos{'pg_xlog_stat'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -4203,7 +4185,8 @@ sub pg_xlog_stat
 		}
 	}
 	$curfh->close();
-	$global_infos{'pg_xlog_stat'} = $offset;
+
+	return $offset || 0;
 }
 
 # Compute graphs of xlog cluster statistics
@@ -4235,16 +4218,13 @@ sub pg_xlog_stat_report
 # Compute statistics of bgwriter cluster
 sub pg_stat_bgwriter
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	my @start_vals = ();
 	my %total_count = ();
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_stat_bgwriter'} if (exists $global_infos{'pg_stat_bgwriter'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -4288,8 +4268,8 @@ sub pg_stat_bgwriter
 		push(@start_vals, @data);
 	}
 	$curfh->close();
-	$global_infos{'pg_stat_bgwriter'} = $offset;
 
+	return $offset || 0;
 }
 
 # Compute graphs of bgwriter cluster statistics
@@ -4359,7 +4339,7 @@ sub pg_stat_bgwriter_report
 # Compute statistics of connections
 sub pg_stat_connections
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	my @start_vals = ();
 	my $tmp_val = 0;
@@ -4367,9 +4347,6 @@ sub pg_stat_connections
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_stat_connections'} if (exists $global_infos{'pg_stat_connections'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -4394,13 +4371,14 @@ sub pg_stat_connections
 		$all_stat_connections{$data[0]}{'all'}{idle} += ($data[1] - $data[2] - $data[4]);
 	}
 	$curfh->close();
-	$global_infos{'pg_stat_connections'} = $offset;
 
 	# Store the full list of database
 	foreach my $d (keys %db_list) {
 		push(@global_databases, $d) if (!grep/^$d$/, @global_databases);
 	}
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
+
+	return $offset || 0;
 }
 
 # Compute graphs of connections statistics
@@ -4594,15 +4572,12 @@ sub pg_stat_all_functions_report
 # Compute graphs of replication cluster statistics
 sub pg_stat_replication
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	my @start_vals = ();
 	my $tmp_val = 0;
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_stat_replication'} if (exists $global_infos{'pg_stat_replication'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -4665,7 +4640,8 @@ sub pg_stat_replication
 		}
 	}
 	$curfh->close();
-	$global_infos{'pg_stat_replication'} = $offset;
+
+	return $offset || 0;
 }
 
 # Compute graphs of replication cluster statistics
@@ -4755,13 +4731,10 @@ sub pg_stat_replication_report
 # Compute statistics of pgbouncer
 sub pgbouncer_stats
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pgbouncer_stats'} if (exists $global_infos{'pgbouncer_stats'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -4780,7 +4753,8 @@ sub pgbouncer_stats
 		$all_pgbouncer_stats{$data[0]}{$data[1]}{$data[2]}{maxwait} += ($data[10] || 0);
 	}
 	$curfh->close();
-	$global_infos{'pgbouncer_stats'} = $offset;
+
+	return $offset || 0;
 }
 
 # Compute graphs of pgbouncer statistics
@@ -4997,15 +4971,12 @@ sub pgbouncer_ini_report
 # Collect statistics about pgbouncer queries
 sub pgbouncer_req_stats
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 
 	my @start_vals = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pgbouncer_req_stats'} if (exists $global_infos{'pgbouncer_req_stats'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -5052,9 +5023,9 @@ sub pgbouncer_req_stats
 		@start_vals = ();
 		push(@start_vals, @data);
 	}
-
 	$curfh->close();
-	$global_infos{'pgbouncer_req_stats'} = $offset;
+
+	return $offset || 0;
 }
 
 # Show report about pgbouncer queries
@@ -5262,13 +5233,10 @@ sub pg_class_size_report
 # Compute graphs of locks statistics
 sub pg_stat_locks
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_stat_locks'} if (exists $global_infos{'pg_stat_locks'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -5281,7 +5249,8 @@ sub pg_stat_locks
 		$all_stat_locks{$data[0]}{$data[1]}{$data[2]}{$data[3]} += $data[4];
 	}
 	$curfh->close();
-	$global_infos{'pg_stat_locks'} = $offset;
+
+	return $offset || 0;
 }
 
 # Compute graphs of locks statistics
@@ -6349,13 +6318,10 @@ sub pg_db_role_setting_report
 # Compute statistics of buffercache database
 sub pg_database_buffercache
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_database_buffercache'} if (exists $global_infos{'pg_database_buffercache'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -6369,7 +6335,8 @@ sub pg_database_buffercache
 		$all_database_buffercache{$data[0]}{'all'}{database_loaded} += ($data[5]||0);
 	}
 	$curfh->close();
-	$global_infos{'pg_database_buffercache'} = $offset;
+
+	return $offset || 0;
 }
 
 # Compute report of buffercache database statistics
@@ -6415,13 +6382,10 @@ sub pg_database_buffercache_report
 # Compute statistics of usagecount in shared buffers
 sub pg_database_usagecount
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_database_usagecount'} if (exists $global_infos{'pg_database_usagecount'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -6432,7 +6396,8 @@ sub pg_database_usagecount
 		$all_database_usagecount{$data[0]}{$data[2]} += ($data[4]||0);
 	}
 	$curfh->close();
-	$global_infos{'pg_database_usagecount'} = $offset;
+
+	return $offset || 0;
 }
 
 # Compute graph of usagecount in shared buffers
@@ -6465,13 +6430,10 @@ sub pg_database_usagecount_report
 # Compute statistics of dirty buffer in cache
 sub pg_database_isdirty
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_database_isdirty'} if (exists $global_infos{'pg_database_isdirty'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -6482,7 +6444,8 @@ sub pg_database_isdirty
 		$all_database_isdirty{$data[0]}{$data[2]} += $data[5] if ($data[3] eq 't');
 	}
 	$curfh->close();
-	$global_infos{'pg_database_isdirty'} = $offset;
+
+	return $offset || 0;
 }
 
 # Compute graphs of dirty buffer in cache
@@ -6515,14 +6478,11 @@ sub pg_database_isdirty_report
 # Compute statistics of archiver
 sub pg_stat_archiver
 {
-	my ($in_dir, $file) = @_;
+	my ($in_dir, $file, $offset) = @_;
 
 	my @start_vals = ();
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	my $offset = 0;
-	$offset = $global_infos{'pg_stat_archiver'} if (exists $global_infos{'pg_stat_archiver'});
-
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>) {
 		$offset += length($l);
@@ -6551,7 +6511,8 @@ sub pg_stat_archiver
 		push(@start_vals, @data);
 	}
 	$curfh->close();
-	$global_infos{'pg_stat_archiver'} = $offset;
+
+	return $offset || 0;
 }
 
 # Compute graphs of archiver statistics
@@ -9976,7 +9937,7 @@ sub load_sarfile_stats
 	# Load data from file
 	my @content = ();
 	my $offset = 0;
-	$offset = $global_infos{'load_sarfile_stats'} if (exists $global_infos{'load_sarfile_stats'});
+	$offset = $global_infos{"$file"} if (exists $global_infos{"$file"});
 
 	my $curfh = open_filehdl("$file");
 	$curfh->seek($offset,0);
@@ -10002,7 +9963,7 @@ sub load_sarfile_stats
 		}
 	}
 	$curfh->close();
-	$global_infos{'load_sarfile_stats'} = $offset;
+	$global_infos{"$file"} = $offset;
 
 	my $type = '';
 	my @headers = ();
@@ -10103,7 +10064,7 @@ sub load_sarfile_stats
 
 sub load_fsuse_stats
 {
-	my ($file) = @_;
+	my ($in_dir, $file) = @_;
 
 	my $interval = 0;
 	my $hostname = 'unknown';
@@ -10111,9 +10072,9 @@ sub load_fsuse_stats
 
 	# Load data from file
 	my @content = ();
-	my $offset = (exists $global_infos{'load_fsuse_stats'}) ? $global_infos{'load_fsuse_stats'} : 0;
-	my $curfh = open_filehdl("$file");
-	print STDERR "DEBUG: Starting to read $file from offset $offset\n" if ($DEBUG);
+	my $offset = (exists $global_infos{"$in_dir/$file"}) ? $global_infos{"$in_dir/$file"} : 0;
+	my $curfh = open_filehdl("$in_dir/$file");
+	print STDERR "DEBUG: Starting to read $in_dir/$file from offset $offset\n" if ($DEBUG);
 	$curfh->seek($offset,0);
 	my $first = 0;
 	while (my $l = <$curfh>) {
@@ -10128,7 +10089,7 @@ sub load_fsuse_stats
 		$first++;
 	}
 	$curfh->close();
-	$global_infos{'load_fsuse_stats'} = $offset;
+	$global_infos{"$in_dir/$file"} = $offset;
 
 	return @fsdata;
 }
@@ -10145,7 +10106,7 @@ sub compute_sarfile_stats
 	# With old sar version there is no filesystem use stats
 	# pgcluu_collectd may have save these stat in file fs_stat_use.csv
 	if (-e "$in_dir/fs_stat_use.csv" && $data_info{name} eq 'system-space') {
-		push(@{$fulldata{'system-space'}}, &load_fsuse_stats("$in_dir/fs_stat_use.csv"));
+		push(@{$fulldata{'system-space'}}, &load_fsuse_stats($in_dir, 'fs_stat_use.csv'));
 	}
 
 	####
@@ -11223,6 +11184,7 @@ sub load_pg_binary
 
 			my %_global_infos = %{$stats{global_infos}} ;
 			foreach my $inf (keys %_global_infos) {
+				$_global_infos{$inf} //= 0;
 				if ($_global_infos{$inf} =~ /ARRAY/) {
 					push(@{$global_infos{$inf}}, @{$_global_infos{$inf}});
 				} else {
@@ -11307,6 +11269,7 @@ sub load_sar_binary
 			# Setting global information
 			my %_global_infos = %{$stats{global_infos}} ;
 			foreach my $inf (keys %_global_infos) {
+				$_global_infos{$inf} //= 0;
 				if ($_global_infos{$inf} =~ /ARRAY/) {
 					push(@{$global_infos{$inf}}, @{$_global_infos{$inf}});
 				} else {
