@@ -1281,7 +1281,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
                 }
 
 		# Home page is built from cache file or from csv file, not both
-		if ( $sar_file && ($ACTION ne 'home') || ($#binfiles == -1)) {
+		elsif ( $sar_file && ($ACTION ne 'home') || ($#binfiles == -1)) {
 			# Then build sar statistics from data file starting at begining
 			# when there's no cache file or starting at last cache offset.
 			# In cache/binary mode we can not process sadc binary data file
