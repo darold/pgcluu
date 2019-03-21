@@ -8022,31 +8022,34 @@ function custom_date( kind ) {
     var fromDate = new Date()
     var toDate = new Date();
 
-    if (document.getElementById('end-date').value != '') {
-       toDate = new Date(document.getElementById('end-date').value.substring(0, 10))
-       fromDate = new Date(document.getElementById('end-date').value.substring(0, 10))
-    }
-
     switch(kind) {
       case 'year':
+          // Display last year
+	  toDate = new Date(Date.now());
           fromDate.setYear(fromDate.getYear() + 1900 - 1);
         break;
       case 'month':
+          // Display last month
+	  toDate = new Date(Date.now());
           fromDate.setMonth(toDate.getMonth() - 1);
         break;
       case 'week':
+          // Display last 7 days
+	  toDate = new Date(Date.now());
           fromDate.setDate(toDate.getDate() - 7);
         break;
       case 'day':
+          // Display last 24 hours
+	  toDate = new Date(Date.now());
 	  fromDate.setDate(toDate.getDate() - 1);
         break;
     }
 
     var tzoffset = (new Date()).getTimezoneOffset() * 60000;
     document.getElementById('start-date').value = (new Date(fromDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
-    document.getElementById('start-date').value = document.getElementById('start-date').value.substring(0,11) + '00:00';
+    document.getElementById('start-date').value = document.getElementById('start-date').value;
     document.getElementById('end-date').value = (new Date(toDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
-    document.getElementById('end-date').value = document.getElementById('end-date').value.substring(0,11) + '00:00';
+    document.getElementById('end-date').value = document.getElementById('end-date').value;
   }
 
   function go_forward() {
@@ -8058,9 +8061,8 @@ function custom_date( kind ) {
     var delta    = toDate - fromDate;
     fromDate += delta - 3600000;
     toDate   += delta - 3600000;
-    var tzoffset = (new Date()).getTimezoneOffset() * 60000;
-    document.getElementById('start-date').value = (new Date(fromDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
-    document.getElementById('end-date').value = (new Date(toDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
+    document.getElementById('start-date').value = (new Date(fromDate)).toISOString().slice(0,16).replace(/T/g," ");
+    document.getElementById('end-date').value = (new Date(toDate)).toISOString().slice(0,16).replace(/T/g," ");
   };
 
   function go_backward() {
@@ -8072,9 +8074,8 @@ function custom_date( kind ) {
     var delta    = toDate - fromDate;
     fromDate -= delta - 3600000;
     toDate   -= delta - 3600000;
-    var tzoffset = (new Date()).getTimezoneOffset() * 60000;
-    document.getElementById('start-date').value = (new Date(fromDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
-    document.getElementById('end-date').value = (new Date(toDate - tzoffset)).toISOString().slice(0,16).replace(/T/g," ");
+    document.getElementById('start-date').value = (new Date(fromDate)).toISOString().slice(0,16).replace(/T/g," ");
+    document.getElementById('end-date').value = (new Date(toDate)).toISOString().slice(0,16).replace(/T/g," ");
   };
 
 </script>            
