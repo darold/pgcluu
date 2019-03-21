@@ -232,6 +232,17 @@ my $sar_day   = '';
 # Charset used in the html output
 my $charset = 'utf-8';
 
+# List of reports that do not generate graphs and then
+# where stats are only read from the last stats dir.
+my @NOGRAPH_LIST = (
+	'home', 'sysinfo', 'database-info', 'table-indexes', 'table-vacuums-analyzes',
+	'table-quey-tuples', 'table-kind-tuples', 'table-size', 'table-unlogged',
+	'statio-table', 'index-scan', 'index-size', 'index-invalid', 'index-hash',
+	'statio-index', 'unused-index', 'redundant-index', 'missing-index', 'count-index',
+	'database-functions', 'buffercache-relation'
+);
+
+
 # Statistics files to use with report
 my %DB_GRAPH_INFOS = (
 	'pg_stat_database.csv' => {
@@ -1048,6 +1059,7 @@ my $RSC_BASE = '.';
 
 sub read_conf
 {
+	print STDERR "DEBUG: Reading configuration file $CONFIG_FILE\n" if ($DEBUG);
 
 	unless(open(IN, $CONFIG_FILE)) {
 		die "ERROR: can not read configuration file $CONFIG_FILE, $!\n";
@@ -1203,7 +1215,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 	# about CLuster, Database and System whatever is the Time
 	# selection. There is no cumulative data in these stats.
 	# Same for System and Database Info reports.
-	next if ( ($ACTION eq 'home' || $ACTION eq 'sysinfo' || $ACTION eq 'database-info') && $dx < $#WORK_DIRS);
+	next if ( grep(/^$ACTION$/, @NOGRAPH_LIST) && $dx < $#WORK_DIRS);
 
 	# Set absolute path to the working directory
 	$in_dir = "$INPUT_DIR/$WORK_DIRS[$dx]";
