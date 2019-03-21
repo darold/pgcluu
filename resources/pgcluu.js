@@ -64,7 +64,7 @@ function create_linegraph (divid, charttitle, ylabel, arr_series, lineseries, y2
                 show: true,
                 tooltipContentEditor: function (str, seriesIndex, pointIndex, plot) {
                     var dateToDisplay = new Date(plot.data[seriesIndex][pointIndex][0]);
-                    var textToShow = '<div>On '+dateToDisplay.toString();
+                    var textToShow = '<div>On '+dateToDisplay.toString().substring(0,33)+'<br>'+dateToDisplay.toString().substring(34);
                     for (var i=0; i<plot.data.length;i++) {
                             textToShow += '<br><span class="mfigure">'+pretty_print_number(plot.data[i][pointIndex][1], 2, plot.series[i].label)+' <small>'+plot.series[i].label+'</small></span>';
                     }

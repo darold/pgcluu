@@ -11789,6 +11789,7 @@ sub build_daily_binary
 			# Save binary files for the previous day
 			&dump_sys_binary($day_dir, "sys_cache.bin");
 			&dump_pg_binary($day_dir);
+			&dump_sar_binary($day_dir);
 
 			# Reset global variables before processing a new work dir
 			&clear_stats();
