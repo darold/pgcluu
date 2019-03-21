@@ -326,7 +326,16 @@ limit in days.
 
 This mode is enabled when --rotate-daily or --rotate-hourly command line
 options are used. It allow pgcluu to build reports incrementally by days
-or hours.
+or hours. In this mode you don't have to build reports per day or hour
+pgcluu will do the work automatically, just give it the top statistics
+directory.
+
+	pgcluu -o /var/www/pgcluu/reports/ /var/lib/pgcluu/data/
+
+pgcluu will detect that --rotate-daily or --rotate-hourly have been used
+to collect data and generate reports for each day or hours stored. Previous
+directories already processed will not be processed again unless this was the
+the last one.
 
 The daily or hourly basis statistic storage also allow the use of the CGI
 script pgcluu.cgi to have dynamic reports and temporal search. See "Using
