@@ -216,6 +216,115 @@ our @sar_to_be_stored = (
 	'sar_space_devices_stat'
 );
 
+# Relation between sar binary file and CGI action parameter.
+# This is used to only load the binary file related to a report.
+our %bin_action_map = (
+	'system-cpu' => 'sar_cpu_stat',
+	'system-memory' => 'sar_memory_stat',
+	'system-dirty' => 'sar_dirty_stat',
+	'system-swap' => 'sar_swap_stat',
+	'system-load' => 'sar_load_stat',
+	'system-process' => 'sar_process_stat',
+	'system-runqueue' => 'sar_process_stat',
+	'system-cswch' => 'sar_context_stat',
+	'system-pcrea' => 'sar_context_stat',
+	'system-block' => 'sar_block_stat',
+	'system-tps' => 'sar_block_stat',
+	'system-page' => 'sar_pageswap_stat',
+	'system-fault' => 'sar_pageswap_stat',
+	'system-scanpage' => 'sar_pageswap_stat',
+	'system-cpudevice' => 'sar_util_devices_stat',
+	'system-rwdevice' => 'sar_rw_devices_stat',
+	'system-tpsdevice' => 'sar_rw_devices_stat',
+	'system-srvtime' => 'sar_srvtime_stat',
+	'system-space' => 'sar_space_devices_stat',
+	'network-utilization' => 'sar_networks_stat',
+	'network-error' => 'sar_networks_stat',
+);
+
+our %pg_action_map = (
+	'cluster-backends' => 'all_stat_database',
+	'database-backends' => 'all_stat_database',
+	'cluster-deadlocks' => 'all_stat_database',
+	'database-deadlocks' => 'all_stat_database',
+	'cluster-cache_ratio' => 'all_stat_database',
+	'database-cache_ratio' => 'all_stat_database',
+	'cluster-temporary_files' => 'all_stat_database',
+	'cluster-temporary_bytes' => 'all_stat_database',
+	'database-temporary_files' => 'all_stat_database',
+	'database-temporary_bytes' => 'all_stat_database',
+	'cluster-read_ratio' => 'all_stat_database',
+	'database-read_ratio' => 'all_stat_database',
+	'cluster-write_ratio' => 'all_stat_database',
+	'database-write_ratio' => 'all_stat_database',
+	'cluster-read_write_query' => 'all_stat_database',
+	'database-read_write_query' => 'all_stat_database',
+	'cluster-commits_rollbacks' => 'all_stat_database',
+	'database-commits_rollbacks' => 'all_stat_database',
+	'cluster-transactions' => 'all_stat_database',
+	'database-transactions' => 'all_stat_database',
+	'cluster-canceled_queries' => 'all_stat_database',
+	'database-canceled_queries' => 'all_stat_database',
+	'cluster-connections' => 'all_stat_connections',
+	'database-connections' => 'all_stat_connections',
+	'cluster-conflicts' => 'all_stat_database_conflicts',
+	'database-conflicts' => 'all_stat_database_conflicts',
+	'cluster-size' => 'all_database_size',
+	'database-size' => 'all_database_size',
+	'tablespace-size' => 'all_tablespace_size',
+	'cluster-buffersused' => 'all_database_buffercache',
+	'cluster-databaseloaded' => 'all_database_buffercache',
+	'cluster-usagecount' => 'all_database_usagecount',
+	'cluster-isdirty' => 'all_database_isdirty',
+	'cluster-bgwriter' => 'all_stat_bgwriter',
+	'cluster-bgwriter_count' => 'all_stat_bgwriter',
+	'cluster-checkpoints' => 'all_stat_bgwriter',
+	'cluster-checkpoints_time' => 'all_stat_bgwriter',
+	'cluster-xlog_files' => 'all_xlog_stat',
+	'cluster-xlog' => 'all_stat_replication',
+	'cluster-archive' => 'all_stat_archiver',
+	'cluster-replication' => 'all_stat_replication',
+	'buffercache-relation' => 'all_relation_buffercache',
+	'statio-buffercache' => 'all_relation_buffercache',
+	'table-vacuums-analyzes' => 'all_vacuum_stat',
+	'table-indexes' => 'all_stat_user_tables',
+	'table-vacuums-analyzes' => 'all_stat_user_tables',
+	'table-query-tuples' => 'all_stat_user_tables',
+	'table-kind-tuples' => 'all_stat_user_tables',
+	'table-size' => 'all_class_size',
+	'index-size' => 'all_class_size',
+	'table-unlogged' => 'all_stat_unlogged',
+	'statio-table' => 'all_statio_user_tables',
+	'index-scan' => 'all_stat_user_indexes',
+	'index-invalid' => 'all_stat_invalid_indexes',
+	'index-hash' => 'all_stat_hash_indexes',
+	'statio-index' => 'all_statio_user_indexes',
+	'database-function' => 'all_stat_user_functions',
+	'pgbouncer-connections' => 'all_pgbouncer_stats',
+	'pgbouncer-duration' => 'all_pgbouncer_req_stats',
+	'pgbouncer-number' => 'all_pgbouncer_req_stats',
+	'pgbouncer-wait-total' => 'all_pgbouncer_req_stats',
+	'pgbouncer-wait-average' => 'all_pgbouncer_req_stats',
+	'database-lock-types' => 'all_stat_locks',
+	'database-lock-modes' => 'all_stat_locks',
+	'database-lock-granted' => 'all_stat_locks',
+	'unused-index' => 'all_stat_unused_indexes',
+	'redundant-index' => 'all_stat_redundant_indexes',
+	'missing-index' => 'all_stat_missing_fkindexes',
+	'count-index' => 'all_stat_count_indexes',
+	'cluster-pgconf' => 'all_postgresql_conf',
+	'cluster-recoveryconf' => 'all_recovery_conf',
+	'cluster-alterconf' => 'all_postgresql_auto_conf',
+	'cluster-pghba' => 'all_pg_hba_conf',
+	'cluster-pgident' => 'all_pg_ident_conf',
+	'cluster-settings' => 'all_settings',
+	'cluster-nondefault-settings' => 'all_nondefault_settings',
+	'cluster-dbrolesetting' => 'all_db_role_setting',
+	'cluster-pgbouncer' => 'all_pgbouncer_ini',
+	'database-queries' => 'all_stat_statements',
+);
+
+
 our %sysinfo   = (); # Hash used to store system information
 
 # Store default timestamp
@@ -246,121 +355,189 @@ my @NOGRAPH_LIST = (
 # Statistics files to use with report
 my %DB_GRAPH_INFOS = (
 	'pg_stat_database.csv' => {
+		'0' => {
+			'name' =>  'cluster-backends',
+			'title' => 'Global connections',
+			'description' => 'Global number of clients connected.',
+			'ylabel' => 'Connections',
+			'legends' => ['backends'],
+		},
 		'1' => {
 			'name' =>  'database-backends',
 			'title' => 'Connections on %s database',
-			'all_title' => 'Global connections',
 			'description' => 'Number of clients connected to a database.',
-			'all_description' => 'Global number of clients connected.',
 			'ylabel' => 'Connections',
 			'legends' => ['backends'],
 		},
 		'2' => {
-			'name' =>  'database-read_write_query',
-			'title' => 'Affected tuples per operation on %s database',
-			'all_title' => 'Global affected tuples per operation',
+			'name' =>  'cluster-read_write_query',
+			'title' => 'Global affected tuples per operation',
 			'ylabel' => 'Tuples',
-			'description' => 'Affected rows on databases grouped by statement family.',
-			'all_description' => 'Global affected rows grouped by statement family.',
+			'description' => 'Global affected rows grouped by statement family.',
 		},
 		'3' => {
-			'name' =>  'database-cache_ratio',
-			'title' => 'Cache hit/miss ratio on %s database',
-			'all_title' => 'Global cache hit/miss ratio',
-			'description' => 'Per database cache hit/miss ratio.',
-			'all_description' => 'Global cache hit/miss ratio.',
+			'name' =>  'database-read_write_query',
+			'title' => 'Affected tuples per operation on %s database',
+			'ylabel' => 'Tuples',
+			'description' => 'Affected rows on databases grouped by statement family.',
+		},
+		'4' => {
+			'name' =>  'cluster-cache_ratio',
+			'title' => 'Global cache hit/miss ratio',
+			'description' => 'Global cache hit/miss ratio.',
 			'ylabel' => 'Blocks per second',
 			'legends' => ['Cache hit','Cache miss','hit/miss ratio'],
 			'y2label' => 'Percentage',
 		},
-		'4' => {
-			'name' =>  'database-commits_rollbacks',
-			'title' => 'Commits/Rollbacks per second on %s database',
-			'all_title' => 'Global Commits/Rollbacks per second',
-			'description' => 'Number of commits / rollbacks per second and number of backends per database.',
-			'all_description' => 'Global number of commits / rollbacks per second and number of backends.',
+		'5' => {
+			'name' =>  'database-cache_ratio',
+			'title' => 'Cache hit/miss ratio on %s database',
+			'description' => 'Per database cache hit/miss ratio.',
+			'ylabel' => 'Blocks per second',
+			'legends' => ['Cache hit','Cache miss','hit/miss ratio'],
+			'y2label' => 'Percentage',
+		},
+		'6' => {
+			'name' =>  'cluster-commits_rollbacks',
+			'title' => 'Global Commits/Rollbacks per second',
+			'description' => 'Global number of commits / rollbacks per second and number of backends.',
 			'ylabel' => 'Transaction/sec',
 			'legends' => ['commit','rollback','backends'],
 			'y2label' => 'Number of backend',
 		},
-		'5' => {
-			'name' =>  'database-write_ratio',
-			'title' => 'Write ratio on %s database',
-			'all_title' => 'Global Write ratio',
-			'description' => 'Write ratio on databases excluding templates and postgres.',
-			'all_description' => 'Global write ratio, excluding templates and postgres databases.',
+		'7' => {
+			'name' =>  'database-commits_rollbacks',
+			'title' => 'Commits/Rollbacks per second on %s database',
+			'description' => 'Number of commits / rollbacks per second and number of backends per database.',
+			'ylabel' => 'Transaction/sec',
+			'legends' => ['commit','rollback','backends'],
+			'y2label' => 'Number of backend',
+		},
+		'8' => {
+			'name' =>  'cluster-write_ratio',
+			'title' => 'Global Write ratio',
+			'description' => 'Global write ratio, excluding templates and postgres databases.',
 			'ylabel' => 'Write queries per second',
 			'legends' => ['Insert','Update','Delete'],
 		},
-		'6' => {
-			'name' =>  'database-read_ratio',
-			'title' => 'Read tuples on %s database',
-			'all_title' => 'Global read tuples',
+		'9' => {
+			'name' =>  'database-write_ratio',
+			'title' => 'Write ratio on %s database',
+			'description' => 'Write ratio on databases excluding templates and postgres.',
+			'ylabel' => 'Write queries per second',
+			'legends' => ['Insert','Update','Delete'],
+		},
+		'10' => {
+			'name' =>  'cluster-read_ratio',
+			'title' => 'Global read tuples',
 			'description' => 'Show entries returned from the index and live rows fetched from the tables. The latter will be less if any dead or not-yet-committed rows are fetched using the index.',
-			'all_description' => 'Show entries returned from the index and live rows fetched from the tables. The latter will be less if any dead or not-yet-committed rows are fetched using the index.',
 			'ylabel' => 'Tuples per second',
 			'legends' => ['Table (returned)','Index (fetched)'],
 		},
-		'7' => {
-			'name' =>  'database-deadlocks',
-			'title' => 'Number of deadlocks on %s database',
-			'all_title' => 'Global number of deadlocks',
-			'description' => 'Number of deadlocks detected in this database.',
-			'all_description' => 'Global number of deadlocks detected.',
+		'11' => {
+			'name' =>  'database-read_ratio',
+			'title' => 'Read tuples on %s database',
+			'description' => 'Show entries returned from the index and live rows fetched from the tables. The latter will be less if any dead or not-yet-committed rows are fetched using the index.',
+			'ylabel' => 'Tuples per second',
+			'legends' => ['Table (returned)','Index (fetched)'],
+		},
+		'12' => {
+			'name' =>  'cluster-deadlocks',
+			'title' => 'Global number of deadlocks',
+			'description' => 'Global number of deadlocks detected.',
 			'ylabel' => 'Number of deadlocks',
 			'legends' => ['deadlocks'],
 		},
-		'8' => {
-			'name' =>  'database-canceled_queries',
-			'title' => 'Number of canceled queries on %s database',
-			'all_title' => 'Global number of canceled queries',
-			'description' => 'Number of queries canceled due to conflicts with recovery in this database. [Conflicts occur only on standby servers]',
-			'all_description' => 'Global number of queries canceled due to conflicts with recovery. [Conflicts occur only on standby servers]',
+		'13' => {
+			'name' =>  'database-deadlocks',
+			'title' => 'Number of deadlocks on %s database',
+			'description' => 'Number of deadlocks detected in this database.',
+			'ylabel' => 'Number of deadlocks',
+			'legends' => ['deadlocks'],
+		},
+		'14' => {
+			'name' =>  'cluster-canceled_queries',
+			'title' => 'Global number of canceled queries',
+			'description' => 'Global number of queries canceled due to conflicts with recovery. [Conflicts occur only on standby servers]',
 			'ylabel' => 'Number of queries canceled',
 			'legends' => ['conflicts'],
 		},
-		'9' => {
-			'name' =>  'database-temporary_files',
-			'title' => 'Number of temporary files on %s database',
-			'all_title' => 'Global number of temporary files',
-			'description' => 'Number of temporary files created by queries per database.',
-			'all_description' => 'Global number of temporary files created by queries.',
+		'15' => {
+			'name' =>  'database-canceled_queries',
+			'title' => 'Number of canceled queries on %s database',
+			'description' => 'Number of queries canceled due to conflicts with recovery in this database. [Conflicts occur only on standby servers]',
+			'ylabel' => 'Number of queries canceled',
+			'legends' => ['conflicts'],
+		},
+		'16' => {
+			'name' =>  'cluster-temporary_files',
+			'title' => 'Global number of temporary files',
+			'description' => 'Global number of temporary files created by queries.',
 			'ylabel' => 'Number of files',
 			'legends' => ['temporary files'],
 		},
-		'10' => {
-			'name' =>  'database-temporary_bytes',
-			'title' => 'Size of temporary data on %s database',
-			'all_title' => 'Global size of temporary data',
-			'description' => 'Amount of data per seconde written to temporary files created by queries per database.',
-			'all_description' => 'Global amount of data per second written to temporary files created by queries.',
+		'17' => {
+			'name' =>  'database-temporary_files',
+			'title' => 'Number of temporary files on %s database',
+			'description' => 'Number of temporary files created by queries per database.',
+			'ylabel' => 'Number of files',
+			'legends' => ['temporary files'],
+		},
+		'18' => {
+			'name' =>  'cluster-temporary_bytes',
+			'title' => 'Global size of temporary data',
+			'description' => 'Global amount of data per second written to temporary files created by queries.',
 			'ylabel' => 'Size per seconde',
 			'legends' => ['temporary data'],
 		},
-                '11' => {
-                        'name' =>  'database-transactions',
-                        'title' => 'Transactions per second on %s database',
-                        'all_title' => 'Transaction throughput per second',
+		'19' => {
+			'name' =>  'database-temporary_bytes',
+			'title' => 'Size of temporary data on %s database',
+			'description' => 'Amount of data per seconde written to temporary files created by queries per database.',
+			'ylabel' => 'Size per seconde',
+			'legends' => ['temporary data'],
+		},
+                '20' => {
+                        'name' =>  'cluster-transactions',
+                        'title' => 'Transaction throughput per second',
                         'description' => 'Number of transaction (commit+rollback) issued per second.',
-                        'all_description' => 'Number of transaction (commit+rollback) issued per second.',
                         'ylabel' => 'Transaction/sec',
                         'legends' => ['tps'],
                 },
-
+                '21' => {
+                        'name' =>  'database-transactions',
+                        'title' => 'Transactions per second on %s database',
+                        'description' => 'Number of transaction (commit+rollback) issued per second.',
+                        'ylabel' => 'Transaction/sec',
+                        'legends' => ['tps'],
+                },
 	},
 	'pg_stat_database_conflicts.csv' =>  {
+		'0' => {
+			'name' =>  'cluster-conflicts',
+			'title' => 'Conflicts per type on all database',
+			'description' => 'Statistics about query cancels occurring due to conflicts with recovery on standby servers.',
+                        'ylabel' => 'Number of conflict',
+			'legends' => [ 'tablespace', 'lock', 'snapshot', 'bufferpin', 'deadlock' ],
+		},
 		'1' => {
 			'name' =>  'database-conflicts',
 			'title' => 'Conflicts per type on %s database',
-			'all_title' => 'Conflicts per type on all database',
 			'description' => 'Per database statistics about query cancels occurring due to conflicts with recovery on standby servers.',
-			'all_description' => 'Statistics about query cancels occurring due to conflicts with recovery on standby servers.',
                         'ylabel' => 'Number of conflict',
 			'legends' => [ 'tablespace', 'lock', 'snapshot', 'bufferpin', 'deadlock' ],
 		},
 	},
 	'pg_database_size.csv' => {
 		'1' => {
+			'name' =>  'cluster-size',
+			'title' => 'Size of %s database',
+			'description' => 'Database sizes.',
+			'ylabel' => 'Size',
+			'legends' => ['size'],
+			'active' => 1,
+		},
+		'2' => {
 			'name' =>  'database-size',
 			'title' => 'Size of %s database',
 			'description' => 'Database sizes.',
@@ -380,28 +557,28 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_stat_bgwriter.csv' => {
 		'1' => {
-			'name' => 'database-checkpoints',
+			'name' => 'cluster-checkpoints',
 			'title' => 'checkpoints counter stats',
 			'description' => 'Background writer statistics on checkpoints. Checkpoints timed is checkpoints issued because of checkpoint_timeout and checkpoints request is checkpoint issued by request. Comparing checkpoints timed and requested shows whether you’ve set checkpoint segments usefully.',
 			'ylabel' => 'Number of checkpoints',
 			'legends' => ['checkpoints timed','checkpoints requests'],
 		},
 		'2' => {
-			'name' =>  'database-bgwriter',
+			'name' =>  'cluster-bgwriter',
 			'title' => 'background writer clean stats',
 			'description' => 'Background writer cache cleaning statistics by checkpoints, lru, backends and total allocated bytes per second. Buffers checkpoint are written during checkpoint calls, buffers backend represent client backend that had to write to satisfy an allocation and buffers clean represent background writer cleaning a dirty buffer expected by an allocation. Buffers allocated is the total number of allocated new buffer whether or not it was already cached.',
 			'ylabel' => 'Size per second',
 			'legends' => ['checkpoint buffers','clean buffers','backend buffers', 'allocated buffers'],
 		},
 		'3' => {
-			'name' =>  'database-bgwriter_count',
+			'name' =>  'cluster-bgwriter_count',
 			'title' => 'background writer count stats',
 			'description' => 'Background writer counter stats. Max written clean reports the number of times the background writer stopped a cleaning scan because it had written too many buffers. Buffers backend fsync reports the number of times a backend had to execute its own fsync call (normally the background writer handles those even when the backend does its own write).',
 			'ylabel' => 'Times per second',
 			'legends' => ['maxwritten clean','buffers backend fsync'],
 		},
 		'4' => {
-			'name' => 'database-checkpoints_time',
+			'name' => 'cluster-checkpoints_time',
 			'title' => 'checkpoints write stats',
 			'description' => 'Background writer statistics on checkpoints. Checkpoint write time reports the total amount of time that has been spent in the portion of checkpoint processing where files are written to disk. Checkpoint sync time reports the total amount of time that has been spent in the portion of checkpoint processing where files are synchronized to disk.',
 			'ylabel' => 'Duration',
@@ -409,6 +586,13 @@ my %DB_GRAPH_INFOS = (
 		},
 	},
 	'pg_stat_connections.csv' => {
+		'0' => {
+			'name' =>  'cluster-connections',
+			'title' => 'Connections by type on all database',
+			'description' => 'Connections by type including idle ones.',
+			'ylabel' => 'Number of connections',
+			'legends' => ['Active','Idle','Idle in xact', 'Waiting for a lock'],
+		},
 		'1' => {
 			'name' =>  'database-connections',
 			'title' => 'Connections by type on %s database',
@@ -557,7 +741,7 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_xlog_stat.csv' => {
 		'1' => {
-			'name' =>  'database-xlog_files',
+			'name' =>  'cluster-xlog_files',
 			'title' => 'WAL files',
 			'description' => 'Number of WAL file in the xlog directory.',
 			'ylabel' => 'Number of files',
@@ -566,14 +750,14 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_stat_replication.csv' => {
 		'1' => {
-			'name' =>  'database-xlog',
+			'name' =>  'cluster-xlog',
 			'title' => 'Xlog written',
 			'description' => 'Number of xlog data written per second.',
 			'ylabel' => 'Size per second',
 			'legends' => ['written'],
 		},
 		'2' => {
-			'name' =>  'database-replication',
+			'name' =>  'cluster-replication',
 			'title' => 'Replication lag with %s',
 			'description' => 'Lag of replication between primary and secondary servers.',
 			'ylabel' => 'Lag sizes',
@@ -670,7 +854,7 @@ my %DB_GRAPH_INFOS = (
 	},
 	'postgresql.conf' => {
 		'1' => {
-			'name' =>  'database-pgconf',
+			'name' =>  'cluster-pgconf',
 			'title' => 'PostgreSQL configuration',
 			'description' => 'Configuration directives and values defined in file postgresql.conf.',
 			'ylabel' => 'Number',
@@ -681,7 +865,7 @@ my %DB_GRAPH_INFOS = (
 	},
 	'postgresql.auto.conf' => {
 		'1' => {
-			'name' =>  'database-alterconf',
+			'name' =>  'cluster-alterconf',
 			'title' => 'PostgreSQL system altered configuration',
 			'description' => 'Configuration directives and values defined using ALTER SYSTEM.',
 			'ylabel' => 'Number',
@@ -692,7 +876,7 @@ my %DB_GRAPH_INFOS = (
 	},
 	'recovery.conf' => {
 		'1' => {
-			'name' =>  'database-recoveryconf',
+			'name' =>  'cluster-recoveryconf',
 			'title' => 'PostgreSQL recovery configuration',
 			'description' => 'Configuration directives and values defined in file recovery.conf.',
 			'ylabel' => 'Number',
@@ -703,7 +887,7 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_hba.conf' => {
 		'1' => {
-			'name' =>  'database-pghba',
+			'name' =>  'cluster-pghba',
 			'title' => 'PostgreSQL authorization',
 			'description' => 'Client authentication controlled by pg_hba.conf configuration file.',
 			'ylabel' => 'Number',
@@ -714,7 +898,7 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_ident.conf' => {
 		'1' => {
-			'name' =>  'database-pgident',
+			'name' =>  'cluster-pgident',
 			'title' => 'PostgreSQL User Name Maps',
 			'description' => 'Different operating system user / database user mappings might be needed for different connections. They are defined in file pg_ident.conf.',
 			'ylabel' => 'Number',
@@ -725,7 +909,7 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_settings.csv' => {
 		'1' => {
-			'name' =>  'database-settings',
+			'name' =>  'cluster-settings',
 			'title' => 'PostgreSQL Settings',
 			'description' => 'Configuration directives and values defined in pg_settings.',
 			'ylabel' => 'Number',
@@ -747,7 +931,7 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_db_role_setting.csv' => {
 		'1' => {
-			'name' =>  'database-dbrolesetting',
+			'name' =>  'cluster-dbrolesetting',
 			'title' => 'PostgreSQL Database/Roles Settings',
 			'description' => 'Configuration directives and values defined with ALTER DATABASE and ALTER ROLE.',
 			'ylabel' => 'Number',
@@ -758,7 +942,7 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pgbouncer.ini' => {
 		'1' => {
-			'name' =>  'database-pgbouncer',
+			'name' =>  'cluster-pgbouncer',
 			'title' => 'Pgbouncer configuration',
 			'description' => 'Configuration directives and values defined in file pgbouncer.ini.',
 			'ylabel' => 'Number',
@@ -769,7 +953,7 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_database_buffercache.csv' => {
 		'1' => {
-			'name' =>  'database-buffersused',
+			'name' =>  'cluster-buffersused',
 			'title' => 'Shared buffers utilization per database',
 			'description' => 'Show statistics about percentage of shared buffers used per database.',
 			'ylabel' => 'Percent',
@@ -778,7 +962,7 @@ my %DB_GRAPH_INFOS = (
 			'menu' => 'Shared buffers utilization',
 		},
 		'2' => {
-			'name' =>  'database-databaseloaded',
+			'name' =>  'cluster-databaseloaded',
 			'title' => 'Percentage of each databases loaded in shared buffers',
 			'description' => 'Show statistics about percentage of each database loaded in shared buffers.',
 			'ylabel' => 'Percent',
@@ -788,7 +972,7 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_database_usagecount.csv' => {
 		'1' => {
-			'name' =>  'database-usagecount',
+			'name' =>  'cluster-usagecount',
 			'title' => 'Shared buffers usagecount distribution',
 			'description' => 'Show statistics about usagecount distribution in shared buffers.',
 			'ylabel' => 'Percent',
@@ -799,7 +983,7 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_database_isdirty.csv' => {
 		'1' => {
-			'name' =>  'database-isdirty',
+			'name' =>  'cluster-isdirty',
 			'title' => 'Dirty shared buffers usagecount distribution',
 			'description' => 'Show statistics about usagecount distribution in dirty shared buffers.',
 			'ylabel' => 'Percent',
@@ -830,7 +1014,7 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_stat_archiver.csv' => {
 		'1' => {
-			'name' =>  'database-archive',
+			'name' =>  'cluster-archive',
 			'title' => 'Statistics about archiver',
 			'description' => 'Number of WAL files archived with number of failure.',
 			'ylabel' => 'Number',
@@ -1050,7 +1234,6 @@ my $BEGIN = $cgi->param('start') || '';
 my $END = $cgi->param('end') || '';
 
 my $REAL_ACTION = $ACTION || '';
-$REAL_ACTION =~ s/^cluster/database/;
 my $ID_ACTION = -1;
 
 my $src_base = '';
@@ -1186,13 +1369,6 @@ $in_dir .= "/$WORK_DIRS[-1]" if ($#WORK_DIRS >= 0);
 # Load global information to be able to compose application menus
 ####
 
-#### Show about page and exit
-#if ($ACTION eq 'about') {
-#	&show_about();
-#	&html_footer();
-#	exit 0;
-#}
-
 #### Show empty data
 if ($#WORK_DIRS < 0) {
 	&wrong_date_selection(1);
@@ -1231,6 +1407,15 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 		next;
 	}
 
+	# If we are processiong multiple stat dirs caching is mandatory
+	if ($#binfiles == -1 && $#WORK_DIRS > 0)
+	{
+		print qq{<p>&nbsp</p><div class="flotr-graph"><blockquote><b>NO CACHE FILE FOUND:</b> Please read documentation about pgCluu caching</blockquote></div></td>};
+		# Caching is mandatory in CGI mode
+		&html_footer();
+		exit 0;
+	}
+
 	# Set system information, database list
 	# and global information to build menu
 	%sysinfo = ();
@@ -1266,11 +1451,12 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 	}
 
 	# Action to perform when a sar statistics is requested
-	if (($ACTION eq 'home') || ($ACTION =~ /^(system|device|network)-/)) {
+	if (($ACTION eq 'home') || ($ACTION =~ /^(system|device|network)-/))
+	{
                 # Load statistics from cache files
                 if ($#binfiles >= 0) {
-                        print STDERR "DEBUG: Loading Sar statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
-                        &load_sar_binary($in_dir);
+			my $binstat = $bin_action_map{$ACTION} || $ACTION;
+                        &load_sar_binary($in_dir, $binstat);
 			# Set timezone
 			if (($TIMEZONE eq '00') && $global_infos{timezone}) {
 				$TIMEZONE = $global_infos{timezone};
@@ -1281,7 +1467,8 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
                 }
 
 		# Home page is built from cache file or from csv file, not both
-		elsif ( $sar_file && ($ACTION ne 'home') || ($#binfiles == -1)) {
+		elsif ( $sar_file && ($ACTION ne 'home') || ($#binfiles == -1))
+		{
 			# Then build sar statistics from data file starting at begining
 			# when there's no cache file or starting at last cache offset.
 			# In cache/binary mode we can not process sadc binary data file
@@ -1311,12 +1498,13 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 	}
 
 	# Action to perform when a PostgreSQL statistics is requested
-	if (($ACTION ne 'home') || ($ACTION !~ /^(system|device|network)-/)) {
-
+	if (($ACTION eq 'home') || ($ACTION !~ /^(system|device|network)-/))
+	{
 		# Load statistics from cache files
-		if ($#binfiles > 0) {
-			print STDERR "DEBUG: Loading PostgreSQL statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
-			&load_pg_binary($in_dir);
+		if ($#binfiles > 0)
+		{
+			my $pgstat = $pg_action_map{$ACTION} || $ACTION;
+			&load_pg_binary($in_dir, $pgstat);
 
 			# Set timezone
 			if (($TIMEZONE eq '00') && $global_infos{timezone}) {
@@ -1348,7 +1536,6 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 
 				# Read statistics from csv file starting at at begining of the
 				# file or last offset when binary files are present
-
 				if (-e "$in_dir/$k" && !-z "$in_dir/$k") {
 					&compute_postgresql_stat($in_dir, $k, $src_base, %{$DB_GRAPH_INFOS{$k}});
 				# Gzip data files are only available when they can't be appended anymore so
@@ -1994,10 +2181,12 @@ sub set_overall_database_stat_from_binary
 # Compute overall system statistics
 sub set_overall_system_stat_from_binary
 {
-	foreach my $t (sort {$a <=> $b} keys %sar_cpu_stat) {
+
+	foreach my $t (sort {$a <=> $b} keys %sar_cpu_stat)
+	{
                 # Skip unwanted lines
-                next if ($BEGIN && ($t < $BEGIN));
-                next if ($END   && ($t > $END));
+		#next if ($BEGIN && ($t < $BEGIN));
+		#next if ($END   && ($t > $END));
 		if (!exists $OVERALL_STATS{'system'}{'cpu'} || ($OVERALL_STATS{'system'}{'cpu'}[1] < $sar_cpu_stat{$t}{'all'}{total})) {
 			@{$OVERALL_STATS{'system'}{'cpu'}} = ($t, $sar_cpu_stat{$t}{'all'}{total});
 		}
@@ -2006,8 +2195,8 @@ sub set_overall_system_stat_from_binary
 	}
 	foreach my $t (sort {$a <=> $b} keys %sar_load_stat) {
                 # Skip unwanted lines
-                next if ($BEGIN && ($t < $BEGIN));
-                next if ($END   && ($t > $END));
+		#next if ($BEGIN && ($t < $BEGIN));
+		#next if ($END   && ($t > $END));
 
 		if (!exists $OVERALL_STATS{'system'}{'load'} || ($OVERALL_STATS{'system'}{'load'}[1] < $sar_load_stat{$t}{'ldavg-1'})) {
 			@{$OVERALL_STATS{'system'}{'load'}} = ($t, $sar_load_stat{$t}{'ldavg-1'});
@@ -2015,8 +2204,8 @@ sub set_overall_system_stat_from_binary
 	}
 	foreach my $t (sort {$a <=> $b} keys %sar_process_stat) {
                 # Skip unwanted lines
-                next if ($BEGIN && ($t < $BEGIN));
-                next if ($END   && ($t > $END));
+		#next if ($BEGIN && ($t < $BEGIN));
+		#next if ($END   && ($t > $END));
 
 		if (!exists $OVERALL_STATS{'system'}{'process'} || ($OVERALL_STATS{'system'}{'process'}[1] < $sar_process_stat{$t}{'plist-sz'})) {
 			@{$OVERALL_STATS{'system'}{'process'}} = ($t, $sar_process_stat{$t}{'plist-sz'});
@@ -2027,8 +2216,8 @@ sub set_overall_system_stat_from_binary
 	}
 	foreach my $t (sort {$a <=> $b} keys %sar_context_stat) {
                 # Skip unwanted lines
-                next if ($BEGIN && ($t < $BEGIN));
-                next if ($END   && ($t > $END));
+		#next if ($BEGIN && ($t < $BEGIN));
+		#next if ($END   && ($t > $END));
 
 		if (!exists $OVERALL_STATS{'system'}{'cswch'} || ($OVERALL_STATS{'system'}{'cswch'}[1] < $sar_context_stat{$t}{'cswch'})) {
 			@{$OVERALL_STATS{'system'}{'cswch'}} = ($t, $sar_context_stat{$t}{'cswch'});
@@ -2036,8 +2225,8 @@ sub set_overall_system_stat_from_binary
 	}
 	foreach my $t (sort {$a <=> $b} keys %sar_memory_stat) {
                 # Skip unwanted lines
-                next if ($BEGIN && ($t < $BEGIN));
-                next if ($END   && ($t > $END));
+		#next if ($BEGIN && ($t < $BEGIN));
+		#next if ($END   && ($t > $END));
 
 		if (!exists $OVERALL_STATS{'system'}{'kbcached'} || ($OVERALL_STATS{'system'}{'kbcached'}[1] > $sar_memory_stat{$t}{'kbcached'})) {
 			@{$OVERALL_STATS{'system'}{'kbcached'}} = ($t, $sar_memory_stat{$t}{'kbcached'});
@@ -2045,8 +2234,8 @@ sub set_overall_system_stat_from_binary
 	}
 	foreach my $t (sort {$a <=> $b} keys %sar_dirty_stat) {
                 # Skip unwanted lines
-                next if ($BEGIN && ($t < $BEGIN));
-                next if ($END   && ($t > $END));
+		#next if ($BEGIN && ($t < $BEGIN));
+		#next if ($END   && ($t > $END));
 
 		if (!exists $OVERALL_STATS{'system'}{'kbdirty'} || ($OVERALL_STATS{'system'}{'kbdirty'}[1] < $sar_dirty_stat{$t}{'kbdirty'})) {
 			@{$OVERALL_STATS{'system'}{'kbdirty'}} = ($t, $sar_dirty_stat{$t}{'kbdirty'});
@@ -2054,8 +2243,8 @@ sub set_overall_system_stat_from_binary
 	}
 	foreach my $t (sort {$a <=> $b} keys %sar_swap_stat) {
                 # Skip unwanted lines
-                next if ($BEGIN && ($t < $BEGIN));
-                next if ($END   && ($t > $END));
+		#next if ($BEGIN && ($t < $BEGIN));
+		#next if ($END   && ($t > $END));
 
 		$sar_swap_stat{$t}{'pswpin'} ||= 0;
 		$sar_swap_stat{$t}{'pswpout'} ||= 0;
@@ -2069,8 +2258,8 @@ sub set_overall_system_stat_from_binary
 
 	foreach my $t (sort {$a <=> $b} keys %sar_pageswap_stat) {
                 # Skip unwanted lines
-                next if ($BEGIN && ($t < $BEGIN));
-                next if ($END   && ($t > $END));
+		#next if ($BEGIN && ($t < $BEGIN));
+		#next if ($END   && ($t > $END));
 
 		$sar_pageswap_stat{$t}{'pgpgin'} ||= 0;
 		$sar_pageswap_stat{$t}{'pgpgout'} ||= 0;
@@ -2111,8 +2300,8 @@ sub set_overall_system_stat_from_binary
 	}
 	foreach my $t (sort {$a <=> $b} keys %sar_block_stat) {
                 # Skip unwanted lines
-                next if ($BEGIN && ($t < $BEGIN));
-                next if ($END   && ($t > $END));
+		#next if ($BEGIN && ($t < $BEGIN));
+		#next if ($END   && ($t > $END));
 
 		$sar_block_stat{$t}{'bread'} ||= 0;
 		$sar_block_stat{$t}{'bwrite'} ||= 0;
@@ -2125,8 +2314,8 @@ sub set_overall_system_stat_from_binary
 	}
 	foreach my $t (sort {$a <=> $b} keys %sar_srvtime_stat) {
                 # Skip unwanted lines
-                next if ($BEGIN && ($t < $BEGIN));
-                next if ($END   && ($t > $END));
+		#next if ($BEGIN && ($t < $BEGIN));
+                #next if ($END   && ($t > $END));
 		foreach my $dev (keys %{ $sar_srvtime_stat{$t} } ) {
 			next if ($DEVICE && ($dev ne $DEVICE));
 			if (!exists $OVERALL_STATS{'system'}{'svctm'} || ($OVERALL_STATS{'system'}{'svctm'}[1] < $sar_srvtime_stat{$t}{$dev}{'svctm'})) {
@@ -2136,8 +2325,8 @@ sub set_overall_system_stat_from_binary
 	}
 	foreach my $t (sort {$a <=> $b} keys %sar_rw_devices_stat) {
                 # Skip unwanted lines
-                next if ($BEGIN && ($t < $BEGIN));
-                next if ($END   && ($t > $END));
+		#next if ($BEGIN && ($t < $BEGIN));
+		#next if ($END   && ($t > $END));
 		foreach my $dev (keys %{ $sar_rw_devices_stat{$t} } ) {
 			next if ($DEVICE && ($dev ne $DEVICE));
 			$OVERALL_STATS{'system'}{'devices'}{$dev}{read} += $sar_rw_devices_stat{$t}{$dev}{'rd_sec/s'} || 0;
@@ -2243,79 +2432,55 @@ sub pg_stat_database_report
 			next if ($DATABASE && ($db ne $DATABASE));
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 			next if ($data_info{$id}{name} ne $REAL_ACTION);
-			if ($data_info{$id}{name} eq 'database-write_ratio') {
+			if ($data_info{$id}{name} =~ /(database|cluster)-write_ratio/) {
 
 				if ($has_tuples) {
 					$database_stat{$db}{insert} =~ s/,$//;
 					$database_stat{$db}{update} =~ s/,$//;
 					$database_stat{$db}{delete} =~ s/,$//;
 				}
-				if ($db ne 'all') {
-					print &jqplot_linegraph_array($IDX++, 'database-write_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{insert}, $database_stat{$db}{update}, $database_stat{$db}{delete});
-				} else {
-					print &jqplot_linegraph_array($IDX++, 'cluster-write_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{insert}, $database_stat{$db}{update}, $database_stat{$db}{delete});
-				}
+				print &jqplot_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{insert}, $database_stat{$db}{update}, $database_stat{$db}{delete});
 
-			} elsif ($data_info{$id}{name} eq 'database-read_ratio') {
+			} elsif ($data_info{$id}{name} =~ /(database|cluster)-read_ratio/) {
 
 				if ($has_tuples) {
 					$database_stat{$db}{returned} =~ s/,$//;
 					$database_stat{$db}{fetched} =~ s/,$//;
 				}
-				if ($db ne 'all') {
-					print &jqplot_linegraph_array($IDX++, 'database-read_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{returned}, $database_stat{$db}{fetched});
-				} else {
-					print &jqplot_linegraph_array($IDX++, 'cluster-read_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{returned}, $database_stat{$db}{fetched});
-				}
+				print &jqplot_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{returned}, $database_stat{$db}{fetched});
 
-			} elsif ($data_info{$id}{name} eq 'database-read_write_query') {
+			} elsif ($data_info{$id}{name} =~ /(database|cluster)-read_write_query/) {
 				if (exists $total_query_type{$db}{'all'} && ($total_query_type{$db}{'all'} > 0)) {
 					my %data = ();
 					foreach my $t (keys %{$total_query_type{$db}}) {
 						next if ($t eq 'all');
 						$data{$t} = sprintf("%0.2f", $total_query_type{$db}{$t}*100/$total_query_type{$db}{'all'});
 					}
-					if ($db ne 'all') {
-						print &jqplot_piegraph($IDX++, 'database-read_write_query', \%{$data_info{$id}}, $db, %data);
-					} else {
-						print &jqplot_piegraph($IDX++, 'cluster-read_write_query', \%{$data_info{$id}}, $db, %data);
-					}
+					print &jqplot_piegraph($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, %data);
 				}
 
-			} elsif ($data_info{$id}{name} eq 'database-cache_ratio') {
+			} elsif ($data_info{$id}{name} =~ /(database|cluster)-cache_ratio/) {
 
 				$database_stat{$db}{blks_read} =~ s/,$//;
 				$database_stat{$db}{blks_hit} =~ s/,$//;
-				if ($db ne 'all') {
-					print &jqplot_linegraph_array($IDX++, 'database-cache_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{blks_hit}, $database_stat{$db}{blks_read}, $database_stat{$db}{ratio_hit_miss});
-				} else {
-					print &jqplot_linegraph_array($IDX++, 'cluster-cache_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{blks_hit}, $database_stat{$db}{blks_read}, $database_stat{$db}{ratio_hit_miss});
-				}
+				print &jqplot_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{blks_hit}, $database_stat{$db}{blks_read}, $database_stat{$db}{ratio_hit_miss});
 				delete $database_stat{$db}{blks_hit};
 				delete $database_stat{$db}{blks_read};
 				delete $database_stat{$db}{ratio_hit_miss};
 
-			} elsif ($data_info{$id}{name} eq 'database-commits_rollbacks') {
+			} elsif ($data_info{$id}{name} =~ /(database|cluster)-commits_rollbacks/) {
 
 				$database_stat{$db}{xact_commit} =~ s/,$//;
 				$database_stat{$db}{xact_rollback} =~ s/,$//;
 				$database_stat{$db}{nbackend} =~ s/,$//;
-				if ($db ne 'all') {
-					print &jqplot_linegraph_array($IDX++, 'database-commits_rollbacks', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_commit}, $database_stat{$db}{xact_rollback}, $database_stat{$db}{nbackend});
-				} else {
-					print &jqplot_linegraph_array($IDX++, 'cluster-commits_rollbacks', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_commit}, $database_stat{$db}{xact_rollback}, $database_stat{$db}{nbackend});
-				}
+				print &jqplot_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{xact_commit}, $database_stat{$db}{xact_rollback}, $database_stat{$db}{nbackend});
 				delete $database_stat{$db}{xact_commit};
 				delete $database_stat{$db}{xact_rollback};
 
-			} elsif ($data_info{$id}{name} eq 'database-transactions') {
+			} elsif ($data_info{$id}{name} =~ /(database|cluster)-transactions/) {
 
 				$database_stat{$db}{xact_throughput} =~ s/,$//;
-				if ($db ne 'all') {
-					print &jqplot_linegraph_array($IDX++, 'database-transactions', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_throughput});
-				} else {
-					print &jqplot_linegraph_array($IDX++, 'cluster-transactions', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_throughput});
-				}
+				print &jqplot_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $database_stat{$db}{xact_throughput});
 				delete $database_stat{$db}{xact_throughput};
 
 			}
@@ -2330,7 +2495,7 @@ sub pg_stat_database_report
 			next if ($DATABASE && ($DATABASE ne 'all') && ($db ne $DATABASE));
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 
-			if ($data_info{$id}{name} eq 'database-backends') {
+			if ($data_info{$id}{name} eq 'database-backends' || $data_info{$id}{name} eq 'cluster-backends') {
 				$database_stat{$db}{nbackend} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{nbackend};
 				if (($db ne 'all') && ($DATABASE ne 'all')) {
@@ -2338,7 +2503,7 @@ sub pg_stat_database_report
 				}
 				delete $database_stat{$db}{nbackend};
 
-			} elsif ($has_conflict && ($data_info{$id}{name} eq 'database-canceled_queries')) {
+			} elsif ($has_conflict && ($data_info{$id}{name} =~ /(database|cluster)-canceled_queries/)) {
 
 				$database_stat{$db}{canceled_queries} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{canceled_queries};
@@ -2347,7 +2512,7 @@ sub pg_stat_database_report
 				}
 				delete $database_stat{$db}{canceled_queries};
 
-			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-deadlocks')) {
+			} elsif ($has_temp && ($data_info{$id}{name} =~ /(database|cluster)-deadlocks/)) {
 				$database_stat{$db}{deadlocks} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{deadlocks};
 				if (($db ne 'all') && ($DATABASE ne 'all')) {
@@ -2355,7 +2520,7 @@ sub pg_stat_database_report
 				}
 				delete $database_stat{$db}{deadlocks};
 
-			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-temporary_files')) {
+			} elsif ($has_temp && ($data_info{$id}{name} =~ /(database|cluster)-temporary_files/)) {
 
 				$database_stat{$db}{temp_files} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{temp_files};
@@ -2364,7 +2529,7 @@ sub pg_stat_database_report
 				}
 				delete $database_stat{$db}{temp_files};
 
-			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-temporary_bytes')) {
+			} elsif ($has_temp && ($data_info{$id}{name} =~ /(database|cluster)-temporary_bytes/)) {
 
 				$database_stat{$db}{temp_bytes} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{temp_bytes};
@@ -2378,19 +2543,19 @@ sub pg_stat_database_report
 		if ($db_glob eq 'all') {
 			my $name = $data_info{$id}{name};
 			$name =~ s/^database/cluster/;
-			if ($has_temp && ($data_info{$id}{name} eq 'database-temporary_files')) {
+			if ($has_temp && ($data_info{$id}{name} =~ /(database|cluster)-temporary_files/)) {
 				print &jqplot_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
 			}
-			if ($has_temp && ($data_info{$id}{name} eq 'database-temporary_bytes')) {
+			if ($has_temp && ($data_info{$id}{name} =~ /(database|cluster)-temporary_bytes/)) {
 				print &jqplot_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
 			}
-			if ($data_info{$id}{name} eq 'database-backends') {
+			if ($data_info{$id}{name} =~ /(database|cluster)-backends/) {
 				print &jqplot_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
 			}
-			if ($has_temp && ($data_info{$id}{name} eq 'database-deadlocks')) {
+			if ($has_temp && $data_info{$id}{name} =~ /(database|cluster)-deadlocks/) {
 				print &jqplot_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
 			}
-			if ($has_conflict && ($data_info{$id}{name} eq 'database-canceled_queries')) {
+			if ($has_conflict && ($data_info{$id}{name} =~ /(database|cluster)-canceled_queries/)) {
 				print &jqplot_linegraph_hash($IDX++, $name, \%{$data_info{$id}}, 'all', %data);
 			}
 		}
@@ -2453,7 +2618,7 @@ sub pg_stat_database_conflicts_report
 	my ($src_base, $db_glob, %data_info) = @_;
 
 	my %database_stat = ();
-	my $id = &get_data_id('database-conflicts', %data_info);
+	my $id = &get_data_id($ACTION, %data_info);
 	my $total_val = 0;
 	my $tz = ($STATS_TIMEZONE*3600*1000);
 	my %conflict_type = ();
@@ -2535,7 +2700,7 @@ sub pg_database_size_report
 	}
 	%all_database_size = ();
 
-	my $id = &get_data_id('database-size', %data_info);
+	my $id = &get_data_id($ACTION, %data_info);
 
 	my %data = ();
 	foreach my $db (sort keys %database_stat) {
@@ -2937,7 +3102,7 @@ sub pg_stat_user_indexes_report
 					<th>Live table rows fetched</th>
 };
 		}
-		if (scalar keys %{$all_class_size{$db}} == 0) {
+		if (scalar keys %{$all_stat_user_indexes{$db}} == 0) {
 			$table_header = qq{<td><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td>};
 		}
 		print qq{
@@ -3745,7 +3910,7 @@ sub pg_xlog_stat_report
 	%all_xlog_stat = ();
 
 	if ($xlog_stat{total} ) {
-		my $id = &get_data_id('database-xlog_files', %data_info);
+		my $id = &get_data_id('cluster-xlog_files', %data_info);
 		$xlog_stat{total} =~ s/,$//;
 		if (exists $xlog_stat{recycled}) {
 			push(@{$data_info{$id}{legends}}, 'recycled', 'written', 'max_wal');
@@ -3848,30 +4013,30 @@ sub pg_stat_bgwriter_report
 	%all_stat_bgwriter = ();
 
 	my $total_checkpoint = $data{'Checkpoint timed'} + $data{'Checkpoint requested'};
-	if (($data_info{$ID_ACTION}{name} eq 'database-checkpoints') && $total_checkpoint) {
+	if (($data_info{$ID_ACTION}{name} eq 'cluster-checkpoints') && $total_checkpoint) {
 		$data_info{$ID_ACTION}{legends}[0] .= ' (' . sprintf("%0.2f", $data{'Checkpoint timed'}*100/($total_checkpoint||1)) . '%)';
 		$data_info{$ID_ACTION}{legends}[1] .= ' (' . sprintf("%0.2f", $data{'Checkpoint requested'}*100/($total_checkpoint||1)) . '%)';
 	}
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		next if ($id ne $ID_ACTION);
 		next if ($data_info{$id}{name} ne $REAL_ACTION);
-		if ($data_info{$id}{name} eq 'database-checkpoints') {
+		if ($data_info{$id}{name} eq 'cluster-checkpoints') {
 			$bgwriter_stat{checkpoints_timed} =~ s/,$//;
 			$bgwriter_stat{checkpoints_req} =~ s/,$//;
 			print &jqplot_linegraph_array($IDX++, 'cluster-checkpoints', \%{$data_info{$id}}, '', $bgwriter_stat{checkpoints_timed}, $bgwriter_stat{checkpoints_req});
-		} elsif ($data_info{$id}{name} eq 'database-checkpoints_time') {
+		} elsif ($data_info{$id}{name} eq 'cluster-checkpoints_time') {
 			if (exists $bgwriter_stat{checkpoint_write_time}) {
 				$bgwriter_stat{checkpoint_sync_time} =~ s/,$//;
 				$bgwriter_stat{checkpoint_write_time} =~ s/,$//;
 				print &jqplot_linegraph_array($IDX++, 'cluster-checkpoints_time', \%{$data_info{$id}}, '', $bgwriter_stat{checkpoint_write_time}, $bgwriter_stat{checkpoint_sync_time});
 			}
-		} elsif ($data_info{$id}{name} eq 'database-bgwriter') {
+		} elsif ($data_info{$id}{name} eq 'cluster-bgwriter') {
 			$bgwriter_stat{buffers_checkpoint} =~ s/,$//;
 			$bgwriter_stat{buffers_clean} =~ s/,$//;
 			$bgwriter_stat{buffers_backend} =~ s/,$//;
 			$bgwriter_stat{buffers_alloc} =~ s/,$//;
 			print &jqplot_linegraph_array($IDX++, 'cluster-bgwriter', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean}, $bgwriter_stat{buffers_backend}, $bgwriter_stat{buffers_alloc});
-		} elsif ($data_info{$id}{name} eq 'database-bgwriter_count') {
+		} elsif ($data_info{$id}{name} eq 'cluster-bgwriter_count') {
 			$bgwriter_stat{maxwritten_clean} =~ s/,$//;
 			$bgwriter_stat{buffers_backend_fsync} =~ s/,$//;
 			print &jqplot_linegraph_array($IDX++, 'cluster-bgwriter_count', \%{$data_info{$id}}, '',  $bgwriter_stat{maxwritten_clean}, $bgwriter_stat{buffers_backend_fsync});
@@ -3903,17 +4068,19 @@ sub pg_stat_connections
                 # Store list of database
                 $db_list{$data[5]} = 1;
 
-		$all_stat_connections{$data[0]}{$data[5]}{total} = $data[1];
-		$all_stat_connections{$data[0]}{$data[5]}{active} = $data[2];
-		$all_stat_connections{$data[0]}{$data[5]}{waiting} = $data[3];
-		$all_stat_connections{$data[0]}{$data[5]}{idle_in_xact} = $data[4];
-		$all_stat_connections{$data[0]}{$data[5]}{idle} = ($data[1] - $data[2] - $data[4]);
-
-		$all_stat_connections{$data[0]}{'all'}{total} += $data[1];
-		$all_stat_connections{$data[0]}{'all'}{active} += $data[2];
-		$all_stat_connections{$data[0]}{'all'}{waiting} += $data[3];
-		$all_stat_connections{$data[0]}{'all'}{idle_in_xact} += $data[4];
-		$all_stat_connections{$data[0]}{'all'}{idle} += ($data[1] - $data[2] - $data[4]);
+		if ($ACTION eq 'database-connections') {
+			$all_stat_connections{$data[0]}{$data[5]}{total} = $data[1];
+			$all_stat_connections{$data[0]}{$data[5]}{active} = $data[2];
+			$all_stat_connections{$data[0]}{$data[5]}{waiting} = $data[3];
+			$all_stat_connections{$data[0]}{$data[5]}{idle_in_xact} = $data[4];
+			$all_stat_connections{$data[0]}{$data[5]}{idle} = ($data[1] - $data[2] - $data[4]);
+		} else {
+			$all_stat_connections{$data[0]}{'all'}{total} += $data[1];
+			$all_stat_connections{$data[0]}{'all'}{active} += $data[2];
+			$all_stat_connections{$data[0]}{'all'}{waiting} += $data[3];
+			$all_stat_connections{$data[0]}{'all'}{idle_in_xact} += $data[4];
+			$all_stat_connections{$data[0]}{'all'}{idle} += ($data[1] - $data[2] - $data[4]);
+		}
 	}
 	$curfh->close();
 
@@ -3935,20 +4102,29 @@ sub pg_stat_connections_report
 
 	my %connections_stat = ();
 	my $tz = ($STATS_TIMEZONE*3600*1000);
-	foreach my $time (sort {$a <=> $b} keys %all_stat_connections) {
-		foreach my $db (@global_databases) {
-			next if (($db_glob ne 'all') && ($db ne $db_glob));
-			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
-			$connections_stat{$db}{total} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{$db}{total}||0) . '],';
-			$connections_stat{$db}{active} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{$db}{active}||0) . '],';
-			$connections_stat{$db}{waiting} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{$db}{waiting}||0) . '],';
-			$connections_stat{$db}{idle_in_xact} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{$db}{idle_in_xact}||0) . '],';
-			$connections_stat{$db}{idle} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{$db}{idle}||0) . '],';
+	foreach my $time (sort {$a <=> $b} keys %all_stat_connections)
+	{
+		if ($ACTION eq 'database-connections') {
+			foreach my $db (@global_databases) {
+				next if (($db_glob ne 'all') && ($db ne $db_glob));
+				next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
+				$connections_stat{$db}{total} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{$db}{total}||0) . '],';
+				$connections_stat{$db}{active} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{$db}{active}||0) . '],';
+				$connections_stat{$db}{waiting} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{$db}{waiting}||0) . '],';
+				$connections_stat{$db}{idle_in_xact} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{$db}{idle_in_xact}||0) . '],';
+				$connections_stat{$db}{idle} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{$db}{idle}||0) . '],';
+			}
+		} else {
+			$connections_stat{'all'}{total} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{'all'}{total}||0) . '],';
+			$connections_stat{'all'}{active} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{'all'}{active}||0) . '],';
+			$connections_stat{'all'}{waiting} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{'all'}{waiting}||0) . '],';
+			$connections_stat{'all'}{idle_in_xact} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{'all'}{idle_in_xact}||0) . '],';
+			$connections_stat{'all'}{idle} .= '[' . ($time - $tz) . ',' . ($all_stat_connections{$time}{'all'}{idle}||0) . '],';
 		}
 	}
 	%all_stat_connections = ();
 
-	my $id = &get_data_id('database-connections', %data_info);
+	my $id = &get_data_id($ACTION, %data_info);
 	if (scalar keys %connections_stat > 0) {
 		foreach my $db (sort keys %connections_stat) {
 			next if ($db ne $db_glob);
@@ -4155,12 +4331,12 @@ sub pg_stat_replication_report
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		next if ($id ne $ID_ACTION);
 		next if ($data_info{$id}{name} ne $REAL_ACTION);
-		if ($data_info{$id}{name} eq 'database-xlog') {
+		if ($data_info{$id}{name} eq 'cluster-xlog') {
 			$xlog_stat{master_location} =~ s/,$// if (exists $xlog_stat{master_location});
 			print &jqplot_linegraph_array($IDX++, 'cluster-xlog', \%{$data_info{$id}}, '', $xlog_stat{master_location});
 			delete $xlog_stat{master_location} if (exists $xlog_stat{master_location});
 
-		} elsif ($data_info{$id}{name} eq 'database-replication') {
+		} elsif ($data_info{$id}{name} eq 'cluster-replication') {
 			my $has_data = 0;
 			foreach my $host (sort {$a cmp $b} keys %xlog_stat) {
 				next if ($host eq 'master_location');
@@ -4396,7 +4572,7 @@ sub pgbouncer_ini_report
 	} else {
 		$output = "<div style=\"white-space: pre\">\n$output</div>\n";
 	}
-	my $id = &get_data_id('database-pgbouncer', %data_info);
+	my $id = &get_data_id('cluster-pgbouncer', %data_info);
 	print qq{
 <ul id="slides">
 <li class="slide active-slide" id="cluster-pgbouncer-slide">
@@ -5068,14 +5244,17 @@ sub pg_stat_count_indexes
 # Compute report about table without indexes or with too many indexes
 sub pg_stat_count_indexes_report
 {
-	my ($src_base, $db, %data_info) = @_;
+	my ($src_base, $dbname, %data_info) = @_;
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
-	return if (!$db);
+	return if (!$dbname);
 
-	foreach my $db (sort keys %all_stat_count_indexes) {
+	foreach my $db (sort keys %all_stat_count_indexes)
+	{
+		next if ($db ne $dbname);
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
+
 		my $id = &get_data_id('count-index', %data_info);
 		# Open filehandle to cluster file
 		print qq{
@@ -5199,7 +5378,7 @@ sub postgresql_conf_report
 	} else {
 		$output = "<div style=\"white-space: pre\">\n$output</div>\n";
 	}
-	my $id = &get_data_id('database-pgconf', %data_info);
+	my $id = &get_data_id('cluster-pgconf', %data_info);
 	print qq{
 <ul id="slides">
 <li class="slide active-slide" id="cluster-pgconf-slide">
@@ -5274,7 +5453,7 @@ sub recovery_conf_report
 	} else {
 		$output = "<div style=\"white-space: pre\">\n$output</div>\n";
 	}
-	my $id = &get_data_id('database-recoveryconf', %data_info);
+	my $id = &get_data_id('cluster-recoveryconf', %data_info);
 	print qq{
 <ul id="slides">
 <li class="slide active-slide" id="cluster-recoveryconf-slide">
@@ -5350,7 +5529,7 @@ sub postgresql_auto_conf_report
 	} else {
 		$output = "<div style=\"white-space: pre\">\n$output</div>\n";
 	}
-	my $id = &get_data_id('database-alterconf', %data_info);
+	my $id = &get_data_id('cluster-alterconf', %data_info);
 	print qq{
 <ul id="slides">
 <li class="slide active-slide" id="cluster-alterconf-slide">
@@ -5428,7 +5607,7 @@ sub pg_hba_conf_report
 		$output = "<div style=\"white-space: pre\">\n$output</div>\n";
 	}
 
-	my $id = &get_data_id('database-pghba', %data_info);
+	my $id = &get_data_id('cluster-pghba', %data_info);
 	print qq{
 <ul id="slides">
 <li class="slide active-slide" id="cluster-pghba-slide">
@@ -5505,7 +5684,7 @@ sub pg_ident_conf_report
 	} else {
 		$output = "<div style=\"white-space: pre\">\n$output</div>\n";
 	}
-	my $id = &get_data_id('database-pgident', %data_info);
+	my $id = &get_data_id('cluster-pgident', %data_info);
 	print qq{
 <ul id="slides">
 <li class="slide active-slide" id="cluster-pgident-slide">
@@ -5592,7 +5771,7 @@ sub pg_settings_report
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
-	my $id = &get_data_id('database-settings', %data_info);
+	my $id = &get_data_id('cluster-settings', %data_info);
 	my $output = '';
 	if (scalar keys %all_settings == 0) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
@@ -5787,7 +5966,7 @@ sub pg_db_role_setting_report
 
 	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
 
-	my $id = &get_data_id('database-dbrolesetting', %data_info);
+	my $id = &get_data_id('cluster-dbrolesetting', %data_info);
 	my $output = '';
 	if (scalar keys %all_db_role_setting == 0) {
 		$output = '<div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div>';
@@ -5897,7 +6076,7 @@ sub pg_database_buffercache_report
 	%all_database_buffercache = ();
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		next if ($id ne $ID_ACTION);
-		if ($data_info{$id}{name} eq 'database-buffersused') {
+		if ($data_info{$id}{name} eq 'cluster-buffersused') {
 			my @graph_data = ();
 			foreach my $db (sort keys %shared_stat) {
 				next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
@@ -5906,7 +6085,7 @@ sub pg_database_buffercache_report
 				push(@graph_data, $shared_stat{$db}{shared_buffers_used});
 			}
 			print &jqplot_linegraph_array($IDX++, 'cluster-buffersused', \%{$data_info{$id}}, '', @graph_data);
-		} elsif ($data_info{$id}{name} eq 'database-databaseloaded') {
+		} elsif ($data_info{$id}{name} eq 'cluster-databaseloaded') {
 			my @graph_data = ();
 			foreach my $db (sort keys %shared_stat) {
 				next if ($db eq 'all');
@@ -5960,7 +6139,7 @@ sub pg_database_usagecount_report
 	%all_database_usagecount = ();
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		next if ($id ne $ID_ACTION);
-		if ($data_info{$id}{name} eq 'database-usagecount') {
+		if ($data_info{$id}{name} eq 'cluster-usagecount') {
 			my @graph_data = ();
 			foreach my $u (sort keys %shared_stat) {
 				push(@{$data_info{$id}{legends}}, "% of usagecount $u");
@@ -6011,7 +6190,7 @@ sub pg_database_isdirty_report
 	%all_database_isdirty = ();
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		next if ($id ne $ID_ACTION);
-		if ($data_info{$id}{name} eq 'database-isdirty') {
+		if ($data_info{$id}{name} eq 'cluster-isdirty') {
 			my @graph_data = ();
 			foreach my $u (sort keys %shared_stat) {
 				push(@{$data_info{$id}{legends}}, "% of usagecount $u");
@@ -6094,7 +6273,7 @@ sub pg_stat_archiver_report
 	%all_stat_archiver = ();
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		next if ($id ne $ID_ACTION);
-		if ($data_info{$id}{name} eq 'database-archive') {
+		if ($data_info{$id}{name} eq 'cluster-archive') {
 			print &jqplot_linegraph_array($IDX++, 'cluster-archive', \%{$data_info{$id}}, '', $archiver_stat{archived_count}, $archiver_stat{failed_count});
 		}
 	}
@@ -6194,9 +6373,11 @@ sub pg_stat_statements_report
                 if ($all_stat_statements{$db}{has_temp}{total_time} == 3) {
                         $header .= qq{<th>I/O time</th>};
                 }
+		$header = qq{<th>Calls</th><th>Avg time</th><th>Total time</th><th>Rows</th>$header<th>Query</th>};
 	} else {
 		$header = qq{<td><div class="flotr-graph"><blockquote><b>NO DATASET</b></blockquote></div></td>};
 	}
+
 	print qq{
 <li class="slide active-slide" id="database-queries-slide">
 <div id="database-queries"><br/><br/><br/><br/></div>
@@ -6214,12 +6395,7 @@ sub pg_stat_statements_report
 			<table class="table table-striped sortable" id="$db-$data_info{$id}{name}-table">
 				<thead>
 					<tr>
-					<th>Calls</th>
-					<th>Avg time</th>
-					<th>Total time</th>
-					<th>Rows</th>
 					$header
-					<th>Query</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -7556,7 +7732,6 @@ AAAASUVORK5CYII=';
 			   <a href="#" tabindex="-1">Wal / Checkpoint </a>
 			      <ul class="dropdown-menu">
 			      <li id="menu-cluster-xlog_files"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-xlog_files&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Wal files</a></li>
-			      <li id="menu-cluster-xlog"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-xlog&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Wal bytes written</a></li>
 			      <li id="menu-cluster-checkpoints"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-checkpoints&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Checkpoints counter</a></li>
 			      <li id="menu-cluster-checkpoints_time"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-checkpoints_time&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Checkpoints write time</a></li>
 			      <li id="menu-cluster-archive"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-archive&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Archiver stats</a></li>
@@ -7576,6 +7751,7 @@ AAAASUVORK5CYII=';
 			<li id="menu-replication" class="dropdown-submenu">
 			   <a href="#" tabindex="-1">Replication statistics </a>
 			      <ul class="dropdown-menu">
+			      <li id="menu-cluster-xlog"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-xlog&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Wal bytes written</a></li>
 			      <li id="menu-cluster-replication"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-replication&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Replication lag</a></li>
 			      <li id="menu-cluster-canceled_queries"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-canceled_queries&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Canceled queries</a></li>
 			      <li id="menu-cluster-conflicts"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-conflicts&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Conflicts</a></li>
@@ -10116,8 +10292,7 @@ sub jqplot_linegraph_array
 		push(@legend, $infos->{legends}[$i] || '');
 	}
 	if ($title eq 'all') {
-		$title = $infos->{all_title};
-		$description = $infos->{all_description};
+		$title = $infos->{title};
 	} else {
 		$title = sprintf($infos->{title}, ($title || 'none'));
 	}
@@ -10348,7 +10523,6 @@ sub read_sysinfo
 	# Load global information from cache file
 	if (-e "$input_dir/global_infos.bin")
 	{
-		print STDERR "DEBUG: Loading global information from cache files $input_dir/global_infos.bin\n" if ($DEBUG);
 		&load_sar_binary($input_dir, 'global_infos');
 
 		# Look for disk device and network interface from global info
@@ -10705,11 +10879,14 @@ sub dump_sys_binary
 # Load statistics from pg cache into memory
 sub load_pg_binary
 {
-        my ($input_dir) = @_;
+        my ($input_dir, $varname) = @_;
 
 	foreach my $name (@pg_to_be_stored) {
 
+                next if ($varname ne 'home' && $name ne $varname); # Just load the right binary file
 		next if ( !-e "$input_dir/$name.bin");
+
+		print STDERR "DEBUG: Loading PostgreSQL statistics from cache file $in_dir/$name.bin\n" if ($DEBUG);
 
 		my %stats = ();
 		my $lfh = new IO::File "<$input_dir/$name.bin";
@@ -10799,10 +10976,14 @@ sub load_sar_binary
 {
         my ($input_dir, $varname) = @_;
 
-	foreach my $name (@sar_to_be_stored) {
-		next if ($varname && $name ne $varname); # Just load the requested binary file
+	foreach my $name (@sar_to_be_stored)
+	{
+                next if ($varname ne 'home' && $name ne $varname); # Just load the right binary file
+
+		print STDERR "DEBUG: Loading Sar statistics from cache file $in_dir/$name.bin\n" if ($DEBUG);
 		my %stats = ();
-		if (-e "$input_dir/$name.bin") {
+		if (-e "$input_dir/$name.bin")
+		{
 			my $lfh = new IO::File "<$input_dir/$name.bin";
 			if (not defined $lfh) {
 				die "FATAL: can't read from $input_dir/$name.bin, $!\n";
@@ -10810,9 +10991,10 @@ sub load_sar_binary
 			%stats = %{ fd_retrieve($lfh) };
 			$lfh->close();
 		}
-		# Setting global information
-		if ($name eq 'global_infos') {
 
+		# Setting global information
+		if ($name eq 'global_infos')
+		{
 			# Setting global information
 			my %_global_infos = %{$stats{global_infos}} ;
 			foreach my $inf (keys %_global_infos) {
@@ -10824,8 +11006,9 @@ sub load_sar_binary
 				}
 			}
 			delete $stats{global_infos};
-
-		} else {
+		}
+		else
+		{
 
 			# Load other sar storages
 			foreach my $m (keys %stats) {
@@ -10843,6 +11026,7 @@ sub load_sar_binary
 			}
 		}
 	}
+
 	# Compute overall system statistics from binary file 
 	# as they are normally computed when reading data files.
 	set_overall_system_stat_from_binary();
