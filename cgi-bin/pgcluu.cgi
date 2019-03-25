@@ -59,6 +59,8 @@ my $MAX_INDEXES     = 5;
 my @DATABASE_LIST   = ();
 my @DEVICE_SPACE_LIST = ();
 
+my $MAX_RENDERED_DAYS = 7;
+
 my $SAR_UPPER_11_5_6 = 0;
 
 my %RELKIND = (
@@ -1270,6 +1272,8 @@ sub read_conf
 			push(@INCLUDE_IFACE, @vals);
 		} elsif ($var eq 'REVERT_DATE') {
 			$REVERT_DATE = $vals[0];
+		} elsif ($var eq 'MAX_RENDERED_DAYS') {
+			$MAX_RENDERED_DAYS = int($vals[0]);
 		}
 	}
 	# Defined the default backward level where ressources files are stored
@@ -1924,7 +1928,6 @@ sub compute_postgresql_stat
 {
 	my ($input_dir, $file, $src_base, %data_info) = @_;
 
-	print STDERR "DEBUG: reading statistics in file $input_dir/$file\n" if ($DEBUG);
 
 	# Compute graphs following the data file
 	my $fctname = $file;
@@ -1933,6 +1936,7 @@ sub compute_postgresql_stat
 	$fctname =~ s/\./_/g;
 	my $offset = 0;
 	$offset = $global_infos{"$input_dir/$file"} if (exists $global_infos{"$input_dir/$file"});
+	print STDERR "DEBUG: Reading statistics in file $input_dir/$file starting at offset $offset\n" if ($DEBUG);
 	# Call the function associated to the action and get back the new offset
 	# offset is used in incremental mode to avoir parsing the entire file.
 	$global_infos{"$input_dir/$file"} = $fctname->($input_dir, $file, $offset);
@@ -10734,6 +10738,8 @@ sub get_data_directories
 {
 	my @work_dirs = ();
 
+	my $local_max_render = $MAX_RENDERED_DAYS;
+
 	# Lookup for daily or hourly sub directories to scan
 	# Search years / months / days / hours directories
 	if (not opendir(DIR, "$INPUT_DIR")) {
@@ -10779,6 +10785,7 @@ sub get_data_directories
 					if ($#hours == -1 || $#hbin >= 0) {
 						push(@work_dirs, "$y/$m/$d");
 					} else {
+						$local_max_render = $MAX_RENDERED_DAYS * 24;
 						foreach  my $h (sort { $a <=> $b } @hours) {
 							next if ($o_hour && ("$y$m$d$h" lt "$o_year$o_month$o_day$o_hour"));
 							next if ($e_hour && ("$y$m$d$h" gt "$e_year$e_month$e_day$e_hour"));
@@ -10789,10 +10796,10 @@ sub get_data_directories
 			}
 		}
 
-	} else {
-		# REMOVED: only incremental mode is supported in CGI mode.
-		# we are not in incremental mode only first level directory will be proceed
-		# push(@work_dirs, '.');
+		if ($#work_dirs > $local_max_render) {
+			$local_max_render--;
+			splice(@work_dirs, 0, $local_max_render);
+		}
 	}
 
 	return @work_dirs;
