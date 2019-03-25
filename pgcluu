@@ -393,28 +393,28 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_stat_bgwriter.csv' => {
 		'1' => {
-			'name' => 'database-checkpoints',
+			'name' => 'cluster-checkpoints',
 			'title' => 'checkpoints counter stats',
 			'description' => 'Background writer statistics on checkpoints. Checkpoints timed is checkpoints issued because of checkpoint_timeout and checkpoints request is checkpoint issued by request. Comparing checkpoints timed and requested shows whether you’ve set checkpoint segments usefully.',
 			'ylabel' => 'Number of checkpoints',
 			'legends' => ['checkpoints timed','checkpoints requests'],
 		},
 		'2' => {
-			'name' =>  'database-bgwriter',
+			'name' =>  'cluster-bgwriter',
 			'title' => 'background writer clean stats',
 			'description' => 'Background writer cache cleaning statistics by checkpoints, lru, backends and total allocated bytes per second. Buffers checkpoint are written during checkpoint calls, buffers backend represent client backend that had to write to satisfy an allocation and buffers clean represent background writer cleaning a dirty buffer expected by an allocation. Buffers allocated is the total number of allocated new buffer whether or not it was already cached.',
 			'ylabel' => 'Size per second',
 			'legends' => ['checkpoint buffers','clean buffers','backend buffers', 'allocated buffers'],
 		},
 		'3' => {
-			'name' =>  'database-bgwriter_count',
+			'name' =>  'cluster-bgwriter_count',
 			'title' => 'background writer count stats',
 			'description' => 'Background writer counter stats. Max written clean reports the number of times the background writer stopped a cleaning scan because it had written too many buffers. Buffers backend fsync reports the number of times a backend had to execute its own fsync call (normally the background writer handles those even when the backend does its own write).',
 			'ylabel' => 'Times per second',
 			'legends' => ['maxwritten clean','buffers backend fsync'],
 		},
 		'4' => {
-			'name' => 'database-checkpoints_time',
+			'name' => 'cluster-checkpoints_time',
 			'title' => 'checkpoints write stats',
 			'description' => 'Background writer statistics on checkpoints. Checkpoint write time reports the total amount of time that has been spent in the portion of checkpoint processing where files are written to disk. Checkpoint sync time reports the total amount of time that has been spent in the portion of checkpoint processing where files are synchronized to disk.',
 			'ylabel' => 'Duration',
@@ -594,7 +594,7 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_xlog_stat.csv' => {
 		'1' => {
-			'name' =>  'database-xlog_files',
+			'name' =>  'cluster-xlog_files',
 			'title' => 'WAL files',
 			'description' => 'Number of WAL file in the xlog directory.',
 			'ylabel' => 'Number of files',
@@ -603,14 +603,14 @@ my %DB_GRAPH_INFOS = (
 	},
 	'pg_stat_replication.csv' => {
 		'1' => {
-			'name' =>  'database-xlog',
+			'name' =>  'cluster-xlog',
 			'title' => 'Xlog written',
 			'description' => 'Number of xlog data written per second.',
 			'ylabel' => 'Size per second',
 			'legends' => ['written'],
 		},
 		'2' => {
-			'name' =>  'database-replication',
+			'name' =>  'cluster-replication',
 			'title' => 'Replication lag with %s',
 			'description' => 'Lag of replication between primary and secondary servers.',
 			'ylabel' => 'Lag size',
@@ -4203,7 +4203,7 @@ sub pg_xlog_stat_report
 	}
 	%all_xlog_stat = ();
 
-	my $id = &get_data_id('database-xlog_files', %data_info);
+	my $id = &get_data_id('cluster-xlog_files', %data_info);
 	$xlog_stat{total} =~ s/,$//;
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 	if (exists $xlog_stat{recycled}) {
@@ -4301,9 +4301,9 @@ sub pg_stat_bgwriter_report
 
 	my $total_checkpoint = ($data{'Checkpoint timed'} || 0) + ($data{'Checkpoint requested'} || 0);
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
-		next if (!grep(/^$data_info{$id}{name}$/, 'database-checkpoints', 'database-checkpoints_time', 'database-bgwriter', 'database-bgwriter_count'));
+		next if (!grep(/^$data_info{$id}{name}$/, 'cluster-checkpoints', 'cluster-checkpoints_time', 'cluster-bgwriter', 'cluster-bgwriter_count'));
 		my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
-		if ($data_info{$id}{name} eq 'database-checkpoints') {
+		if ($data_info{$id}{name} eq 'cluster-checkpoints') {
 			my $bkup0 = $data_info{$id}{legends}[0];
 			my $bkup1 = $data_info{$id}{legends}[1];
 			if ($total_checkpoint) {
@@ -4315,19 +4315,19 @@ sub pg_stat_bgwriter_report
 			print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-checkpoints', \%{$data_info{$id}}, '', $bgwriter_stat{checkpoints_timed}, $bgwriter_stat{checkpoints_req});
 			$data_info{$id}{legends}[0] = $bkup0;
 			$data_info{$id}{legends}[1] = $bkup1;
-		} elsif ($data_info{$id}{name} eq 'database-checkpoints_time') {
+		} elsif ($data_info{$id}{name} eq 'cluster-checkpoints_time') {
 			if (exists $bgwriter_stat{checkpoint_write_time}) {
 				$bgwriter_stat{checkpoint_sync_time} =~ s/,$//;
 				$bgwriter_stat{checkpoint_write_time} =~ s/,$//;
 				print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-checkpoints_time', \%{$data_info{$id}}, '', $bgwriter_stat{checkpoint_write_time}, $bgwriter_stat{checkpoint_sync_time});
 			}
-		} elsif ($data_info{$id}{name} eq 'database-bgwriter') {
+		} elsif ($data_info{$id}{name} eq 'cluster-bgwriter') {
 			$bgwriter_stat{buffers_checkpoint} =~ s/,$// if (exists $bgwriter_stat{buffers_checkpoint});
 			$bgwriter_stat{buffers_clean} =~ s/,$// if (exists $bgwriter_stat{buffers_clean});
 			$bgwriter_stat{buffers_backend} =~ s/,$// if (exists $bgwriter_stat{buffers_backend});
 			$bgwriter_stat{buffers_alloc} =~ s/,$// if (exists $bgwriter_stat{buffers_alloc});
 			print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-bgwriter', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean}, $bgwriter_stat{buffers_backend},$bgwriter_stat{buffers_alloc});
-		} elsif ($data_info{$id}{name} eq 'database-bgwriter_count') {
+		} elsif ($data_info{$id}{name} eq 'cluster-bgwriter_count') {
 			$bgwriter_stat{maxwritten_clean} =~ s/,$// if (exists $bgwriter_stat{maxwritten_clean});
 			$bgwriter_stat{buffers_backend_fsync} =~ s/,$// if (exists $bgwriter_stat{buffers_backend_fsync});
 			print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-bgwriter_count', \%{$data_info{$id}}, '',  $bgwriter_stat{maxwritten_clean}, $bgwriter_stat{buffers_backend_fsync});
@@ -4672,12 +4672,12 @@ sub pg_stat_replication_report
 	if (!$sysinfo{CONFIGURATION}{'capture'}) {
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
-			if (exists $xlog_stat{master_location} && ($data_info{$id}{name} eq 'database-xlog')) {
+			if (exists $xlog_stat{master_location} && ($data_info{$id}{name} eq 'cluster-xlog')) {
 				$xlog_stat{master_location} =~ s/,$//;
 				print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-xlog', \%{$data_info{$id}}, '', $xlog_stat{master_location});
 				delete $xlog_stat{master_location};
 
-			} elsif ($data_info{$id}{name} eq 'database-replication') {
+			} elsif ($data_info{$id}{name} eq 'cluster-replication') {
 				foreach my $host (sort {$a cmp $b} keys %xlog_stat) {
 					next if ($host eq 'master_location');
 					$xlog_stat{$host}{sent_location} =~ s/,$//;
@@ -4690,7 +4690,7 @@ sub pg_stat_replication_report
 			$fhcluster->close();
 		}
 	} else {
-		my $id = &get_data_id('database-replication', %data_info);
+		my $id = &get_data_id('cluster-replication', %data_info);
 		my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 		$data_info{$id}{title} =~ s/ with \%s//;
 		print $fhcluster qq{
@@ -7762,11 +7762,11 @@ sub generate_html_menu
 			$disable_buffercache = '';
 			$disable_buffer = '';
 		}
-		if (-e "$OUTPUT_DIR/cluster-database-bgwriter.html") {
+		if (-e "$OUTPUT_DIR/cluster-bgwriter.html") {
 			$disable_bgwriter = "";
 			$disable_writer = "";
 		}
-		if (-e "$OUTPUT_DIR/cluster-database-bgwriter_count.html") {
+		if (-e "$OUTPUT_DIR/cluster-bgwriter_count.html") {
 			$disable_bgwriter_count = "";
 			$disable_writer = "";
 		}
@@ -7778,19 +7778,19 @@ sub generate_html_menu
 			$disable_tempfile_bytes = "";
 			$disable_temporary = "";
 		}
-		if (-e "$OUTPUT_DIR/cluster-database-xlog_files.html") {
+		if (-e "$OUTPUT_DIR/cluster-xlog_files.html") {
 			$disable_xlog_files = '';
 			$disable_wal = '';
 		}
-		if (-e "$OUTPUT_DIR/cluster-database-xlog.html") {
+		if (-e "$OUTPUT_DIR/cluster-xlog.html") {
 			$disable_xlog = '';
 			$disable_wal = '';
 		}
-		if (-e "$OUTPUT_DIR/cluster-database-checkpoints.html") {
+		if (-e "$OUTPUT_DIR/cluster-checkpoints.html") {
 			$disable_checkpoints = '';
 			$disable_wal = '';
 		}
-		if (-e "$OUTPUT_DIR/cluster-database-checkpoints.html") {
+		if (-e "$OUTPUT_DIR/cluster-checkpoints.html") {
 			$disable_checkpointwrite = '';
 			$disable_wal = '';
 		}
@@ -7824,7 +7824,7 @@ sub generate_html_menu
 		if (-e "$OUTPUT_DIR/cluster-database-prepared.html") {
 			$disable_prepared = "";
 		}
-		if (-e "$OUTPUT_DIR/cluster-database-replication.html") {
+		if (-e "$OUTPUT_DIR/cluster-replication.html") {
 			$disable_replication = "";
 			$disable_allrepli = "";
 		}
@@ -7901,8 +7901,8 @@ sub generate_html_menu
 			<li id="menu-backgroundwriter" class="dropdown-submenu $disable_writer">
 			   <a href="#" tabindex="-1">Background writer </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-cluster-bgwriter"$disable_bgwriter><a href="cluster-database-bgwriter.html">Background writer buffers</a></li>
-			      <li id="menu-cluster-bgwriter_count"$disable_bgwriter_count><a href="cluster-database-bgwriter_count.html">Background writer counters</a></li>
+			      <li id="menu-cluster-bgwriter"$disable_bgwriter><a href="cluster-bgwriter.html">Background writer buffers</a></li>
+			      <li id="menu-cluster-bgwriter_count"$disable_bgwriter_count><a href="cluster-bgwriter_count.html">Background writer counters</a></li>
 			      </ul>
 		        </li>
 			<li id="menu-temporaryfiles" class="dropdown-submenu$disable_temporary">
@@ -7915,10 +7915,9 @@ sub generate_html_menu
 			<li id="menu-walcheckpoint" class="dropdown-submenu$disable_wal">
 			   <a href="#" tabindex="-1">Wal / Checkpoint </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-cluster-xlog_files"$disable_xlog_files><a href="cluster-database-xlog_files.html">Wal files</a></li>
-			      <li id="menu-cluster-xlog"$disable_xlog><a href="cluster-database-xlog.html">Wal bytes written</a></li>
-			      <li id="menu-cluster-checkpoints"$disable_checkpoints><a href="cluster-database-checkpoints.html">Checkpoints counter</a></li>
-			      <li id="menu-cluster-checkpoints_time"$disable_checkpointwrite><a href="cluster-database-checkpoints.html">Checkpoints write time</a></li>
+			      <li id="menu-cluster-xlog_files"$disable_xlog_files><a href="cluster-xlog_files.html">Wal files</a></li>
+			      <li id="menu-cluster-checkpoints"$disable_checkpoints><a href="cluster-checkpoints.html">Checkpoints counter</a></li>
+			      <li id="menu-cluster-checkpoints_time"$disable_checkpointwrite><a href="cluster-checkpoints.html">Checkpoints write time</a></li>
 			      <li id="menu-cluster-archive"$disable_archive><a href="cluster-database-archive.html">Archiver stats</a></li>
 			      </ul>
 		        </li>
@@ -7937,7 +7936,8 @@ sub generate_html_menu
 			<li id="menu-replication" class="dropdown-submenu$disable_allrepli">
 			   <a href="#" tabindex="-1">Replication statistics </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-cluster-replication"$disable_replication><a href="cluster-database-replication.html">Replication lag</a></li>
+			      <li id="menu-cluster-xlog"$disable_xlog><a href="cluster-xlog.html">Wal bytes written</a></li>
+			      <li id="menu-cluster-replication"$disable_replication><a href="cluster-replication.html">Replication lag</a></li>
 			      <li id="menu-cluster-canceled_queries"$disable_canceled><a href="cluster-database-canceled_queries.html">Canceled queries</a></li>
 			      <li id="menu-cluster-conflicts"$disable_conflicts><a href="cluster-database-conflicts.html">Conflicts</a></li>
 			      </ul>
