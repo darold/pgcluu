@@ -8177,8 +8177,8 @@ AAAASUVORK5CYII=';
           <li id="menu-time" class="dropdown">
             <a href="#" class="dropdown-toggle" data-toggle="dropdown">Time selector <b class="caret"></b></a>
             <ul class="dropdown-menu">
-               <li id="menu-time-year"><a href="" onclick="custom_date('year'); return false;">Year</a></li>
-	       <li id="menu-time-month"><a href="" onclick="custom_date('month'); return false;">Month</a></li>
+               <!-- li id="menu-time-year"><a href="" onclick="custom_date('year'); return false;">Year</a></li>
+	       <li id="menu-time-month"><a href="" onclick="custom_date('month'); return false;">Month</a></li -->
 	       <li id="menu-time-week"><a href="" onclick="custom_date('week'); return false;">Week</a></li>
 	       <li id="menu-time-day"><a href="" onclick="custom_date('day'); return false;">Day</a></li>
 	       <li id="menu-time-backward"><a href="" onclick="go_backward(); return false;">Backward</a></li>
