@@ -29,7 +29,7 @@ $VERSION = '3.0dev';
 $PROGRAM = 'pgCluu';
 
 
-my $CONFIG_FILE     = 'pgcluu.conf';
+my $CONFIG_FILE     = '/etc/pgcluu.conf';
 my $SADF_PROG       = '/usr/bin/sadf';
 my $DISABLE_SAR     = 0;
 my $HTML            = '';
