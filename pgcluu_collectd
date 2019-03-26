@@ -30,8 +30,11 @@ $PROGRAM = 'pgcluu_collectd';
 my $SAR_PROG    = 'sar';
 my $PSQL_PROG   = 'psql';
 my $CAT_PROG    = 'cat ';
+
+# Global variables
+my $CONFIG_FILE     = "/usr/local/etc/pgcluu.conf";
 my $SAR_FILE    = 'sar_stats.dat';
-my $PIDFILE     = "/tmp/$PROGRAM.pid";
+my $PIDFILE     = "/var/run/pgcluu_collectd.pid";
 my $SQL_PROBE   = '';
 my %DB_INFO     = ();
 my $HELP        = 0;
@@ -344,6 +347,9 @@ my %METRICS_COMMANDS = (
 		'command' => 'dump_preparedxactstats'
 	},
 );
+
+# Read configuration file before reading command line parameters
+&read_conf();
 
 # Process command line options and look for an action keyword. There
 # are no mandatory options.
@@ -3000,4 +3006,28 @@ sub save_dbrole_settings
 	return ($f1,$f2);
 }
 
+sub read_conf
+{
+	# We don't need a configuration file but if any check the
+	# configuration directives related to pgcluu_collectd.
+	if (open(IN, $CONFIG_FILE))
+	{
+		print STDERR "DEBUG: Reading configuration file $CONFIG_FILE\n" if ($DEBUG);
+		while (my $l = <IN>)
+		{
+			chomp($l);
+			$l =~ s/\r//gs;
+			next if (!$l);
+
+			my ($var, @vals) = split(/[\s]+/, $l);
+			if ($var eq 'STATS_COLLECTD_RETENTION') {
+				$vals[0] = int($vals[0]);
+				if ($RETENTION != $vals[0]) {
+					$RETENTION = $vals[0];
+					print STDERR "LOG: Setting retention from configuration file to $RETENTION\n";
+				}
+			}
+		}
+	}
+}
 
