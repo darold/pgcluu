@@ -1223,7 +1223,7 @@ if ($CACHE) {
 
 	# Warn that in cache mode the output directory in the same as input one
 	if ($OUTPUT_DIR) {
-		warn "WARNING: output directory will not be used, cache files will be generated in $INPUT_DIR\n";
+		warn "WARNING: output directory will not be used, cache files will be generated in $INPUT_DIR\n" if ($DEBUG);
 	}
 
 } else {
@@ -11719,6 +11719,8 @@ sub read_conf
 					$RETENTION = $vals[0];
 					print STDERR "LOG: Setting retention from configuration file to $RETENTION\n";
 				}
+			} elsif ($var eq 'STATS_REPORT_CACHING') {
+				$CACHE = $vals[0];
 			}
 		}
 	}

@@ -101,6 +101,9 @@ STATS_COLLECTD_RETENTION	$RETENTION
 # removed. It can be used to preserved disk space. Default store indefinitely.
 STATS_REPORT_RETENTION	$RETENTION
 
+# This directive must be enabled in CGI mode. In this case pgcluu must be
+# run periodically at least each 5 minutes to build and update cached stats.
+STATS_REPORT_CACHING	0
 };
 close(OUTCFG);
 
