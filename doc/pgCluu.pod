@@ -57,13 +57,13 @@ Download the tarball from SourceForge and unpack the archive:
 
 This will copy the Perl scripts pgcluu_collectd and pgcluu into /usr/bin or
 /usr/local/bin directory following your distribution and the man page to
-/usr/share/man/man1/pgcluu.1 or /usr/local/share/man/man1/pgcluu.1.
+/usr/share/man/man1/pgcluu.1p.gz or /usr/local/share/man/man1/pgcluu.1p.gz.
 Those are the default installation directories for 'site' install on some
 well-known distribution but the path may change.
 
 If you want to install all under /usr location, use INSTALLDIRS='perl' as an
 argument of Makefile.PL. The script will be installed into /usr/bin/pgcluu
-and the manpage into /usr/share/man/man1/pgcluu.1.
+and the manpage into /usr/share/man/man1/pgcluu.1p.gz.
 
 For example, to install everything just like Debian does, proceed as follows:
 
