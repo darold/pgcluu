@@ -6,7 +6,6 @@ pgcluu_collectd
 README
 doc/pgCluu.pod
 cgi-bin/pgcluu.cgi
-cgi-bin/pgcluu.conf
 cgi-bin/rsc/bean.min.js
 cgi-bin/rsc/bootstrap-datetimepicker.min.css
 cgi-bin/rsc/bootstrap-datetimepicker.min.js
@@ -31,4 +30,7 @@ cgi-bin/rsc/pgcluu.min.js
 cgi-bin/rsc/pgcluu_slide.min.js
 cgi-bin/rsc/sorttable.min.js
 cgi-bin/rsc/underscore.min.js
-
+cgi-bin/rsc/w3.min.js
+pgcluu_collectd.service
+pgcluu.service
+pgcluu.timer
