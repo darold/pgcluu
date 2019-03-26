@@ -9,7 +9,7 @@
 # Author: Gilles Darold
 # Copyright: (C) 2012-2019 Gilles Darold - All rights reserved.
 #------------------------------------------------------------------------------
-use vars qw($VERSION $PROGRAM $CONFIG_FILE);
+use vars qw($VERSION $PROGRAM);
 
 use strict qw(vars);
 use warnings;
@@ -27,8 +27,9 @@ use Storable qw(store_fd fd_retrieve);
 
 $VERSION = '3.0dev';
 $PROGRAM = 'pgCluu';
-$CONFIG_FILE = 'pgcluu.conf';
 
+
+my $CONFIG_FILE     = 'pgcluu.conf';
 my $SADF_PROG       = '/usr/bin/sadf';
 my $DISABLE_SAR     = 0;
 my $HTML            = '';
