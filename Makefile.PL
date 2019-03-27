@@ -195,7 +195,7 @@ close(INST);
 `perl -p -i -e 's#my \\\$PIDFILE .*=.*#my \\\$PIDFILE     = "$PIDDIR/pgcluu_collectd.pid";#' pgcluu_collectd`;
 `perl -p -i -e 's#/var/lib/pgcluu/data#$STATDIR#' pgcluu.service pgcluu_collectd.service`;
 `perl -p -i -e 's#/var/lib/pgcluu/report#$REPORTDIR#' pgcluu.service`;
-`perl -p -i -e 's#/usr/local/bin#$DESTDIR/bin#' pgcluu.service pgcluu_collectd.service`;
+`perl -p -i -e 's#/usr/bin#$DESTDIR/bin#' pgcluu.service pgcluu_collectd.service`;
 `perl -p -i -e 's#/var/run/postgresql#$PIDDIR#' pgcluu_collectd.service`;
 
 my %merge_compat = ();
