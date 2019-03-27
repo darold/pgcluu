@@ -32,9 +32,9 @@ my $PSQL_PROG   = 'psql';
 my $CAT_PROG    = 'cat ';
 
 # Global variables
-my $CONFIG_FILE     = "/usr/local/etc/pgcluu.conf";
+my $CONFIG_FILE     = "/etc/pgcluu.conf";
 my $SAR_FILE    = 'sar_stats.dat';
-my $PIDFILE     = "/var/run/pgcluu_collectd.pid";
+my $PIDFILE     = "/var/run/postgresql/pgcluu_collectd.pid";
 my $SQL_PROBE   = '';
 my %DB_INFO     = ();
 my $HELP        = 0;

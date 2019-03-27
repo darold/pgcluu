@@ -27,7 +27,7 @@ $VERSION = '2.9';
 $PROGRAM = 'pgCluu';
 
 # Global variables
-my $CONFIG_FILE     = "/usr/local/etc/pgcluu.conf";
+my $CONFIG_FILE     = "/etc/pgcluu.conf";
 my $OUTPUT_DIR      = '';
 my $SADF_PROG       = '/usr/bin/sadf';
 my $DISABLE_SAR     = 0;

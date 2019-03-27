@@ -19,8 +19,8 @@ Environment=STATDIR=/var/lib/pgcluu/data
 Environment=PIDFILE=/var/run/postgresql/pgcluu_collectd.pid
 ExecStartPre=-/bin/mkdir -p $STATDIR
 ExecStartPre=-/bin/chown postgres: $STATDIR
-ExecStart=/usr/local/bin/pgcluu_collectd --daemonize --rotate-daily --pid-file $PIDFILE $STATDIR
-ExecStop=/usr/local/bin/pgcluu_collectd -k --pid-file $PIDFILE
+ExecStart=/usr/bin/pgcluu_collectd --daemonize --rotate-daily --pid-file $PIDFILE $STATDIR
+ExecStop=/usr/bin/pgcluu_collectd -k --pid-file $PIDFILE
 KillMode=process
 Restart=on-failure
 RestartSec=60s
