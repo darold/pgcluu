@@ -622,6 +622,9 @@ GENERATING REPORTS
 
             */5 * * * * /usr/local/bin/pgcluu --cache /var/lib/pgcluu/data
 
+    If you are using systemd pgcluu.timer service then caching can be
+    enabled using STATS_REPORT_CACHING directive.
+
     To see your reports, go to the following URL:
 
             http://localhost/cgi-bin/pgcluu.cgi
@@ -632,6 +635,19 @@ GENERATING REPORTS
     /usr/local/bin/ which is the default for an installation from sources
     but with an installation from binary package you might find them into
     /usr/bin/.
+
+    The CGI mode allow you to select the period of time used to generate the
+    statistics reports. Using default pgcluu_collectd 60 seconds interval, a
+    daily graph will have 1440 points. Having too much timeseries to render
+    is not a good point for performances so we are limiting to the first
+    seven days of the selected period. This mean a maximum of 10080 points
+    for one week, this seems a safe limit. Feel free to increase or reduce
+    the limit following the server and client resources. This is controlled
+    by
+
+            MAX_RENDERED_DAYS       7
+
+    configuration directive in pgcluu.conf
 
 LICENSE
     Copyright (c) 2012-2019, Gilles Darold
