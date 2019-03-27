@@ -228,7 +228,7 @@ WriteMakefile(
 	'MAN1PODS'     => { 'doc/pgCluu.pod' => 'blib/man1/pgcluu.1p' },
 	'DESTDIR'      => $ENV{DESTDIR},
 	'INSTALLDIRS'  => $ENV{INSTALLDIRS},
-	'clean'	       => {FILES => "install_all.sh pgcluu.conf"},
+	'clean'	       => {FILES => "install_all.sh"},
 	%merge_compat
 );
 
