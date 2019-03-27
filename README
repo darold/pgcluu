@@ -623,7 +623,9 @@ GENERATING REPORTS
             */5 * * * * /usr/local/bin/pgcluu --cache /var/lib/pgcluu/data
 
     If you are using systemd pgcluu.timer service then caching can be
-    enabled using STATS_REPORT_CACHING directive.
+    enabled using STATS_REPORT_CACHING directive. Enabling this mode
+    generate cache files (*.bin) in the statistics directory and disable
+    static HTML reports generation.
 
     To see your reports, go to the following URL:
 
