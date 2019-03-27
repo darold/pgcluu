@@ -36,8 +36,14 @@ my $CGIDIR = $ENV{CGIDIR} || '/usr/lib/cgi-bin';
 my $APACHECONF = $ENV{APACHECONF} || '/etc/apache2/conf-available';
 my $MANDIR = $ENV{MANDIR} || "$DESTDIR/share/man";
 my $DOCDIR = $ENV{DOCDIR} || "$DESTDIR/share/doc";
-my $SYSTEMDDIR = $ENV{SYSTEMDIR} || "$ENV{DESTDIR}/lib/systemd/system";
+my $SYSTEMDDIR = $ENV{SYSTEMDDIR} || "$ENV{DESTDIR}/lib/systemd/system";
 my $RETENTION = $ENV{RETENTION} || 0;
+
+# Try to detect RPM specific directory installation
+my $RPM_LIKE = 0;
+if ($SYSTEMDDIR eq '/usr/lib/systemd/system' && ! -d '/usr/lib/systemd/system') {
+	$SYSTEMDDIR = $ENV{SYSTEMDDIR} || '/lib/systemd/system';
+}
 
 # Setup ok. generating sendmailanalyzer.conf config file
 unless(open(OUTCFG, ">pgcluu.conf")) {
