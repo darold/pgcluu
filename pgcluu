@@ -14,6 +14,7 @@ use vars qw($VERSION $PROGRAM);
 use strict qw(vars);
 use warnings;
 
+use constant UMASK      => 0027;
 
 use IO::File;
 use Getopt::Long qw(:config bundling no_ignore_case_always);
@@ -236,6 +237,8 @@ my $sar_year  = '';
 my $sar_month = '';
 my $sar_day   = '';
 
+# Set the default mask for file and directory creation
+umask(UMASK);
 
 # Charset used in the html output
 my $charset = 'utf-8';
@@ -1542,8 +1545,9 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			closedir(ODIR);
 			foreach my $f (@files) {
 				my $tmp_content = '';
-				open(IN, "$OUTPUT_DIR/$f") or die "FATAL: can't read file $OUTPUT_DIR/$f, $!";
-				while (my $l = <IN>) {
+				my $fh = IO::File->new("$OUTPUT_DIR/$f", "r");
+				die "FATAL: can't read file $OUTPUT_DIR/$f, $!" if (not defined $fh);
+				while (my $l = <$fh>) {
 					chomp($l);
 					$l =~ s/\r//;
 					if ($l =~ /<div id="navigation"><\/div>/) {
@@ -1555,11 +1559,12 @@ $menu
 					}
 					$tmp_content .= "$l\n";
 				}
-				close(IN);
+				close($fh);
 				# override file
-				open(OUT, ">$OUTPUT_DIR/$f") or die "FATAL: can't write to file $OUTPUT_DIR/$f, $!";
-				print OUT $tmp_content;
-				close(OUT);
+				$fh = IO::File->new("$OUTPUT_DIR/$f", "w");
+				die "FATAL: can't write file $OUTPUT_DIR/$f, $!" if (not defined $fh);
+				print $fh $tmp_content;
+				close($fh);
 			}
 		}
 
@@ -1737,10 +1742,8 @@ sub init_html_file
 	my $src_base = shift;
 
 	# Open a filehandle for each database
-	my $fhdb = new IO::File ">$ofile";
-	if (not defined $fhdb) {
-		die "FATAL: can't write to $ofile, $!\n";
-	}
+	my $fhdb = IO::File->new($ofile, "w");
+	die "FATAL: can't write file $ofile, $!" if (not defined $fhdb);
 	&html_header($fhdb, $src_base);
 	$fhdb->print("<ul id=\"slides\">\n");
 	$fhdb->close();
@@ -1757,10 +1760,8 @@ sub append_to_html_file
 	}
 
 	# Open a filehandle for each database
-	my $fhdb = new IO::File ">>$ofile";
-	if (not defined $fhdb) {
-		die "FATAL: can't write to $ofile, $!\n";
-	}
+	my $fhdb = IO::File->new($ofile, "a");
+	die "FATAL: can't write file $ofile, $!" if (not defined $fhdb);
 	return $fhdb;
 }
 
@@ -1768,10 +1769,8 @@ sub end_html_file
 {
 	my $ofile = shift;
 
-	my $fhdb = new IO::File ">>$ofile";
-	if (not defined $fhdb) {
-		die "FATAL: can't write to $ofile, $!\n";
-	}
+	my $fhdb = IO::File->new($ofile, "a");
+	die "FATAL: can't write file $ofile, $!" if (not defined $fhdb);
 	$fhdb->print("</ul>\n");
 	&html_footer($fhdb);
 	$fhdb->close;
@@ -1803,9 +1802,9 @@ sub open_filehdl
 
 	my $curfh = new IO::File;
 	if (!is_compressed("$file")) {
-		$curfh->open("< $file") or die "FATAL: can't read file $file: $!\n";
+		$curfh->open($file, 'r') or die "FATAL: can't read file $file: $!\n";
 	} else {
-		$curfh->open("$ZCAT_PROG $file |") or die "FATAL: can't read pipe from command: $ZCAT_PROG $file, $!\n";
+		$curfh->open("$ZCAT_PROG $file", "-|") or die "FATAL: can't read pipe from command: $ZCAT_PROG $file, $!\n";
 	}
 	return $curfh;
 }
@@ -1815,18 +1814,21 @@ sub detect_timezone
 	my $file = shift;
 
 	my $tz = '+00';
+	my $fh = undef;
 
 	if (!&is_compressed($file)) {
-		if (!open(IN, "$file")) {
+		$fh = IO::File->new($file, 'r');
+		if (not defined $fh) {
 			die "FATAL: can't read file $file: $!\n";
 		}
 	} else {
-		if (!open(IN, "$ZCAT_PROG $file |")) {
+		$fh = IO::File->new("$ZCAT_PROG $file", '-|');
+		if (not defined $fh) {
 			die "FATAL: can't read pipe on command: $ZCAT_PROG $file, $!\n";
 		}
 	}
 	my $i = 1;
-	while (<IN>) {
+	while (<$fh>) {
 		my @data = split(/;/);
 		if ($data[0] =~ /^\d+-\d+-\d+ \d+:\d+:\d+([+\-]\d\d)/) {
 			$tz = $1;
@@ -1835,7 +1837,7 @@ sub detect_timezone
 		$i++;
 		last if ($i > 10);
 	}
-	close(IN);
+	close($fh);
 
 	return $tz;
 }
@@ -1862,10 +1864,11 @@ sub set_device_list
 		my $command = "$SADF_PROG -t -P ALL -d $sadc_file -- -d -p";
 		print STDERR "DEBUG: looking for device list using command $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new($command, '-|');
+		if (not defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		while (my $l = <IN>) {
+		while (my $l = <$fh>) {
 			chomp($l);
 			# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
 			my @data = split(/;/, $l);
@@ -1877,15 +1880,16 @@ sub set_device_list
 				last;
 			}
 		}
-		close(IN);
+		close($fh);
 
 		$command = "$SADF_PROG -t -P ALL -d $sadc_file -- -n DEV";
 		print STDERR "DEBUG: looking for network device list using command $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		$fh = IO::File->new($command, '-|');
+		if (not defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		while (my $l = <IN>) {
+		while (my $l = <$fh>) {
 			chomp($l);
 			#hostname;interval;timestamp;IFACE;rxpck/s;txpck/s;...
 			my @data = split(/;/, $l);
@@ -1896,7 +1900,7 @@ sub set_device_list
 				last;
 			}
 		}
-		close(IN);
+		close($fh);
 
 		# There is no information about disk space device in sadc file
 		#@DEVICE_SPACE_LIST = ...;
@@ -1904,18 +1908,21 @@ sub set_device_list
 	} elsif ($sar_file && -f "$sar_file") {
 
 		print STDERR "DEBUG: looking for devices in sar file $sar_file\n" if ($DEBUG);
+		my $fh = undef;
 		# Load data from file
 		if (!&is_compressed($sar_file)) {
-			if (!open(IN, "$sar_file")) {
+			$fh = IO::File->new($sar_file, 'r');
+			if (not defined $fh) {
 				die "FATAL: can't read input file $sar_file: $!\n";
 			}
 		} else {
-			if (!open(IN, "$ZCAT_PROG $sar_file |")) {
+			$fh = IO::File->new("$ZCAT_PROG $sar_file", '-|');
+			if (not defined $fh) {
 				die "FATAL: can't read pipe from command: $ZCAT_PROG $sar_file, $!\n";
 			}
 		}
 		my $type = '';
-		while (my $l = <IN>)
+		while (my $l = <$fh>)
 		{
 			chomp($l);
 			$l =~ s/\r//;
@@ -1948,7 +1955,7 @@ sub set_device_list
 				push(@DEVICE_SPACE_LIST, $values[8]) if (!grep(/^$values[8]$/, @DEVICE_SPACE_LIST));
 			}
 		}
-		close(IN);
+		close($fh);
 	}
 }
 
@@ -3060,10 +3067,8 @@ sub pg_stat_user_tables_report
 			next if ($data_info{$id}{name} !~ /^table-/);
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 			# Open filehandle to cluster file
-			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
-			if (not defined $fhtable) {
-				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
-			}
+			my $fhtable = IO::File->new("$OUTPUT_DIR/$db-$data_info{$id}{name}.html", "w");
+			die "FATAL: can't write file $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!" if (not defined $fhtable);
 			&html_header($fhtable, $src_base);
 			my $table_header = '';
 			my $colspan = '';
@@ -3268,10 +3273,8 @@ sub pg_stat_user_indexes_report
 			next if ($data_info{$id}{name} !~ /^index-/);
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 			# Open filehandle to cluster file
-			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
-			if (not defined $fhtable) {
-				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
-			}
+			my $fhtable = IO::File->new("$OUTPUT_DIR/$db-$data_info{$id}{name}.html", "w");
+			die "FATAL: can't write file $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!" if (not defined $fhtable);
 			&html_header($fhtable, $src_base);
 			my $table_header = '';
 			my $colspan =  ' colspan="4"';
@@ -3383,10 +3386,8 @@ sub pg_stat_invalid_indexes_report
 			next if ($data_info{$id}{name} ne 'index-invalid');
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 			# Open filehandle to cluster file
-			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
-			if (not defined $fhtable) {
-				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
-			}
+			my $fhtable = IO::File->new("$OUTPUT_DIR/$db-$data_info{$id}{name}.html", "w");
+			die "FATAL: can't write file $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!" if (not defined $fhtable);
 			&html_header($fhtable, $src_base);
 			my $table_header = '';
 			my $colspan =  ' colspan="4"';
@@ -3484,10 +3485,8 @@ sub pg_stat_unlogged_report
 			next if ($data_info{$id}{name} ne 'table-unlogged');
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 			# Open filehandle to cluster file
-			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
-			if (not defined $fhtable) {
-				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
-			}
+			my $fhtable = IO::File->new("$OUTPUT_DIR/$db-$data_info{$id}{name}.html", "w");
+			die "FATAL: can't write file $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!" if (not defined $fhtable);
 			&html_header($fhtable, $src_base);
 			my $table_header = '';
 			my $colspan =  ' colspan="2"';
@@ -3581,10 +3580,8 @@ sub pg_stat_hash_indexes_report
 			next if ($data_info{$id}{name} ne 'index-hash');
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 			# Open filehandle to cluster file
-			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
-			if (not defined $fhtable) {
-				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
-			}
+			my $fhtable = IO::File->new("$OUTPUT_DIR/$db-$data_info{$id}{name}.html", "w");
+			die "FATAL: can't write file $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!" if (not defined $fhtable);
 			&html_header($fhtable, $src_base);
 			my $table_header = '';
 			my $colspan =  ' colspan="4"';
@@ -3712,10 +3709,8 @@ sub pg_statio_user_tables_report
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^statio-table/);
 			# Open filehandle to cluster file
-			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
-			if (not defined $fhtable) {
-				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
-			}
+			my $fhtable = IO::File->new("$OUTPUT_DIR/$db-$data_info{$id}{name}.html", "w");
+			die "FATAL: can't write file $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!" if (not defined $fhtable);
 			&html_header($fhtable, $src_base);
 
 			my $colspan =  ' colspan="6"';
@@ -3858,10 +3853,8 @@ sub pg_relation_buffercache_report
 			next if ($data_info{$id}{name} !~ /^buffercache-/);
 
 			# Open filehandle to cluster file
-			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
-			if (not defined $fhtable) {
-				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
-			}
+			my $fhtable = IO::File->new("$OUTPUT_DIR/$db-$data_info{$id}{name}.html", "w");
+			die "FATAL: can't write file $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!" if (not defined $fhtable);
 			&html_header($fhtable, $src_base);
 			my $table_header = '';
 			my $colspan =  ' colspan="6"';
@@ -3941,10 +3934,8 @@ sub pg_relation_buffercache_report
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^statio-buffercache/);
 			# Open filehandle to cluster file
-			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
-			if (not defined $fhtable) {
-				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
-			}
+			my $fhtable = IO::File->new("$OUTPUT_DIR/$db-$data_info{$id}{name}.html", "w");
+			die "FATAL: can't write file $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!" if (not defined $fhtable);
 			&html_header($fhtable, $src_base);
 
 			foreach my $rel (sort {$to_show{$db}{$a} <=> $to_show{$db}{$b} } keys %{$to_show{$db}}) {
@@ -4016,10 +4007,8 @@ sub pg_statio_user_indexes_report
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^statio-index/);
 			# Open filehandle to cluster file
-			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
-			if (not defined $fhtable) {
-				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
-			}
+			my $fhtable = IO::File->new("$OUTPUT_DIR/$db-$data_info{$id}{name}.html", "w");
+			die "FATAL: can't write file $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!" if (not defined $fhtable);
 			&html_header($fhtable, $src_base);
 
 			my $colspan =  ' colspan="3"';
@@ -5038,10 +5027,8 @@ sub pg_class_size_report
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^(table|index)-/);
 			# Open filehandle to cluster file
-			my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
-			if (not defined $fhtable) {
-				die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
-			}
+			my $fhtable = IO::File->new("$OUTPUT_DIR/$db-$data_info{$id}{name}.html", "w");
+			die "FATAL: can't write file $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!" if (not defined $fhtable);
 			&html_header($fhtable, $src_base);
 			my $table_header = '';
 			my $kind = '';
@@ -5231,10 +5218,8 @@ sub pg_stat_unused_indexes_report
 	foreach my $db (sort keys %all_stat_unused_indexes) {
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 		# Open filehandle to cluster file
-		my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
-		if (not defined $fhtable) {
-			die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
-		}
+		my $fhtable = IO::File->new("$OUTPUT_DIR/$db-$data_info{$id}{name}.html", "w");
+		die "FATAL: can't write file $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!" if (not defined $fhtable);
 		&html_header($fhtable, $src_base);
 		print $fhtable qq{
 <ul id="slides">
@@ -5314,10 +5299,8 @@ sub pg_stat_redundant_indexes_report
 	foreach my $db (sort keys %all_stat_redundant_indexes) {
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 		# Open filehandle to cluster file
-		my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
-		if (not defined $fhtable) {
-			die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
-		}
+		my $fhtable = IO::File->new("$OUTPUT_DIR/$db-$data_info{$id}{name}.html", "w");
+		die "FATAL: can't write file $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!" if (not defined $fhtable);
 		&html_header($fhtable, $src_base);
 		print $fhtable qq{
 <ul id="slides">
@@ -5389,10 +5372,8 @@ sub pg_stat_count_indexes_report
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 		my $id = &get_data_id('count-index', %data_info);
 		# Open filehandle to cluster file
-		my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
-		if (not defined $fhtable) {
-			die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
-		}
+		my $fhtable = IO::File->new("$OUTPUT_DIR/$db-$data_info{$id}{name}.html", "w");
+		die "FATAL: can't write file $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!" if (not defined $fhtable);
 		&html_header($fhtable, $src_base);
 		print $fhtable qq{
 <ul id="slides">
@@ -5507,10 +5488,8 @@ sub pg_stat_missing_fkindexes_report
 	foreach my $db (sort keys %all_stat_missing_fkindexes) {
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 		# Open filehandle to cluster file
-		my $fhtable = new IO::File ">$OUTPUT_DIR/$db-$data_info{$id}{name}.html";
-		if (not defined $fhtable) {
-			die "FATAL: can't write to $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!\n";
-		}
+		my $fhtable = IO::File->new("$OUTPUT_DIR/$db-$data_info{$id}{name}.html", "w");
+		die "FATAL: can't write file $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!" if (not defined $fhtable);
 		&html_header($fhtable, $src_base);
 		print $fhtable qq{
 <ul id="slides">
@@ -6675,7 +6654,7 @@ sub generate_html_index
 	my $in_dir = shift;
 	my $src_base = shift;
 
-	my $fh = new IO::File ">$OUTPUT_DIR/index.html";
+	my $fh = IO::File->new("$OUTPUT_DIR/index.html", 'w');
 	if (not defined $fh) {
 		die "FATAL: can't write to $OUTPUT_DIR/index.html, $!\n";
 	}
@@ -8079,8 +8058,9 @@ sub generate_html_menu
 		my $disable_deadlock = ' class="disabled"';
 		my $disable_transaction = ' class="disabled"';
 		my $disable_prepared = ' class="disabled"';
-		if (open(IN, "$OUTPUT_DIR/database-$db.html")) {
-			while (<IN>) {
+		my $fh = IO::File->new("$OUTPUT_DIR/database-$db.html", 'r');
+		if (defined $fh) {
+			while (<$fh>) {
 				if (/<div id="database-size">/) {
 					$disable_size = '';
 				} elsif (/<div id="database-backends">/) {
@@ -8125,7 +8105,7 @@ sub generate_html_menu
 					$disable_prepared = "";
 				}
 			}
-			close(IN);
+			close($fh);
 		}
 
 		if (!$sysinfo{CONFIGURATION}{'capture'}) {
@@ -8205,15 +8185,16 @@ sub generate_html_menu
 
 			my $disable_wait_total = ' class="disabled"';
 			my $disable_wait_avg = ' class="disabled"';
-			if (open(IN, "$OUTPUT_DIR/pgbouncer-$db.html")) {
-				while (<IN>) {
+			my $fh = IO::File->new("$OUTPUT_DIR/pgbouncer-$db.html", 'r');
+			if (defined $fh) {
+				while (<$fh>) {
 					if (/<div id="pgbouncer-wait-total">/) {
 						$disable_wait_total = '';
 					} elsif (/<div id="pgbouncer-wait-average">/) {
 						$disable_wait_avg = '';
 					}
 				}
-				close(IN);
+				close($fh);
 			}
 
 			$menu_str .= qq{
@@ -8441,7 +8422,7 @@ sub generate_html_menu
 		if (!-e "$out_dir/menu.html")
 		{
 			print "DEBUG: generating external menu into $out_dir/menu.html\n" if ($DEBUG);
-			my $mfh = new IO::File ">$out_dir/menu.html";
+			my $mfh = IO::File->new("$OUTPUT_DIR/menu.html", 'w');
 			if (defined $mfh) {
 				print $mfh $menu_str;
 				$mfh->close;
@@ -9051,7 +9032,7 @@ sub compute_srvtime_report
 			$srvtime_stat{$n}{'await'} =~ s/,$//;
 			$srvtime_stat{$n}{'svctm'} =~ s/,$//;
 			# Open a filehandle for each database
-			my $fh = new IO::File ">$OUTPUT_DIR/$data_info->{name}-$n.html";
+			my $fh = IO::File->new("$OUTPUT_DIR/$data_info->{name}-$n.html", 'w');
 			if (not defined $fh) {
 				die "FATAL: can't write to $OUTPUT_DIR/$data_info->{name}-$n.html, $!\n";
 			}
@@ -9118,7 +9099,7 @@ sub compute_rw_device_report
 			push(@DEVICE_LIST, $n) if (!grep(/^$n$/, @DEVICE_LIST));
 
 			# Open a filehandle for each database
-			my $fh = new IO::File ">$OUTPUT_DIR/$data_info->{name}-$n.html";
+			my $fh = IO::File->new("$OUTPUT_DIR/$data_info->{name}-$n.html", 'w');
 			if (not defined $fh) {
 				die "FATAL: can't write to $OUTPUT_DIR/$data_info->{name}-$n.html, $!\n";
 			}
@@ -9188,7 +9169,7 @@ sub compute_space_device_report
 				push(@DEVICE_SPACE_LIST, $n);
 			}
 			# Open a filehandle for each database
-			my $fh = new IO::File ">$OUTPUT_DIR/system-space-$n.html";
+			my $fh = IO::File->new("$OUTPUT_DIR/system-space-$n.html", 'w');
 			if (not defined $fh) {
 				die "FATAL: can't write to $OUTPUT_DIR/system-space-$n.html, $!\n";
 			}
@@ -9254,7 +9235,7 @@ sub compute_util_device_report
 			push(@DEVICE_LIST, $n) if (!grep(/^$n$/, @DEVICE_LIST));
 
 			# Open a filehandle for each database
-			my $fh = new IO::File ">$OUTPUT_DIR/$data_info->{name}-$n.html";
+			my $fh = IO::File->new("$OUTPUT_DIR/$data_info->{name}-$n.html", 'w');
 			if (not defined $fh) {
 				die "FATAL: can't write to $OUTPUT_DIR/$data_info->{name}-$n.html, $!\n";
 			}
@@ -9313,7 +9294,7 @@ sub compute_network_report
 			push(@IFACE_LIST, $n) if (!grep(/^$n$/, @IFACE_LIST));
 
 			# Open a filehandle for each database
-			my $fh = new IO::File ">$OUTPUT_DIR/$data_info->{name}-$n.html";
+			my $fh = IO::File->new("$OUTPUT_DIR/$data_info->{name}-$n.html", 'w');
 			if (not defined $fh) {
 				die "FATAL: can't write to $OUTPUT_DIR/$data_info->{name}-$n.html, $!\n";
 			}
@@ -9366,7 +9347,7 @@ sub compute_network_error_report
 			push(@IFACE_LIST, $n) if (!grep(/^$n$/, @IFACE_LIST));
 
 			# Open a filehandle for each database
-			my $fh = new IO::File ">$OUTPUT_DIR/$data_info->{name}-$n.html";
+			my $fh = IO::File->new("$OUTPUT_DIR/$data_info->{name}-$n.html", 'w');
 			if (not defined $fh) {
 				die "FATAL: can't write to $OUTPUT_DIR/$data_info->{name}-$n.html, $!\n";
 			}
@@ -9395,11 +9376,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -P ALL -d $file";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute cpu statistics
@@ -9413,11 +9395,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -d $file -- -q";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute load statistics
@@ -9431,11 +9414,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -d $file -- -q";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute process statistics
@@ -9449,11 +9433,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -d $file -- -q";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute runqueue statistics
@@ -9467,11 +9452,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -d $file -- -w";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute context switches statistics
@@ -9485,11 +9471,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -d $file -- -w";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute process creation statistics
@@ -9503,11 +9490,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -d $file -- -r";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute graphs for memory statistics
@@ -9521,11 +9509,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -d $file -- -r";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute graphs for memory statistics
@@ -9539,11 +9528,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -d $file -- -W";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute swap statistics
@@ -9557,11 +9547,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -d $file -- -B";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute page swap statistics
@@ -9571,11 +9562,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -d $file -- -B";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute page swap statistics
@@ -9585,11 +9577,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -d $file -- -B";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute page swap statistics
@@ -9603,11 +9596,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -d $file -- -b";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute block statistics
@@ -9621,11 +9615,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -d $file -- -b";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute block statistics
@@ -9639,11 +9634,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -P ALL -d $file -- -F -p";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute disk space use per devices statistics
@@ -9657,11 +9653,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -P ALL -d $file -- -d -p";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute I/O per devices statistics
@@ -9675,11 +9672,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -P ALL -d $file -- -d -p";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute service time per devices statistics
@@ -9694,11 +9692,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -P ALL -d $file -- -d -p";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute I/O per devices statistics
@@ -9713,11 +9712,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -P ALL -d $file -- -d -p";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute cpu utilization per devices statistics
@@ -9732,11 +9732,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -P ALL -d $file -- -n DEV";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute network statistics
@@ -9750,11 +9751,12 @@ sub compute_sarstat_stats
 		my $command = "$SADF_PROG -t -P ALL -d $file -- -n EDEV";
 		print "DEBUG: running $command'\n" if ($DEBUG);
 		# Load data from file
-		if (!open(IN, "$command |")) {
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
 			die "FATAL: can't read output from command ($command): $!\n";
 		}
-		my @content = <IN>;
-		close(IN);
+		my @content = <$fh>;
+		close($fh);
 		chomp(@content);
 
 		# Compute network errors statistics
@@ -10215,7 +10217,7 @@ sub compute_sar_graph
 	if (!grep(/^$data_info{name}$/, 'system-srvtime', 'system-device', 'system-tpsdevice', 'system-cpudevice', 'network-utilization', 'network-error'))
 	{
 		# Open global filehandle
-		$FH = new IO::File ">$OUTPUT_DIR/$data_info{name}.html";
+		$FH = IO::File->new("$OUTPUT_DIR/$data_info{name}.html", 'w');
 		if (not defined $FH) {
 			die "FATAL: can't write to $OUTPUT_DIR/system.html, $!\n";
 		}
@@ -10729,15 +10731,18 @@ sub read_sysinfo
 sub read_sysinfo_file
 {
 	my $file = shift;
+	my $fh = undef;
 
 	if (!is_compressed($file)) {
-		open(IN, $file) or die "ERROR: can't read file $file, $!\n";
+		$fh = IO::File->new("$file", 'r');
+		die "ERROR: can't read file $file, $!\n" if (not defined $fh);
 	} else {
-		open(IN, "$ZCAT_PROG $file |") or die "ERROR: can't read pipe on command: $ZCAT_PROG $file, $!\n";
+		$fh = IO::File->new("$ZCAT_PROG $file", '-|');
+		die "ERROR: can't read pipe on command: $ZCAT_PROG $file, $!\n" if (not defined $fh);
 	}
 	my %sysinfo = ();
 	my $section = '';
-	while (my $l = <IN>) {
+	while (my $l = <$fh>) {
 		chomp($l);
 		$l =~ s/\r//;
 		if ($l =~ /^\[(.*)\]$/) {
@@ -10880,7 +10885,7 @@ sub read_sysinfo_file
 			push(@{$sysinfo{$section}}, "$l\n");
 		}
 	}
-	close(IN);
+	close($fh);
 
 	return %sysinfo;
 }
@@ -10893,7 +10898,7 @@ sub write_resources
 		if ($l =~ /^WRFILE: (.*)/) {
 			$rscfh->close() if (defined $rscfh);
 			if (!-e "$OUTPUT_DIR/$1" || $OVERRIDE) {
-				$rscfh = new IO::File ">$OUTPUT_DIR/$1";
+				$rscfh = IO::File->new("$OUTPUT_DIR/$1", 'w');
 				die "FATAL: can't write file $1\n" if (not defined $rscfh);
 			}
 			next;
@@ -11014,7 +11019,7 @@ sub dump_pg_binary
         my ($in_dir, $outfile) = @_;
 
 	foreach my $name (@pg_to_be_stored) {
-		my $lfh = new IO::File ">$in_dir/$name.bin";
+		my $lfh = IO::File->new("$in_dir/$name.bin", 'w');
 		if (not defined $lfh) {
 			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
 		}
@@ -11033,7 +11038,7 @@ sub dump_sar_binary
         my ($in_dir, $outfile) = @_;
 
 	foreach my $name (@sar_to_be_stored) {
-		my $lfh = new IO::File ">$in_dir/$name.bin";
+		my $lfh = IO::File->new("$in_dir/$name.bin", 'w');
 		if (not defined $lfh) {
 			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
 		}
@@ -11047,7 +11052,7 @@ sub dump_sys_binary
 {
         my ($in_dir, $outfile) = @_;
 
-	my $lfh = new IO::File ">$in_dir/$outfile";
+	my $lfh = IO::File->new("$in_dir/$outfile", 'w');
 	if (not defined $lfh) {
 		die "FATAL: can't write to $in_dir/$outfile, $!\n";
 	}
@@ -11067,7 +11072,7 @@ sub load_pg_binary
 
 		next if (!-e "$in_dir/$name.bin");
 
-		my $lfh = new IO::File "<$in_dir/$name.bin";
+		my $lfh = IO::File->new("$in_dir/$name.bin", 'r');
 		if (not defined $lfh) {
 			die "FATAL: can't read from $in_dir/$name.bin, $!\n";
 		}
@@ -11126,7 +11131,7 @@ sub load_pg_binary
 	# Preserve backward compatibility with renaming of variable all_statio_all_indexes
 	if (-e "$in_dir/all_statio_all_indexes.bin") {
 
-		my $lfh = new IO::File "<$in_dir/all_statio_all_indexes.bin";
+		my $lfh = IO::File->new("$in_dir/all_statio_all_indexes.bin", 'r');
 		if (not defined $lfh) {
 			die "FATAL: can't read from $in_dir/all_statio_all_indexes.bin, $!\n";
 		}
@@ -11152,7 +11157,7 @@ sub load_sar_binary
 
 	foreach my $name (@sar_to_be_stored) {
 
-		my $lfh = new IO::File "<$in_dir/$name.bin";
+		my $lfh = IO::File->new("$in_dir/$name.bin", 'r');
 		if (not defined $lfh) {
 			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
 		}
@@ -11198,7 +11203,7 @@ sub load_sysinfo_binary
 {
         my ($in_dir, $infile) = @_;
 
-	my $lfh = new IO::File "<$in_dir/$infile";
+	my $lfh = IO::File->new("$in_dir/$infile", 'w');
 	if (not defined $lfh) {
 		die "FATAL: can't write to $in_dir/$infile, $!\n";
 	}
@@ -11272,7 +11277,7 @@ sub build_incremental_index
 
 	print "DEBUG: generating global index to access incremental reports...\n" if ($DEBUG);
 
-	my $fh = new IO::File ">$outdir/index.html";
+	my $fh = IO::File->new("$outdir/index.html", 'w');
 	if (not defined $fh) {
 		die "FATAL: can't write to $outdir/index.html, $!\n";
 	}
@@ -11366,14 +11371,14 @@ sub get_calendar
 	map { $str .= '<th>' . $day_lbl{$_} . '</th>'; } @wday;
 	$str .= "</tr></thead>\n<tbody>\n";
 	my @currow = ('','','','','','','');
-	my $d = '';
 	my $wd = 0;
 	my $wn = 0;
 	my $week = '';
 	my @report_hour_done = ();
 	my @report_day_done = ();
 	my @report_week_done = ();
-	for $d ("01" .. "31") {
+	for my $d ("01" .. "31")
+	{
 		last if (($d == 31) && grep(/^$month$/, '04','06','09','11'));
 		last if (($d == 30) && ($month eq '02'));
 		last if (($d == 29) && ($month eq '02') && !IsLeapYear($year));
@@ -11425,16 +11430,18 @@ sub get_calendar
 	pop(@report_hour_done);
 	foreach my $path (@report_hour_done) {
 		next if (-e "$outdir/$path/done");
-		if (open(my $out, ">", "$outdir/$path/done")) {
-			close($out);
+		my $fh = IO::File->new("$outdir/$path/done", 'w');
+		if (defined $fh) {
+			close($fh);
 			print "DEBUG: marking directory $outdir/$path/ has been done...\n" if ($DEBUG);
 		}
 	}
 	pop(@report_day_done);
 	foreach my $path (@report_day_done) {
 		next if (-e "$path/done");
-		if (open(my $out, ">", "$outdir/$path/done")) {
-			close($out);
+		my $fh = IO::File->new("$outdir/$path/done", 'w');
+		if (defined $fh) {
+			close($fh);
 			print "DEBUG: marking directory $outdir/$path/ has been done...\n" if ($DEBUG);
 		}
 	}
@@ -11518,7 +11525,7 @@ sub build_hour_index
 	print "DEBUG: generating index to access hourly reports...\n" if ($DEBUG);
 
 	my @done = ();
-	my $fh = new IO::File ">$outdir/index.html";
+	my $fh = IO::File->new("$outdir/index.html", 'w');
 	if (not defined $fh) {
 		die "FATAL: can't write to $outdir/index.html, $!\n";
 	}
@@ -11703,10 +11710,11 @@ sub read_conf
 {
 	# We don't need a configuration file but if any check the
 	# configuration directives related to pgcluu only.
-	if (open(IN, $CONFIG_FILE))
+	my $fh = IO::File->new($CONFIG_FILE, 'r');
+	if (defined $fh)
 	{
 		print STDERR "DEBUG: Reading configuration file $CONFIG_FILE\n" if ($DEBUG);
-		while (my $l = <IN>)
+		while (my $l = <$fh>)
 		{
 			chomp($l);
 			$l =~ s/\r//gs;
@@ -11723,6 +11731,7 @@ sub read_conf
 				$CACHE = $vals[0];
 			}
 		}
+		close($fh);
 	}
 }
 

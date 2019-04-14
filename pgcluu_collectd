@@ -20,6 +20,8 @@ use Getopt::Long qw(:config bundling no_ignore_case_always);
 use POSIX qw(locale_h sys_wait_h);
 setlocale(LC_ALL, 'C');
 
+use constant UMASK      => 0027;
+
 $| = 1;
 
 $VERSION = '2.9';
@@ -86,6 +88,9 @@ my $DIFF_PROG   = 'diff -U 0';
 my $CRONUSER    = '';
 my $PKG_LIST_PROG  = '';
 my $DF_COMMAND  = 'LANG=C df --output="source,size,used,avail,itotal,iused,iavail,fstype,target" -x squashfs -x tmpfs -x devtmpfs';
+
+# Set the default mask for file and directory creation
+umask(UMASK);
 
 # Stores starting time
 my $START_TIME = time();
@@ -409,14 +414,6 @@ if ($RETENTION) {
 	$RETENTION =~ s/[+\-]//g;
 }
 
-# Autodetect package listing command to use
-if (!$PKG_LIST_PROG) {
-	$PKG_LIST_PROG = `which rpm dpkg 2>/dev/null`;
-	chomp($PKG_LIST_PROG);
-	$PKG_LIST_PROG .= ' -qa' if ($PKG_LIST_PROG =~ /\/rpm/);
-	$PKG_LIST_PROG .= ' -l' if ($PKG_LIST_PROG =~ /\/dpkg/);
-}
-
 # Set current username for cron listing
 if (!$CRONUSER) {
 	$CRONUSER = $ENV{USERNAME} || 'postgres';
@@ -470,7 +467,7 @@ my $OUTPUT_DIR = $ARGV[0] || '';
 # Overwrite the output directory in capture mode
 if ($CAPTURE) {
 	$OUTPUT_DIR = 'pgcluu_capture';
-	unless(mkdir "$CAPTURE_DIR/$OUTPUT_DIR") {
+	unless(mkdir("$CAPTURE_DIR/$OUTPUT_DIR")) {
 		die "FATAL: can not create capture temporary directory $CAPTURE_DIR/$OUTPUT_DIR: $!.\n";
 	} else {
 		print "INFO: creating temporary output directory: $CAPTURE_DIR/$OUTPUT_DIR\n";
@@ -501,16 +498,16 @@ if (-f $PIDFILE) {
 }
 
 # Check excluded times
-if ($SKIP_HOURS) {
-	my $tmp = $SKIP_HOURS;
-	my @timerange = split(/\s+/, $tmp);
-	foreach $tmp (@timerange) {
-		next if (!$tmp);
-		if ($tmp =~ m#(\d{2}):(\d{2})-(\d{2}):(\d{2})#) {
+if ($SKIP_HOURS)
+{
+	my @timerange = split(/\s+/, $SKIP_HOURS);
+	foreach my $t (@timerange) {
+		next if (!$t);
+		if ($t =~ m#(\d{2}):(\d{2})-(\d{2}):(\d{2})#) {
 			push(@SKIP_BEGIN, "$1$2");
 			push(@SKIP_END, "$3$4");
 		} else {
-			&dprint("FATAL: Bad time range: $tmp. Format of exclusion time must be: HH:MM-HH:MM\n");
+			&dprint("FATAL: Bad time range: $t. Format of exclusion time must be: HH:MM-HH:MM\n");
 		}
 	}
 }
@@ -572,11 +569,12 @@ if (!$CAPTURE) {
 		exit 1;
 	} else {
 		# Check if we can write in this directory
-		unless(open(OUT, ">wtest")) {
+		my $fh = IO::File->new("wtest", 'w');
+		if (not defined $fh) {
 			&dprint("FATAL: can not write into output directory $OUTPUT_DIR\n");
 			exit 1;
 		}
-		close(OUT);
+		close($fh);
 		unlink("wtest");
 
 	}
@@ -660,9 +658,9 @@ if (!$DAEMONIZE) {
 	die "FATAL: Couldn't fork: $!" unless defined($pid);
 	POSIX::setsid() or die "Can't detach: \$!";
 	&dprint("LOG: Detach from terminal with pid: $$\n");
-	open(STDIN, "/dev/null");
-	open(STDOUT, ">/dev/null");
-	open(STDERR, ">/dev/null");
+	open(STDIN , '<', "/dev/null");
+	open(STDOUT, '>', "/dev/null");
+	open(STDERR, '>', "/dev/null");
 }
 
 
@@ -671,11 +669,12 @@ my $orig_name = $0;
 $0 = $PROGRAM;
 
 # Create pid file
-unless(open(OUT, ">$PIDFILE")) {
+my $fhp = IO::File->new($PIDFILE, 'w');
+if (not defined $fhp) {
 	die "FATAL: can't create pid file $PIDFILE, $!\n";
 }
-print OUT $$;
-close(OUT);
+print $fhp $$;
+close($fhp);
 
 # Generate the psql command
 $PSQL_PROG .= " -XAtq -F';' -f - ";
@@ -790,9 +789,9 @@ while (1) {
 
 	# Set daily rotation subdirectories 
 	if ($D_ROTATE && !$H_ROTATE && !-d "$year/$mon/$mday") {
-		mkdir "$year" if (!-d "$year");
-		mkdir "$year/$mon" if (!-d "$year/$mon");
-		mkdir "$year/$mon/$mday";
+		mkdir("$year") if (!-d "$year");
+		mkdir("$year/$mon") if (!-d "$year/$mon");
+		mkdir("$year/$mon/$mday");
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday";
 	} elsif ($D_ROTATE) {
@@ -810,10 +809,10 @@ while (1) {
 
 	# Set hourly rotation/incremental subdirectories 
 	if ($H_ROTATE && !-d "$year/$mon/$mday/$hour") {
-		mkdir "$year" if (!-d "$year");
-		mkdir "$year/$mon" if (!-d "$year/$mon");
-		mkdir "$year/$mon/$mday" if (!-d "$year/$mon/$mday");
-		mkdir "$year/$mon/$mday/$hour";
+		mkdir("$year") if (!-d "$year");
+		mkdir("$year/$mon") if (!-d "$year/$mon");
+		mkdir("$year/$mon/$mday") if (!-d "$year/$mon/$mday");
+		mkdir("$year/$mon/$mday/$hour");
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday/$hour";
 	} elsif ($H_ROTATE) {
@@ -905,14 +904,15 @@ sub collect_metrics
 	}
 
 	# Store current pgcluu configuration
-	unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
+	my $fhl = IO::File->new("$OUT_DIR/sysinfo.txt", 'a');
+	if (not defined $fhl) {
 		&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
 		unlink_pid_and_exit("FATAL: can not write into file $OUT_DIR/sysinfo.txt, $!", 1);
 	}
-	print OUT "[CONFIGURATION]\n";
-	print OUT "capture=$CAPTURE\n";
-	print OUT "sysstat=$sysstat_version\n" if ($sysstat_version);
-	close(OUT);
+	print $fhl "[CONFIGURATION]\n";
+	print $fhl "capture=$CAPTURE\n";
+	print $fhl "sysstat=$sysstat_version\n" if ($sysstat_version);
+	close($fhl);
 
 	# Collect PostgreSQL global cluster infromation and save all into $OUT_DIR/sysinfo.txt
 	# Diff with old collected information will be saved to sysinfo.txt.diff
@@ -992,9 +992,13 @@ sub collect_metrics
 	if (!$NO_DATABASE) {
 		# Collecting database statistics if there other than pgbouncer metrics to collect
 		if ($PG_RET >= 0) {
-			open(PSQL, "| $PSQL_PROG");
-			print PSQL $script_sql, "\n";
-			close(PSQL);
+			if (open($fhl, '|-', $PSQL_PROG)) {
+				print $fhl $script_sql, "\n";
+				close($fhl);
+			} else {
+				&dprint("FATAL: failure when calling psql command: $PSQL_PROG, $!\n");
+				unlink_pid_and_exit("FATAL: failure when calling psql command: $PSQL_PROG, $!", 1);
+			}
 
 			# Get database list
 			my @dblist = &get_databases();
@@ -1018,9 +1022,13 @@ sub collect_metrics
 					}
 				}
 				# Collecting database statistics
-				open(PSQL, "| $LOCAL_PSQL_PROG");
-				print PSQL $script_repeat_sql, "\n";
-				close(PSQL);
+				if (open($fhl, '|-', $LOCAL_PSQL_PROG)) {
+					print $fhl $script_repeat_sql, "\n";
+					close($fhl);
+				} else {
+					&dprint("FATAL: failure when calling psql command: $PSQL_PROG, $!\n");
+					unlink_pid_and_exit("FATAL: failure when calling psql command: $PSQL_PROG, $!", 1);
+				}
 			}
 		}
 
@@ -1088,15 +1096,15 @@ sub collect_metrics
 			my $ntime = &get_current_timestamp();
 			map { s/\s+/;/g; s/^/$ntime;/; } @fsuse; # format output to csv
 			# Filesystem;1K-blocks;Used;Avail;Inodes;IUsed;IFree;Typer;Mounted on
-			unless(open(OUT, ">>$OUT_DIR/fs_stat_use.csv")) {
+			$fhl = IO::File->new("$OUT_DIR/fs_stat_use.csv", 'a');
+			if (not defined $fhl) {
 				&dprint("FATAL: can not write into file $OUT_DIR/fs_stat_use.csv\n");
 				unlink_pid_and_exit("FATAL: can not write into file $OUT_DIR/fs_stat_use.csv, $!", 1);
 			}
-			print OUT join("\n", @fsuse), "\n";
-			close(OUT);
+			print $fhl join("\n", @fsuse), "\n";
+			close($fhl);
 		}
 	}
-
 }
 
 
@@ -1127,50 +1135,51 @@ sub get_initial_info
 		my @procs = ();
 		my @trigs = ();
 		my %parts = ();
-		unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
+		my $fhl = IO::File->new("$OUT_DIR/sysinfo.txt", 'a');
+		if (not defined $fhl) {
 			&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
-			exit 1;
+			unlink_pid_and_exit("FATAL: can not write into file $OUT_DIR/sysinfo.txt, $!", 1);
 		}
 		if (&backend_minimum_version(9, 1)) {
 			# Look for all installed extensions
-			print OUT "[EXTENSION]\n";
+			print $fhl "[EXTENSION]\n";
 			foreach my $db (sort @alldbs) {
 				my @ext = &get_extensions($db);
 				push(@extensions, "$db=" . join(',', sort @ext)) if ($#ext >= 0);
 			}
 			foreach my $e (@extensions) {
-				print OUT "$e\n";
+				print $fhl "$e\n";
 			}
 		}
 		# Look for all schema in a database
-		print OUT "[SCHEMA]\n";
+		print $fhl "[SCHEMA]\n";
 		foreach my $db (sort @alldbs) {
 			my @sch = &get_schemas($db);
 			push(@schemas, "$db=" . join(',', sort @sch)) if ($#sch >= 0);
 		}
 		foreach my $s (@schemas) {
-			print OUT "$s\n";
+			print $fhl "$s\n";
 		}
 		# Look for all schema in a database
-		print OUT "[PROCEDURE]\n";
+		print $fhl "[PROCEDURE]\n";
 		foreach my $db (sort @alldbs) {
 			my $pro = &get_proc_count($db);
 			push(@procs, "$db=" . $pro);
 		}
 		foreach my $p (@procs) {
-			print OUT "$p\n";
+			print $fhl "$p\n";
 		}
 		# Look for all schema in a database
-		print OUT "[TRIGGER]\n";
+		print $fhl "[TRIGGER]\n";
 		foreach my $db (sort @alldbs) {
 			my $tgs = &get_triggers($db);
 			push(@trigs, "$db=$tgs");
 		}
 		foreach my $t (@trigs) {
-			print OUT "$t\n";
+			print $fhl "$t\n";
 		}
 		# Look for partitionned tables in a database
-		print OUT "[PARTITIONNED_TABLE]\n";
+		print $fhl "[PARTITIONNED_TABLE]\n";
 		foreach my $db (sort @alldbs) {
 			my @p = &get_partitionned_tables($db);
 
@@ -1179,7 +1188,7 @@ sub get_initial_info
 				my ($oid, $content) = split(/[;]/, $line, 2);
 
 				$parts{$oid} = $db;
-				print OUT "$db=$oid;$content\n";
+				print $fhl "$db=$oid;$content\n";
 			}
 		}
 		# get trigger or rule definition of each partitionned table
@@ -1187,12 +1196,12 @@ sub get_initial_info
 			my $db = $parts{$oid};
 			my @implementation = &get_partitionned_implementation($db, $oid);
 
-			print OUT "[PARTITION_IMPL $db $oid]\n";
+			print $fhl "[PARTITION_IMPL $db $oid]\n";
 			foreach my $line (@implementation) {
-				print OUT "$line\n";
+				print $fhl "$line\n";
 			}
 		}
-		close(OUT);
+		close($fhl);
 	}
 }
 
@@ -1388,13 +1397,14 @@ sub fetch_version
 	}
 
 	if ($save) {
-		unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
+		my $fhl = IO::File->new("$OUT_DIR/sysinfo.txt", 'a');
+		if (not defined $fhl) {
 			&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
-			exit 1;
+			unlink_pid_and_exit("FATAL: can not write into file $OUT_DIR/sysinfo.txt, $!", 1);
 		}
-		print OUT "[PGVERSION]\n";
-		print OUT "$pg_ver\n";
-		close(OUT);
+		print $fhl "[PGVERSION]\n";
+		print $fhl "$pg_ver\n";
+		close($fhl);
 	}
 
 	return "$DB_INFO{major}.$DB_INFO{minor}";
@@ -1453,13 +1463,14 @@ sub get_uptime
 	chomp($uptime);
 
 	if ($save) {
-		unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
+		my $fhl = IO::File->new("$OUT_DIR/sysinfo.txt", 'a');
+		if (not defined $fhl) {
 			&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
-			exit 1;
+			unlink_pid_and_exit("FATAL: can not write into file $OUT_DIR/sysinfo.txt, $!", 1);
 		}
-		print OUT "[PGUPTIME]\n";
-		print OUT "$uptime\n";
-		close(OUT);
+		print $fhl "[PGUPTIME]\n";
+		print $fhl "$uptime\n";
+		close($fhl);
 	}
 	return $uptime;
 }
@@ -1676,10 +1687,11 @@ sub grab_os_information
 	# System kernel tuning parameters
 	$cmd = '/sbin/sysctl -a 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
-    my @system = `$cmd | grep -E "vm.nr_hugepages |vm.nr_overcommit_hugepages|vm.overcommit|vm.dirty_.*(ratio|bytes|kbytes)|swappiness|zone_reclaim_mode|shmmax|shmall|sched_autogroup_enabled|sched_migration_cost"`;
-	unless(open(OUT, ">>$OUT_DIR/sysinfo.txt")) {
+	my @system = `$cmd | grep -E "vm.nr_hugepages |vm.nr_overcommit_hugepages|vm.overcommit|vm.dirty_.*(ratio|bytes|kbytes)|swappiness|zone_reclaim_mode|shmmax|shmall|sched_autogroup_enabled|sched_migration_cost"`;
+	my $fhl = IO::File->new("$OUT_DIR/sysinfo.txt", 'a');
+	if (not defined $fhl) {
 		&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
-		exit 1;
+		unlink_pid_and_exit("FATAL: can not write into file $OUT_DIR/sysinfo.txt, $!", 1);
 	}
 	$cmd = 'cat /sys/kernel/mm/*transparent_hugepage/enabled 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
@@ -1716,8 +1728,8 @@ sub grab_os_information
 		push(@row , '/queue/rotational : ' . `$cmd`);
 		push(@devices, @row);
 	}
-	print OUT "[DEVICES]\n";
-	print OUT @devices;
+	print $fhl "[DEVICES]\n";
+	print $fhl @devices;
 	# Look at uptime informations
 	$cmd = 'uptime 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
@@ -1728,40 +1740,48 @@ sub grab_os_information
 	my @crontab = `$cmd`;
 	# Get package installation information
 	my @installation = ();
-	if ($PKG_LIST_PROG) {
-		$cmd = "$PKG_LIST_PROG 2>/dev/null | grep postgres";
-		$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
-		@installation = `$cmd`;
-	}
 
-	print OUT "[CPU]\n";
-	print OUT @cpuinfo;
-	print OUT "[KERNEL]\n";
-	print OUT $kernel_info;
-	print OUT "[UPTIME]\n";
-	print OUT $uptime;
-	print OUT "[MEMORY]\n";
-	print OUT @meminfo;
-	print OUT "[DF]\n";
-	print OUT @dfinfo;
-	print OUT "[MOUNT]\n";
-	print OUT @mountinfo;
-	print OUT "[FSTAB]\n";
-	print OUT @fstabinfo;
-	print OUT "[PCI]\n";
-	print OUT @pciinfo;
-	print OUT "[RELEASE]\n";
-	print OUT @releaseinfo;
-	print OUT "[SYSTEM]\n";
-	print OUT @system;
-	print OUT "[PROCESS]\n";
-	print OUT @pslist;
-	print OUT "[CRONTAB]\n";
-	print OUT @crontab;
-	print OUT "[INSTALLATION]\n";
-	print OUT @installation;
+	# Autodetect package listing command to use
+	if (!$PKG_LIST_PROG) {
+		my @ret = `which rpm dpkg 2>/dev/null`;
+		chomp(@ret);
+		foreach my $c (@ret) {
+			$PKG_LIST_PROG = "$c -qa " if ($c =~ /\/rpm/);
+			$PKG_LIST_PROG = "$c -l " if ($c =~ /\/dpkg/);
+		}
+	}
+	$cmd = "$PKG_LIST_PROG 2>/dev/null | grep postgres";
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	@installation = `$cmd`;
+
+	print $fhl "[CPU]\n";
+	print $fhl @cpuinfo;
+	print $fhl "[KERNEL]\n";
+	print $fhl $kernel_info;
+	print $fhl "[UPTIME]\n";
+	print $fhl $uptime;
+	print $fhl "[MEMORY]\n";
+	print $fhl @meminfo;
+	print $fhl "[DF]\n";
+	print $fhl @dfinfo;
+	print $fhl "[MOUNT]\n";
+	print $fhl @mountinfo;
+	print $fhl "[FSTAB]\n";
+	print $fhl @fstabinfo;
+	print $fhl "[PCI]\n";
+	print $fhl @pciinfo;
+	print $fhl "[RELEASE]\n";
+	print $fhl @releaseinfo;
+	print $fhl "[SYSTEM]\n";
+	print $fhl @system;
+	print $fhl "[PROCESS]\n";
+	print $fhl @pslist;
+	print $fhl "[CRONTAB]\n";
+	print $fhl @crontab;
+	print $fhl "[INSTALLATION]\n";
+	print $fhl @installation;
 	
-	close(OUT);
+	close($fhl);
 }
 
 sub usage
@@ -2906,8 +2926,7 @@ sub load_settings
 
 	if (-e "$in_dir/pg_settings.csv") {
 		# Load data from pg_settings.csv file
-		my $curfh = new IO::File;
-		$curfh->open("$in_dir/pg_settings.csv");
+		my $curfh = IO::File->new("$in_dir/pg_settings.csv", 'r');
 		while (<$curfh>) {
 			chomp();
 			my @data = split(/;/);
@@ -2929,8 +2948,7 @@ sub load_settings
 	}
 	if (-e "$in_dir/pg_db_role_setting.csv") {
 		# Load data from pg_db_role_setting.csv file
-		my $curfh = new IO::File;
-		$curfh->open("$in_dir/pg_db_role_setting.csv");
+		my $curfh = IO::File->new("$in_dir/pg_db_role_setting.csv", 'r');
 		while (<$curfh>) {
 			chomp();
 			my @data = split(/;/);
@@ -2950,30 +2968,32 @@ sub save_pg_settings
 	my ($out_dir, $pg_settings_orig, $pg_settings_curr) = @_;
 
 	my $f1 = "$out_dir/pg_settings_orig.tmp";
-	my $curfh = new IO::File;
-	$curfh->open(">$f1");
-	foreach my $k (sort keys %$pg_settings_orig) {
-		print $curfh "$k : ";
-		foreach my $c (sort keys %{$pg_settings_orig->{$k}}) {
-			next if ($pg_settings_orig->{$k}{$c} eq '');
-			print $curfh "$c => $pg_settings_orig->{$k}{$c}, ";
+	my $curfh = IO::File->new($f1, 'w');
+	if (defined $curfh) {
+		foreach my $k (sort keys %$pg_settings_orig) {
+			print $curfh "$k : ";
+			foreach my $c (sort keys %{$pg_settings_orig->{$k}}) {
+				next if ($pg_settings_orig->{$k}{$c} eq '');
+				print $curfh "$c => $pg_settings_orig->{$k}{$c}, ";
+			}
+			print $curfh "\n";
 		}
-		print $curfh "\n";
+		$curfh->close();
 	}
-	$curfh->close();
 
 	my $f2 = "$out_dir/pg_settings_curr.tmp";
-	$curfh = new IO::File;
-	$curfh->open(">$f2");
-	foreach my $k (sort keys %$pg_settings_curr) {
-		print $curfh "$k : ";
-		foreach my $c (sort keys %{$pg_settings_curr->{$k}}) {
-			next if ($pg_settings_curr->{$k}{$c} eq '');
-			print $curfh "$c => $pg_settings_curr->{$k}{$c}, ";
+	$curfh = IO::File->new($f2, 'w');
+	if (defined $curfh) {
+		foreach my $k (sort keys %$pg_settings_curr) {
+			print $curfh "$k : ";
+			foreach my $c (sort keys %{$pg_settings_curr->{$k}}) {
+				next if ($pg_settings_curr->{$k}{$c} eq '');
+				print $curfh "$c => $pg_settings_curr->{$k}{$c}, ";
+			}
+			print $curfh "\n";
 		}
-		print $curfh "\n";
+		$curfh->close();
 	}
-	$curfh->close();
 
 	return ($f1,$f2);
 }
@@ -2984,24 +3004,26 @@ sub save_dbrole_settings
 	my ($out_dir, $pg_dbrole_settings_orig, $pg_dbrole_settings_curr) = @_;
 
 	my $f1 = "$out_dir/pg_dbrole_settings_orig.tmp";
-	my $curfh = new IO::File;
-	$curfh->open(">$f1");
-	foreach my $k (sort keys %$pg_dbrole_settings_orig) {
-		foreach my $c (sort keys %{$pg_dbrole_settings_orig->{$k}}) {
-			print $curfh "Database: $k, Role: $c, Settings: $pg_dbrole_settings_orig->{$k}{$c}\n";
+	my $curfh = IO::File->new($f1, 'w');
+	if (defined $curfh) {
+		foreach my $k (sort keys %$pg_dbrole_settings_orig) {
+			foreach my $c (sort keys %{$pg_dbrole_settings_orig->{$k}}) {
+				print $curfh "Database: $k, Role: $c, Settings: $pg_dbrole_settings_orig->{$k}{$c}\n";
+			}
 		}
+		$curfh->close();
 	}
-	$curfh->close();
 
 	my $f2 = "$out_dir/pg_dbrole_settings_curr.tmp";
-	$curfh = new IO::File;
-	$curfh->open(">$f2");
-	foreach my $k (sort keys %$pg_dbrole_settings_curr) {
-		foreach my $c (sort keys %{$pg_dbrole_settings_curr->{$k}}) {
-			print $curfh "Database: $k, Role: $c, Settings: $pg_dbrole_settings_curr->{$k}{$c}\n";
+	$curfh = IO::File->new($f2, 'w');
+	if (defined $curfh) {
+		foreach my $k (sort keys %$pg_dbrole_settings_curr) {
+			foreach my $c (sort keys %{$pg_dbrole_settings_curr->{$k}}) {
+				print $curfh "Database: $k, Role: $c, Settings: $pg_dbrole_settings_curr->{$k}{$c}\n";
+			}
 		}
+		$curfh->close();
 	}
-	$curfh->close();
 
 	return ($f1,$f2);
 }
@@ -3010,10 +3032,10 @@ sub read_conf
 {
 	# We don't need a configuration file but if any check the
 	# configuration directives related to pgcluu_collectd.
-	if (open(IN, $CONFIG_FILE))
-	{
+	my $curfh = IO::File->new($CONFIG_FILE, 'r');
+	if (defined $curfh) {
 		print STDERR "DEBUG: Reading configuration file $CONFIG_FILE\n" if ($DEBUG);
-		while (my $l = <IN>)
+		while (my $l = <$curfh>)
 		{
 			chomp($l);
 			$l =~ s/\r//gs;
