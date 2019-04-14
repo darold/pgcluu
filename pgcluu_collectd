@@ -20,7 +20,10 @@ use Getopt::Long qw(:config bundling no_ignore_case_always);
 use POSIX qw(locale_h sys_wait_h);
 setlocale(LC_ALL, 'C');
 
-use constant UMASK      => 0027;
+# Change MASK to 0027 if you want to secure the data directory
+# Note that in CGI mode the www-data user or group need read
+# access to all files in the statistics directory.
+use constant UMASK => 0022;
 
 $| = 1;
 
