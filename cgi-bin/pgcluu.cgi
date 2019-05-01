@@ -1869,6 +1869,9 @@ sub write_database_info
 	my $nsch = $#{$sysinfo{SCHEMA}{$db}} + 1;
 	my $schlist = join(',', @{$sysinfo{SCHEMA}{$db}});
 	$schlist = ' (' . $schlist . ')' if ($schlist);
+	my $njson = $#{$sysinfo{JSON}{$db}} + 1;
+	my $jsonlist = join(',', @{$sysinfo{JSON}{$db}});
+	$jsonlist = ' (' . $jsonlist . ')' if ($jsonlist);
 	my $procount = $sysinfo{PROCEDURE}{$db} || 0;
 	my $trigcount = $sysinfo{TRIGGER}{$db} || 0;
 	my $last_vacuum = $OVERALL_STATS{'database'}{$db}{last_vacuum} || '-';
@@ -1905,6 +1908,9 @@ sub write_database_info
 	        <li><span class="figure">$OVERALL_STATS{database}{$db}{invalid_indexes}</span> <span class="figure-label">Invalid indexes</span></li>
 	        <li><span class="figure">$OVERALL_STATS{database}{$db}{hash_indexes}</span> <span class="figure-label">Hash indexes</span></li>
 	        <li><span class="figure">$nsch</span> <span class="figure-label">Schemas$schlist</span></li>
+};
+	print qq{<li><span class="figure">$njson</span> <span class="figure-label">json vs jsonb columns$jsonlist</span></li>} if ($jsonlist);
+	print qq{
 	        <li><span class="figure">$last_vacuum</span> <span class="figure-label">Last manual vacuum</span></li>
 	        <li><span class="figure">$last_analyze</span> <span class="figure-label">Last manual analyze</span></li>
 	        <li><span class="figure">$last_autovacuum</span> <span class="figure-label">Last auto vacuum</span></li>
@@ -10501,7 +10507,7 @@ sub read_sysinfo
 	my $input_dir = shift;
 
 	# Empty arrays before filling them
-	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA/;
+	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA JSON/;
 	foreach my $s (@toclear) {
 		delete $sysinfo{$s};
 	}
@@ -10664,6 +10670,12 @@ sub read_sysinfo_file
 
 		}
 		elsif ($section eq 'SCHEMA') {
+			my ($db, @vals) = split(/[=,]+/, $l);
+			foreach my $s (@vals) {
+				push(@{$sysinfo{$section}{$db}}, $s) if (!grep(/^$s$/, @{$sysinfo{$section}{$db}}));
+			}
+		}
+		elsif ($section eq 'JSON') {
 			my ($db, @vals) = split(/[=,]+/, $l);
 			foreach my $s (@vals) {
 				push(@{$sysinfo{$section}{$db}}, $s) if (!grep(/^$s$/, @{$sysinfo{$section}{$db}}));
@@ -11054,7 +11066,7 @@ sub load_sysinfo_binary
 	my %_sysinfo = %{$stats{sysinfo}};
 
 	# Empty arrays before filling them
-	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA/;
+	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA JSON/;
 	foreach my $s (@toclear) {
 		delete $sysinfo{$s};
 	}

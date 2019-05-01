@@ -1135,6 +1135,7 @@ sub get_initial_info
 	if ($#alldbs > -1) {
 		my @extensions = ();
 		my @schemas = ();
+		my @json = ();
 		my @procs = ();
 		my @trigs = ();
 		my %parts = ();
@@ -1163,7 +1164,16 @@ sub get_initial_info
 		foreach my $s (@schemas) {
 			print $fhl "$s\n";
 		}
-		# Look for all schema in a database
+		# Look for all JSON vs JSONB columns in a database
+		print $fhl "[JSON]\n";
+		foreach my $db (sort @alldbs) {
+			my @col = &get_json_cols($db);
+			push(@json, "$db=" . join(',', sort @col)) if ($#col >= 0);
+		}
+		foreach my $s (@json) {
+			print $fhl "$s\n";
+		}
+		# Look for all procedure in a database
 		print $fhl "[PROCEDURE]\n";
 		foreach my $db (sort @alldbs) {
 			my $pro = &get_proc_count($db);
@@ -1502,6 +1512,31 @@ sub get_schemas
 
 	return @db_schema;
 }
+
+####
+# Retrieve JSON vs JSONB columns for a given database.
+####
+sub get_json_cols
+{
+	my $database = shift;
+
+	my $LOCAL_PSQL_PROG = $PSQL_PROG;
+	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
+		if ($database !~ /^[a-z0-9\_\-]+$/i) {
+			$LOCAL_PSQL_PROG .= " -d '$database'";
+		} else {
+			$LOCAL_PSQL_PROG .= " -d $database";
+		}
+	}
+	my @db_json = `echo "SELECT c.relname||'.'||a.attname FROM pg_attribute a JOIN pg_class c ON (a.attrelid=c.relfilenode) WHERE a.atttypid = 114 ORDER BY 1" | $LOCAL_PSQL_PROG`;
+	if ($? != 0) {
+		unlink_pid_and_exit("FATAL: psql error.", 0);
+	}
+	chomp(@db_json);
+
+	return @db_json;
+}
+
 
 ####
 ## Retrieve partitionned tables from a given database.
