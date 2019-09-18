@@ -917,7 +917,7 @@ sub collect_metrics
 	print $fhl "sysstat=$sysstat_version\n" if ($sysstat_version);
 	close($fhl);
 
-	# Collect PostgreSQL global cluster infromation and save all into $OUT_DIR/sysinfo.txt
+	# Collect PostgreSQL global cluster information and save all into $OUT_DIR/sysinfo.txt
 	# Diff with old collected information will be saved to sysinfo.txt.diff
 	if (!$NO_DATABASE && ($PG_RET >= 0)) {
 		&get_initial_info();
@@ -926,7 +926,7 @@ sub collect_metrics
 	# Get System information  and save all into $OUT_DIR/sysinfo.txt
 	# Diff with old collected information will be saved to sysinfo.txt.diff
 	if (!$NO_SYSINFO) {
-		&grab_os_information();
+		&grab_os_information($OUT_DIR);
 	}
 
 	####
@@ -1230,26 +1230,7 @@ sub verify_action
 		}
 		return $ret;
 	}
-	# Only keep setting and configuration collect
-#	if ($CAPTURE) {
-#		foreach my $m (keys %METRICS_COMMANDS) {
-#			delete $METRICS_COMMANDS{$m} if (($m ne 'configuration_stats') &&
-#							 ($m ne 'pg_settings_stats') &&
-#							 ($m ne 'pg_nondefault_settings_stats') &&
-#							 (($m ne 'pg_db_role_setting_stats') || !&backend_minimum_version(9, 0)) &&
-#							 ($m ne 'tablespace_size_stats') &&
-#							 ($m ne 'database_size_stats') &&
-#							 ($m ne 'unused_indexes_stats') &&
-#							 ($m ne 'redundant_indexes_stats') &&
-#							 ($m ne 'invalid_indexes_stats') &&
-#							 ($m ne 'hash_indexes_stats') &&
-#							 ($m ne 'missing_fkindexes_stats') &&
-#							 ($m ne 'count_indexes_stats') &&
-#							 (($m ne 'replication_stats') || !&backend_minimum_version(9, 1))
-#							);
-#		}
-#		return $ret;
-#	}
+	# Remove some metric collection following the PostgreSQL version.
 	if (!&backend_minimum_version(9, 4)) {
 		delete $METRICS_COMMANDS{'archiver_stats'};
 	}
@@ -1685,6 +1666,7 @@ sub sysstat_version
 
 sub grab_os_information
 {
+	my $out_dir = shift();
 
 	# Look at CPU informations
 	my $cmd = 'cat /proc/cpuinfo 2>/dev/null';
@@ -1698,6 +1680,17 @@ sub grab_os_information
 	$cmd = 'cat /proc/meminfo 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 	my @meminfo = `$cmd`;
+	if ($out_dir) {
+		my ($commit_limit) = grep(/^CommitLimit:/, @meminfo);
+		my ($commit_as) = grep(/^Committed_AS:/, @meminfo);
+		if ($commit_limit and $commit_as ne '' and open(my $outf, '>>', "$out_dir/commit_memory.csv")) {
+			my $cdate = time();
+			$commit_limit =~ s/[^\d]+(\d+)[^\d]+/$1/;
+			$commit_as =~ s/[^\d]+(\d+)[^\d]+/$1/;
+			print $outf "$cdate;$commit_limit;$commit_as\n";
+			close($outf);
+		}
+	}
 	# Look at filesystem informations
 	$cmd = 'df -h | grep -v "/dev/loop" 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);

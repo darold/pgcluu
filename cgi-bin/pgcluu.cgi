@@ -43,7 +43,7 @@ my %DEVFH           = ();
 my $IDX             = 1;
 my $HELP            = 0;
 my $SHOW_VER        = 0;
-my $DEBUG           = 1;
+my $DEBUG           = 0;
 my $NUMBER_CPU      = 0;
 my $TIMEZONE        = '00'; #substr(strftime('%z', localtime()), 0, 3);
 my $STATS_TIMEZONE  = '00';  # Timezone is auto detected from data files
@@ -199,6 +199,7 @@ our %sar_util_devices_stat = ();
 our %sar_networks_stat = ();
 our %sar_neterror_stat = ();
 our %sar_space_devices_stat = ();
+our %sar_commit_memory_stat = ();
 
 our @sar_to_be_stored = (
 	'global_infos',
@@ -216,7 +217,8 @@ our @sar_to_be_stored = (
 	'sar_util_devices_stat',
 	'sar_networks_stat',
 	'sar_neterror_stat',
-	'sar_space_devices_stat'
+	'sar_space_devices_stat',
+	'sar_commit_memory_stat'
 );
 
 # Relation between sar binary file and CGI action parameter.
@@ -226,6 +228,7 @@ our %bin_action_map = (
 	'system-memory' => 'sar_memory_stat',
 	'system-dirty' => 'sar_dirty_stat',
 	'system-swap' => 'sar_swap_stat',
+	'system-commit_memory' => 'sar_commit_memory_stat',
 	'system-load' => 'sar_load_stat',
 	'system-process' => 'sar_process_stat',
 	'system-runqueue' => 'sar_process_stat',
@@ -1234,6 +1237,13 @@ my %SAR_GRAPH_INFOS = (
 		'y2label' => 'Percents',
 		'legends' => [ 'pgscank/s', 'pgscand/s', 'pgsteal/s', '%vmeff' ],
 	},
+	'22' => {
+		'name' =>  'system-commit_memory',
+		'title' => 'Estimated memory to complete the workload',
+		'description' => 'CommitLimit is the total amount of memory currently available to be allocated on the system based on the overcommit ratio (vm.overcommit_ratio). This limit is only adhered to if strict overcommit accounting is enabled (vm.overcommit_memory = 2). CommitLimit is calculated with the following formula: (MemTotal - Hugetlb) * overcommit_ratio / 100. Committed_AS is the total amount of memory estimated to complete the workload. This value represents the worst case scenario value, and also includes swap memory.',
+		'ylabel' => 'Size',
+		'legends' => ['CommitLimit', 'Committed_AS'],
+	},
 );
 # Set CGI handle and retrieve current params states
 my $cgi = new CGI;
@@ -1499,6 +1509,11 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 				my %fulldata = &load_sarfile_stats($sar_file);
 				if (-e "$in_dir/fs_stat_use.csv") {
 					push(@{$fulldata{'system-space'}}, &load_fsuse_stats($in_dir, 'fs_stat_use.csv'));
+				}
+
+				# Get Commit memory stats
+				if (-e "$in_dir/commit_memory.csv") {
+					push(@{$fulldata{'system-commit_memory'}}, &load_commit_memory_stats($in_dir, 'commit_memory.csv'));
 				}
 
 				print STDERR "DEBUG: looking for sar text data file $sar_file\n" if ($DEBUG);
@@ -8072,6 +8087,7 @@ AAAASUVORK5CYII=';
                   <li id="menu-system-memory"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-memory&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Memory</a></li>
                   <li id="menu-system-dirty"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-dirty&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Dirty memory</a></li>
                   <li id="menu-system-swap"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-swap&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Swap</a></li>
+                  <li id="menu-system-swap"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-commit_memory&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Memory workload</a></li>
                   <li class="divider"></li>
                   <li id="menu-system-load"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-load&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Load</a></li>
                   <li id="menu-system-process"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-process&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Task list</a></li>
@@ -9795,7 +9811,6 @@ sub load_fsuse_stats
 	my @fsdata = ();
 
 	# Load data from file
-	my @content = ();
 	my $offset = (exists $global_infos{"$input_dir/$file"}) ? $global_infos{"$input_dir/$file"} : 0;
 	my $curfh = open_filehdl("$input_dir/$file");
 	print STDERR "DEBUG: Starting to read $input_dir/$file from offset $offset\n" if ($DEBUG);
@@ -9805,7 +9820,6 @@ sub load_fsuse_stats
 		$offset += length($l);
 		chomp($l);
 		$l =~ s/\r//;
-		push(@content, $l);
 		$l =~ s/,/\./g;
 		# Add the header
 		push(@fsdata, "hostname;interval;timestamp;MBfsfree;MBfsused;%fsused;%ufsused;Ifree;Iused;%Iused;FILESYSTEM") if (!$first);
@@ -9816,6 +9830,75 @@ sub load_fsuse_stats
 	$global_infos{"$input_dir/$file"} = $offset;
 
 	return @fsdata;
+}
+
+sub load_commit_memory_stats
+{
+	my ($in_dir, $file) = @_;
+
+	my $interval = 0;
+	my $hostname = 'unknown';
+	my @fsdata = ();
+
+	# Load data from file
+	my $offset = (exists $global_infos{"$in_dir/$file"}) ? $global_infos{"$in_dir/$file"} : 0;
+	my $curfh = open_filehdl("$in_dir/$file");
+	print STDERR "DEBUG: Starting to read $in_dir/$file from offset $offset\n" if ($DEBUG);
+	$curfh->seek($offset,0);
+	my $first = 0;
+	while (my $l = <$curfh>) {
+		$offset += length($l);
+		chomp($l);
+		$l =~ s/\r//;
+		$l =~ s/,/\./g;
+		# Add the header
+		push(@fsdata, "timestamp;CommitLimit;CommittedAs") if (!$first);
+		push(@fsdata, $l);
+		$first++;
+	}
+	$curfh->close();
+	$global_infos{"$in_dir/$file"} = $offset;
+
+	return @fsdata;
+}
+
+sub compute_commit_memory_stat
+{
+	for (my $i = 0; $i <= $#_; $i++) {
+		# epoch;commitLimit;committed_As
+		my @data = split(/;/, $_[$i]);
+		next if ($data[0] !~ /^\d+/);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[0]*1000 < $BEGIN));
+		next if ($END   && ($data[0]*1000 > $END));
+
+		my $tz = ((0-$TIMEZONE)*3600);
+		$data[0] -= $tz;
+		map { s/,/\./ } @data ;
+		$sar_commit_memory_stat{$data[0]}{'commit_limit'}  = ($data[1]||0)*1000;
+		$sar_commit_memory_stat{$data[0]}{'committed_as'} = ($data[2]||0)*1000;
+	}
+}
+
+sub compute_commit_memory_report
+{
+	my $data_info = shift();
+
+	my %commit_memory_stat = ();
+	foreach my $t (sort {$a <=> $b} keys %sar_commit_memory_stat) {
+		if (!exists $OVERALL_STATS{'system'}{'committed_as'} || ($OVERALL_STATS{'system'}{'committed_as'}[1] < $sar_commit_memory_stat{$t}{'committed_as'})) {
+			@{$OVERALL_STATS{'system'}{'committed_as'}} = ($t, $sar_commit_memory_stat{$t}{'committed_as'});
+		}
+		$commit_memory_stat{'commit_limit'}  .= '[' . $t . ',' . $sar_commit_memory_stat{$t}{'commit_limit'} . '],';
+		$commit_memory_stat{'committed_as'} .= '[' . $t . ',' . $sar_commit_memory_stat{$t}{'committed_as'} . '],';
+	}
+	%sar_commit_memory_stat = ();
+	if (scalar keys %commit_memory_stat > 0) {
+		$commit_memory_stat{'commit_limit'} =~ s/,$//;
+		$commit_memory_stat{'committed_as'} =~ s/,$//;
+		print &jqplot_linegraph_array($IDX++, 'system-commit_memory', $data_info, '', $commit_memory_stat{'commit_limit'}, $commit_memory_stat{'committed_as'});
+	}
 }
 
 sub compute_sarfile_stats
@@ -9890,6 +9973,16 @@ sub compute_sarfile_stats
 
 		# Compute swap statistics
 		&compute_swap_stat(@{$fulldata->{pswap}});
+
+	}
+
+	####
+	# Set commit memory utilization
+	####
+	if ($data_info{name} eq 'system-commit_memory') {
+
+		# Compute disk space use per devices statistics
+		&compute_commit_memory_stat(@{$fulldata->{'system-commit_memory'}});
 
 	}
 
@@ -10124,6 +10217,16 @@ sub compute_sar_graph
 
 		# Compute graphs for swap statistics
 		&compute_swap_report(\%data_info);
+
+	}
+
+	####
+	# Show commit memory utilization
+	####
+	if ($data_info{name} eq 'system-commit_memory') {
+
+		# Compute graphs for I/O per devices statistics
+		&compute_commit_memory_report(\%data_info, $src_base);
 
 	}
 
