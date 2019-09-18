@@ -17,8 +17,9 @@ User=postgres
 Environment=STATDIR=/var/lib/pgcluu/data
 Environment=REPORTDIR=/var/lib/pgcluu/report
 ExecStartPre=-/bin/mkdir -p $REPORTDIR
-ExecStartPre=-/bin/chown postgres: $REPORTDIR
-ExecStart=/usr/bin/pgcluu -o $REPORTDIR $STATDIR
+ExecStartPre=-/bin/chown postgres:www-data $REPORTDIR
+ExecStartPre=-/bin/chmod u=rwX,g=rsX,o= $REPORTDIR
+ExecStart=/usr/local/bin/pgcluu -o $REPORTDIR $STATDIR
 
 [Install]
 WantedBy=multi-user.target
