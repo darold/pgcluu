@@ -405,20 +405,27 @@ my %DB_GRAPH_INFOS = (
 			'legends' => ['checkpoints timed','checkpoints requests'],
 		},
 		'2' => {
-			'name' =>  'cluster-bgwriter',
+			'name' =>  'cluster-bgwriter_write',
 			'title' => 'background writer clean stats',
-			'description' => 'Background writer cache cleaning statistics by checkpoints, lru, backends and total allocated bytes per second. Buffers checkpoint are written during checkpoint calls, buffers backend represent client backend that had to write to satisfy an allocation and buffers clean represent background writer cleaning a dirty buffer expected by an allocation. Buffers allocated is the total number of allocated new buffer whether or not it was already cached.',
+			'description' => 'Background writer cache cleaning statistics by checkpoints, lru and backends. Buffers checkpoint are written during checkpoint calls, buffers backend represent client backend that had to write to satisfy an allocation and buffers clean represent background writer cleaning a dirty buffer expected by an allocation.',
 			'ylabel' => 'Size per second',
-			'legends' => ['checkpoint buffers','clean buffers','backend buffers', 'allocated buffers'],
+			'legends' => ['checkpoint buffers','clean buffers','backend buffers'],
 		},
 		'3' => {
+			'name' =>  'cluster-bgwriter_read',
+			'title' => 'background writer allocated buffers',
+			'description' => 'Background total allocated bytes per second. Buffers allocated is the total number of allocated new buffers whether or not it was already cached.',
+			'ylabel' => 'Size per second',
+			'legends' => ['allocated'],
+		},
+		'4' => {
 			'name' =>  'cluster-bgwriter_count',
 			'title' => 'background writer count stats',
 			'description' => 'Background writer counter stats. Max written clean reports the number of times the background writer stopped a cleaning scan because it had written too many buffers. Buffers backend fsync reports the number of times a backend had to execute its own fsync call (normally the background writer handles those even when the backend does its own write).',
 			'ylabel' => 'Times per second',
 			'legends' => ['maxwritten clean','buffers backend fsync'],
 		},
-		'4' => {
+		'5' => {
 			'name' => 'cluster-checkpoints_time',
 			'title' => 'checkpoints write stats',
 			'description' => 'Background writer statistics on checkpoints. Checkpoint write time reports the total amount of time that has been spent in the portion of checkpoint processing where files are written to disk. Checkpoint sync time reports the total amount of time that has been spent in the portion of checkpoint processing where files are synchronized to disk.',
@@ -1741,6 +1748,7 @@ sub init_html_file
 	my $ofile = shift;
 	my $src_base = shift;
 
+	$ofile =~ s/cluster-cluster-/cluster-/;
 	# Open a filehandle for each database
 	my $fhdb = IO::File->new($ofile, "w");
 	die "FATAL: can't write file $ofile, $!" if (not defined $fhdb);
@@ -1754,6 +1762,7 @@ sub append_to_html_file
 	my $ofile = shift;
 	my $src_base = shift;
 
+	$ofile =~ s/cluster-cluster-/cluster-/;
 	# If file doesn't exist create it
 	if (! -e $ofile) {
 		&init_html_file($ofile, $src_base);
@@ -1769,6 +1778,7 @@ sub end_html_file
 {
 	my $ofile = shift;
 
+	$ofile =~ s/cluster-cluster-/cluster-/;
 	my $fhdb = IO::File->new($ofile, "a");
 	die "FATAL: can't write file $ofile, $!" if (not defined $fhdb);
 	$fhdb->print("</ul>\n");
@@ -4221,7 +4231,7 @@ sub pg_stat_bgwriter_report
 
 	my $total_checkpoint = ($data{'Checkpoint timed'} || 0) + ($data{'Checkpoint requested'} || 0);
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
-		next if (!grep(/^$data_info{$id}{name}$/, 'cluster-checkpoints', 'cluster-checkpoints_time', 'cluster-bgwriter', 'cluster-bgwriter_count'));
+		next if (!grep(/^$data_info{$id}{name}$/, 'cluster-checkpoints', 'cluster-checkpoints_time', 'cluster-bgwriter_write', 'cluster-bgwriter_read', 'cluster-bgwriter_count'));
 		my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 		if ($data_info{$id}{name} eq 'cluster-checkpoints') {
 			my $bkup0 = $data_info{$id}{legends}[0];
@@ -4241,12 +4251,14 @@ sub pg_stat_bgwriter_report
 				$bgwriter_stat{checkpoint_write_time} =~ s/,$//;
 				print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-checkpoints_time', \%{$data_info{$id}}, '', $bgwriter_stat{checkpoint_write_time}, $bgwriter_stat{checkpoint_sync_time});
 			}
-		} elsif ($data_info{$id}{name} eq 'cluster-bgwriter') {
+		} elsif ($data_info{$id}{name} eq 'cluster-bgwriter_write') {
 			$bgwriter_stat{buffers_checkpoint} =~ s/,$// if (exists $bgwriter_stat{buffers_checkpoint});
 			$bgwriter_stat{buffers_clean} =~ s/,$// if (exists $bgwriter_stat{buffers_clean});
 			$bgwriter_stat{buffers_backend} =~ s/,$// if (exists $bgwriter_stat{buffers_backend});
+			print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-bgwriter_write', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean}, $bgwriter_stat{buffers_backend});
+		} elsif ($data_info{$id}{name} eq 'cluster-bgwriter_read') {
 			$bgwriter_stat{buffers_alloc} =~ s/,$// if (exists $bgwriter_stat{buffers_alloc});
-			print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-bgwriter', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean}, $bgwriter_stat{buffers_backend},$bgwriter_stat{buffers_alloc});
+			print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-bgwriter_read', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_alloc});
 		} elsif ($data_info{$id}{name} eq 'cluster-bgwriter_count') {
 			$bgwriter_stat{maxwritten_clean} =~ s/,$// if (exists $bgwriter_stat{maxwritten_clean});
 			$bgwriter_stat{buffers_backend_fsync} =~ s/,$// if (exists $bgwriter_stat{buffers_backend_fsync});
@@ -7583,7 +7595,8 @@ sub generate_html_menu
 		my $disable_deadlock = ' class="disabled"';
 		my $disable_buffercache = ' class="disabled"';
 		my $disable_buffer = ' disabled';
-		my $disable_bgwriter = ' class="disabled"';
+		my $disable_bgwriter_write = ' class="disabled"';
+		my $disable_bgwriter_read = ' class="disabled"';
 		my $disable_bgwriter_count = ' class="disabled"';
 		my $disable_writer = ' disabled';
 		my $disable_tempfile = ' class="disabled"';
@@ -7593,7 +7606,7 @@ sub generate_html_menu
 		my $disable_xlog_files = ' class="disabled"';
 		my $disable_xlog = ' class="disabled"';
 		my $disable_checkpoints = ' class="disabled"';
-		my $disable_checkpointwrite = ' class="disabled"';
+		my $disable_checkpoint_time = ' class="disabled"';
 		my $disable_archive = ' class="disabled"';
 		my $disable_rw_ratio = ' disabled';
 		my $disable_read_ratio = ' class="disabled"';
@@ -7642,8 +7655,12 @@ sub generate_html_menu
 			$disable_buffercache = '';
 			$disable_buffer = '';
 		}
-		if (-e "$OUTPUT_DIR/cluster-bgwriter.html") {
-			$disable_bgwriter = "";
+		if (-e "$OUTPUT_DIR/cluster-bgwriter_write.html") {
+			$disable_bgwriter_write = "";
+			$disable_writer = "";
+		}
+		if (-e "$OUTPUT_DIR/cluster-bgwriter_read.html") {
+			$disable_bgwriter_read = "";
 			$disable_writer = "";
 		}
 		if (-e "$OUTPUT_DIR/cluster-bgwriter_count.html") {
@@ -7670,8 +7687,8 @@ sub generate_html_menu
 			$disable_checkpoints = '';
 			$disable_wal = '';
 		}
-		if (-e "$OUTPUT_DIR/cluster-checkpoints.html") {
-			$disable_checkpointwrite = '';
+		if (-e "$OUTPUT_DIR/cluster-checkpoints_time.html") {
+			$disable_checkpoint_time = '';
 			$disable_wal = '';
 		}
 		if (-e "$OUTPUT_DIR/cluster-database-read_ratio.html") {
@@ -7708,43 +7725,43 @@ sub generate_html_menu
 			$disable_replication = "";
 			$disable_allrepli = "";
 		}
-		if (-e "$OUTPUT_DIR/cluster-cluster-archive.html") {
+		if (-e "$OUTPUT_DIR/cluster-archive.html") {
 			$disable_archive = '';
 			$disable_wal = '';
 		}
-		if (-e "$OUTPUT_DIR/cluster-cluster-pgconf.html") {
+		if (-e "$OUTPUT_DIR/cluster-pgconf.html") {
 			$disable_conf = '';
 			$disable_pgconf = '';
 		}
-		if (-e "$OUTPUT_DIR/cluster-cluster-settings.html") {
+		if (-e "$OUTPUT_DIR/cluster-settings.html") {
 			$disable_conf = '';
 			$disable_pgsettings = '';
 		}
-		if (-e "$OUTPUT_DIR/cluster-cluster-nondefault-settings.html") {
+		if (-e "$OUTPUT_DIR/cluster-nondefault-settings.html") {
 			$disable_conf = '';
 			$disable_pgnondefaultsettings = '';
 		}
-		if (-e "$OUTPUT_DIR/cluster-cluster-dbrolesetting.html") {
+		if (-e "$OUTPUT_DIR/cluster-dbrolesetting.html") {
 			$disable_conf = '';
 			$disable_pgdb_role_setting = '';
 		}
-		if (-e "$OUTPUT_DIR/cluster-cluster-alterconf.html") {
+		if (-e "$OUTPUT_DIR/cluster-alterconf.html") {
 			$disable_conf = '';
 			$disable_alterconf = '';
 		}
-		if (-e "$OUTPUT_DIR/cluster-cluster-recoveryconf.html") {
+		if (-e "$OUTPUT_DIR/cluster-recoveryconf.html") {
 			$disable_conf = '';
 			$disable_recoveryconf = '';
 		}
-		if (-e "$OUTPUT_DIR/cluster-cluster-pghba.html") {
+		if (-e "$OUTPUT_DIR/cluster-pghba.html") {
 			$disable_conf = '';
 			$disable_pghba = '';
 		}
-		if (-e "$OUTPUT_DIR/cluster-cluster-pgident.html") {
+		if (-e "$OUTPUT_DIR/cluster-pgident.html") {
 			$disable_conf = '';
 			$disable_pgident = ''
 		}
-		if (-e "$OUTPUT_DIR/cluster-cluster-pgbouncer.html") {
+		if (-e "$OUTPUT_DIR/cluster-pgbouncer.html") {
 			$disable_conf = '';
 			$disable_pgbouncer = '';
 		}
@@ -7781,8 +7798,9 @@ sub generate_html_menu
 			<li id="menu-backgroundwriter" class="dropdown-submenu $disable_writer">
 			   <a href="#" tabindex="-1">Background writer </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-cluster-bgwriter"$disable_bgwriter><a href="cluster-bgwriter.html">Background writer buffers</a></li>
-			      <li id="menu-cluster-bgwriter_count"$disable_bgwriter_count><a href="cluster-bgwriter_count.html">Background writer counters</a></li>
+			      <li id="menu-cluster-bgwriter_write"$disable_bgwriter_write><a href="cluster-bgwriter_read.html">Bgwriter buffers written</a></li>
+			      <li id="menu-cluster-bgwriter_read"$disable_bgwriter_read><a href="cluster-bgwriter_read.html">Bgwriter buffers allocated</a></li>
+			      <li id="menu-cluster-bgwriter_count"$disable_bgwriter_count><a href="cluster-bgwriter_count.html">Bgwriter counters</a></li>
 			      </ul>
 		        </li>
 			<li id="menu-temporaryfiles" class="dropdown-submenu$disable_temporary">
@@ -7797,7 +7815,7 @@ sub generate_html_menu
 			      <ul class="dropdown-menu">
 			      <li id="menu-cluster-xlog_files"$disable_xlog_files><a href="cluster-xlog_files.html">Wal files</a></li>
 			      <li id="menu-cluster-checkpoints"$disable_checkpoints><a href="cluster-checkpoints.html">Checkpoints counter</a></li>
-			      <li id="menu-cluster-checkpoints_time"$disable_checkpointwrite><a href="cluster-checkpoints.html">Checkpoints write time</a></li>
+			      <li id="menu-cluster-checkpoints_time"$disable_checkpoint_time><a href="cluster-checkpoints_time.html">Checkpoints write time</a></li>
 			      <li id="menu-cluster-archive"$disable_archive><a href="cluster-database-archive.html">Archiver stats</a></li>
 			      </ul>
 		        </li>
@@ -7829,15 +7847,15 @@ sub generate_html_menu
 			<li id="menu-configuration" class="dropdown-submenu$disable_conf">
 			   <a href="#" tabindex="-1">Configurations </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-cluster-pgconf"$disable_pgconf><a href="cluster-cluster-pgconf.html">PostgreSQL configuration</a></li>
-			      <li id="menu-cluster-settings"$disable_pgsettings><a href="cluster-cluster-settings.html">PostgreSQL settings</a></li>
-			      <li id="menu-cluster-nondefault-settings"$disable_pgnondefaultsettings><a href="cluster-cluster-nondefault-settings.html">PostgreSQL non default settings</a></li>
-			      <li id="menu-cluster-dbrolesetting"$disable_pgdb_role_setting><a href="cluster-cluster-dbrolesetting.html">Database/Roles settings</a></li>
-			      <li id="menu-cluster-alterconf"$disable_alterconf><a href="cluster-cluster-alterconf.html">PostgreSQL ALTER SYSTEM configuration</a></li>
-			      <li id="menu-cluster-recoveryconf"$disable_recoveryconf><a href="cluster-cluster-recoveryconf.html">PostgreSQL recovery configuration</a></li>
-			      <li id="menu-cluster-pghba"$disable_pghba><a href="cluster-cluster-pghba.html">PostgreSQL authorization</a></li>
-			      <li id="menu-cluster-pgident"$disable_pgident><a href="cluster-cluster-pgident.html">User Name Maps</a></li>
-			      <li id="menu-cluster-pgbouncer"$disable_pgbouncer><a href="cluster-cluster-pgbouncer.html">Pgbouncer settings</a></li>
+			      <li id="menu-cluster-pgconf"$disable_pgconf><a href="cluster-pgconf.html">PostgreSQL configuration</a></li>
+			      <li id="menu-cluster-settings"$disable_pgsettings><a href="cluster-settings.html">PostgreSQL settings</a></li>
+			      <li id="menu-cluster-nondefault-settings"$disable_pgnondefaultsettings><a href="cluster-nondefault-settings.html">PostgreSQL non default settings</a></li>
+			      <li id="menu-cluster-dbrolesetting"$disable_pgdb_role_setting><a href="cluster-dbrolesetting.html">Database/Roles settings</a></li>
+			      <li id="menu-cluster-alterconf"$disable_alterconf><a href="cluster-alterconf.html">PostgreSQL ALTER SYSTEM configuration</a></li>
+			      <li id="menu-cluster-recoveryconf"$disable_recoveryconf><a href="cluster-recoveryconf.html">PostgreSQL recovery configuration</a></li>
+			      <li id="menu-cluster-pghba"$disable_pghba><a href="cluster-pghba.html">PostgreSQL authorization</a></li>
+			      <li id="menu-cluster-pgident"$disable_pgident><a href="cluster-pgident.html">User Name Maps</a></li>
+			      <li id="menu-cluster-pgbouncer"$disable_pgbouncer><a href="cluster-pgbouncer.html">Pgbouncer settings</a></li>
 			     </ul>
 			</li>
                 </ul>

@@ -279,7 +279,8 @@ our %pg_action_map = (
 	'cluster-databaseloaded' => 'all_database_buffercache',
 	'cluster-usagecount' => 'all_database_usagecount',
 	'cluster-isdirty' => 'all_database_isdirty',
-	'cluster-bgwriter' => 'all_stat_bgwriter',
+	'cluster-bgwriter_write' => 'all_stat_bgwriter',
+	'cluster-bgwriter_read' => 'all_stat_bgwriter',
 	'cluster-bgwriter_count' => 'all_stat_bgwriter',
 	'cluster-checkpoints' => 'all_stat_bgwriter',
 	'cluster-checkpoints_time' => 'all_stat_bgwriter',
@@ -567,20 +568,27 @@ my %DB_GRAPH_INFOS = (
 			'legends' => ['checkpoints timed','checkpoints requests'],
 		},
 		'2' => {
-			'name' =>  'cluster-bgwriter',
+			'name' =>  'cluster-bgwriter_write',
 			'title' => 'background writer clean stats',
-			'description' => 'Background writer cache cleaning statistics by checkpoints, lru, backends and total allocated bytes per second. Buffers checkpoint are written during checkpoint calls, buffers backend represent client backend that had to write to satisfy an allocation and buffers clean represent background writer cleaning a dirty buffer expected by an allocation. Buffers allocated is the total number of allocated new buffer whether or not it was already cached.',
+			'description' => 'Background writer cache cleaning statistics by checkpoints, lru and backends. Buffers checkpoint are written during checkpoint calls, buffers backend represent client backend that had to write to satisfy an allocation and buffers clean represent background writer cleaning a dirty buffer expected by an allocation.',
 			'ylabel' => 'Size per second',
-			'legends' => ['checkpoint buffers','clean buffers','backend buffers', 'allocated buffers'],
+			'legends' => ['checkpoint','clean','backend'],
 		},
 		'3' => {
+			'name' =>  'cluster-bgwriter_read',
+			'title' => 'background writer allocated buffers',
+			'description' => 'Background total allocated bytes per second. Buffers allocated is the total number of allocated new buffers whether or not it was already cached.',
+			'ylabel' => 'Size per second',
+			'legends' => ['allocated'],
+		},
+		'4' => {
 			'name' =>  'cluster-bgwriter_count',
 			'title' => 'background writer count stats',
 			'description' => 'Background writer counter stats. Max written clean reports the number of times the background writer stopped a cleaning scan because it had written too many buffers. Buffers backend fsync reports the number of times a backend had to execute its own fsync call (normally the background writer handles those even when the backend does its own write).',
 			'ylabel' => 'Times per second',
 			'legends' => ['maxwritten clean','buffers backend fsync'],
 		},
-		'4' => {
+		'5' => {
 			'name' => 'cluster-checkpoints_time',
 			'title' => 'checkpoints write stats',
 			'description' => 'Background writer statistics on checkpoints. Checkpoint write time reports the total amount of time that has been spent in the portion of checkpoint processing where files are written to disk. Checkpoint sync time reports the total amount of time that has been spent in the portion of checkpoint processing where files are synchronized to disk.',
@@ -4041,12 +4049,14 @@ sub pg_stat_bgwriter_report
 				$bgwriter_stat{checkpoint_write_time} =~ s/,$//;
 				print &jqplot_linegraph_array($IDX++, 'cluster-checkpoints_time', \%{$data_info{$id}}, '', $bgwriter_stat{checkpoint_write_time}, $bgwriter_stat{checkpoint_sync_time});
 			}
-		} elsif ($data_info{$id}{name} eq 'cluster-bgwriter') {
+		} elsif ($data_info{$id}{name} eq 'cluster-bgwriter_write') {
 			$bgwriter_stat{buffers_checkpoint} =~ s/,$//;
 			$bgwriter_stat{buffers_clean} =~ s/,$//;
 			$bgwriter_stat{buffers_backend} =~ s/,$//;
+			print &jqplot_linegraph_array($IDX++, 'cluster-bgwriter_write', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean}, $bgwriter_stat{buffers_backend});
+		} elsif ($data_info{$id}{name} eq 'cluster-bgwriter_read') {
 			$bgwriter_stat{buffers_alloc} =~ s/,$//;
-			print &jqplot_linegraph_array($IDX++, 'cluster-bgwriter', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_checkpoint}, $bgwriter_stat{buffers_clean}, $bgwriter_stat{buffers_backend}, $bgwriter_stat{buffers_alloc});
+			print &jqplot_linegraph_array($IDX++, 'cluster-bgwriter_read', \%{$data_info{$id}}, '', $bgwriter_stat{buffers_alloc});
 		} elsif ($data_info{$id}{name} eq 'cluster-bgwriter_count') {
 			$bgwriter_stat{maxwritten_clean} =~ s/,$//;
 			$bgwriter_stat{buffers_backend_fsync} =~ s/,$//;
@@ -7722,8 +7732,9 @@ AAAASUVORK5CYII=';
 			<li id="menu-backgroundwriter" class="dropdown-submenu">
 			   <a href="#" tabindex="-1">Background writer </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-cluster-bgwriter"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-bgwriter&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Background writer buffers</a></li>
-			      <li id="menu-cluster-bgwriter_count"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-bgwriter_count&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Background writer counters</a></li>
+			      <li id="menu-cluster-bgwriter_write"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-bgwriter_write&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Bgwriter buffers written</a></li>
+			      <li id="menu-cluster-bgwriter_read"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-bgwriter_read&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Bgwriter buffers allocated</a></li>
+			      <li id="menu-cluster-bgwriter_count"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-bgwriter_count&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Bgwriter counters</a></li>
 			      </ul>
 		        </li>
 };
