@@ -1,3 +1,269 @@
+2019-09-18 - Version 3.0 released
+
+This release is a major release that adds lot of improvement and
+new reports. It also improve performances and fully support a CGI
+mode with dynamic content for realtime reports.
+
+New or enhanced reports/features:
+
+  * The CGI mode to provide dynamic reports on time selection is now
+    production ready and has left the beta stage. See documentation
+    on how to enable it. Debian packaging enable this mode by default.
+  * Installation and configuration is fully managed from Makefile.PL
+    script. This will help distribution packaging with additional
+    configuration directives to control the behavior of pgcluu scripts
+    with generic systemd service and timer files. 
+  * Add incremental mode to pgcluu. That mean that you don't have to
+    remove the content of the report directory anymore before running
+    pgcluu again and when pgcluu detect that you are running in this
+    mode. The incremental mode is detected from statistic directory
+    when you have used the --rotate-daily or --rotate-hourly option
+    to pgcluu_collectd.
+  * Rewrite Stats I/O reports to display read/hit per table or indexes
+    during the audit period reported.
+  * Move Xlog (Wal bytes written) report under replication menu as
+    data comes from pg_stat_replication.
+  * Explode System and Cluster reports into several reports dedicated
+    files to limit the size of the HTML files in incremental mode.
+  * Add collect and report of vm.nr_overcommit_hugepages.
+  * Add report on pages scanned to report number of pages scanned by
+    the kswapd daemon and number of pages scanned directly per second
+    (pgscank/s and pgscand/s). It also reports the number of pages
+    the system has reclaimed from cache (pagecache and swapcache) per
+    second to satisfy its memory demands (pgsteal/s). On a second
+    axis %vmeffto reports the the efficiency of page reclaim.
+  * All pages reports have been moved as sub menu of the Page menu and
+    pgfree has been removed from the page fault report.
+  * Limit system cache statistics report to pgpgin/s and pgpgout/s and
+    a new report is dedicated to Page fault statistics with majflt/s,
+    minflt/s and pgfree/s dataset. Dataset minflt/s is calculated from
+    sar output as result of "fault/s - majflt/s".
+  * All statistics about pg_stat_user_* and pg_stat_xact_user_* views
+    are now stored as a snapshot at start and at end of the audit
+    period and each hour if you are running in incremental mode. The
+    old behavior was to append the snapshot at each running interval
+    to the data file but this is not necessary and this can use huge
+    disk space if you have lot of table and indexes in your database.
+    Backward compatibility is preserved.
+  * New report of json versus jsonb columns in each database.
+  * Add keepalive kernel configuration in SysInfo report.
+  * Separate bgwriter "allocated" buffers in a dedicated report for
+    better reading.
+  * Add new report about estimated memory workload based on the value
+    of Committed_AS from /proc/meminfo. Committed_AS is the total
+    amount of memory estimated to complete the workload. This value
+    represents the worst case scenario value, and also includes swap
+    memory. The report show the memory workload aver the time.
+
+New command line options:
+
+  - Add option -x, --external-menu to pgcluu to save the common menu
+    in menu.html and load it into each report using w3-include-html
+    attribute from w3.js. This will only work if access to HTML report
+    is through a Web server, not using the file:// protocol.
+  - Add new option --retention to pgcluu to set number of rolling days
+    to keep in report directory. Default is to store indefinitely.
+  - Add option --retention NDAYS to pgcluu_collectd to set the number
+    of rolling days to keep in data directory in incremental mode.
+    Default is to store indefinitely.
+
+New configuration directives :
+
+  * Add configuration directive STATS_REPORT_CACHING to pgcluu.conf
+    file. This directive must be enabled in CGI mode. In this case the
+    pgcluu script must be run periodically at least each 5 minutes to
+    build and update cached statistics. In cache mode pgcluu generate
+    binary file in the statistics directory and nothing in the report
+    directory. The pgcluu.service and pgcluu.timer can be use, pgcluu
+    will read the configuration file and switch automatically to cache
+    mode if STATS_REPORT_CACHING is enabled.
+
+  * Add MAX_RENDERED_DAYS configuration directive to set the maximum
+    number of days in a graph. Using default pgcluu_collectd 1 minute
+    interval each, daily graph will have 1440 points. Having too much
+    data to render is not a good point for performances with the
+    current code. The user can set is own graph period, default is to
+    limit to the first seven days of the selected period. This mean a
+    maximum of 10080 points for one week, this seems a safe limit.
+
+It also fixes some issues reported by users since last five months:
+
+  - New report on memory workload based on values of Committed_AS from
+    /proc/meminfo. Thanks to Jehan-Guillaume de Rorthais for the
+    feature request.
+  - Separate bgwriter "allocated" buffers in a dedicated report.
+    Thanks to Guillaume Lelarge for the report.
+  - Use MASK to 0022 for directory and file creation and add a note
+    about securing the stats repository in the source code.
+    It can be changed to 0027 if you want to secure the data directory
+    Note that in CGI mode the www-data user or group need read access
+    to all files in the stat directory. The systemd service files take
+    care of setting the privilege for the postgres and www-data users.
+  - Make perlcritic more happy.
+  - Try to handle automatically systemd RPM specific path in install
+    process (/lib/systemd/system/).
+  - Update resources files minimization.
+  - Fix declaration of config file.
+  - Change Perl installation paths to be vendor paths by default and
+    adapt path replacement by DESTDIR.
+  - Keep pgcluu.conf after a make clean to be able to see the content.
+  - Update documentation about new installation behavior.
+  - Fix perl replacement issues on service file
+  - Update MANIFEST and META.yml files
+  - Update path to man page in documentation.
+  - Replace DATADIR by STATDIR and HTMLDIR by RSCDIR in Makefile.PL.
+    Add missing REPORTDIR variable, default /var/lib/pgcluu/report.
+  - Change default PIDDIR to /var/run/postgresql.
+  - Replace path in services files following environment variables
+    defined with Makefile.PL.
+  - The configuration file pgcluu.conf is now auto-generated by script
+    Makefile.PL
+  - Add support to some new environment variables to fully customize
+    the installation paths (HTMLDIR,CGIDIR,CONFDIR,PIDDIR,DATADIR,
+    APACHECONF,MANDIR,DOCDIR,SYSTEMDDIR,RETENTION). Default are:
+    
+            DESTDIR     => /usr/local
+            INSTALLDIRS => site
+            CONFDIR     => DESTDIR/etc
+            PIDDIR      => /var/run
+            DATADIR     => /var/lib/pgcluu/data
+            HTMLDIR     => DESTDIR/share/pgcluu
+            CGIDIR      => /usr/lib/cgi-bin
+            APACHECONF  => /etc/apache2/conf-available
+            MANDIR      => DESTDIR/share/man
+            DOCDIR      => DESTDIR/share/doc
+            SYSTEMDIR   => DESTDIR/lib/systemd/system
+            RETENTION   => 0
+    
+    If INSTALLDIRS is set to 'vendor':
+    
+            CONFDIR     => /etc
+            DESTDIR     => /usr
+    
+    The configuration file is auto-generated by the Makefile.PL script
+    and saved into CONFDIR/pgcluu.conf. If the destination file exists
+    it is not overridden. The file is saved as example in directory
+    DOCDIR/pgcluu/examples/pgcluu.conf.dist
+    
+    The man page is saved as DESTDIR/share/man/pgcluu.1p.gz and a
+    symbolic link pgcluu_collectd.1p.gz is created to this file. The
+    documentation, README, changelog.gz, LICENSE files are saved under
+    DESTDIR/share/doc/.
+    
+    For the CGI mode, resources (css & js files from the cgi-bin/rsc)
+    are saved under the DESTDIR/share/pgcluu/rsc directory. The CGI
+    script is saved under /usr/lib/cgi-bin/pgcluu.cgi. The Apache
+    configuration file under /etc/apache2/conf-available/pgcluu.conf
+    with a symbolic link /etc/apache2/conf-enabled/pgcluu.conf created
+    to this file. Its content: 
+
+            Alias /pgcluu HTMLDIR/
+            <Directory HTMLDIR/>
+                Options FollowSymLinks MultiViews
+                AllowOverride None
+                Require local
+                #Require ip 192.1.168.0/24
+            </Directory>
+    
+    The systemd files (pgcluu_collectd.service, pgcluu.service and
+    pgcluu.timer) are saved as examples into DOCDIR/pgcluu/examples/
+    and into the systemd directory SYSTEMDDIR/
+    
+    The right path to the configuration file is set into all scripts
+    pgcluu, pgcluu_collectd and pgcluu.cgi. The path where the pid
+    file must be saved is replaced into pgcluu_collectd with the value
+    of PIDFILE variable.
+  - Enable configuration reading to pgcluu_collectd. The configuration
+    directive supported by this script is STATS_COLLECTD_RETENTION. It
+    is used to set the retention limit in the statistics directory
+    expressed in number of days. This directive is only used by script
+    pgcluu_collectd in incremental mode. Only the last number of days
+    will be preserved, obsolete directories will be removed. It can be
+    used to preserved disk space. Default store indefinitely.
+  - Enable configuration reading to script pgcluu. The configuration
+    directive supported by this script is STATS_REPORT_RETENTION. It
+    is used to set the retention limit in static html report directory
+    expressed in number of days. This directive is only used by pgcluu
+    in incremental mode. Only last number of days will be preserved,
+    obsolete directories will be removed. It can be used to preserved
+    disk space. Default store indefinitely.
+  - Fix some uninitialized variables during report generation of
+    pg_stat_user_tables and pg_stat_user_indexes.
+  - Set default configuration file path to /etc/pgcluu.conf and no
+    more /usr/local/etc/pgcluu.conf
+  - Change $CONFIG_FILE declaration in CGI script.
+  - Update copyright year.
+  - Limit number of days to process for a single time period
+    controlled by configuration directive MAX_RENDERED_DAYS.
+  - Disable Year and Month time selector for the moment, this is too
+    much data to render with the actual implementation of pgcluu.cgi
+  - Separate cluster / database actions.
+  - Only display latest information in CGI mode for all database
+    table and index reports that reports a list of statistics.
+    These informations can not be cumulated over time selection.
+  - Add map between actions and binary file to only load relevant
+    files
+  - Improve report generation by reading only required data.
+  - Prevent reading sar stat from data file when already read from
+    binary file.
+  - Fix multiple call to set_device_list() and compute_sarfile_stats()
+  - Only display latest information in CGI mode for menu Home, SysInfo
+    and Database.
+  - Fix offset caching for incremental mode.
+  - Fix missing call to dump_sar_binary() when build cache from hourly
+    rotation.
+  - Fix missing System menu on some condition.
+  - Submit immediately the time selector when day/week/month/year is
+    selected.
+  - Add more information on incremental mode to documentation.
+  - Fix CGI Time selector behavior.
+  - Fix calendar output for days that have already been processed.
+  - Fix issue in CPU parsing from sar output since addition of Softnet
+    stats in version 11.7.2.
+  - Update minified javascript files and add file w3.js to the list
+    of resources files.
+  - Add resources/w3.js Javascript library to be able to include a
+    HTML file into an other. Used to not include the menu in each HTML
+    file from menu.html.
+  - Explode cluster.html output into per report dedicated files to
+    limit the size of a HTML file in incremental mode. This should
+    be applied to other huge files (system.html and database-DB.html).
+  - Fix some HTML tags.
+  - Add documentation about Dynamic Reports generation using the CGI
+    mode. Thanks to Maiken Saveljev for most part of the installation
+    guide.
+  - Add information about incremental mode and --retention option at
+    end of pgcluu help.
+  - Add example for incremental mode at end of help message.
+  - Add a warning about storing indefinitely statistics with script
+    pgcluu_collectd that can fill disk space in the short or medium
+    term. Obsolete statistics can be removed using new command line
+    option '--retention ndays' with pgcluu_collectd.
+  - Update documentation about pgcluu_collectd --retention option.
+    Thanks to Christoph Courtois for the feature request.
+  - Document sorttable license. The license is called X11 in the
+    file, but MIT on the website. Stick with MIT because that's what
+    the other js files are using. Thanks to Christoph Berg for the
+    patch.
+  - Add pages reports changes to CGI.
+  - Add report on pages scanned to report number of pages scanned by
+    the kswapd daemon and number of pages scanned directly per second
+    (pgscank/s and pgscand/s). Thanks to Jehan-Guillaume de Rorthais
+    for the feature request.
+  - Additional fixes and improvements on CGI devices detection to
+    display system menu.
+  - Fix unwanted "no dataset" in table stats.
+  - Modifiy pgcluu to support new changes in pgcluu_collected about
+    pg_stat_(user|all)_* statistics storage. This patch also remove
+    use of global variable %all_vacuum_stats that was duplicating
+    storage with %all_stat_user_tables that already contain vacumm
+    and analyze statistics.
+  - Add description of %vmeff to reports.
+  - Fix missing wait of compression child process resulting in zombi
+    process. Thanks to Jehan Guillaume de Rorthais for the report.
+  - Suppress which command error in some distribution. Thanks to
+    Michael Vitale for the report.
+
 2018-12-13 - Version 2.9 released
 
 This release is a minor release that fix a major issue in the

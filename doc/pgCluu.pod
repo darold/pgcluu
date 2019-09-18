@@ -240,6 +240,25 @@ pgcluu.service+pgcluu.timer. If you don"t want to use systemd you can
 simply run pgcluu script with the -C option and execute it periodically
 through a cron job.
 
+Note that the systemd service files set the privilege to the data and report
+directory to user postgres and group www-data. By this way reports are readable
+through an httpd server for static reports and data are readable through the
+CGI if enabled. Command executed by the pgcluu_collectd.service file (daemon part)
+are:
+
+	/bin/mkdir -p $STATDIR
+	/bin/chown postgres:www-data $STATDIR
+	/bin/chmod u=rwX,g=rsX,o= $STATDIR
+
+The pgcluu.service file (client part) execute commands:
+
+	/bin/mkdir -p $REPORTDIR
+	/bin/chown postgres:www-data $REPORTDIR
+	/bin/chmod u=rwX,g=rsX,o= $REPORTDIR
+
+In case you don't want to use systemd service files you will have to execute
+these commands manually before tunning pgCluu.
+
 =head1 COLLECTING STATISTICS
 
 To generate reports about your PostgreSQL Cluster Utilization you must collect
@@ -268,7 +287,7 @@ options:
   -E, --end-after=SECOND   self terminate program after a given number of seconds.
                            Can be written: 7200 or 120M or 2H, for days use 7D for
                            example to stop collecting data after seven days. 
-  -f, --pid-file=FILE      path to pid file. Default: /tmp/pgcluu_collectd.pid.
+  -f, --pid-file=FILE      path to pid file. Default: /var/run/postgresql/pgcluu_collectd.pid.
   -h, --host=HOSTNAME      database server host or socket directory
   -i, --interval=NUM       time to wait between runs
   -k, --kill		   stop current pgcluu_collectd running daemon.
@@ -278,11 +297,11 @@ options:
   -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
   -P, --psql=BIN           path to the psql command. Default: psql.
   -Q, --no-statement       do not collect queries statistics from pg_stat_statements.
-  -r, --rotate-daily       force the daily rotation of data files.
-  -R, --rotate-hourly      force the hourly rotation of data files.
+  -r, --rotate-daily       force daily rotation of data files.
+  -R, --rotate-hourly      force hourly rotation of data files.
   -s, --sar=BIN            path to sar sysstat command. Default: sar.
   -S, --disable-sar        disable collect of system statistics with sar.
-  -T, --notablespace       disable lookup at tablespace when the connect user
+  -T, --no-tablespace      disable lookup at tablespace when the connect user
 			   is not superuser to avoid printing an error message.
   -U, --dbuser=USERNAME    database user to connect as. Default to current user.
   -v, --verbose            Print out debug informations.
@@ -294,7 +313,7 @@ options:
   --list-metric            list available metrics actions that can be performed.
   --sysinfo                get operating system information and exit (sysinfo.txt).
   --no-sysinfo             do not collect operating system information at all. 
-  --no-database            do not collect database statistics at all. 
+  --no-database            do not collect database statistics at all.
   --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
 			   database. Ex: -p 6432 -U postgres -h 192.168.1.100
                            You must at least give one parameter to enable
@@ -307,11 +326,15 @@ options:
   --pgservice NAME         Name of service inside of the pg_service.conf file.
   --exclude-time RANGE     exclude a laps of time by giving the start and end
 			   hours.
+  --cron-user=USERNAME     collect crontab settings for the given username (in
+                           this case pgcluu_collectd need to be run as root).
+                           Default is to use USERNAME environment variable or
+                           postgres when it is not defined.
   --package-list=CMD       command to list PostgreSQL packages. Default is to
                            autodetect package type and using command 'rpm -qa'
                            or 'dpkg -l'. If you have an other system you can
                            set a custom command. A filter on keyword 'postgres'
-                           is appended to the command: ' | grep postgres'.
+			   is appended to the command: ' | grep postgres'.
   --retention NDAYS        number of rolling days to keep in data directory in
                            incremental mode. Default is to store indefinitely.
   --help                   print usage
@@ -348,7 +371,7 @@ to collect statistics from a remote server:
 
 	pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.0.0.1 -U postgres --disable-sar
 
-the same but collecting system statistics using remote sar calls:
+the same but with collecting system statistics using remote sar calls:
 
 	pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.0.0.1 -U postgres --enable-ssh 
 		--ssh-user postgres --ssh-identity /var/lib/postgresql/.ssh/id_rsa.pub
@@ -377,48 +400,52 @@ limit.
 The output directory with all statistics collected should look likes:
 
 	/tmp/stat_db1/
-	 |-- end-pg_statio_user_indexes.csv
-	 |-- end-pg_statio_user_sequences.csv
-	 |-- end-pg_statio_user_tables.csv
-	 |-- end-pg_stat_user_functions.csv
-	 |-- end-pg_stat_user_indexes.csv
-	 |-- end-pg_stat_user_tables.csv
-	 |-- end-pg_stat_xact_user_functions.csv
-	 |-- end-pg_stat_xact_user_tables.csv
-	 |-- fs_stat_use.csv
-	 |-- pg_class_size.csv
-	 |-- pg_database_size.csv
-	 |-- pg_db_role_setting.csv
-	 |-- pg_nondefault_settings.csv
-	 |-- pg_prepared_xact.csv
-	 |-- pg_settings.csv
-	 |-- pg_stat_archiver.csv
-	 |-- pg_stat_bgwriter.csv
-	 |-- pg_stat_connections.csv
-	 |-- pg_stat_count_indexes.csv
-	 |-- pg_stat_database_conflicts.csv
-	 |-- pg_stat_database.csv
-	 |-- pg_stat_hash_indexes.csv
-	 |-- pg_stat_invalid_indexes.csv
-	 |-- pg_statio_user_indexes.csv
-	 |-- pg_statio_user_sequences.csv
-	 |-- pg_statio_user_tables.csv
-	 |-- pg_stat_locks.csv
-	 |-- pg_stat_missing_fkindexes.csv
-	 |-- pg_stat_redundant_indexes.csv
-	 |-- pg_stat_replication.csv
-	 |-- pg_stat_unlogged.csv
-	 |-- pg_stat_unused_indexes.csv
-	 |-- pg_stat_user_functions.csv
-	 |-- pg_stat_user_indexes.csv
-	 |-- pg_stat_user_tables.csv
-	 |-- pg_stat_xact_user_functions.csv
-	 |-- pg_stat_xact_user_tables.csv
-	 |-- pg_tablespace_size.csv
-	 |-- pg_xlog_stat.csv
-	 |-- postgresql.conf
-	 |-- sar_stats.dat
-	 |-- sysinfo.txt
+	|-- commit_memory.csv
+	|-- end-pg_statio_user_indexes.csv
+	|-- end-pg_statio_user_sequences.csv
+	|-- end-pg_statio_user_tables.csv
+	|-- end-pg_stat_user_functions.csv
+	|-- end-pg_stat_user_indexes.csv
+	|-- end-pg_stat_user_tables.csv
+	|-- end-pg_stat_xact_user_functions.csv
+	|-- end-pg_stat_xact_user_tables.csv
+	|-- fs_stat_use.csv
+	|-- pg_class_size.csv
+	|-- pg_database_size.csv
+	|-- pg_db_role_setting.csv
+	|-- pg_hba.conf
+	|-- pg_ident.conf
+	|-- pg_nondefault_settings.csv
+	|-- pg_prepared_xact.csv
+	|-- pg_settings.csv
+	|-- pg_stat_archiver.csv
+	|-- pg_stat_bgwriter.csv
+	|-- pg_stat_connections.csv
+	|-- pg_stat_count_indexes.csv
+	|-- pg_stat_database_conflicts.csv
+	|-- pg_stat_database.csv
+	|-- pg_stat_hash_indexes.csv
+	|-- pg_stat_invalid_indexes.csv
+	|-- pg_statio_user_indexes.csv
+	|-- pg_statio_user_sequences.csv
+	|-- pg_statio_user_tables.csv
+	|-- pg_stat_locks.csv
+	|-- pg_stat_missing_fkindexes.csv
+	|-- pg_stat_redundant_indexes.csv
+	|-- pg_stat_replication.csv
+	|-- pg_stat_unlogged.csv
+	|-- pg_stat_unused_indexes.csv
+	|-- pg_stat_user_functions.csv
+	|-- pg_stat_user_indexes.csv
+	|-- pg_stat_user_tables.csv
+	|-- pg_stat_xact_user_functions.csv
+	|-- pg_stat_xact_user_tables.csv
+	|-- pg_tablespace_size.csv
+	|-- pg_xlog_stat.csv
+	|-- postgresql.auto.conf
+	|-- postgresql.conf
+	|-- sar_stats.dat
+	|-- sysinfo.txt
 
 Then now you can proceed with pgcluu to generate reports.
 
@@ -525,6 +552,10 @@ options:
   -T, --no-table             Do not report statistics related to tables.
   -v, --verbose              Print out debug informations.
   -V, --version              Show pgcluu version and exit.
+  -x, --external-menu        Save menu in menu.html and load it into each report
+                             using w3-include-html attribut from w3.js. This will
+			     only work if acces to HTML reports is through a Web
+			     server, not using the file:// protocol.
   -z, --timezone +/-XX       Set the number of hour(s) from GMT of the timezone.
                              Use this to adjust date/time from the sar output,
                              pgcluu use GMT time to draw charts.
