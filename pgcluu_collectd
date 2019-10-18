@@ -860,7 +860,7 @@ while (1) {
 		# Wait next run following the interval value
 		my $t1 = time - $t0;
 		if ($t1 >= $INTERVAL) {
-			print "WARNING: loop took: $t1, you may consider increase the interval ($INTERVAL sec) using -i option.\n";
+			print "WARNING: loop took: $t1 seconds, you may consider increase the interval ($INTERVAL sec) using -i option.\n";
 			# Wait next run following the interval value
 			sleep($INTERVAL);
 		} else {
@@ -1537,8 +1537,9 @@ sub get_partitionned_tables
 	}
 
 	# Assume that inherited tables having check constraints are partitions
-	my $sql = "SELECT p.oid, quote_ident(pn.nspname) || '.' || quote_ident(p.relname),"
-		. " quote_ident(cn.nspname) || '.' || quote_ident(c.relname), con.consrc,"
+	my $sql = sprintf(
+		  "SELECT p.oid, quote_ident(pn.nspname) || '.' || quote_ident(p.relname),"
+		. " quote_ident(cn.nspname) || '.' || quote_ident(c.relname), %s,"
 		. " CASE WHEN t.oid IS NOT NULL THEN 'Trigger' WHEN r.oid IS NOT NULL THEN 'Rule' ELSE 'Unknown' END,"
 		. " count(*) OVER (PARTITION BY p.oid)"
 		. " FROM pg_inherits i"
@@ -1548,7 +1549,9 @@ sub get_partitionned_tables
 		. " JOIN pg_namespace cn ON cn.oid = p.relnamespace"
 		. " JOIN pg_constraint con ON con.conrelid= c.oid AND con.contype = 'c'"
 		. " LEFT JOIN pg_trigger t ON t.tgrelid = p.oid"
-		. " LEFT JOIN pg_rewrite r ON r.ev_class = p.oid";
+		. " LEFT JOIN pg_rewrite r ON r.ev_class = p.oid",
+		&backend_minimum_version(12, 0) ? "pg_get_constraintdef(con.oid)" : "con.consrc"
+		);
 
 	my @db_parttables = `echo "$ALWAYS_SECURE_SEARCH_PATH_SQL $sql" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
