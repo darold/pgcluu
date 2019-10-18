@@ -103,6 +103,7 @@ our %all_class_size = ();
 our %all_stat_locks = ();
 our %all_stat_unused_indexes = ();
 our %all_stat_redundant_indexes = ();
+our %all_stat_extended_statistics = ();
 our %all_stat_count_indexes = ();
 our %all_stat_missing_fkindexes = ();
 our %all_postgresql_conf = ();
@@ -157,6 +158,7 @@ our @pg_to_be_stored = (
 	'all_stat_locks',
 	'all_stat_unused_indexes',
 	'all_stat_redundant_indexes',
+	'all_stat_extended_statistics',
 	'all_stat_count_indexes',
 	'all_stat_missing_fkindexes',
 	'all_postgresql_conf',
@@ -301,6 +303,7 @@ our %pg_action_map = (
 	'table-size' => 'all_class_size',
 	'index-size' => 'all_class_size',
 	'table-unlogged' => 'all_stat_unlogged',
+	'table-extended' => 'all_stat_extended_statistics',
 	'statio-table' => 'all_statio_user_tables',
 	'index-scan' => 'all_stat_user_indexes',
 	'index-invalid' => 'all_stat_invalid_indexes',
@@ -1079,6 +1082,17 @@ my %DB_GRAPH_INFOS = (
 			'legends' => ['Unlogged tables'],
 			'active' => 1,
 			'menu' => 'Unlogged tables',
+		},
+	},
+	'pg_stat_ext.csv' => {
+		'1' => {
+			'name' =>  'table-extended',
+			'title' => 'Extended statistics defined on %s',
+			'description' => 'List of extended planner statistics created in the database.',
+			'ylabel' => 'Number',
+			'legends' => ['Extended stats'],
+			'active' => 1,
+			'menu' => 'Extended statistics',
 		},
 	},
 
@@ -5292,7 +5306,6 @@ sub pg_stat_count_indexes_report
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 
 		my $id = &get_data_id('count-index', %data_info);
-		# Open filehandle to cluster file
 		print qq{
 <ul id="slides">
 <li class="slide active-slide" id="$data_info{$id}{name}-slide">
@@ -5374,6 +5387,89 @@ sub pg_stat_count_indexes_report
 	}
 	%all_stat_count_indexes = ();
 }
+
+# Compute statistics about extended statistics
+sub pg_stat_ext
+{
+	my ($input_dir, $file) = @_;
+
+	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
+
+	%all_stat_extended_statistics = ();
+
+	# Load data from file
+	my $curfh = open_filehdl("$in_dir/$file");
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
+
+		next if (($#INCLUDE_DB >= 0) && (!grep($data[1] =~ /^$_$/, @INCLUDE_DB)));
+
+		# timestamp | dbname | schemaname | tablename | stats_schemaname | stats_name | stats_owner | attnames | kinds
+		push(@{$all_stat_extended_statistics{$data[1]}}, [ ($data[4], $data[5], $data[8], $data[7], $data[2], $data[3]) ] );
+	}
+	$curfh->close();
+}
+
+# Compute report about extended statistics
+sub pg_stat_ext_report
+{
+	my ($src_base, $dbname, %data_info) = @_;
+
+	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
+
+	return if (!$dbname);
+
+	my $id = &get_data_id('table-extended', %data_info);
+
+	foreach my $db (sort keys %all_stat_extended_statistics) {
+		next if ($db ne $dbname);
+		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
+		print qq{
+<ul id="slides">
+<div class="row">
+    <div class="col-md-12">
+      <div class="panel panel-default">
+      <div class="panel-heading">
+	<h2>$data_info{$id}{menu} on $db database</h2>
+	<p>$data_info{$id}{description}</p>
+      </div>
+      <div class="panel-body">
+	<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+		<div class="span11">
+			<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
+				<thead>
+					<tr>
+					<th>Table</th>
+					<th>Extended Statistic</th>
+					</tr>
+				</thead>
+				<tbody>
+};
+		my %stat_kinds = ('f' => 'dependencies', 'd' => 'ndistinct', 'm' => 'mcv');
+		foreach my $r (sort {"$a->[4].$a->[5]" cmp "$b->[4].$b->[5]"} @{$all_stat_extended_statistics{$db}}) {
+			$r->[2] =~ s/\{//;
+			$r->[2] =~ s/\}//;
+			my @skind = split(',', $r->[2]);
+			map { s/(.*)/$stat_kinds{$1}/; } @skind;
+			$r->[3] =~ s/\{//;
+			$r->[3] =~ s/\}//;
+			print "<tr><td>$r->[4].$r->[5]</td><td>CREATE STATISTICS $r->[0].$r->[1] (", join(',', @skind), ") ON $r->[3] FROM $r->[4].$r->[5];</td></tr>\n";
+		}
+		print qq{
+				</tbody>
+			</table>
+		</div>
+	</div>
+	</div>
+    </div>
+</div>
+};
+	}
+	%all_stat_extended_statistics = ();
+}
+
 
 # Get relevant content of postgresql.conf
 sub postgresql_conf
@@ -7880,6 +7976,13 @@ AAAASUVORK5CYII=';
 		%data_info = %{$DB_GRAPH_INFOS{'pg_statio_user_tables.csv'}};
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^statio-/);
+			$table_str .= qq{
+			      <li id="menu-$data_info{$id}{name}"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=$data_info{$id}{name}&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">$data_info{$id}{menu}</a></li>
+};
+		}
+		%data_info = %{$DB_GRAPH_INFOS{'pg_stat_ext.csv'}};
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			next if ($data_info{$id}{name} !~ /^table-/);
 			$table_str .= qq{
 			      <li id="menu-$data_info{$id}{name}"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=$db&action=$data_info{$id}{name}&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">$data_info{$id}{menu}</a></li>
 };

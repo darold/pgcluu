@@ -354,6 +354,12 @@ my %METRICS_COMMANDS = (
 		'output' => 'pg_prepared_xact.csv',
 		'command' => 'dump_preparedxactstats'
 	},
+	'statistcs_stats' => {
+		'output' => 'pg_stat_ext.csv',
+		'command' => 'dump_statisticsext',
+		'repeat'  => 1,
+		'override'  => 1,
+	},
 );
 
 # Read configuration file before reading command line parameters
@@ -2828,6 +2834,9 @@ sub dump_pgstatarchiver
 	return $sql;
 }
 
+####
+# Get information about prepared transactions
+####
 sub dump_preparedxactstats
 {
 
@@ -2839,6 +2848,29 @@ sub dump_preparedxactstats
 
 	return $sql;
 }
+
+####
+# Get extended statisctics defined in a database
+####
+sub dump_statisticsext
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), current_database(), " .
+		"cn.nspname AS schemaname, c.relname AS tablename, sn.nspname AS stat_schemaname, " .
+		"s.stxname AS stat_name, pg_get_userbyid(s.stxowner) AS stat_owner, " .
+		"(SELECT array_agg(a.attname ORDER BY a.attnum) AS array_agg FROM unnest(s.stxkeys) k(k) JOIN pg_attribute a ON a.attrelid = s.stxrelid AND a.attnum = k.k) AS attnames, " .
+		"s.stxkind AS kinds " .
+		"FROM pg_statistic_ext s JOIN pg_class c ON c.oid = s.stxrelid " .
+		"LEFT JOIN pg_namespace cn ON cn.oid = c.relnamespace " .
+		"LEFT JOIN pg_namespace sn ON sn.oid = s.stxnamespace " .
+		"WHERE NOT (EXISTS (SELECT 1 FROM unnest(s.stxkeys) k(k) JOIN pg_attribute a ON a.attrelid = s.stxrelid AND a.attnum = k.k WHERE NOT has_column_privilege(c.oid, a.attnum, 'select'::text))) " .
+		"AND (c.relrowsecurity = false OR NOT row_security_active(c.oid))"
+	);
+
+	return $sql;
+}
+
 
 
 sub parse_pretty_size

@@ -106,6 +106,7 @@ our %all_class_size = ();
 our %all_stat_locks = ();
 our %all_stat_unused_indexes = ();
 our %all_stat_redundant_indexes = ();
+our %all_stat_extended_statistics = ();
 our %all_stat_count_indexes = ();
 our %all_stat_missing_fkindexes = ();
 our %all_postgresql_conf = ();
@@ -160,6 +161,7 @@ our @pg_to_be_stored = (
 	'all_stat_locks',
 	'all_stat_unused_indexes',
 	'all_stat_redundant_indexes',
+	'all_stat_extended_statistics',
 	'all_stat_count_indexes',
 	'all_stat_missing_fkindexes',
 	'all_postgresql_conf',
@@ -911,6 +913,17 @@ my %DB_GRAPH_INFOS = (
 			'legends' => ['Unlogged tables'],
 			'active' => 1,
 			'menu' => 'Unlogged tables',
+		},
+	},
+	'pg_stat_ext.csv' => {
+		'1' => {
+			'name' =>  'table-extended',
+			'title' => 'Extended statistics defined on %s',
+			'description' => 'List of extended planner statistics created in the database.',
+			'ylabel' => 'Number',
+			'legends' => ['Extended stats'],
+			'active' => 1,
+			'menu' => 'Extended statistics',
 		},
 	},
 );
@@ -5556,6 +5569,88 @@ sub pg_stat_missing_fkindexes_report
 	%all_stat_missing_fkindexes = ();
 }
 
+# Compute statistics about extended statistics
+sub pg_stat_ext
+{
+	my ($in_dir, $file) = @_;
+
+	return if ($NO_TB_STAT);
+
+	%all_stat_extended_statistics = ();
+
+	# Load data from file
+	my $curfh = open_filehdl("$in_dir/$file");
+	while (my $l = <$curfh>) {
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
+
+		# timestamp | dbname | schemaname | tablename | stats_schemaname | stats_name | stats_owner | attnames | kinds
+		push(@{$all_stat_extended_statistics{$data[1]}}, [ ($data[4], $data[5], $data[8], $data[7], $data[2], $data[3]) ] );
+	}
+	$curfh->close();
+}
+
+# Compute report about extended statistics
+sub pg_stat_ext_report
+{
+	my ($src_base, %data_info) = @_;
+
+	return if ($NO_TB_STAT);
+
+	my $id = &get_data_id('table-extended', %data_info);
+
+	foreach my $db (sort keys %all_stat_extended_statistics) {
+		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
+		# Open filehandle to cluster file
+		my $fhtable = IO::File->new("$OUTPUT_DIR/$db-$data_info{$id}{name}.html", "w");
+		die "FATAL: can't write file $OUTPUT_DIR/$db-$data_info{$id}{name}.html, $!" if (not defined $fhtable);
+		&html_header($fhtable, $src_base);
+		print $fhtable qq{
+<ul id="slides">
+<div class="row">
+    <div class="col-md-12">
+      <div class="panel panel-default">
+      <div class="panel-heading">
+	<h2>$data_info{$id}{menu} on $db database</h2>
+	<p>$data_info{$id}{description}</p>
+      </div>
+      <div class="panel-body">
+	<div class="analysis-item row-fluid" id="$db-$data_info{$id}{name}">
+		<div class="span11">
+			<table class="table table-striped" id="$db-$data_info{$id}{name}-table">
+				<thead>
+					<tr>
+					<th>Table</th>
+					<th>Extended Statistic</th>
+					</tr>
+				</thead>
+				<tbody>
+};
+		my %stat_kinds = ('f' => 'dependencies', 'd' => 'ndistinct', 'm' => 'mcv');
+		foreach my $r (sort {"$a->[4].$a->[5]" cmp "$b->[4].$b->[5]"} @{$all_stat_extended_statistics{$db}}) {
+			$r->[2] =~ s/\{//;
+			$r->[2] =~ s/\}//;
+			my @skind = split(',', $r->[2]);
+			map { s/(.*)/$stat_kinds{$1}/; } @skind;
+			$r->[3] =~ s/\{//;
+			$r->[3] =~ s/\}//;
+			print $fhtable "<tr><td>$r->[4].$r->[5]</td><td>CREATE STATISTICS $r->[0].$r->[1] (", join(',', @skind), ") ON $r->[3] FROM $r->[4].$r->[5];</td></tr>\n";
+		}
+		print $fhtable qq{
+				</tbody>
+			</table>
+		</div>
+	</div>
+	</div>
+    </div>
+</div>
+};
+		$fhtable->close;
+	}
+	%all_stat_extended_statistics = ();
+}
+
 # Get relevant content of postgresql.conf
 sub postgresql_conf
 {
@@ -6703,7 +6798,7 @@ sub generate_html_index
 			$OVERALL_STATS{'database'}{$db}{'cache_ratio'} = sprintf("%3d", ($OVERALL_STATS{'database'}{$db}{'blks_hit'} * 100) / (($OVERALL_STATS{'database'}{$db}{'blks_read'} + $OVERALL_STATS{'database'}{$db}{'blks_hit'}) || 1));
 		}
 		foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
-			next if ($db eq 'all');
+			next if ($db eq 'all' || !$db);
 			$OVERALL_STATS{'cluster'}{'size'} += ($OVERALL_STATS{'database'}{$db}{'size'}||0);
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 			if (exists $OVERALL_STATS{'database'}{$db}{'size'}) {
@@ -7939,6 +8034,13 @@ sub generate_html_menu
 } if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
 		}
 		%data_info = %{$DB_GRAPH_INFOS{'pg_stat_unlogged.csv'}};
+		foreach my $id (sort {$a <=> $b} keys %data_info) {
+			next if ($data_info{$id}{name} !~ /^table-/);
+			$table_str .= qq{
+			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
+} if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
+		}
+		%data_info = %{$DB_GRAPH_INFOS{'pg_stat_ext.csv'}};
 		foreach my $id (sort {$a <=> $b} keys %data_info) {
 			next if ($data_info{$id}{name} !~ /^table-/);
 			$table_str .= qq{
