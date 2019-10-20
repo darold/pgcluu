@@ -7082,7 +7082,7 @@ EOF
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="glyphicon icon-th icon-2x pull-left"></i><h2>Partitionning</h2>
+              <i class="glyphicon icon-th icon-2x pull-left"></i><h2>Partitioning</h2>
               </div>
               <div class="panel-body">
                 <div class="key-figures">

@@ -2093,7 +2093,7 @@ sub write_database_info
               <h3>$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{name}</h3>
               <div class="key-figures">
                 <ul>
-                  <li>Partitionning kind: <span class="figure">$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{kind}</span></li>
+                  <li>Partitioning kind: <span class="figure">$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{kind}</span></li>
                   <li>Number of partitions: <span class="figure">$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{nparts}</span></li>
                   <li>$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{kind} detail: <pre>$sysinfo{PARTITIONNED_TABLE}{$db}{$oid}{implementation}</pre></li>
                 </ul>
@@ -7239,7 +7239,7 @@ EOF
             <div class="col-md-12">
               <div class="panel panel-default">
               <div class="panel-heading">
-              <i class="glyphicon icon-th icon-2x pull-left"></i><h2>Partitionning</h2>
+              <i class="glyphicon icon-th icon-2x pull-left"></i><h2>Partitioning</h2>
               </div>
               <div class="panel-body">
 		<div class="key-figures">
