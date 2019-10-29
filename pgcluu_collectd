@@ -27,7 +27,7 @@ use constant UMASK => 0022;
 
 $| = 1;
 
-$VERSION = '3.0';
+$VERSION = '3.1';
 $PROGRAM = 'pgcluu_collectd';
 
 # Default path to the external programs

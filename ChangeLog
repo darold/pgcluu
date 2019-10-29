@@ -1,3 +1,24 @@
+2019-10-29 - Version 3.1 released
+
+This release is a maintenance release that adds support to PostgreSQL
+v12.0. It also add a new report:
+
+  * Add report of extended statistics in report Table Statistics per
+    database. Example:
+    
+        Table         | Extended Statistic
+        public.cities | CREATE STATISTICS sch1.t1_stat (dependencies)
+                                  ON city,country FROM public.cities;
+
+It also fixes some issues reported by users since last month:
+
+  - Fix some typos in documentation. Thanks to Justin Pryzby for the
+    report.
+  - Replace obsolete pg_constraint.consrc in PostgreSQL v12 by a call
+    to function pg_get_constraintdef(). Thanks to seadba and Devrim
+    Gunduz for the report.
+
+
 2019-09-18 - Version 3.0 released
 
 This release is a major release that adds lot of improvement and
