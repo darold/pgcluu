@@ -4,7 +4,7 @@ use ExtUtils::MakeMaker;
 
 use strict;
 
-my @ALLOWED_ARGS = ('INSTALLDIRS','DESTDIR','RSCDIR','REPORTDIR','CGIDIR','CONFDIR','PIDDIR','STATDIR','APACHECONF','MANDIR','DOCDIR','SYSTEMDDIR','RETENTION');
+my @ALLOWED_ARGS = ('INSTALLDIRS','DESTDIR','PREFIX','RSCDIR','REPORTDIR','CGIDIR','CONFDIR','PIDDIR','STATDIR','APACHECONF','MANDIR','DOCDIR','SYSTEMDDIR','RETENTION', 'BINDIR');
 
 # Parse command line arguments and store them as environment variables
 while ($_ = shift) {
@@ -21,23 +21,31 @@ if (exists $ENV{INSTALLDIRS} && $ENV{INSTALLDIRS} !~ /^(site|vendor)$/) {
 }
 
 # Default install path
-my $DESTDIR = $ENV{DESTDIR} || '/usr/local';
+my $DESTDIR = $ENV{DESTDIR} || '';
+my $PREFIX  = $ENV{PREFIX} || '/usr/local';
 my $INSTALLDIRS = $ENV{INSTALLDIRS} || 'site';
-my $CONFDIR = $ENV{CONFDIR} || "$DESTDIR/etc";
+my $CONFDIR = $ENV{CONFDIR} || "$DESTDIR$PREFIX/etc";
+my $CONFDIR_SRVC = $ENV{CONFDIR} || "$PREFIX/etc";
 if ($INSTALLDIRS eq 'vendor') {
-	$CONFDIR = $ENV{CONFDIR} || '/etc';
-	$DESTDIR = $ENV{DESTDIR} || '/usr';
+	$PREFIX = $ENV{PREFIX} || '/usr';
+	$CONFDIR = $ENV{CONFDIR} || "$DESTDIR/etc";
+	$CONFDIR_SRVC = $ENV{CONFDIR} || "/etc";
 }
-my $PIDDIR = $ENV{PIDDIR} || '/var/run/postgresql';
-my $STATDIR = $ENV{STATDIR} || '/var/lib/pgcluu/data';
-my $REPORTDIR = $ENV{REPORTDIR} || '/var/lib/pgcluu/report';
-my $RSCDIR = $ENV{RSCDIR} || "$DESTDIR/share/pgcluu";
-my $CGIDIR = $ENV{CGIDIR} || '/usr/lib/cgi-bin';
-my $APACHECONF = $ENV{APACHECONF} || '/etc/apache2/conf-available';
-my $MANDIR = $ENV{MANDIR} || "$DESTDIR/share/man";
-my $DOCDIR = $ENV{DOCDIR} || "$DESTDIR/share/doc";
-my $SYSTEMDDIR = $ENV{SYSTEMDDIR} || "$ENV{DESTDIR}/lib/systemd/system";
+my $BINDIR = $ENV{BINDIR} || "$DESTDIR$PREFIX/bin";
+my $PIDDIR = $ENV{PIDDIR} || "$DESTDIR/var/run/postgresql";
+my $STATDIR = $ENV{STATDIR} || "$DESTDIR/var/lib/pgcluu/data";
+my $REPORTDIR = $ENV{REPORTDIR} || "$DESTDIR/var/lib/pgcluu/report";
+my $RSCDIR = $ENV{RSCDIR} || "$DESTDIR$PREFIX/share/pgcluu";
+my $CGIDIR = $ENV{CGIDIR} || "$DESTDIR$PREFIX/lib/cgi-bin";
+my $APACHECONF = $ENV{APACHECONF} || "$CONFDIR/apache2/conf-available";
+my $MANDIR = $ENV{MANDIR} || "$DESTDIR$PREFIX/share/man";
+my $DOCDIR = $ENV{DOCDIR} || "$DESTDIR$PREFIX/share/doc";
+my $SYSTEMDDIR = $ENV{SYSTEMDDIR} || "$DESTDIR/lib/systemd/system";
 my $RETENTION = $ENV{RETENTION} || 0;
+my $STATDIR_SRVC = $ENV{STATDIR} || "/var/lib/pgcluu/data";
+my $REPORTDIR_SRVC = $ENV{REPORTDIR} || "/var/lib/pgcluu/report";
+my $PIDDIR_SRVC = $ENV{PIDDIR} || "/var/run/postgresql";
+my $BINDIR_SRVC = $ENV{BINDIR} || "$PREFIX/bin";
 
 # Try to detect RPM specific directory installation
 my $RPM_LIKE = 0;
@@ -136,6 +144,9 @@ fi
 if [ ! -d "$DOCDIR/pgcluu/examples" ]; then
 	mkdir -p $DOCDIR/pgcluu/examples
 fi
+if [ ! -d "$CGIDIR" ]; then
+	mkdir -p $CGIDIR
+fi
 if [ ! -d "$APACHECONF" ]; then
 	mkdir -p $APACHECONF
 fi
@@ -183,7 +194,9 @@ if [ ! -f "$CONFDIR/pgcluu.conf" ]; then
 	install -m 644 pgcluu.conf $CONFDIR/pgcluu.conf
 fi
 gzip -f $DOCDIR/pgcluu/changelog
-gzip -f $MANDIR/man1/pgcluu.1p
+if [ ! -e "$MANDIR/man1/pgcluu.1p.gz" ]; then
+	gzip -f $MANDIR/man1/pgcluu.1p
+fi
 install -m 644 pgcluu_collectd.service $SYSTEMDDIR/
 install -m 644 pgcluu.service $SYSTEMDDIR/
 install -m 644 pgcluu.timer $SYSTEMDDIR/
@@ -197,12 +210,12 @@ ln -s pgcluu.1p.gz pgcluu_collectd.1p.gz
 close(INST);
 `chmod 755 install_all.sh`;
 
-`perl -p -i -e 's#my \\\$CONFIG_FILE .*#my \\\$CONFIG_FILE     = "$CONFDIR/pgcluu.conf";#' cgi-bin/pgcluu.cgi pgcluu_collectd pgcluu`;
-`perl -p -i -e 's#my \\\$PIDFILE .*=.*#my \\\$PIDFILE     = "$PIDDIR/pgcluu_collectd.pid";#' pgcluu_collectd`;
-`perl -p -i -e 's#/var/lib/pgcluu/data#$STATDIR#' pgcluu.service pgcluu_collectd.service`;
-`perl -p -i -e 's#/var/lib/pgcluu/report#$REPORTDIR#' pgcluu.service`;
-`perl -p -i -e 's#/usr/bin#$DESTDIR/bin#' pgcluu.service pgcluu_collectd.service`;
-`perl -p -i -e 's#/var/run/postgresql#$PIDDIR#' pgcluu_collectd.service`;
+`perl -p -i -e 's#my \\\$CONFIG_FILE .*#my \\\$CONFIG_FILE     = "$CONFDIR_SRVC/pgcluu.conf";#' cgi-bin/pgcluu.cgi pgcluu_collectd pgcluu`;
+`perl -p -i -e 's#my \\\$PIDFILE .*=.*#my \\\$PIDFILE     = "$PIDDIR_SRVC/pgcluu_collectd.pid";#' pgcluu_collectd`;
+`perl -p -i -e 's#/var/lib/pgcluu/data#$STATDIR_SRVC#' pgcluu.service pgcluu_collectd.service`;
+`perl -p -i -e 's#/var/lib/pgcluu/report#$REPORTDIR_SRVC#' pgcluu.service`;
+`perl -p -i -e 's#/usr/bin#$BINDIR_SRVC#' pgcluu.service pgcluu_collectd.service`;
+`perl -p -i -e 's#/var/run/postgresql#$PIDDIR_SRVC#' pgcluu_collectd.service`;
 
 my %merge_compat = ();
 if ($ExtUtils::MakeMaker::VERSION >= 6.46) {
