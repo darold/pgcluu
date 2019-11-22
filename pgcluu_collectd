@@ -354,7 +354,7 @@ my %METRICS_COMMANDS = (
 		'output' => 'pg_prepared_xact.csv',
 		'command' => 'dump_preparedxactstats'
 	},
-	'statistcs_stats' => {
+	'statistics_stats' => {
 		'output' => 'pg_stat_ext.csv',
 		'command' => 'dump_statisticsext',
 		'repeat'  => 1,
@@ -1237,6 +1237,9 @@ sub verify_action
 		return $ret;
 	}
 	# Remove some metric collection following the PostgreSQL version.
+	if (!&backend_minimum_version(10, 0)) {
+		delete $METRICS_COMMANDS{'statistics_stats'};
+	}
 	if (!&backend_minimum_version(9, 4)) {
 		delete $METRICS_COMMANDS{'archiver_stats'};
 	}
