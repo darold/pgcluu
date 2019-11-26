@@ -72,7 +72,7 @@ RSC_BASE	/pgcluu/rsc/
 
 # Path to the main pgCluu data directory. This path
 # must be readable by the user running your httpd server.
-INPUT_DIR	$STATDIR
+INPUT_DIR	$STATDIR_SRVC
 
 # Space or comma separated list of database that must be reported.
 # Value can be any valid perl regexp
