@@ -10017,7 +10017,7 @@ sub load_sarfile_stats
 			next;
 		}
 		# look for kernel header to find the date
-		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /\t(\d+)([\-\/])(\d+)[\-\/](\d+)\t/) ) {
+		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /\s+(\d+)([\-\/])(\d+)[\-\/](\d+)\s+/) ) {
 			if ($2 eq '/') {
 				$sar_month = $1;
 				$sar_day = $3;
@@ -10070,6 +10070,7 @@ sub load_sarfile_stats
 			$am_pm = $2;
 			shift(@headers) if ($headers[0] =~ /^(AM|PM)$/);
 		}
+
 		# Get all values reported
 		my @values = ();
 		push(@values, split(m#\s+#, $content[$i]));

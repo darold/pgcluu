@@ -9822,7 +9822,7 @@ sub load_sarfile_stats
 			next;
 		}
 		# look for kernel header to find the date
-		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /(\d+)([\-\/])(\d+)[\-\/](\d+)/) ) {
+		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /\s+(\d+)([\-\/])(\d+)[\-\/](\d+)\s+/) ) {
 			if ($2 eq '/') {
 				$sar_month = $1;
 				$sar_day = $3;
