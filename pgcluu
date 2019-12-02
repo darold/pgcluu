@@ -7902,7 +7902,7 @@ sub generate_html_menu
 			<li id="menu-backgroundwriter" class="dropdown-submenu $disable_writer">
 			   <a href="#" tabindex="-1">Background writer </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-cluster-bgwriter_write"$disable_bgwriter_write><a href="cluster-bgwriter_read.html">Bgwriter buffers written</a></li>
+			      <li id="menu-cluster-bgwriter_write"$disable_bgwriter_write><a href="cluster-bgwriter_write.html">Bgwriter buffers written</a></li>
 			      <li id="menu-cluster-bgwriter_read"$disable_bgwriter_read><a href="cluster-bgwriter_read.html">Bgwriter buffers allocated</a></li>
 			      <li id="menu-cluster-bgwriter_count"$disable_bgwriter_count><a href="cluster-bgwriter_count.html">Bgwriter counters</a></li>
 			      </ul>
