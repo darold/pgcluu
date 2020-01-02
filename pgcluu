@@ -10969,6 +10969,9 @@ sub read_sysinfo_file
 	my $file = shift;
 	my $fh = undef;
 
+	# Fix weird case of empty file
+	return if (-z $file);
+
 	if (!is_compressed($file)) {
 		$fh = IO::File->new("$file", 'r');
 		die "ERROR: can't read file $file, $!\n" if (not defined $fh);
@@ -11445,9 +11448,12 @@ sub load_sysinfo_binary
 {
         my ($in_dir, $infile) = @_;
 
-	my $lfh = IO::File->new("$in_dir/$infile", 'w');
+	# Fix weird case of empty file
+	return if (-z "$in_dir/$infile");
+
+	my $lfh = IO::File->new("$in_dir/$infile", 'r');
 	if (not defined $lfh) {
-		die "FATAL: can't write to $in_dir/$infile, $!\n";
+		die "FATAL: can't read file $in_dir/$infile, $!\n";
 	}
 	my %stats = %{ fd_retrieve($lfh) };
 	$lfh->close();

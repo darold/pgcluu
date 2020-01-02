@@ -11274,6 +11274,9 @@ sub load_sysinfo_binary
 {
         my ($input_dir, $infile) = @_;
 
+	# Do not load empty file, Storable don't support it
+	return if (-r "$input_dir/$infile");
+
 	my $lfh = new IO::File "<$input_dir/$infile";
 	if (not defined $lfh) {
 		die "FATAL: can't read from $input_dir/$infile, $!\n";
