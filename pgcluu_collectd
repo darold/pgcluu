@@ -1757,6 +1757,12 @@ sub grab_os_information
 		$ret = `$cmd`;
 		push(@system, "/sys/kernel/mm/transparent_hugepage/khugepaged/defrag: " . $ret);
 	}
+	$cmd = "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null | grep -E 'performance|powersave|userspace|ondemand|conservative|schedutil'";
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my $ret = `$cmd`;
+	if ($ret ne '') {
+		push(@system, "scaling_governor: " . $ret);
+	}
 	# Look at block devices informations
 	my @devices;
 	$cmd = 'ls /sys/block/ | grep -v "^loop"';

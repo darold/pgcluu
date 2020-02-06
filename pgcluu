@@ -7365,6 +7365,7 @@ EOF
 
 		my $sysctl_info = '';
 		my $hugepage_info = '';
+		my $cpu_info = '';
 		foreach my $k (sort keys %{$sysinfo{SYSTEM}}) {
 			next if ($k =~ /^kernel.*shm/);
 			if ($k =~ /transparent_hugepage/) {
@@ -7373,6 +7374,10 @@ EOF
 				$sysinfo{SYSTEM}{$k} =~ s/.*\[(.*)\].*/$1/;
 				$hugepage_info .= <<EOF;
 		<li><span class="figure-label" data-toggle="tooltip" data-placement="top" title="$k">$k2</span> <span class="figure">$sysinfo{SYSTEM}{$k}</span></li>
+EOF
+			} elsif ($k =~ /scaling_governor/) {
+				$cpu_info .= <<EOF;
+		<li><span class="figure-label" data-toggle="tooltip" data-placement="top" title="$k">$k</span> <span class="figure">$sysinfo{SYSTEM}{$k}</span></li>
 EOF
 			} else {
 				my $lbl = $k;
@@ -7457,6 +7462,7 @@ EOF
 	      <li><span class="figure">$sysinfo{CPU}{'cache size'}</span> <span class="figure-label">Cache</span></li>
 	      $core_info
 	      <li><span class="figure">$sysinfo{CPU}{'processor'}</span> <span class="figure-label">Cores</span></li>
+	      $cpu_info
 		</ul>
 		</div>
               </div>
