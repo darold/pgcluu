@@ -1719,6 +1719,11 @@ used with pgcluu_collectd.
     exit 0;
 }
 
+sub is_interactive_mode
+{
+	return -t STDIN && -t STDOUT;
+}
+
 sub set_sysstat_file
 {
 	my $input_dir = shift;
@@ -11967,6 +11972,7 @@ sub read_conf
 	my $fh = IO::File->new($CONFIG_FILE, 'r');
 	if (defined $fh)
 	{
+		my $tmp_outdir = '';
 		print STDERR "DEBUG: Reading configuration file $CONFIG_FILE\n" if ($DEBUG);
 		while (my $l = <$fh>)
 		{
@@ -11982,10 +11988,18 @@ sub read_conf
 					print STDERR "LOG: Setting retention from configuration file to $RETENTION\n";
 				}
 			} elsif ($var eq 'STATS_REPORT_CACHING') {
-				$CACHE = $vals[0];
+				GetOptions("o|output=s" => \$tmp_outdir);
+				if (is_interactive_mode() and !$CACHE and $tmp_outdir and $vals[0]) {
+					# The user might don't want to use cache mode, do nothing
+					$CACHE = 0;
+				} else {
+					$CACHE = $vals[0];
+				}
 			}
 		}
 		close($fh);
+		# we have extracted the -o option, restore it
+		$OUTPUT_DIR = $tmp_outdir if ($tmp_outdir);	
 	}
 }
 
