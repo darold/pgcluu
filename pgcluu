@@ -11992,7 +11992,7 @@ sub read_conf
 				my $tmp_outdir = '';
 				for (my $i = 0; $i <= $#ARGV; $i++)
 				{
-					$tmp_outdir = $ARGV[$i+1], last if (defined $ARGV[$i+1] && $ARGV[$i+1] =~ /^-o|-output$/);
+					$tmp_outdir = $ARGV[$i+1], last if ($ARGV[$i] =~ /^(-o|--output)$/);
 				}
 				if (is_interactive_mode() and !$CACHE and $tmp_outdir and $vals[0]) {
 					# The user might don't want to use cache mode, do nothing
