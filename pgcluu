@@ -1134,7 +1134,9 @@ GetOptions(
 	"charset=s"          => \$charset,
 	"retention=i"        => \$RETENTION,
 ) or die usage();
+
 &usage if ($HELP);
+
 
 # Print version number to stdout
 if ($SHOW_VER) {
@@ -4161,7 +4163,7 @@ sub pg_xlog_stat_report
 	%all_xlog_stat = ();
 
 	my $id = &get_data_id('cluster-xlog_files', %data_info);
-	$xlog_stat{total} =~ s/,$//;
+	$xlog_stat{total} =~ s/,$// if (defined $xlog_stat{total});
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 	if (exists $xlog_stat{recycled}) {
 		push(@{$data_info{$id}{legends}}, 'recycled', 'written', 'max_wal');
@@ -11972,7 +11974,6 @@ sub read_conf
 	my $fh = IO::File->new($CONFIG_FILE, 'r');
 	if (defined $fh)
 	{
-		my $tmp_outdir = '';
 		print STDERR "DEBUG: Reading configuration file $CONFIG_FILE\n" if ($DEBUG);
 		while (my $l = <$fh>)
 		{
@@ -11988,7 +11989,11 @@ sub read_conf
 					print STDERR "LOG: Setting retention from configuration file to $RETENTION\n";
 				}
 			} elsif ($var eq 'STATS_REPORT_CACHING') {
-				GetOptions("o|output=s" => \$tmp_outdir);
+				my $tmp_outdir = '';
+				for (my $i = 0; $i <= $#ARGV; $i++)
+				{
+					$tmp_outdir = $ARGV[$i+1], last if (defined $ARGV[$i+1] && $ARGV[$i+1] =~ /^-o|-output$/);
+				}
 				if (is_interactive_mode() and !$CACHE and $tmp_outdir and $vals[0]) {
 					# The user might don't want to use cache mode, do nothing
 					$CACHE = 0;
@@ -11998,8 +12003,6 @@ sub read_conf
 			}
 		}
 		close($fh);
-		# we have extracted the -o option, restore it
-		$OUTPUT_DIR = $tmp_outdir if ($tmp_outdir);	
 	}
 }
 
