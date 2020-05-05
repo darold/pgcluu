@@ -1843,7 +1843,8 @@ sub open_filehdl
 	if (!is_compressed("$file")) {
 		$curfh->open($file, 'r') or die "FATAL: can't read file $file: $!\n";
 	} else {
-		$curfh->open("$ZCAT_PROG $file", "-|") or die "FATAL: can't read pipe from command: $ZCAT_PROG $file, $!\n";
+		open($curfh, "-|", "$ZCAT_PROG $file");
+		die "FATAL: can't read pipe from command: $ZCAT_PROG $file, $!\n" if (not defined $curfh);
 	}
 	return $curfh;
 }
@@ -1853,19 +1854,8 @@ sub detect_timezone
 	my $file = shift;
 
 	my $tz = '+00';
-	my $fh = undef;
 
-	if (!&is_compressed($file)) {
-		$fh = IO::File->new($file, 'r');
-		if (not defined $fh) {
-			die "FATAL: can't read file $file: $!\n";
-		}
-	} else {
-		$fh = IO::File->new("$ZCAT_PROG $file", '-|');
-		if (not defined $fh) {
-			die "FATAL: can't read pipe on command: $ZCAT_PROG $file, $!\n";
-		}
-	}
+	my $fh = open_filehdl($file);
 	my $i = 1;
 	while (<$fh>) {
 		my @data = split(/;/);
@@ -1947,19 +1937,8 @@ sub set_device_list
 	} elsif ($sar_file && -f "$sar_file") {
 
 		print STDERR "DEBUG: looking for devices in sar file $sar_file\n" if ($DEBUG);
-		my $fh = undef;
 		# Load data from file
-		if (!&is_compressed($sar_file)) {
-			$fh = IO::File->new($sar_file, 'r');
-			if (not defined $fh) {
-				die "FATAL: can't read input file $sar_file: $!\n";
-			}
-		} else {
-			$fh = IO::File->new("$ZCAT_PROG $sar_file", '-|');
-			if (not defined $fh) {
-				die "FATAL: can't read pipe from command: $ZCAT_PROG $sar_file, $!\n";
-			}
-		}
+		my $fh = open_filehdl($sar_file);
 		my $type = '';
 		while (my $l = <$fh>)
 		{
@@ -6809,7 +6788,7 @@ sub generate_html_index
 			$OVERALL_STATS{'cluster'}{'size'} += ($OVERALL_STATS{'database'}{$db}{'size'}||0);
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 			if (exists $OVERALL_STATS{'database'}{$db}{'size'}) {
-				if (!exists $overall_stat_databases{'size'} || $OVERALL_STATS{'database'}{$db}{'size'} > $overall_stat_databases{'size'}[1]) {
+				if (!exists $overall_stat_databases{'size'} || ($OVERALL_STATS{'database'}{$db}{'size'}||0) > ($overall_stat_databases{'size'}[1]||0)) {
 					@{$overall_stat_databases{'size'}} = ($db, $OVERALL_STATS{'database'}{$db}{'size'});
 				}
 			}
@@ -10980,18 +10959,11 @@ sub read_sysinfo
 sub read_sysinfo_file
 {
 	my $file = shift;
-	my $fh = undef;
 
 	# Fix weird case of empty file
 	return if (-z $file);
 
-	if (!is_compressed($file)) {
-		$fh = IO::File->new("$file", 'r');
-		die "ERROR: can't read file $file, $!\n" if (not defined $fh);
-	} else {
-		$fh = IO::File->new("$ZCAT_PROG $file", '-|');
-		die "ERROR: can't read pipe on command: $ZCAT_PROG $file, $!\n" if (not defined $fh);
-	}
+	my $fh = open_filehdl($file);
 	my %sysinfo = ();
 	my $section = '';
 	while (my $l = <$fh>) {
