@@ -35,10 +35,12 @@ $PROGRAM = 'pgcluu_collectd';
 my $SAR_PROG    = 'sar';
 my $PSQL_PROG   = 'psql';
 my $CAT_PROG    = 'cat ';
+my $PIDSTAT_PROG = 'pidstat';
 
 # Global variables
 my $CONFIG_FILE     = "/etc/pgcluu.conf";
 my $SAR_FILE    = 'sar_stats.dat';
+my $PIDSTAT_FILE    = 'pidstat_stats.dat';
 my $PIDFILE     = "/var/run/postgresql/pgcluu_collectd.pid";
 my $SQL_PROBE   = '';
 my %DB_INFO     = ();
@@ -416,6 +418,8 @@ my $result = GetOptions(
 	'cron-user=s'    => \$CRONUSER,
 	'package-list=s' => \$PKG_LIST_PROG,
 	'retention=i'    => \$RETENTION,
+	"pidstat=s"      => \$PIDSTAT_PROG,
+	"pidstat-file=s" => \$PIDSTAT_FILE,
 ) or die &usage();
 
 # Clean retention value
@@ -597,9 +601,11 @@ if (!$CAPTURE) {
 
 # Generate the sar command
 my $def_sar_command = "LC_ALL=C $SAR_PROG -t -p -A 1 1";
+my $def_pidstat_command = "LC_ALL=C $PIDSTAT_PROG -T ALL -u -w -r -d -U postgres 1 1";
 my $sshcmd = '';
 # Set command to execute sar remotely using ssh if necessary 
-if ($USE_SSH) {
+if ($USE_SSH)
+{
 	# Force using the user defined ssh command
 	if ($SSH_COMMAND) {
 		$sshcmd = $SSH_COMMAND;
@@ -842,7 +848,9 @@ while (1) {
 			`find $OUTPUT_DIR/$year/ -name '*' -mtime +$RETENTION -delete`;
 		}
 		$year++;
-		`find $OUTPUT_DIR/$year/ -name '*' -mtime +$RETENTION -delete`;
+		if (-d "$OUTPUT_DIR/$year") {
+			`find $OUTPUT_DIR/$year/ -name '*' -mtime +$RETENTION -delete`;
+		}
 	}
 
 	# Collect all metrics about the cluster
@@ -978,12 +986,17 @@ sub collect_metrics
 		}
 	}
 
-	# Set the sar command
+	# Set the sar and pidstat command
 	my $sar_command = '';
-	if (!$DISABLE_SAR) {
+	my $pidstat_command = '';
+	if (!$DISABLE_SAR)
+	{
 		$sar_command = ($sshcmd) ? $sshcmd . ' "' . $def_sar_command . ' "' : $def_sar_command;
 		$sar_command .= " >>$OUT_DIR/$SAR_FILE";
+		$pidstat_command = ($sshcmd) ? $sshcmd . ' "' . $def_pidstat_command . ' "' : $def_pidstat_command;
+		$pidstat_command .= " >>$OUT_DIR/$PIDSTAT_FILE";
 	}
+
 
 	# Remove files that must be overriden
 	foreach my $type (sort {$a cmp $b} keys %METRICS_COMMANDS) {
@@ -1093,8 +1106,10 @@ sub collect_metrics
 	}
 
 	# Collecting system statistics
-	if (!$DISABLE_SAR && $sar_command && $sysstat_version) {
-		&dprint(`$sar_command`);
+	if (!$DISABLE_SAR && $sysstat_version)
+	{
+		&dprint(`$sar_command`) if ($sar_command);
+		&dprint(`$pidstat_command`) if ($pidstat_command);
 	}
 
 	if (!$NO_SYSINFO && $sysstat_version lt "11.7.4") {
@@ -1759,7 +1774,7 @@ sub grab_os_information
 	}
 	$cmd = "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null | grep -E 'performance|powersave|userspace|ondemand|conservative|schedutil'";
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
-	my $ret = `$cmd`;
+	$ret = `$cmd`;
 	if ($ret ne '') {
 		push(@system, "scaling_governor: " . $ret);
 	}
