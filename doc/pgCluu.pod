@@ -277,77 +277,77 @@ usage: pgcluu_collectd [options] output_dir
 
 options:
 
-  -B, --enable-buffercache enable buffercache statistics if pg_buffercache
+    -B, --enable-buffercache enable buffercache statistics if pg_buffercache
 			   extension is installed.
-  -c, --capture            create a snapshot of the PostgreSQL installation
-                           into tmp/pgcluu_capture.tar.gz.
-  -C, --end-counter=NUM    terminate program after NUM reports.
-  -d, --dbname=DATABASE    database name to connect to. Default to current user.
-  -D, --daemonize          detach from console and enter in daemon mode.
-  -E, --end-after=SECOND   self terminate program after a given number of seconds.
-                           Can be written: 7200 or 120M or 2H, for days use 7D for
-                           example to stop collecting data after seven days. 
-  -f, --pid-file=FILE      path to pid file. Default: /var/run/postgresql/pgcluu_collectd.pid.
-  -h, --host=HOSTNAME      database server host or socket directory
-  -i, --interval=NUM       time to wait between runs
-  -k, --kill		   stop current pgcluu_collectd running daemon.
-  -m, --metric=METRIC      set a coma separated list of metrics to perform.
-  -M, --max-size=SIZE      self terminate program when the size of the output dir
-                           exceed a given size. Can be written: 2GB or 2000MB. 
-  -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
-  -P, --psql=BIN           path to the psql command. Default: psql.
-  -Q, --no-statement       do not collect queries statistics from pg_stat_statements.
-  -r, --rotate-daily       force daily rotation of data files.
-  -R, --rotate-hourly      force hourly rotation of data files.
-  -s, --sar=BIN            path to sar sysstat command. Default: sar.
-  -S, --disable-sar        disable collect of system statistics with sar.
-  -T, --no-tablespace      disable lookup at tablespace when the connect user
+    -c, --capture            create a snapshot of the PostgreSQL installation
+                             into tmp/pgcluu_capture.tar.gz.
+    -C, --end-counter=NUM    terminate program after NUM reports.
+    -d, --dbname=DATABASE    database name to connect to. Default to current user.
+    -D, --daemonize          detach from console and enter in daemon mode.
+    -E, --end-after=SECOND   self terminate program after a given number of seconds.
+                             Can be written: 7200 or 120M or 2H, for days use 7D for
+                             example to stop collecting data after seven days. 
+    -f, --pid-file=FILE      path to pid file. Default: /var/run/postgresql/pgcluu_collectd.pid.
+    -h, --host=HOSTNAME      database server host or socket directory
+    -i, --interval=NUM       time to wait between runs
+    -k, --kill		   stop current pgcluu_collectd running daemon.
+    -m, --metric=METRIC      set a coma separated list of metrics to perform.
+    -M, --max-size=SIZE      self terminate program when the size of the output dir
+                             exceed a given size. Can be written: 2GB or 2000MB. 
+    -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
+    -P, --psql=BIN           path to the psql command. Default: psql.
+    -Q, --no-statement       do not collect queries statistics from pg_stat_statements.
+    -r, --rotate-daily       force daily rotation of data files.
+    -R, --rotate-hourly      force hourly rotation of data files.
+    -s, --sar=BIN            path to sar sysstat command. Default: sar.
+    -S, --disable-sar        disable collect of system statistics with sar.
+    -T, --no-tablespace      disable lookup at tablespace when the connect user
 			   is not superuser to avoid printing an error message.
-  -U, --dbuser=USERNAME    database user to connect as. Default to current user.
-  -v, --verbose            Print out debug informations.
-  -V, --version            Show pgcluu_collectd version and exit.
-  -W, --password=pass      database password.
-  -z, --compress           force compression of rotated data files.
-  --included-db=DATABASE   collect statistics only for those databases present
-                           in a comma separated list of database names.
-  --list-metric            list available metrics actions that can be performed.
-  --sysinfo                get operating system information and exit (sysinfo.txt).
-  --no-sysinfo             do not collect operating system information at all. 
-  --no-database            do not collect database statistics at all.
-  --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
+    -U, --dbuser=USERNAME    database user to connect as. Default to current user.
+    -v, --verbose            Print out debug informations.
+    -V, --version            Show pgcluu_collectd version and exit.
+    -W, --password=pass      database password.
+    -z, --compress           force compression of rotated data files.
+    --included-db=DATABASE   collect statistics only for those databases present
+                             in a comma separated list of database names.
+    --list-metric            list available metrics actions that can be performed.
+    --sysinfo                get operating system information and exit (sysinfo.txt).
+    --no-sysinfo             do not collect operating system information at all. 
+    --no-database            do not collect database statistics at all.
+    --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
 			   database. Ex: -p 6432 -U postgres -h 192.168.1.100
-                           You must at least give one parameter to enable
-                           pgbouncer monitoring.
-  --sar-file=FILE          path to sar output data file for sysstat stats
-                           Default to output_dir/sar_stats.dat.
-  --stat-type all|user     Set stats tables to read. Values: 'all' or 'user' to
+                             You must at least give one parameter to enable
+                             pgbouncer monitoring.
+    --sar-file=FILE          path to sar output data file for sysstat stats
+                             Default to output_dir/sar_stats.dat.
+    --stat-type all|user     Set stats tables to read. Values: 'all' or 'user' to
 			   look at pg_stat_(all|user) tables. Default: user.
-  --pgversion X.Y          force the PostgreSQL version to the given value.
-  --pgservice NAME         Name of service inside of the pg_service.conf file.
-  --exclude-time RANGE     exclude a laps of time by giving the start and end
+    --pgversion X.Y          force the PostgreSQL version to the given value.
+    --pgservice NAME         Name of service inside of the pg_service.conf file.
+    --exclude-time RANGE     exclude a laps of time by giving the start and end
 			   hours.
-  --cron-user=USERNAME     collect crontab settings for the given username (in
-                           this case pgcluu_collectd need to be run as root).
-                           Default is to use USERNAME environment variable or
-                           postgres when it is not defined.
-  --package-list=CMD       command to list PostgreSQL packages. Default is to
-                           autodetect package type and using command 'rpm -qa'
-                           or 'dpkg -l'. If you have an other system you can
-                           set a custom command. A filter on keyword 'postgres'
+    --cron-user=USERNAME     collect crontab settings for the given username (in
+                             this case pgcluu_collectd need to be run as root).
+                             Default is to use USERNAME environment variable or
+                             postgres when it is not defined.
+    --package-list=CMD       command to list PostgreSQL packages. Default is to
+                             autodetect package type and using command 'rpm -qa'
+                             or 'dpkg -l'. If you have an other system you can
+                             set a custom command. A filter on keyword 'postgres'
 			   is appended to the command: ' | grep postgres'.
-  --retention NDAYS        number of rolling days to keep in data directory in
-                           incremental mode. Default is to store indefinitely.
-  --help                   print usage
+    --retention NDAYS        number of rolling days to keep in data directory in
+                             incremental mode. Default is to store indefinitely.
+    --help                   print usage
 
 Use those options to execute sar on the remote host defined by the -h option,
 otherwise it will be executed locally:
 
-  --enable-ssh             activate the use of ssh to run sysstat remotely.
-  --ssh-program ssh        path to the ssh program to use. Default: ssh.
-  --ssh-user username      connection login name. Default to running user.
-  --ssh-identity file      path to the identity file to use.
-  --ssh-timeout second     timeout to ssh connection failure. Default 10 seconds.
-  --ssh-options  options   list of -o options to use for the ssh connection. Options
+    --enable-ssh             activate the use of ssh to run sysstat remotely.
+    --ssh-program ssh        path to the ssh program to use. Default: ssh.
+    --ssh-user username      connection login name. Default to running user.
+    --ssh-identity file      path to the identity file to use.
+    --ssh-timeout second     timeout to ssh connection failure. Default 10 seconds.
+    --ssh-options  options   list of -o options to use for the ssh connection. Options
 			   always used:
 				 -o ConnectTimeout=$ssh_timeout
 				 -o PreferredAuthentications=hostbased,publickey
@@ -522,53 +522,54 @@ usage: pgcluu [options] [-i sar_file | -I sadc_file] [input_dir]
 		   files are stored.
 
 options:
-  -b, --begin  datetime      start date/time for the data to be parsed.
-  -C, --cache                generate cache files only (.bin), no html output.
-  -d, --db-only dbname       only report for the whole cluster and the given
-                             database name. You can use it multiple time or
-                             give a comma separated list of database name.
-  -D, --device-only dev      only report I/O stats for a particular device
-                             You can use it multiple time or give a comma
-                             separated list of device name, ex: sda,sdc.
-  -e, --end    datetime      end date/time for the data to be parsed.
-  -i, --sar-file=FILE        path to the sar text data file to read to generate
-                             system reports. Default to input_dir/sar_stats.dat.
-  -I, --sadc-file=FILE       sadc binary data file to read to generate system
-                             reports. Default to input_dir/sadc_stats.dat.
-  -n, --top-number           Top number of tables or indexes I/O stats to show.
-                             Default is set to top 10. Set it to 0 to show all.
-  -N, --network-only iface   only report stats for a particular network interface.
-                             You can use it multiple times or give a comma separated
-                             list of network interfaces, ex: eth0,eth1.
-  -o, --output=DIR           output directory
-  -r, --reverse-date         By default pgcluu look at mm/dd/yy format in sar file.
-                             When enabled pgcluu will look at dd/mm/yy format.
-  -s, --sadf=BIN             path to the sadf sysstat command used to read the
-                             sadc binary data file. Default: /usr/bin/sadf.
-  -S, --disable-sar          disable collect of system statistics with sar.
-  -t, --with-table table     Only report for the whole tables and the given
-                             table name. You can use it multiple time or
-                             give a comma separated list of database name.
-  -T, --no-table             Do not report statistics related to tables.
-  -v, --verbose              Print out debug informations.
-  -V, --version              Show pgcluu version and exit.
-  -x, --external-menu        Save menu in menu.html and load it into each report
-                             using w3-include-html attribut from w3.js. This will
+
+    -b, --begin  datetime      start date/time for the data to be parsed.
+    -C, --cache                generate cache files only (.bin), no html output.
+    -d, --db-only dbname       only report for the whole cluster and the given
+                               database name. You can use it multiple time or
+                               give a comma separated list of database name.
+    -D, --device-only dev      only report I/O stats for a particular device
+                               You can use it multiple time or give a comma
+                               separated list of device name, ex: sda,sdc.
+    -e, --end    datetime      end date/time for the data to be parsed.
+    -i, --sar-file=FILE        path to the sar text data file to read to generate
+                               system reports. Default to input_dir/sar_stats.dat.
+    -I, --sadc-file=FILE       sadc binary data file to read to generate system
+                               reports. Default to input_dir/sadc_stats.dat.
+    -n, --top-number           Top number of tables or indexes I/O stats to show.
+                               Default is set to top 10. Set it to 0 to show all.
+    -N, --network-only iface   only report stats for a particular network interface.
+                               You can use it multiple times or give a comma separated
+                               list of network interfaces, ex: eth0,eth1.
+    -o, --output=DIR           output directory
+    -r, --reverse-date         By default pgcluu look at mm/dd/yy format in sar file.
+                               When enabled pgcluu will look at dd/mm/yy format.
+    -s, --sadf=BIN             path to the sadf sysstat command used to read the
+                               sadc binary data file. Default: /usr/bin/sadf.
+    -S, --disable-sar          disable collect of system statistics with sar.
+    -t, --with-table table     Only report for the whole tables and the given
+                               table name. You can use it multiple time or
+                               give a comma separated list of database name.
+    -T, --no-table             Do not report statistics related to tables.
+    -v, --verbose              Print out debug informations.
+    -V, --version              Show pgcluu version and exit.
+    -x, --external-menu        Save menu in menu.html and load it into each report
+                               using w3-include-html attribut from w3.js. This will
 			     only work if acces to HTML reports is through a Web
 			     server, not using the file:// protocol.
-  -z, --timezone +/-XX       Set the number of hour(s) from GMT of the timezone.
-                             Use this to adjust date/time from the sar output,
-                             pgcluu use GMT time to draw charts.
-  -Z, --stats-timezone +/-XX Set the number of hour(s) from GMT of the timezone.
-                             Use this to adjust date/time from the cluster and
-                             system stats output, pgcluu use GMT time.
-  --from-sa-file             instruct pgcluu that file specified by the -i option
-                             uses the standard system activity daily data file.
-  --charset                  used to set the HTML charset to be used.
-                             Default: utf-8.
-  --retention NDAYS          number of rolling days to keep in report directory.
-                             Default is to store indefinitely.
-  --help                     print usage
+    -z, --timezone +/-XX       Set the number of hour(s) from GMT of the timezone.
+                               Use this to adjust date/time from the sar output,
+                               pgcluu use GMT time to draw charts.
+    -Z, --stats-timezone +/-XX Set the number of hour(s) from GMT of the timezone.
+                               Use this to adjust date/time from the cluster and
+                               system stats output, pgcluu use GMT time.
+    --from-sa-file             instruct pgcluu that file specified by the -i option
+                               uses the standard system activity daily data file.
+    --charset                  used to set the HTML charset to be used.
+                               Default: utf-8.
+    --retention NDAYS          number of rolling days to keep in report directory.
+                               Default is to store indefinitely.
+    --help                     print usage
 
 For example, you can generate all HTML reports from data files stored into
 /tmp/stat_db1/ with the following commands:
