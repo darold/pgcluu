@@ -4991,7 +4991,6 @@ sub pgbouncer_ini_report
 	my $id = &get_data_id('cluster-pgbouncer', %data_info);
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 	print $fhcluster qq{
-<li style="display: none;" class="slide" id="cluster-pgbouncer-slide">
       <div id="cluster-pgbouncer"><br><br><br><br></div>
 	<div class="row">
             <div class="col-md-12">
@@ -5018,9 +5017,6 @@ sub pgbouncer_ini_report
 
 	%all_pgbouncer_ini_diff = ();
 	
-	print $fhcluster qq{
-  </li>
-};
 	$fhcluster->close();
 }
 
@@ -5824,7 +5820,6 @@ sub postgresql_conf_report
 	my $id = &get_data_id('cluster-pgconf', %data_info);
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 	print $fhcluster qq{
-<li style="display: none;" class="slide" id="cluster-pgconf-slide">
       <div id="cluster-pgconf"><br><br><br><br></div>
 	<div class="row">
             <div class="col-md-12">
@@ -5851,10 +5846,6 @@ sub postgresql_conf_report
 
 	%all_postgresql_conf_diff = ();
 	
-	print $fhcluster qq{
-  </li>
-};
-
 	$fhcluster->close();
 }
 
@@ -5899,7 +5890,6 @@ sub recovery_conf_report
 	my $id = &get_data_id('cluster-recoveryconf', %data_info);
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 	print $fhcluster qq{
-<li style="display: none;" class="slide" id="cluster-recoveryconf-slide">
       <div id="cluster-recoveryconf"><br><br><br><br></div>
 	<div class="row">
             <div class="col-md-12">
@@ -5926,9 +5916,6 @@ sub recovery_conf_report
 
 	%all_recovery_conf_diff = ();
 	
-	print $fhcluster qq{
-  </li>
-};
 	$fhcluster->close();
 }
 
@@ -5973,7 +5960,6 @@ sub postgresql_auto_conf_report
 	my $id = &get_data_id('cluster-alterconf', %data_info);
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 	print $fhcluster qq{
-<li style="display: none;" class="slide" id="cluster-alterconf-slide">
       <div id="cluster-alterconf"><br><br><br><br></div>
 	<div class="row">
             <div class="col-md-12">
@@ -6000,9 +5986,6 @@ sub postgresql_auto_conf_report
 
 	%all_postgresql_auto_conf_diff = ();
 	
-	print $fhcluster qq{
-  </li>
-};
 	$fhcluster->close();
 }
 
@@ -6048,7 +6031,6 @@ sub pg_hba_conf_report
 	my $id = &get_data_id('cluster-pghba', %data_info);
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 	print $fhcluster qq{
-<li style="display: none;" class="slide" id="cluster-pghba-slide">
       <div id="cluster-pghba"><br><br><br><br></div>
 
 	<div class="row">
@@ -6076,9 +6058,6 @@ sub pg_hba_conf_report
 
 	%all_pg_hba_conf_diff = ();
 	
-	print $fhcluster qq{
-  </li>
-};
 	$fhcluster->close();
 }
 
@@ -6123,7 +6102,6 @@ sub pg_ident_conf_report
 	my $id = &get_data_id('cluster-pgident', %data_info);
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 	print $fhcluster qq{
-<li style="display: none;" class="slide" id="cluster-pgident-slide">
       <div id="cluster-pgident"><br><br><br><br></div>
 
 	<div class="row">
@@ -6151,9 +6129,6 @@ sub pg_ident_conf_report
 
 	%all_pg_ident_conf_diff = ();
 	
-	print $fhcluster qq{
-  </li>
-};
 	$fhcluster->close();
 }
 
@@ -6206,7 +6181,6 @@ sub pg_settings_report
 	my $id = &get_data_id('cluster-settings', %data_info);
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 	print $fhcluster qq{
-<li style="display: none;" class="slide" id="cluster-settings-slide">
       <div id="cluster-settings"><br><br><br><br></div>
 
 	<div class="row">
@@ -6265,10 +6239,6 @@ sub pg_settings_report
 
 	%all_settings_diff = ();
 	
-	print $fhcluster qq{
-
-    </li>
-};
 	$fhcluster->close();
 }
 
@@ -6311,7 +6281,6 @@ sub pg_nondefault_settings_report
 	my $id = &get_data_id('cluster-nondefault-settings', %data_info);
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 	print $fhcluster qq{
-<li style="display: none;" class="slide" id="cluster-nondefault-settings-slide">
       <div id="cluster-nondefault-settings"><br><br><br><br></div>
 
 	<div class="row">
@@ -6354,7 +6323,6 @@ sub pg_nondefault_settings_report
 	    </div>
 	    </div>
 	</div>
-    </li>
 };
 	$fhcluster->close();
 	%all_nondefault_settings = ();
@@ -6398,7 +6366,6 @@ sub pg_db_role_setting_report
 	my $id = &get_data_id('cluster-dbrolesetting', %data_info);
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 	print $fhcluster qq{
-<li style="display: none;" class="slide" id="cluster-dbrolesetting-slide">
       <div id="cluster-dbrolesetting"><br><br><br><br></div>
 
 	<div class="row">
@@ -6436,9 +6403,6 @@ sub pg_db_role_setting_report
 
 	%all_db_role_setting_diff = ();
 	
-	print $fhcluster qq{
-    </li>
-};
 	$fhcluster->close();
 }
 
