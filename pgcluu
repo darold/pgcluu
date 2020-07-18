@@ -6632,7 +6632,7 @@ sub pg_stat_archiver_report
 	%all_stat_archiver = ();
 	foreach my $id (sort {$a <=> $b} keys %data_info) {
 		if ($data_info{$id}{name} eq 'cluster-archive') {
-			my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
+			my $fhcluster = &append_to_html_file("$OUTPUT_DIR/$data_info{$id}{name}.html", $src_base);
 			print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-archive', \%{$data_info{$id}}, '', $archiver_stat{archived_count}, $archiver_stat{failed_count});
 			$fhcluster->close();
 		}
@@ -8022,7 +8022,7 @@ sub generate_html_menu
 			      <li id="menu-cluster-xlog_files"$disable_xlog_files><a href="cluster-xlog_files.html">Wal files</a></li>
 			      <li id="menu-cluster-checkpoints"$disable_checkpoints><a href="cluster-checkpoints.html">Checkpoints counter</a></li>
 			      <li id="menu-cluster-checkpoints_time"$disable_checkpoint_time><a href="cluster-checkpoints_time.html">Checkpoints write time</a></li>
-			      <li id="menu-cluster-archive"$disable_archive><a href="cluster-database-archive.html">Archiver stats</a></li>
+			      <li id="menu-cluster-archive"$disable_archive><a href="cluster-archive.html">Archiver stats</a></li>
 			      </ul>
 		        </li>
 			<li id="menu-rw" class="dropdown-submenu$disable_rw_ratio">
