@@ -1598,6 +1598,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			push(@DEVICE_LIST, @{$global_infos{DEVICE_LIST}}) if (exists $global_infos{DEVICE_LIST});
 			push(@IFACE_LIST, @{$global_infos{IFACE_LIST}}) if (exists $global_infos{IFACE_LIST});
 			push(@DEVICE_SPACE_LIST, @{$global_infos{DEVICE_SPACE_LIST}}) if (exists $global_infos{DEVICE_SPACE_LIST});
+			&load_pidstat_binary($in_dir);
 		}
 		# In cache/binary mode we can not process sadc binary data file
 		if (($#binfiles == -1) && -f "$sadc_file")
@@ -12517,6 +12518,7 @@ sub build_daily_binary
 			&dump_sys_binary($day_dir, "sys_cache.bin");
 			&dump_pg_binary($day_dir);
 			&dump_sar_binary($day_dir);
+			&dump_pidstat_binary($day_dir);
 
 			# Reset global variables before processing a new work dir
 			&clear_stats();
@@ -12554,6 +12556,7 @@ sub build_daily_binary
 			if (!$DISABLE_SAR) {
 				print "DEBUG: Loading Sar statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
 				&load_sar_binary($in_dir);
+				&load_pidstat_binary($in_dir);
 			}
 		}
 	}
@@ -12566,6 +12569,7 @@ sub build_daily_binary
 	&dump_sys_binary($day_dir, "sys_cache.bin");
 	&dump_pg_binary($day_dir);
 	&dump_sar_binary($day_dir);
+	&dump_pidstat_binary($day_dir);
 }
 
 sub read_conf
