@@ -38,7 +38,6 @@ my @INCLUDE_TB      = ();
 my @INCLUDE_DEV     = ();
 my @INCLUDE_IFACE   = ();
 my $IMG_FORMAT      = 'png';
-my $FH              = undef;
 my %DEVFH           = ();
 my $IDX             = 1;
 my $HELP            = 0;
@@ -51,6 +50,7 @@ my $REVERT_DATE     = 0;
 my $FROM_SA_FILE    = 0;
 my $SADC_INPUT_FILE = '';
 my $SAR_INPUT_FILE  = '';
+my $PIDSTAT_INPUT_FILE  = '';
 my @DEVICE_LIST     = ();
 my @IFACE_LIST      = ();
 my @GRAPH_COLORS    = ('#6e9dc9', '#f4ab3a', '#ac7fa8', '#8dbd0f','#958c12'); 
@@ -59,6 +59,7 @@ my $CACHE           = 0;
 my $MAX_INDEXES     = 5;
 my @DATABASE_LIST   = ();
 my @DEVICE_SPACE_LIST = ();
+my %fullpidstatdata  = (); # Hash to store full content of pidstat file per type
 
 my $MAX_RENDERED_DAYS = 7;
 
@@ -223,6 +224,19 @@ our @sar_to_be_stored = (
 	'sar_commit_memory_stat'
 );
 
+# Names of pidstat variables that need to be saved as binary file
+our %pidstat_cpu_stat = ();
+our %pidstat_context_stat = ();
+our %pidstat_memory_stat = ();
+our %pidstat_io_stat = ();
+
+our @pidstat_to_be_stored = (
+	'pidstat_cpu_stat',
+	'pidstat_context_stat',
+	'pidstat_memory_stat',
+	'pidstat_io_stat'
+);
+
 # Relation between sar binary file and CGI action parameter.
 # This is used to only load the binary file related to a report.
 our %bin_action_map = (
@@ -346,7 +360,9 @@ my ($e_sec, $e_min, $e_hour, $e_day, $e_month, $e_year) = (0,0,0,0,0,0);
 my $sar_year  = '';
 my $sar_month = '';
 my $sar_day   = '';
-
+my $pidstat_year  = '';
+my $pidstat_month = '';
+my $pidstat_day   = '';
 
 # Charset used in the html output
 my $charset = 'utf-8';
@@ -1259,6 +1275,62 @@ my %SAR_GRAPH_INFOS = (
 		'legends' => ['CommitLimit', 'Committed_AS'],
 	},
 );
+
+my %PIDSTAT_GRAPH_INFOS = (
+	'1' => {
+		'name' =>  'postgres-cpu',
+		'title' => 'PostgreSQL CPU %s utilization',
+		'all_title' => 'Global CPU utilization',
+		'description' => 'Percentage of CPU used by PostgreSQL while executing at the user level (application), with or without nice priority. Note that this field does NOT include time spent running a virtual processor.',
+		'all_description' => 'Percentage of CPU used by PostgreSQL while executing at the user level (application), with or without nice priority. Note that this field does NOT include time spent running a virtual processor.',
+		'ylabel' => 'Percentage',
+		'legends' => ['Total','System','User','Wait'],
+		'active' => 1,
+	},
+	'2' => {
+		'name' =>  'postgres-memory',
+		'title' => 'PostgreSQL memory utilization',
+		'description' => 'Report memory utilization. Virtual Size (VSZ): The virtual memory usage of entire task in kilobytes. Resident Set Size (RSS): The non-swapped physical memory used by the task in kilobytes.',
+		'ylabel' => 'Memory size',
+		'legends' => ['VSZ','RSS'],
+	},
+	'3' => {
+		'name' =>  'postgres-mempercent',
+		'title' => 'PostgreSQL percentage memory use',
+		'description' => 'Report percentage of  memory use. The tasks\'s currently used share of available physical memory.',
+		'ylabel' => 'Percent of Memory',
+		'legends' => ['%MEM'],
+	},
+	'4' => {
+		'name' =>  'postgres-io',
+		'title' => 'PostgreSQL I/O statistics',
+		'description' => 'Number of kilobytes PostgreSQL has caused to be read/written from/to disk per second. Number of kilobytes whose writing to disk has been cancelled by the task. This may occur when the task truncates some dirty pagecache. In this case, some IO which another task has been accounted for will not be happening.',
+		'ylabel' => 'Kb per second',
+		'legends' => ['kB_rd/s','kB_wr/s','kB_ccwr/s'],
+	},
+	'5' => {
+		'name' =>  'postgres-iodelay',
+		'title' => 'PostgreSQL I/O delay',
+		'description' => 'Block I/O delay of the task being monitored, measured in clock ticks. This metric includes the delays spent waiting for sync block I/O completion and for swapin block I/O completion.',
+		'ylabel' => 'Block I/O delay',
+		'legends' => ['iodelay'],
+	},
+	'6' => {
+		'name' => 'postgres-fault',
+		'title' => 'Page faults statistics',
+		'description' => 'Total number of minor/major faults the task has made per second, those which have not required loading a memory page from disk..',
+		'ylabel' => 'Number of faults',
+		'legends' => [ 'minflt/s', 'majflt/s' ],
+	},
+	'7' => {
+		'name' =>  'postgres-cswch',
+		'title' => 'PostgreSQL switching activity',
+		'description' => 'Total number of voluntary/non voluntary context switches the task made per second. A voluntary context switch occurs when a task blocks because it requires a resource that is unavailable. A involuntary context switch takes place when a task executes for the duration of its time slice and then is forced to relinquish the processor.',
+		'ylabel' => 'Context switches',
+		'legends' => ['cswch/s', 'nvcswch/s'],
+	},
+);
+
 # Set CGI handle and retrieve current params states
 my $cgi = new CGI;
 my $SCRIPT_NAME = $cgi->url() || '';
@@ -1468,6 +1540,9 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 	# if there's no binary files
 	my ($sar_file, $sadc_file) = &set_sysstat_file($in_dir);
 
+	# Set default pidstat file to read
+	my $pidstat_file = &set_pidstat_file($in_dir);
+
 	# Detect timezone from csv file when there is no cache file and
 	# look for disk device and network interface from the sar file
 	if ($#binfiles == -1)
@@ -1534,6 +1609,11 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 				foreach my $id (sort keys %SAR_GRAPH_INFOS) {
 					next if (($ACTION ne 'home') && ($REAL_ACTION ne $SAR_GRAPH_INFOS{$id}->{name}));
 					&compute_sarfile_stats($sar_file, $in_dir, \%fulldata, %{$SAR_GRAPH_INFOS{$id}});
+				}
+				print STDERR "DEBUG: looking for pidstatt data file $pidstat_file\n" if ($DEBUG);
+				%fullpidstatdata = &load_sarfile_stats($sar_file);
+				foreach my $id (sort keys %PIDSTAT_GRAPH_INFOS) {
+					&compute_pidstatfile_stats($pidstat_file, $in_dir, %{$PIDSTAT_GRAPH_INFOS{$id}});
 				}
 			}
 		}
@@ -1604,70 +1684,114 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 
 	}
 
-}
+	# Action to perform when a sar statistics is requested
+	if (($ACTION eq 'home') || ($ACTION =~ /^pidstat-/))
+	{
+                # Load statistics from cache files
+                if ($#binfiles >= 0) {
+			my $binstat = $bin_action_map{$ACTION} || $ACTION;
+                        &load_pidstat_binary($in_dir, $binstat);
+			# Set timezone
+			if (($TIMEZONE eq '00') && $global_infos{timezone}) {
+				$TIMEZONE = $global_infos{timezone};
+			}
+			if (($STATS_TIMEZONE eq '00') && $global_infos{stats_timezone}) {
+				$STATS_TIMEZONE = $global_infos{stats_timezone};
+			}
+                }
 
+		# Home page is built from cache file or from csv file, not both
+		elsif ( $pidstat_file && ($ACTION ne 'home') || ($#binfiles == -1))
+		{
+			# Then build pidstat statistics from data file starting at begining
+			# when there's no cache file or starting at last cache offset.
+			if ( -f "$pidstat_file" && (($#binfiles == -1) || ($pidstat_file !~ /\.gz$/)) ) {
 
-if (($ACTION ne 'home') || ($ACTION =~ /^(system|device|network)-/)) {
-
-	# Build sar statistics graphs
-	print STDERR "DEBUG: Building sar statistics reports\n" if ($DEBUG);
-	foreach my $id (sort keys %SAR_GRAPH_INFOS) {
-		next if (($ACTION ne 'home') && ($REAL_ACTION ne $SAR_GRAPH_INFOS{$id}->{name}));
-		print STDERR "DEBUG: Reading sar statistics for $SAR_GRAPH_INFOS{$id}->{name}.\n" if ($DEBUG);
-		&compute_sar_graph($src_base, %{$SAR_GRAPH_INFOS{$id}});
-	}
-
-}
-
-if (($ACTION ne 'home') && ($ACTION ne 'database-info') && ($ACTION !~ /^(system|device|network)-/)) {
-
-	# Loop over statistic in memory to generate reports
-	print STDERR "DEBUG: Building PostgreSQL statistics reports\n" if ($DEBUG);
-
-	# Try to limit report generation to stats that exists in memory.
-	# The storage variable name are the same than the keys in DB_GRAPH_INFOS
-	# minus some transformation.
-	foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS) {
-		$ID_ACTION = -1;
-		if ($ACTION ne 'home') {
-			foreach my $n (keys %{$DB_GRAPH_INFOS{$k}}) {
-				if ($REAL_ACTION eq $DB_GRAPH_INFOS{$k}{$n}->{name}) {
-					$ID_ACTION = $n;
-					last;
+				print STDERR "DEBUG: looking for pidstatt data file $pidstat_file\n" if ($DEBUG);
+				%fullpidstatdata = &load_sarfile_stats($sar_file);
+				foreach my $id (sort keys %PIDSTAT_GRAPH_INFOS) {
+					&compute_pidstatfile_stats($pidstat_file, $in_dir, %{$PIDSTAT_GRAPH_INFOS{$id}});
 				}
 			}
-		} else {
-			$ID_ACTION = 0;
 		}
-		next if ($ID_ACTION < 0);
-
-		my $inmem = $k;
-		$inmem =~ s/\.csv//;
-		$inmem =~ s/\./_/g;
-		$inmem =~ s/^pg_/all_/;
-		if ($inmem eq 'pgbouncer_stats') {
-			$inmem = 'all_pgbouncer_stats';
-		}
-		if (($inmem =~ /_conf/) && ($inmem !~ /^all/)) {
-			$inmem = 'all_' . $inmem;
-		}
-
-		# Skip this report if there's no statistics loaded in memory
-		next if ((scalar keys %{$inmem} == 0) && ($ID_ACTION == 0));
-		print STDERR "DEBUG: Building report for $k (from memory \%$inmem)\n" if ($DEBUG);
-		&compute_postgresql_report($k, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
 	}
-
 }
 
-# Show database general information
-if ($ACTION eq 'database-info') {
-	&write_database_info($DATABASE, $src_base);
-}
 
 #### Show home page information
 if ($ACTION eq 'home') {
 	&show_home();
+}
+#### Show other pages
+else
+{
+	# Show system reports
+	if ($ACTION =~ /^(system|device|network)-/)
+	{
+		# Build sar statistics graphs
+		print STDERR "DEBUG: Building sar statistics reports\n" if ($DEBUG);
+		foreach my $id (sort keys %SAR_GRAPH_INFOS) {
+			next if (($ACTION ne 'home') && ($REAL_ACTION ne $SAR_GRAPH_INFOS{$id}->{name}));
+			print STDERR "DEBUG: Reading sar statistics for $SAR_GRAPH_INFOS{$id}->{name}.\n" if ($DEBUG);
+			&compute_sar_graph($src_base, %{$SAR_GRAPH_INFOS{$id}});
+		}
+
+	}
+	# Show pidstat reports
+	elsif ($ACTION =~ /^pidstat-/)
+	{
+		# Build pidstat statistics graphs
+		print STDERR "DEBUG: Building pidstat statistics reports\n" if ($DEBUG);
+		foreach my $id (sort keys %PIDSTAT_GRAPH_INFOS) {
+			next if (($ACTION ne 'home') && ($REAL_ACTION ne "pidstat-$PIDSTAT_GRAPH_INFOS{$id}->{name}"));
+			&compute_pidstat_graph($src_base, %{$PIDSTAT_GRAPH_INFOS{$id}});
+		}
+	}
+	# Show database general information
+	elsif ($ACTION eq 'database-info')
+	{
+		&write_database_info($DATABASE, $src_base);
+	}
+	else
+	{
+		# Loop over statistic in memory to generate PostgreSQL reports
+		print STDERR "DEBUG: Building PostgreSQL statistics reports\n" if ($DEBUG);
+
+		# Try to limit report generation to stats that exists in memory.
+		# The storage variable name are the same than the keys in DB_GRAPH_INFOS
+		# minus some transformation.
+		foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS) {
+			$ID_ACTION = -1;
+			if ($ACTION ne 'home') {
+				foreach my $n (keys %{$DB_GRAPH_INFOS{$k}}) {
+					if ($REAL_ACTION eq $DB_GRAPH_INFOS{$k}{$n}->{name}) {
+						$ID_ACTION = $n;
+						last;
+					}
+				}
+			} else {
+				$ID_ACTION = 0;
+			}
+			next if ($ID_ACTION < 0);
+
+			my $inmem = $k;
+			$inmem =~ s/\.csv//;
+			$inmem =~ s/\./_/g;
+			$inmem =~ s/^pg_/all_/;
+			if ($inmem eq 'pgbouncer_stats') {
+				$inmem = 'all_pgbouncer_stats';
+			}
+			if (($inmem =~ /_conf/) && ($inmem !~ /^all/)) {
+				$inmem = 'all_' . $inmem;
+			}
+
+			# Skip this report if there's no statistics loaded in memory
+			next if ((scalar keys %{$inmem} == 0) && ($ID_ACTION == 0));
+			print STDERR "DEBUG: Building report for $k (from memory \%$inmem)\n" if ($DEBUG);
+			&compute_postgresql_report($k, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
+		}
+
+	}
 }
 
 ####
@@ -1718,6 +1842,39 @@ sub set_sysstat_file
 	print STDERR "DEBUG: sar/sadc file detected ", ($sar_file) ? $sar_file : $sadc_file, "\n" if ($DEBUG);
 
 	return ($sar_file, $sadc_file);
+}
+
+sub set_pidstat_file
+{
+	my $input_dir = shift;
+
+	$input_dir ||= $INPUT_DIR;
+
+	print STDERR "DEBUG: detecting pidstat file in $input_dir/\n" if ($DEBUG);
+	my $pidstat_file = '';
+	if (!$PIDSTAT_INPUT_FILE) {
+		if (-f "$input_dir/pidstat_stats.dat") {
+			$pidstat_file = "$input_dir/" . 'pidstat_stats.dat';
+		} elsif (-f "$input_dir/pidstat_stats.dat.gz") {
+			$pidstat_file = "$input_dir/" . 'pidstat_stats.dat.gz';
+		}
+		if (!$pidstat_file) {
+			print STDERR "WARNING: No pidstat_stats.dat file found in $input_dir.\nContinuing normally without reporting pidstat statistics.\n" if ($DEBUG);
+			return;
+		}
+	} else {
+		$pidstat_file = $PIDSTAT_INPUT_FILE;
+	}
+
+	# Verify that the sar data file exists.
+	if ($pidstat_file && !-f "$pidstat_file") {
+		print STDERR "ERROR: pidstat text data file $pidstat_file can not be found.\n";
+		exit 1;
+	}
+
+	print STDERR "DEBUG: pidstat file detected $pidstat_file\n" if ($DEBUG);
+
+	return $pidstat_file;
 }
 
 sub progress_bar
@@ -8302,6 +8459,22 @@ AAAASUVORK5CYII=';
 };
 		}
 
+                $menu_str .= qq{
+		  <li class="divider"></li>
+		  <li id="menu-postgres-stats" class="dropdown-submenu">
+		     <a href="#" tabindex="-1">PostgreSQL</a>
+		      <ul class="dropdown-menu">
+			  <li id="menu-postgres-cpu"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=pidstat-postgres-cpu&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">CPU</a></li>
+			  <li id="menu-postgres-cswch"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=pidstat-postgres-cswch&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Context switches</a></li>
+			  <li id="menu-postgres-memory"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=pidstat-postgres-memory&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Memory</a></li>
+			  <li id="menu-postgres-mempercent"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=pidstat-postgres-mempercent&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Percent Memory use</a></li>
+			  <li id="menu-postgres-fault"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=pidstat-postgres-fault&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Pages faults</a></li>
+			  <li id="menu-postgres-iodelay"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=pidstat-postgres-iodelay&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">I/O delay</a></li>
+			  <li id="menu-postgres-io"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=pidstat-postgres-io&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Kb I/O</a></li>
+		      </ul>
+		  </li>
+};
+
 		$menu_str .= qq{
                 </ul>
               </li>
@@ -8462,7 +8635,8 @@ sub compute_cpu_stat
 
 		map { s/,/\./ } @data ;
 		# we only store all cpu statistics
-		if ($data[3] eq 'all') {
+		if ($data[3] eq 'all')
+		{
 			my $total_cpu = ($data[6]||0) + ($data[4]||0);
 			if ($ACTION ne 'home') {
 				$sar_cpu_stat{$data[2]}{$data[3]}{total}  = $total_cpu;
@@ -8488,9 +8662,10 @@ sub compute_cpu_report
 	my $data_info = shift();
 
 	my %cpu_stat = ();
-	foreach my $t (sort {$a <=> $b} keys %sar_cpu_stat) {
-		foreach my $cpu (keys %{$sar_cpu_stat{$t}}) {
-			
+	foreach my $t (sort {$a <=> $b} keys %sar_cpu_stat)
+	{
+		foreach my $cpu (keys %{$sar_cpu_stat{$t}})
+		{
 			if ($cpu eq 'all') {
 				$cpu_stat{$cpu}{total}  .= '[' . $t . ',' . $sar_cpu_stat{$t}{$cpu}{total} . '],';
 				$cpu_stat{$cpu}{system} .= '[' . $t . ',' . $sar_cpu_stat{$t}{$cpu}{system} . '],';
@@ -8502,7 +8677,8 @@ sub compute_cpu_report
 	}
 	%sar_cpu_stat = ();
   
-	if (scalar keys %cpu_stat > 0) {
+	if (scalar keys %cpu_stat > 0)
+	{
 		$cpu_stat{'all'}{total} =~ s/,$//;
 		$cpu_stat{'all'}{system} =~ s/,$//;
 		$cpu_stat{'all'}{user} =~ s/,$//;
@@ -8512,6 +8688,69 @@ sub compute_cpu_report
 		print &jqplot_linegraph_array($IDX++, 'system-cpu', $data_info, 'all', $cpu_stat{'all'}{total}, $cpu_stat{'all'}{system}, $cpu_stat{'all'}{user}, $cpu_stat{'all'}{idle}, $cpu_stat{'all'}{iowait});
 	}
 
+}
+
+sub compute_pidstatcpu_stat
+{
+	for (my $i = 0; $i <= $#_; $i++)
+	{
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+		# hostname;interval;timestamp;USER;PID;%usr;%system;%guest;%wait;%CPU;CPU;Command
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+
+		map { s/,/\./ } @data ;
+		# we only store all cpu statistics
+		my $total_cpu = ($data[6]||0) + ($data[7]||0);
+		$pidstat_cpu_stat{$data[2]}{$data[10]}{total}  += $total_cpu;
+		$pidstat_cpu_stat{$data[2]}{$data[10]}{user}   += ($data[6]||0);
+		$pidstat_cpu_stat{$data[2]}{$data[10]}{system} += ($data[7]||0);
+		$pidstat_cpu_stat{$data[2]}{$data[10]}{wait}   += ($data[8]||0);
+		$pidstat_cpu_stat{$data[2]}{$data[10]}{cpu}    += ($data[9]||0);
+
+		$pidstat_cpu_stat{$data[2]}{'all'}{total}  += $total_cpu;
+		$pidstat_cpu_stat{$data[2]}{'all'}{user}   += ($data[6]||0);
+		$pidstat_cpu_stat{$data[2]}{'all'}{system} += ($data[7]||0);
+		$pidstat_cpu_stat{$data[2]}{'all'}{wait}   += ($data[8]||0);
+		$pidstat_cpu_stat{$data[2]}{'all'}{cpu}    += ($data[9]||0);
+	}
+}
+
+sub compute_pidstatcpu_report
+{
+	my $data_info = shift();
+
+	my %pidstatcpu_stat = ();
+	foreach my $t (sort {$a <=> $b} keys %pidstat_cpu_stat)
+	{
+		foreach my $cpu (keys %{$pidstat_cpu_stat{$t}})
+		{
+			# We only process values from total CPU
+			next if ($cpu ne 'all');
+			$pidstatcpu_stat{$cpu}{total}  .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{total} . '],';
+			$pidstatcpu_stat{$cpu}{system} .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{system} . '],';
+			$pidstatcpu_stat{$cpu}{user}   .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{user} . '],';
+			$pidstatcpu_stat{$cpu}{wait}   .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{wait} . '],';
+			$pidstatcpu_stat{$cpu}{cpu}    .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{cpu} . '],';
+		}
+	}
+	%pidstat_cpu_stat = ();
+
+	if (scalar keys %pidstatcpu_stat > 0)
+	{
+		foreach my $cpu (keys %pidstatcpu_stat)
+		{
+			next if ($cpu ne 'all');
+			$pidstatcpu_stat{$cpu}{total} =~ s/,$//;
+			$pidstatcpu_stat{$cpu}{system} =~ s/,$//;
+			$pidstatcpu_stat{$cpu}{user} =~ s/,$//;
+			$pidstatcpu_stat{$cpu}{wait} =~ s/,$//;
+			$pidstatcpu_stat{$cpu}{cpu} =~ s/,$//;
+			print &jqplot_linegraph_array($IDX++, 'postgres-cpu', $data_info, $cpu, $pidstatcpu_stat{$cpu}{total}, $pidstatcpu_stat{$cpu}{system}, $pidstatcpu_stat{$cpu}{user}, $pidstatcpu_stat{$cpu}{wait});
+		}
+	}
 }
 
 sub compute_load_stat
@@ -8662,6 +8901,44 @@ sub compute_context_report
 	}
 }
 
+sub compute_pidstatcontext_stat
+{
+
+	for (my $i = 0; $i <= $#_; $i++)
+	{
+		# hostname;interval;timestamp;USER;PID;cswch/s;nvcswch/s;Command
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+
+		map { s/,/\./ } @data ;
+		$pidstat_context_stat{$data[2]}{'cswch'}  = ($data[5]||0);
+		$pidstat_context_stat{$data[2]}{'nvcswch'}  = ($data[6]||0);
+	}
+}
+
+sub compute_pidstatcontext_report
+{
+	my $data_info = shift();
+	my %pidstatcontext_stat = ();
+	foreach my $t (sort {$a <=> $b} keys %pidstat_context_stat)
+	{
+		if ($data_info->{name} eq 'postgres-cswch') {
+			$pidstatcontext_stat{'cswch'}  .= '[' . $t . ',' . $pidstat_context_stat{$t}{'cswch'} . '],';
+			$pidstatcontext_stat{'nvcswch'}   .= '[' . $t . ',' . $pidstat_context_stat{$t}{'nvcswch'} . '],';
+		}
+	}
+	if (exists $pidstatcontext_stat{'cswch'} && exists $pidstatcontext_stat{'nvcswch'})
+	{
+		$pidstatcontext_stat{'cswch'} =~ s/,$//;
+		$pidstatcontext_stat{'nvcswch'} =~ s/,$//;
+		print &jqplot_linegraph_array($IDX++, 'postgres-cswch', $data_info, '', $pidstatcontext_stat{'cswch'}, $pidstatcontext_stat{'nvcswch'});
+	}
+}
+
 sub compute_memory_stat
 {
 	for (my $i = 0; $i <= $#_; $i++) {
@@ -8703,6 +8980,53 @@ sub compute_memory_report
 		$memory_stat{'kbbuffers'} =~ s/,$//;
 		$memory_stat{'kbmemfree'} =~ s/,$//;
 		print &jqplot_linegraph_array($IDX++, 'system-memory', $data_info, '', $memory_stat{'kbcached'}, $memory_stat{'kbbuffers'}, $memory_stat{'kbmemfree'});
+	}
+}
+
+sub compute_pidstatmemory_stat
+{
+	for (my $i = 0; $i <= $#_; $i++)
+	{
+		# hostname;interval;timestamp;USER;PID;minflt/s;majflt/s;VSZ;RSS;%MEM;Command
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+
+		map { s/,/\./ } @data ;
+		$pidstat_memory_stat{$data[2]}{'minflt/s'}  = ($data[5]||0);
+		$pidstat_memory_stat{$data[2]}{'majflt/s'}  = ($data[6]||0);
+		$pidstat_memory_stat{$data[2]}{'VSZ'} = $data[7]||0;
+		$pidstat_memory_stat{$data[2]}{'RSS'} = $data[8]||0;
+		$pidstat_memory_stat{$data[2]}{'%MEM'} = $data[9]||0;
+	}
+}
+
+sub compute_pidstatmemory_report
+{
+	my $data_info = shift();
+
+	my %pidstatmemory_stat = ();
+	foreach my $t (sort {$a <=> $b} keys %pidstat_memory_stat)
+	{
+		$pidstatmemory_stat{'VSZ'}  .= '[' . $t . ',' . $pidstat_memory_stat{$t}{'VSZ'} . '],';
+		$pidstatmemory_stat{'RSS'} .= '[' . $t . ',' . $pidstat_memory_stat{$t}{'RSS'} . '],';
+		$pidstatmemory_stat{'%MEM'} .= '[' . $t . ',' . $pidstat_memory_stat{$t}{'%MEM'} . '],';
+	}
+	if (scalar keys %pidstatmemory_stat > 0)
+	{
+		if ($data_info->{name} eq 'postgres-memory')
+		{
+			$pidstatmemory_stat{'VSZ'} =~ s/,$//;
+			$pidstatmemory_stat{'RSS'} =~ s/,$//;
+			print &jqplot_linegraph_array($IDX++, 'postgres-memory', $data_info, '', $pidstatmemory_stat{'VSZ'}, $pidstatmemory_stat{'RSS'});
+		}
+		elsif ($data_info->{name} eq 'postgres-mempercent')
+		{
+			$pidstatmemory_stat{'%MEM'} =~ s/,$//;
+			print &jqplot_linegraph_array($IDX++, 'postgres-mempercent', $data_info, '',  $pidstatmemory_stat{'%MEM'});
+		}
 	}
 }
 
@@ -8929,6 +9253,25 @@ sub compute_fault_report
 	}
 }
 
+sub compute_pidstatfault_report
+{
+	my $data_info = shift();
+
+	my %pidstatfault_stat = ();
+	foreach my $t (sort {$a <=> $b} keys %pidstat_memory_stat)
+	{
+		$pidstatfault_stat{'majflt/s'} .= '[' . $t . ',' . $pidstat_memory_stat{$t}{'majflt/s'} . '],';
+		$pidstatfault_stat{'minflt/s'} .= '[' . $t . ',' . $pidstat_memory_stat{$t}{'minflt/s'} . '],';
+	}
+	if (scalar keys %pidstatfault_stat > 0)
+	{
+		$pidstatfault_stat{'majflt/s'} =~ s/,$//;
+		$pidstatfault_stat{'minflt/s'} =~ s/,$//;
+		print &jqplot_linegraph_array($IDX++, 'postgres-fault', $data_info, '', $pidstatfault_stat{'majflt/s'}, $pidstatfault_stat{'minflt/s'});
+		%pidstat_memory_stat = ();
+	}
+}
+
 sub compute_scanpage_report
 {
 	my $data_info = shift();
@@ -9006,6 +9349,55 @@ sub compute_block_report
 			$block_stat{'rtps'} =~ s/,$//;
 			$block_stat{'wtps'} =~ s/,$//;
 			print &jqplot_linegraph_array($IDX++, 'system-tps', $data_info, '', $block_stat{'tps'}, $block_stat{'rtps'}, $block_stat{'wtps'});
+		}
+	}
+}
+
+sub compute_pidstatio_stat
+{
+	for (my $i = 0; $i <= $#_; $i++) {
+		# hostname;interval;timestamp;USER;PID;kB_rd/s;kB_wr/s;kB_ccwr/s;iodelay;Command
+		my @data = split(/;/, $_[$i]);
+		next if ($data[2] !~ /^\d+/);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN));
+		next if ($END   && ($data[2] > $END));
+
+		map { s/,/\./ } @data;
+		$pidstat_io_stat{$data[2]}{'kB_rd/s'} = ($data[5] > 0) ? $data[5] : 0;
+		$pidstat_io_stat{$data[2]}{'kB_wr/s'} = ($data[6] > 0) ? $data[6] : 0;
+		$pidstat_io_stat{$data[2]}{'kB_ccwr/s'} = ($data[7] > 0) ? $data[7] : 0;
+		$pidstat_io_stat{$data[2]}{'iodelay'} = ($data[8] > 0) ? $data[8] : 0;
+	}
+}
+
+sub compute_pidstatio_report
+{
+	my $data_info = shift();
+
+	my %pidstatio_stat = ();
+	foreach my $t (sort {$a <=> $b} keys %pidstat_io_stat)
+	{
+		$pidstatio_stat{'kB_rd/s'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'kB_rd/s'} . '],';
+		$pidstatio_stat{'kB_wr/s'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'kB_wr/s'} . '],';
+		$pidstatio_stat{'kB_ccwr/s'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'kB_ccwr/s'} . '],';
+		$pidstatio_stat{'iodelay'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'iodelay'} . '],';
+	}
+	if (scalar keys %pidstatio_stat > 0)
+	{
+		if ($data_info->{name} eq 'postgres-io')
+		{
+			$pidstatio_stat{'kB_rd/s'} =~ s/,$//;
+			$pidstatio_stat{'kB_wr/s'} =~ s/,$//;
+			$pidstatio_stat{'kB_ccwr/s'} =~ s/,$//;
+			print &jqplot_linegraph_array($IDX++, 'postgres-io', $data_info, '', $pidstatio_stat{'kB_rd/s'}, $pidstatio_stat{'kB_wr/s'}, $pidstatio_stat{'kB_ccwr/s'});
+		}
+		elsif ($data_info->{name} eq 'postgres-iodelay')
+		{
+			$pidstatio_stat{'iodelay'} =~ s/,$//;
+			print &jqplot_linegraph_array($IDX++, 'postgres-iodelay', $data_info, '', $pidstatio_stat{'iodelay'});
+			%pidstat_io_stat = ();
 		}
 	}
 }
@@ -9714,7 +10106,9 @@ sub find_report_type
 	my $data = shift;
 	my $type = '';
 
-	if ($data =~ m#cswch/s#) {
+	if ($data =~ m#nvcswch/s#) {
+		$type = 'pcswch';
+	} elsif ($data =~ m#cswch/s#) {
 		$type = 'cswch';
 	} elsif ($data =~ m#proc/s#) {
 		$type = 'pcrea';
@@ -9726,16 +10120,22 @@ sub find_report_type
 		$type = 'wcpu';
 	} elsif ($data =~ m#CPU\s+t#) {
 		$type = 'tcpu';
-	} elsif ($data =~ m#CPU\s+#) {
+	} elsif ($data =~ m#CPU\s+\%#) {
 		$type = 'cpu';
+	} elsif ($data =~ m#CPU\s+C#) {
+		$type = 'pcpu';
 	} elsif ($data =~ m#INTR\s+#) {
 		$type = 'intr';
+	} elsif ($data =~ m#VSZ\s+RSS#) {
+		$type = 'pmem';
 	} elsif ($data =~ m#pgpgin/s\s+#) {
 		$type = 'page';
 	} elsif ($data =~ m#pswpin/s\s+#) {
 		$type = 'pswap';
 	} elsif ( ($data =~ m#tps\s+#) && ($data !~ m#DEV\s+#) ) {
 		$type = 'io';
+	} elsif ($data =~ m#kB_ccwr/s\s+#) {
+		$type = 'pio';
 	} elsif ($data =~ m#frmpg/s\s+#) {
 		$type = 'mpage';
 	} elsif ($data =~ m#TTY\s+#) {
@@ -9767,6 +10167,7 @@ sub find_report_type
 
 	return $type;
 }
+
 
 sub load_sarfile_stats
 {
@@ -9903,6 +10304,138 @@ sub load_sarfile_stats
 	}
 
 	return %fulldata;
+}
+
+sub load_pidstatfile_stats
+{
+	my ($file) = @_;
+
+	my $interval = 0;
+	my $hostname = 'unknown';
+	my $has_changed = 0;
+
+	# Load data from file
+	my @content = ();
+	my $offset = 0;
+	$offset = $global_infos{"$file"} if (exists $global_infos{"$file"});
+
+	my $curfh = open_filehdl("$file");
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>)
+	{
+		$offset += length($l);
+		chomp($l);
+		$l =~ s/\r//;
+		# Prevent non relevant lines from being loaded into memory
+		if ( ($l eq '') || ($l =~ /^\d+:\d+:\d+/) || ($l =~ /\d+[\-\/]\d+[\-\/]\d+/)) {
+			push(@content, $l);
+		}
+	}
+	$curfh->close();
+	$global_infos{"$file"} = $offset;
+
+	my $type = '';
+	my @headers = ();
+	my $old_time = 0;
+	my $orig_time = 0;
+
+	for (my $i = 0; $i <= $#content; $i++)
+	{
+		# Empty line, maybe the end of a report
+		if ($content[$i] eq '')
+		{
+			$type = '';
+			@headers = ();
+			$old_time = $orig_time if ($FROM_SA_FILE);
+			next;
+		}
+		# look for kernel header to find the date
+		if ( ($content[$i] !~ /^\d+:\d+:\d+/)
+			&& ($content[$i] =~ /\s+(\d+)([\-\/])(\d+)[\-\/](\d+)\s+/) )
+		{
+			if ($2 eq '/') {
+				$pidstat_month = $1;
+				$pidstat_day = $3;
+				$pidstat_year = $4;
+			} else {
+				$pidstat_month = $3;
+				$pidstat_day = $4;
+				$pidstat_year = $1;
+			}
+			if (length($pidstat_year) == 2) {
+				$pidstat_year += 2000;
+			}
+			#  mm/dd/yy format in pidstat file instead of dd/mm/yy (see option -r)
+			if ($REVERT_DATE || ($pidstat_month > 12)) {
+				my $tmp = $pidstat_day;
+				$pidstat_day = $pidstat_month;
+				$pidstat_month = $tmp;
+			}
+
+			my $tz = ((0-$TIMEZONE)*3600);
+			$orig_time = &timegm_nocheck(0, 0, 0, $pidstat_day, $pidstat_month - 1, $pidstat_year - 1900) + $tz;
+
+			$type = '';
+			@headers = ();
+			next;
+		}
+		# Remove average/summary header if any
+		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /^\D+:\s+/) ) {
+			$type = '';
+			@headers = ();
+			next;
+		}
+
+		if ($#headers == -1)
+		{
+			push(@headers, split(m#\s+#, $content[$i]));
+			shift(@headers);
+			# Try to find the kind of report
+			$type = &find_report_type($content[$i]);
+			if (!$type) {
+				@headers = ();
+			} else {
+				#push(@{$fulldata{$type}}, "hostname;interval;timestamp;" . join(";", @headers));
+			}
+			next;
+		}
+
+		# Remove AM|PM timestamp information
+		my $am_pm = '';
+		if ($content[$i] =~ s/^(\d+:\d+:\d+)\s(AM|PM)/$1/) {
+			$am_pm = $2;
+			shift(@headers) if ($headers[0] =~ /^(AM|PM)$/);
+		}
+
+		# Get all values reported
+		my @values = ();
+		push(@values, split(m#\s+#, $content[$i]));
+		# Extract the timestamp of the line
+		my $timestamp = shift(@values);
+
+		if ($#values != $#headers)
+		{
+			warn "ERROR: Parsing of pidstat output reports different values than headers allow. ($#values != $#headers)\n";
+			warn "INFO: pidstat output file was $file\n";
+			warn "INFO: Line was: $content[$i]\n";
+			die "Header: " . join(';', @headers) . " | Values: " . join(';', @values) . "\n";
+		}
+		if ($timestamp =~ /(\d+:\d+:\d+)/)
+		{
+			$timestamp = &convert_pidstat_time($1, $old_time, $am_pm);
+			$old_time = $timestamp;
+		}
+		if (!$timestamp)
+		{
+			print STDERR "ERROR: unkown time information from pidstat file.\n";
+			print STDERR "HEADER: $timestamp ", join(" ", @headers), "\n";
+			die "DATA: $content[$i]\n";
+		}
+
+		# Change decimal character to perl
+		map { s/,/\./; } @values;
+		push(@{$fullpidstatdata{$type}}, "$hostname;$interval;$timestamp;" . join(";", @values));
+	}
 }
 
 sub load_fsuse_stats
@@ -10449,6 +10982,117 @@ sub compute_sar_graph
 
 }
 
+sub compute_pidstatfile_stats
+{
+        my ($file, $in_dir, %data_info) = @_;
+
+        $SAR_UPPER_11_5_6 = 0;
+
+        # Load sar statistics from file if not already done
+        &load_pidstatfile_stats($file) if (scalar keys %fullpidstatdata == 0);
+
+        ####
+        # Set CPU utilization
+        ####
+        if ($data_info{name} eq 'postgres-cpu')
+        {
+                # Compute cpu statistics
+                &compute_pidstatcpu_stat(@{$fullpidstatdata{pcpu}});
+        }
+
+        ####
+        # Set context switches
+        ####
+        if ($data_info{name} eq 'postgres-cswch')
+        {
+                # Compute context switches statistics
+                &compute_pidstatcontext_stat(@{$fullpidstatdata{pcswch}});
+        }
+
+        ####
+        # Set memory utilization
+        ####
+        if ($data_info{name} eq 'postgres-memory')
+        {
+                # Compute memory statistics
+                &compute_pidstatmemory_stat(@{$fullpidstatdata{pmem}});
+        }
+
+        if ($data_info{name} eq 'postgres-fault')
+        {
+                # Done above
+        }
+
+        ####
+        # Set Kb in/out
+        ####
+        if ($data_info{name} eq 'postgres-io')
+        {
+                # Compute block statistics
+                &compute_pidstatio_stat(@{$fullpidstatdata{pio}});
+        }
+}
+
+sub compute_pidstat_graph
+{
+        my ($src_base, %data_info) = @_;
+
+        ####
+        # Show CPU utilization
+        ####
+        if ($data_info{name} eq 'postgres-cpu')
+        {
+                # Compute graphs for cpu statistics
+                &compute_pidstatcpu_report(\%data_info);
+        }
+
+        ####
+        # Show context switches
+        ####
+        if ($data_info{name} eq 'postgres-cswch')
+        {
+                # Compute graphs for context switches statistics
+                &compute_pidstatcontext_report(\%data_info);
+        }
+
+        ####
+        # Show memory utilization
+        ####
+        if ($data_info{name} eq 'postgres-memory')
+        {
+                # Compute graphs for memory statistics
+                &compute_pidstatmemory_report(\%data_info);
+        }
+	if ($data_info{name} eq 'postgres-mempercent')
+        {
+                # Compute graphs for memory statistics
+                &compute_pidstatmemory_report(\%data_info);
+        }
+
+        ####
+        # Show page utilization
+        ####
+        if ($data_info{name} eq 'postgres-fault')
+        {
+                # Compute graphs for page swap statistics
+                &compute_pidstatfault_report(\%data_info);
+        }
+
+        ####
+        # Show in/out
+        ####
+        if ($data_info{name} eq 'postgres-io')
+        {
+                # Compute graphs for block statistics
+                &compute_pidstatio_report(\%data_info);
+        }
+        if ($data_info{name} eq 'postgres-iodelay')
+        {
+                # Compute graphs for block statistics
+                &compute_pidstatio_report(\%data_info);
+        }
+}
+
 sub convert_time
 {
 	my $str = shift;
@@ -10505,6 +11149,46 @@ sub convert_sar_time
 		return ($curdate + $time) * 1000;
 	}
 
+	return 0;
+}
+
+sub convert_pidstat_time
+{
+	my ($str, $old_timestamp, $am_pm) = @_;
+
+	my $curdate = '';
+
+	$old_timestamp ||= 0;
+	$pidstat_day ||= $o_day;
+	$pidstat_month ||= $o_month;
+	$pidstat_year ||= $o_year;
+
+	if ($str =~ /(\d+):(\d+):(\d+)/)
+	{
+		my $h = $1;
+		my $m = $2;
+		my $s = $3;
+		if ($am_pm && ($am_pm eq 'AM')) {
+			$h = 0 if ($h == 12);
+		} elsif ($am_pm && ($am_pm eq 'PM')) {
+			$h += 12 if ($h < 12);
+		}
+
+		my $time = ($h*3600)+($m*60)+$s;
+
+		my $tz = ((0-$TIMEZONE)*3600);
+		$curdate = &timegm_nocheck(0, 0, 0, $pidstat_day, $pidstat_month - 1, $pidstat_year - 1900) + $tz;
+		if (!$FROM_SA_FILE) {
+			while ($old_timestamp > (($curdate+$time) * 1000)) {
+				$curdate += 86399;
+				my @tinf = gmtime($curdate - $tz);
+				$pidstat_month = $tinf[4]+1;
+				$pidstat_day = $tinf[3];
+				$pidstat_year = $tinf[5]+1900;
+			}
+		}
+		return ($curdate + $time) * 1000;
+	}
 	return 0;
 }
 
@@ -11060,7 +11744,10 @@ sub clear_stats
 	%sysinfo = ();
 	foreach my $name (@sar_to_be_stored) {
 		%{$name} = ();
-	}		
+	}
+	foreach my $name (@pidstat_to_be_stored) {
+		%{$name} = ();
+	}
 
 }
 
@@ -11081,36 +11768,6 @@ sub dump_pg_binary
 		}
 		$lfh->close;
 	}
-}
-
-# Dump memory from sar statistics to file for incremental use
-sub dump_sar_binary
-{
-        my ($input_dir, $outfile) = @_;
-
-	foreach my $name (@sar_to_be_stored) {
-		my $lfh = new IO::File ">$input_dir/$name.bin";
-		if (not defined $lfh) {
-			die "FATAL: can't write to $input_dir/$name.bin, $!\n";
-		}
-		store_fd({ $name => \%{$name} }, $lfh) || die ("Couldn't save binary data to \"$input_dir/$name.bin\"!\n");
-		$lfh->close;
-	}
-}
-
-# Dump memory from system information to file for incremental use
-sub dump_sys_binary
-{
-        my ($input_dir, $outfile) = @_;
-
-	my $lfh = new IO::File ">$input_dir/$outfile";
-	if (not defined $lfh) {
-		die "FATAL: can't write to $input_dir/$outfile, $!\n";
-	}
-        store_fd({
-		'sysinfo' => \%sysinfo,
-        }, $lfh) || die ("Couldn't save binary data to «$input_dir/$outfile»!\n");
-	$lfh->close;
 }
 
 # Load statistics from pg cache into memory
@@ -11269,6 +11926,36 @@ sub load_sar_binary
 	set_overall_system_stat_from_binary();
 }
 
+# Load statistics from pidstat cache into memory
+sub load_pidstat_binary
+{
+	my ($in_dir) = @_;
+
+	foreach my $name (@pidstat_to_be_stored)
+	{
+		my $lfh = IO::File->new("$in_dir/$name.bin", 'r');
+		if (not defined $lfh) {
+			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
+		}
+		my %stats = %{ fd_retrieve($lfh) };
+		$lfh->close();
+		# Load pidstat storages
+		foreach my $m (keys %stats) {
+			foreach my $t (keys %{$stats{$m}}) {
+				foreach my $d (keys %{$stats{$m}{$t}}) {
+					if ($stats{$m}{$t}{$d} =~ /HASH/) {
+						foreach my $k (keys %{$stats{$m}{$t}{$d}}) {
+							${$m}{$t}{$d}{$k} = $stats{$m}{$t}{$d}{$k};
+						}
+					} else {
+						${$m}{$t}{$d} = $stats{$m}{$t}{$d};
+					}
+				}
+			}
+		}
+	}
+}
+
 # Load statistics from sysinfo cache into memory
 sub load_sysinfo_binary
 {
@@ -11365,7 +12052,7 @@ sub backend_minimum_version
 
 	return 0 if (!$numver);
 
-	return 1 if ($sysinfo{PGVERSION}{'major'} >= $numver);
+	return 1 if (!exists $sysinfo{PGVERSION}{'major'} || ($sysinfo{PGVERSION}{'major'} >= $numver));
 
 	return 0;
 }
