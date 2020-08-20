@@ -8696,6 +8696,7 @@ sub compute_pidstatcpu_stat
 	{
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
+		# hostname;interval;timestamp;USER;PID;%usr;%system;%guest;%CPU;CPU;Command
 		# hostname;interval;timestamp;USER;PID;%usr;%system;%guest;%wait;%CPU;CPU;Command
 		# Skip unwanted lines
 		next if ($BEGIN && ($data[2] < $BEGIN));
@@ -8704,17 +8705,28 @@ sub compute_pidstatcpu_stat
 		map { s/,/\./ } @data ;
 		# we only store all cpu statistics
 		my $total_cpu = ($data[6]||0) + ($data[7]||0);
-		$pidstat_cpu_stat{$data[2]}{$data[10]}{total}  += $total_cpu;
-		$pidstat_cpu_stat{$data[2]}{$data[10]}{user}   += ($data[6]||0);
-		$pidstat_cpu_stat{$data[2]}{$data[10]}{system} += ($data[7]||0);
-		$pidstat_cpu_stat{$data[2]}{$data[10]}{wait}   += ($data[8]||0);
-		$pidstat_cpu_stat{$data[2]}{$data[10]}{cpu}    += ($data[9]||0);
+		my $ncpu = $data[9];
+		$ncpu = $data[10] if ($#data > 10);
+		$pidstat_cpu_stat{$data[2]}{$ncpu}{total}  += $total_cpu;
+		$pidstat_cpu_stat{$data[2]}{$ncpu}{user}   += ($data[6]||0);
+		$pidstat_cpu_stat{$data[2]}{$ncpu}{system} += ($data[7]||0);
 
 		$pidstat_cpu_stat{$data[2]}{'all'}{total}  += $total_cpu;
 		$pidstat_cpu_stat{$data[2]}{'all'}{user}   += ($data[6]||0);
 		$pidstat_cpu_stat{$data[2]}{'all'}{system} += ($data[7]||0);
-		$pidstat_cpu_stat{$data[2]}{'all'}{wait}   += ($data[8]||0);
-		$pidstat_cpu_stat{$data[2]}{'all'}{cpu}    += ($data[9]||0);
+
+		if ($#data > 10)
+		{
+			$pidstat_cpu_stat{$data[2]}{$ncpu}{wait}   += ($data[8]||0);
+			$pidstat_cpu_stat{$data[2]}{$ncpu}{cpu}    += ($data[9]||0);
+			$pidstat_cpu_stat{$data[2]}{'all'}{wait}   += ($data[8]||0);
+			$pidstat_cpu_stat{$data[2]}{'all'}{cpu}    += ($data[9]||0);
+		}
+		else
+		{
+			$pidstat_cpu_stat{$data[2]}{$ncpu}{cpu}    += ($data[8]||0);
+			$pidstat_cpu_stat{$data[2]}{'all'}{cpu}    += ($data[8]||0);
+		}
 	}
 }
 
@@ -8732,8 +8744,11 @@ sub compute_pidstatcpu_report
 			$pidstatcpu_stat{$cpu}{total}  .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{total} . '],';
 			$pidstatcpu_stat{$cpu}{system} .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{system} . '],';
 			$pidstatcpu_stat{$cpu}{user}   .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{user} . '],';
-			$pidstatcpu_stat{$cpu}{wait}   .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{wait} . '],';
 			$pidstatcpu_stat{$cpu}{cpu}    .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{cpu} . '],';
+			if (exists $pidstatcpu_stat{$cpu}{wait})
+			{
+				$pidstatcpu_stat{$cpu}{wait}   .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{wait} . '],';
+			}
 		}
 	}
 	%pidstat_cpu_stat = ();
@@ -8746,9 +8761,17 @@ sub compute_pidstatcpu_report
 			$pidstatcpu_stat{$cpu}{total} =~ s/,$//;
 			$pidstatcpu_stat{$cpu}{system} =~ s/,$//;
 			$pidstatcpu_stat{$cpu}{user} =~ s/,$//;
-			$pidstatcpu_stat{$cpu}{wait} =~ s/,$//;
 			$pidstatcpu_stat{$cpu}{cpu} =~ s/,$//;
-			print &jqplot_linegraph_array($IDX++, 'postgres-cpu', $data_info, $cpu, $pidstatcpu_stat{$cpu}{total}, $pidstatcpu_stat{$cpu}{system}, $pidstatcpu_stat{$cpu}{user}, $pidstatcpu_stat{$cpu}{wait});
+
+			if (exists $pidstatcpu_stat{$cpu}{wait})
+			{
+				$pidstatcpu_stat{$cpu}{wait} =~ s/,$//;
+				print &jqplot_linegraph_array($IDX++, 'postgres-cpu', $data_info, $cpu, $pidstatcpu_stat{$cpu}{total}, $pidstatcpu_stat{$cpu}{system}, $pidstatcpu_stat{$cpu}{user}, $pidstatcpu_stat{$cpu}{wait});
+			}
+			else
+			{
+				print &jqplot_linegraph_array($IDX++, 'postgres-cpu', $data_info, $cpu, $pidstatcpu_stat{$cpu}{total}, $pidstatcpu_stat{$cpu}{system}, $pidstatcpu_stat{$cpu}{user});
+			}
 		}
 	}
 }
@@ -9355,7 +9378,9 @@ sub compute_block_report
 
 sub compute_pidstatio_stat
 {
-	for (my $i = 0; $i <= $#_; $i++) {
+	for (my $i = 0; $i <= $#_; $i++)
+	{
+		# hostname;interval;timestamp;USER;PID;kB_rd/s;kB_wr/s;kB_ccwr/s;Command
 		# hostname;interval;timestamp;USER;PID;kB_rd/s;kB_wr/s;kB_ccwr/s;iodelay;Command
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
@@ -9368,7 +9393,10 @@ sub compute_pidstatio_stat
 		$pidstat_io_stat{$data[2]}{'kB_rd/s'} = ($data[5] > 0) ? $data[5] : 0;
 		$pidstat_io_stat{$data[2]}{'kB_wr/s'} = ($data[6] > 0) ? $data[6] : 0;
 		$pidstat_io_stat{$data[2]}{'kB_ccwr/s'} = ($data[7] > 0) ? $data[7] : 0;
-		$pidstat_io_stat{$data[2]}{'iodelay'} = ($data[8] > 0) ? $data[8] : 0;
+		if ($#data > 8)
+		{
+			$pidstat_io_stat{$data[2]}{'iodelay'} = ($data[8] > 0) ? $data[8] : 0;
+		}
 	}
 }
 
@@ -9382,7 +9410,10 @@ sub compute_pidstatio_report
 		$pidstatio_stat{'kB_rd/s'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'kB_rd/s'} . '],';
 		$pidstatio_stat{'kB_wr/s'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'kB_wr/s'} . '],';
 		$pidstatio_stat{'kB_ccwr/s'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'kB_ccwr/s'} . '],';
-		$pidstatio_stat{'iodelay'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'iodelay'} . '],';
+		if (exists $pidstatio_stat{'iodelay'})
+		{
+			$pidstatio_stat{'iodelay'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'iodelay'} . '],';
+		}
 	}
 	if (scalar keys %pidstatio_stat > 0)
 	{
@@ -9393,7 +9424,7 @@ sub compute_pidstatio_report
 			$pidstatio_stat{'kB_ccwr/s'} =~ s/,$//;
 			print &jqplot_linegraph_array($IDX++, 'postgres-io', $data_info, '', $pidstatio_stat{'kB_rd/s'}, $pidstatio_stat{'kB_wr/s'}, $pidstatio_stat{'kB_ccwr/s'});
 		}
-		elsif ($data_info->{name} eq 'postgres-iodelay')
+		elsif ($data_info->{name} eq 'postgres-iodelay' && exists $pidstatio_stat{'iodelay'})
 		{
 			$pidstatio_stat{'iodelay'} =~ s/,$//;
 			print &jqplot_linegraph_array($IDX++, 'postgres-iodelay', $data_info, '', $pidstatio_stat{'iodelay'});
