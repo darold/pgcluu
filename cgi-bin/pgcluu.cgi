@@ -1787,6 +1787,7 @@ else
 
 			# Skip this report if there's no statistics loaded in memory
 			next if ((scalar keys %{$inmem} == 0) && ($ID_ACTION == 0));
+
 			print STDERR "DEBUG: Building report for $k (from memory \%$inmem)\n" if ($DEBUG);
 			&compute_postgresql_report($k, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
 		}
@@ -2158,7 +2159,6 @@ sub compute_postgresql_report
 	$fctname .= '_report';
 	$fctname->($src_base, $DATABASE, %data_info);
 }
-
 
 # Compute statistics of database statistics
 sub pg_stat_database
@@ -11459,9 +11459,14 @@ sub read_sysinfo
 		$sysinfo{RELEASE}{'name'} ||= 'unknown';
 	}
 
+	# Get the list of database from registered extension and schema
 	foreach my $db (keys %{$sysinfo{EXTENSION}}) {
 		push(@DATABASE_LIST, $db) if (!grep(/^$db$/, @DATABASE_LIST));
 	}
+	foreach my $db (keys %{$sysinfo{SCHEMA}}) {
+		push(@DATABASE_LIST, $db) if (!grep(/^$db$/, @DATABASE_LIST));
+	}
+
 
 	# Load global information from cache file
 	if (-e "$input_dir/global_infos.bin")
@@ -11806,9 +11811,9 @@ sub load_pg_binary
 {
         my ($input_dir, $varname) = @_;
 
-	foreach my $name (@pg_to_be_stored) {
-
-                next if ($varname ne 'home' && $name ne $varname); # Just load the right binary file
+	foreach my $name (@pg_to_be_stored)
+	{
+                next if ($varname ne 'home' && $name ne $varname && !grep($name, 'global_databases', 'global_tbspnames')); # Just load the right binary file
 		next if ( !-e "$input_dir/$name.bin");
 
 		print STDERR "DEBUG: Loading PostgreSQL statistics from cache file $in_dir/$name.bin\n" if ($DEBUG);
@@ -11821,52 +11826,55 @@ sub load_pg_binary
 		%stats = %{ fd_retrieve($lfh) };
 		$lfh->close();
 
-		# Setting global information
-		if ($name eq 'global_infos') {
+		if (!grep(/^$name$/, 'global_databases', 'global_tbspnames'))
+		{
+			# Setting global information
+			if ($name eq 'global_infos') {
 
-			my %_global_infos = %{$stats{global_infos}} ;
-			foreach my $inf (keys %_global_infos) {
-				$_global_infos{$inf} //= 0;
-				if ($_global_infos{$inf} =~ /ARRAY/) {
-					push(@{$global_infos{$inf}}, @{$_global_infos{$inf}});
-				} else {
-					$global_infos{$inf} = $_global_infos{$inf};
+				my %_global_infos = %{$stats{global_infos}} ;
+				foreach my $inf (keys %_global_infos) {
+					$_global_infos{$inf} //= 0;
+					if ($_global_infos{$inf} =~ /ARRAY/) {
+						push(@{$global_infos{$inf}}, @{$_global_infos{$inf}});
+					} else {
+						$global_infos{$inf} = $_global_infos{$inf};
+					}
+				}
+				delete $stats{global_infos};
+
+			} else {
+
+				# Load other storages
+				foreach my $m (keys %stats) {
+					foreach my $t (keys %{$stats{$m}}) {
+						if ($stats{$m}{$t} =~ /HASH/) {
+							foreach my $d (keys %{$stats{$m}{$t}}) {
+								if ($stats{$m}{$t}{$d} =~ /HASH/) {
+									foreach my $k (keys %{$stats{$m}{$t}{$d}}) {
+										${$m}{$t}{$d}{$k} = $stats{$m}{$t}{$d}{$k};
+									}
+								} elsif ($stats{$m}{$t}{$d} =~ /ARRAY/) {
+									push(@{${$m}{$t}{$d}}, @{$stats{$m}{$t}{$d}});
+								} else {
+									${$m}{$t}{$d} = $stats{$m}{$t}{$d};
+								}
+							}
+						} elsif ($stats{$m}{$t} =~ /ARRAY/) {
+							push(@{${$m}{$t}}, @{$stats{$m}{$t}});
+						} else {
+							${$m}{$t} = $stats{$m}{$t};
+						}
+					}
 				}
 			}
-			delete $stats{global_infos};
-
-		} elsif (grep(/^$name$/, 'global_databases', 'global_tbspnames', )) {
-
+		}
+		else
+		{
 			# Look for database and tablespace
 			foreach my $d (@{$stats{$name}}) {
 				push(@{$name}, $d) if (!grep(/^$d$/, @{$name}));
 			}
 			delete $stats{$name};
-
-		} else {
-
-			# Load other storages
-			foreach my $m (keys %stats) {
-				foreach my $t (keys %{$stats{$m}}) {
-					if ($stats{$m}{$t} =~ /HASH/) {
-						foreach my $d (keys %{$stats{$m}{$t}}) {
-							if ($stats{$m}{$t}{$d} =~ /HASH/) {
-								foreach my $k (keys %{$stats{$m}{$t}{$d}}) {
-									${$m}{$t}{$d}{$k} = $stats{$m}{$t}{$d}{$k};
-								}
-							} elsif ($stats{$m}{$t}{$d} =~ /ARRAY/) {
-								push(@{${$m}{$t}{$d}}, @{$stats{$m}{$t}{$d}});
-							} else {
-								${$m}{$t}{$d} = $stats{$m}{$t}{$d};
-							}
-						}
-					} elsif ($stats{$m}{$t} =~ /ARRAY/) {
-						push(@{${$m}{$t}}, @{$stats{$m}{$t}});
-					} else {
-						${$m}{$t} = $stats{$m}{$t};
-					}
-				}
-			}
 		}
 	}
 
@@ -11993,7 +12001,7 @@ sub load_sysinfo_binary
         my ($input_dir, $infile) = @_;
 
 	# Do not load empty file, Storable don't support it
-	return if (-r "$input_dir/$infile");
+	return if (-z "$input_dir/$infile");
 
 	my $lfh = new IO::File "<$input_dir/$infile";
 	if (not defined $lfh) {
