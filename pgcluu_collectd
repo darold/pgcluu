@@ -307,6 +307,12 @@ my %METRICS_COMMANDS = (
 		'repeat'  => 1,
 		'override'  => 1,
 	},
+	'unused_trigfunc_stats' => {
+		'output' => 'pg_stat_unused_trigfunc.csv',
+		'command' => 'dump_unusedtrigfunc',
+		'repeat'  => 1,
+		'override'  => 1,
+	},
 	'pg_settings_stats' => {
 		'output' => 'pg_settings.csv',
 		'command' => 'dump_pgsettings',
@@ -1002,12 +1008,14 @@ sub collect_metrics
 	}
 
 	# Copy configuration files into output directory and keep track of change
-	if (!$NO_DATABASE && ($#METRICS >= 0) && grep(/^configuration_stats$/, @METRICS)) {
+	if (!$NO_DATABASE && ($#METRICS >= 0) && grep(/^configuration_stats$/, @METRICS))
+	{
 		my @conf_files = $METRICS_COMMANDS{'configuration_stats'}->{command}->();
 		@conf_files = () if ($PG_RET < 0);
 		my $outdir = $OUT_DIR;
 		$outdir = "$CAPTURE_DIR/$OUT_DIR" if ($CAPTURE);
-		foreach my $f (@conf_files, '/etc/pgbouncer/pgbouncer.ini') {
+		foreach my $f (@conf_files, '/etc/pgbouncer/pgbouncer.ini')
+		{
 			my $filename = basename($f);
 			# Rename old file to be able to perform a diff
 			if (-e "$OUT_DIR/$filename") {
@@ -1036,20 +1044,23 @@ sub collect_metrics
 	}
 
 	# Remove files that must be overriden
-	foreach my $type (sort {$a cmp $b} keys %METRICS_COMMANDS) {
-		if ($METRICS_COMMANDS{$type}->{override} && -e "$OUT_DIR/$METRICS_COMMANDS{$type}->{output}") {
+	foreach my $type (sort {$a cmp $b} keys %METRICS_COMMANDS)
+	{
+		if ($METRICS_COMMANDS{$type}->{override} && -e "$OUT_DIR/$METRICS_COMMANDS{$type}->{output}")
+		{
 			unlink("$OUT_DIR/$METRICS_COMMANDS{$type}->{output}");
 		}
 	}
 
 	# Generating global statistics collector SQL script 
 	my $script_sql = &create_sql_script();
-	if (!$script_sql && ($#METRICS < 0)) {
+	if (!$script_sql && ($#METRICS < 0))
+	{
 		# No action can be perform with this PostgreSQL version
 		unlink_pid_and_exit("FATAL: no action will be run on this PostgreSQL version $DB_INFO{major}.$DB_INFO{minor}, $!", 1);
 	}
-
-	if (!$NO_DATABASE) {
+	if (!$NO_DATABASE)
+	{
 		# Collecting database statistics if there other than pgbouncer metrics to collect
 		if ($PG_RET >= 0) {
 			if (open($fhl, '|-', $PSQL_PROG)) {
@@ -1065,29 +1076,23 @@ sub collect_metrics
 			push(@dblist, $DBNAME) if (($#dblist == -1) && $DBNAME);
 
 			# Generating per database statistics collector SQL script 
-			foreach my $db (@dblist) {
+			foreach my $db (@dblist)
+			{
 
 				next if (($#included_dbs >= 0) && !grep(/^$db$/i, @included_dbs));
-
 				my $script_repeat_sql = &create_sql_script($db);
 				if (!$script_repeat_sql) {
 					last;
 				}
-				my $LOCAL_PSQL_PROG = $PSQL_PROG;
-				if ($db && $#dbnames >= 0 && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $db/i)) {
-					if ($db !~ /^[a-z0-9\_\-]+$/i) {
-						$LOCAL_PSQL_PROG .= " -d '$db'";
-					} else {
-						$LOCAL_PSQL_PROG .= " -d $db";
-					}
-				}
+				my $LOCAL_PSQL_PROG = &set_local_psql_command($db);
+
 				# Collecting database statistics
 				if (open($fhl, '|-', $LOCAL_PSQL_PROG)) {
 					print $fhl $script_repeat_sql, "\n";
 					close($fhl);
 				} else {
-					&dprint("FATAL: failure when calling psql command: $PSQL_PROG, $!\n");
-					unlink_pid_and_exit("FATAL: failure when calling psql command: $PSQL_PROG, $!", 1);
+					&dprint("FATAL: failure when calling psql command: $LOCAL_PSQL_PROG, $!\n");
+					unlink_pid_and_exit("FATAL: failure when calling psql command: $LOCAL_PSQL_PROG, $!", 1);
 				}
 			}
 		}
@@ -1120,8 +1125,10 @@ sub collect_metrics
 	}
 
 	# Collecting pgbouncer statistics
-	if ($PGBOUNCER_ARGS) {
-		foreach my $c (@METRICS) {
+	if ($PGBOUNCER_ARGS)
+	{
+		foreach my $c (@METRICS)
+		{
 			next if ($c !~ /^pgbouncer_/);
 			# create a timestamp to registrer pgbouncer statistics
 			my $timestamp = &get_current_timestamp();
@@ -1142,7 +1149,8 @@ sub collect_metrics
 		}
 	}
 
-	if (!$NO_SYSINFO && $sysstat_version lt "11.7.4") {
+	if (!$NO_SYSINFO && $sysstat_version lt "11.7.4")
+	{
 		# Store filesystem use information
 		my @fsuse = `$DF_COMMAND 2>/dev/null`;
 		if ($#fsuse > 0) {
@@ -1204,7 +1212,8 @@ sub get_initial_info
 		if (&backend_minimum_version(9, 1)) {
 			# Look for all installed extensions
 			print $fhl "[EXTENSION]\n";
-			foreach my $db (sort @alldbs) {
+			foreach my $db (sort @alldbs)
+			{
 				my @ext = &get_extensions($db);
 				push(@extensions, "$db=" . join(',', sort @ext)) if ($#ext >= 0);
 			}
@@ -1282,7 +1291,8 @@ sub verify_action
 
 	# Only pgbouncer metrics and configuration
 	if ($ret < 0) {
-		foreach my $m (keys %METRICS_COMMANDS) {
+		foreach my $m (keys %METRICS_COMMANDS)
+		{
 			delete $METRICS_COMMANDS{$m} if (($m ne 'configuration_stats') && ($m !~ /pgbouncer/));
 		}
 		return $ret;
@@ -1349,12 +1359,14 @@ sub create_sql_script
 
 	# Prepare the SQL script
 	my $sql_queries = '';
-	foreach my $type (sort {$a cmp $b} keys %METRICS_COMMANDS) {
+	foreach my $type (sort {$a cmp $b} keys %METRICS_COMMANDS)
+	{
 		next if (!$db && $METRICS_COMMANDS{$type}->{repeat});
 		next if ($db && !$METRICS_COMMANDS{$type}->{repeat});
 		next if ($type =~ /^pgbouncer_|configuration_/);
 		next if (($type =~ /^(user|all)_/) && ($type !~ /^$STAT_TYPE/)); 
 		next if (($#METRICS >= 0) && !grep(/^$type$/, @METRICS));
+
 		my $sql = $METRICS_COMMANDS{$type}->{command}->();
 		if (!$sql) {
 			return;
@@ -1471,14 +1483,8 @@ sub get_extensions
 {
 	my $database = shift;
 
-	my $LOCAL_PSQL_PROG = $PSQL_PROG;
-	if ($database && $#dbnames >= 0 && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
-		if ($database !~ /^[a-z0-9\_\-]+$/i) {
-			$LOCAL_PSQL_PROG .= " -d '$database'";
-		} else {
-			$LOCAL_PSQL_PROG .= " -d $database";
-		}
-	}
+	my $LOCAL_PSQL_PROG = &set_local_psql_command($database);
+
 	my @db_extension = `echo "SELECT extname||'-'||extversion FROM pg_extension;" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
 		unlink_pid_and_exit("FATAL: psql error.", 0);
@@ -1537,14 +1543,8 @@ sub get_schemas
 {
 	my $database = shift;
 
-	my $LOCAL_PSQL_PROG = $PSQL_PROG;
-	if ($database && $#dbnames >= 0 && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
-		if ($database !~ /^[a-z0-9\_\-]+$/i) {
-			$LOCAL_PSQL_PROG .= " -d '$database'";
-		} else {
-			$LOCAL_PSQL_PROG .= " -d $database";
-		}
-	}
+	my $LOCAL_PSQL_PROG = &set_local_psql_command($database);
+
 	my @db_schema = `echo "SELECT nspname FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' ORDER BY 1" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
 		unlink_pid_and_exit("FATAL: psql error.", 0);
@@ -1561,14 +1561,8 @@ sub get_json_cols
 {
 	my $database = shift;
 
-	my $LOCAL_PSQL_PROG = $PSQL_PROG;
-	if ($database && $#dbnames >= 0 && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
-		if ($database !~ /^[a-z0-9\_\-]+$/i) {
-			$LOCAL_PSQL_PROG .= " -d '$database'";
-		} else {
-			$LOCAL_PSQL_PROG .= " -d $database";
-		}
-	}
+	my $LOCAL_PSQL_PROG = &set_local_psql_command($database);
+
 	my @db_json = `echo "SELECT c.relname||'.'||a.attname FROM pg_attribute a JOIN pg_class c ON (a.attrelid=c.relfilenode) WHERE a.atttypid = 114 ORDER BY 1" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
 		unlink_pid_and_exit("FATAL: psql error.", 0);
@@ -1586,15 +1580,7 @@ sub get_partitionned_tables
 {
 	my $database = shift;
 
-	my $LOCAL_PSQL_PROG = $PSQL_PROG;
-
-	if ($database && $#dbnames >= 0 && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
-		if ($database !~ /^[a-z0-9\_\-]+$/i) {
-			$LOCAL_PSQL_PROG .= " -d '$database'";
-		} else {
-			$LOCAL_PSQL_PROG .= " -d $database";
-		}
-	}
+	my $LOCAL_PSQL_PROG = &set_local_psql_command($database);
 
 	# Assume that inherited tables having check constraints are partitions
 	my $sql = sprintf(
@@ -1630,17 +1616,10 @@ sub get_partitionned_implementation
 {
 	my $database = shift;
 	my $oid = shift;
-	my $LOCAL_PSQL_PROG = $PSQL_PROG;
 
-	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
-		if ($database !~ /^[a-z0-9\_\-]+$/i) {
-			$LOCAL_PSQL_PROG .= " -d '$database'";
-		} else {
-			$LOCAL_PSQL_PROG .= " -d $database";
-		}
-	}
+	my $LOCAL_PSQL_PROG = &set_local_psql_command($database);
 
-    my $sql = "SELECT DISTINCT CASE WHEN pro.oid IS NOT NULL THEN pro.prosrc"
+	my $sql = "SELECT DISTINCT CASE WHEN pro.oid IS NOT NULL THEN pro.prosrc"
 		. "   WHEN r.oid IS NOT NULL THEN pg_get_ruledef(r.oid)"
 		. "   ELSE 'Unknown' END"
 		. " FROM pg_inherits i"
@@ -2488,14 +2467,8 @@ sub get_proc_name
 {
 	my $database = shift;
 
-	my $LOCAL_PSQL_PROG = $PSQL_PROG;
-	if ($database && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
-		if ($database !~ /^[a-z0-9\_\-]+$/i) {
-			$LOCAL_PSQL_PROG .= " -d '$database'";
-		} else {
-			$LOCAL_PSQL_PROG .= " -d $database";
-		}
-	}
+	my $LOCAL_PSQL_PROG = &set_local_psql_command($database);
+
 	my @db_proc = `echo "SELECT n.nspname||'.'||p.proname FROM pg_proc p, pg_namespace n WHERE p.pronamespace=n.oid AND n.nspname NOT IN ('pg_catalog', 'information_schema');" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
 		unlink_pid_and_exit("FATAL: psql error.", 0);
@@ -2506,18 +2479,28 @@ sub get_proc_name
 
 }
 
+sub set_local_psql_command
+{
+	my $database = shift;
+
+	my $local_psql_prog = $PSQL_PROG;
+
+	$local_psql_prog =~ s/-d\s*[^\s]+//;
+	if ($database !~ /^[a-z0-9\_\-]+$/i) {
+		$local_psql_prog .= " -d '$database'";
+	} else {
+		$local_psql_prog .= " -d $database";
+	}
+
+	return $local_psql_prog;
+}
+
 sub get_proc_count
 {
 	my $database = shift;
 
-	my $LOCAL_PSQL_PROG = $PSQL_PROG;
-	if ($database && $#dbnames >= 0 && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
-		if ($database !~ /^[a-z0-9\_\-]+$/i) {
-			$LOCAL_PSQL_PROG .= " -d '$database'";
-		} else {
-			$LOCAL_PSQL_PROG .= " -d $database";
-		}
-	}
+	my $LOCAL_PSQL_PROG = &set_local_psql_command($database);
+
 	my $db_proc = `echo "SELECT count(p.proname) FROM pg_proc p, pg_namespace n WHERE p.pronamespace=n.oid AND n.nspname NOT IN ('pg_catalog', 'information_schema');" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
 		unlink_pid_and_exit("FATAL: psql error.", 0);
@@ -2535,17 +2518,11 @@ sub get_triggers
 {
 	my $database = shift;
 
-    # we can only detect internal triggers since pg 9.0
-    return 0 if (! &backend_minimum_version(9,0));
+	# we can only detect internal triggers since pg 9.0
+	return 0 if (! &backend_minimum_version(9,0));
 
-	my $LOCAL_PSQL_PROG = $PSQL_PROG;
-	if ($database && $#dbnames >= 0 && ($LOCAL_PSQL_PROG !~ s/-d $dbnames[0]/-d $database/i)) {
-		if ($database !~ /^[a-z0-9\_\-]+$/i) {
-			$LOCAL_PSQL_PROG .= " -d '$database'";
-		} else {
-			$LOCAL_PSQL_PROG .= " -d $database";
-		}
-	}
+	my $LOCAL_PSQL_PROG = &set_local_psql_command($database);
+
 	my $db_trigger = `echo "SELECT count(tgname) FROM pg_trigger WHERE NOT tgisinternal;" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
 		unlink_pid_and_exit("FATAL: psql error.", 0);
@@ -2660,7 +2637,26 @@ sub dump_count_indexes
 	return $sql;
 }
 
+####
+# Get unused trigger function in a database
+####
+sub dump_unusedtrigfunc
+{
 
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), current_database(), " .
+		"c.nspname, a.proname " .
+		"FROM pg_proc a JOIN pg_type b ON a.prorettype = b.oid " .
+		"JOIN pg_namespace c ON a.pronamespace = c.oid " .
+		"WHERE %s " .
+		"AND b.typname = 'trigger' AND c.nspname NOT IN ('pg_catalog', 'information_schema') " .
+		"AND a.proname NOT IN (SELECT funcname FROM pg_stat_user_functions) " .
+		"ORDER BY c.nspname, a.proname",
+		(&backend_minimum_version(11, 0) ? "a.prokind = 'f'" : " NOT a.proiswindow AND NOT a.proisagg")
+	);
+
+	return $sql;
+}
 
 ####
 # Get PostgreSQL settings
