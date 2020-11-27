@@ -1414,10 +1414,11 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 	$src_base = '' if ($WORK_DIRS[$dx] eq '-');
 
 	# parse SQL stats files
-	if (-d "$in_dir") {
-
+	if (-d "$in_dir")
+	{
 		# Create output subdirectories if not exists yet
-		if (!$CACHE && !-e "$OUTPUT_DIR") {
+		if (!$CACHE && !-e "$OUTPUT_DIR")
+		{
 			my $ret = `mkdir -p $OUTPUT_DIR 2>&1`;
 			if ($ret) {
 				die "FATAL: $ret\n";
@@ -1431,14 +1432,15 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 		opendir(IDIR, "$in_dir") || die "FATAL: can't opendir $in_dir: $!";
 		my @files = grep { /\.csv(\.gz)?$/ } readdir(IDIR);
 		closedir(IDIR);
-		if ($#files < 0) {
-
+		if ($#files < 0)
+		{
 			print "DEBUG: no csv file found in $in_dir" if ($DEBUG);
-
-		} elsif ($#binfiles == -1) {
-
+		}
+		elsif ($#binfiles == -1)
+		{
 			# Detect timezone from csv file
-			if ($STATS_TIMEZONE eq '00') {
+			if ($STATS_TIMEZONE eq '00')
+			{
 				if (-e "$in_dir/pg_stat_database.csv" && !-z "$in_dir/pg_stat_database.csv") {
 					$STATS_TIMEZONE = &detect_timezone("$in_dir/pg_stat_database.csv");
 				} elsif (-e "$in_dir/pg_stat_database.csv.gz" ) {
@@ -1453,7 +1455,8 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			}
 
 			# Look for disk device and network interface from the sar file
-			if (!$DISABLE_SAR) {
+			if (!$DISABLE_SAR)
+			{
 				@DEVICE_LIST = ();
 				@IFACE_LIST = ();
 				@DEVICE_SPACE_LIST = ();
@@ -1461,7 +1464,8 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			}
 
 			# Enable capture mode if all data file are not present
-			if ($sysinfo{CONFIGURATION}{'capture'}) {
+			if ($sysinfo{CONFIGURATION}{'capture'})
+			{
 				print "DEBUG: data directory was created in capture mode.\n" if ($DEBUG);
 				if ($CACHE) {
 					die "FATAL: caching mode can not be used on a capture repository.\n";
@@ -1469,7 +1473,8 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 			}
 		}
 
-		if ($#binfiles > 0) {
+		if ($#binfiles > 0)
+		{
 			# Load statistics from cache files
 			print "DEBUG: Loading PostgreSQL statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
 			&load_pg_binary($in_dir);
@@ -1485,56 +1490,71 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 		# Loop over CSV files and graphics definition to generate reports
 		print "DEBUG: Building PostgreSQL statistics from CSV files\n" if ($DEBUG);
-		foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS) {
-			# Read statistics from csv file starting at at begining of the
-			# file or last offset when binary files are present
-			if (-e "$in_dir/$k" && !-z "$in_dir/$k") {
+		foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS)
+		{
+			# Read statistics from csv file starting at begining of
+			# the file or last offset when binary files are present
+			if ((-e "$in_dir/$k" && !-z "$in_dir/$k") ||
+				(-e "$in_dir/end-$k" && !-z "$in_dir/end-$k"))
+			{
 				&compute_postgresql_stat($in_dir, $k, $src_base, %{$DB_GRAPH_INFOS{$k}});
 				push(@statistics_build, $k);
+			}
 			# Gzip data files are only available when they can't be appended anymore so
 			# if we have binary files and gzipped files, binary files contains all stats
-			} elsif (($#binfiles == -1) && -e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz") {
+			elsif (($#binfiles == -1) && -e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz")
+			{
 				&compute_postgresql_stat($in_dir, "$k.gz", $src_base, %{$DB_GRAPH_INFOS{$k}}); 
 				push(@statistics_build, $k);
+			}
 			# Files use 'all' instead of 'user' with pgcluu_collectd --stat-type option
-			} elsif ($k =~ /_user_/) {
+			elsif ($k =~ /_user_/)
+			{
 				my $f = $k;
 				$f =~ s/_user_/_all_/;
 				# Read statistics from csv file starting at at begining of the
 				# file or last offset when binary files are present
-				if (-e "$in_dir/$f" && !-z "$in_dir/$f") {
+				if ((-e "$in_dir/$f" && !-z "$in_dir/$f") ||
+					(-e "$in_dir/end-$f" && !-z "$in_dir/end-$f"))
+				{
 					&compute_postgresql_stat($in_dir, $f, $src_base, %{$DB_GRAPH_INFOS{$k}});
 					push(@statistics_build, $k);
+				}
 				# Gzip data files are only available when they can't be appended anymore so
 				# if we have binary files and gzipped files, binary files contains all stats
-				} elsif (($#binfiles == -1) && -e "$in_dir/$f.gz" && !-z "$in_dir/$f.gz") {
+				elsif (($#binfiles == -1) && -e "$in_dir/$f.gz" && !-z "$in_dir/$f.gz")
+				{
 					&compute_postgresql_stat($in_dir, "$f.gz", $src_base, %{$DB_GRAPH_INFOS{$k}});
 					push(@statistics_build, $k);
 				}
 			}
 		}
 
-		if ($CACHE) {
-
+		if ($CACHE)
+		{
 			print "DEBUG: Generating PostgreSQL statistics files cache into $in_dir/\n" if ($DEBUG);
 			$global_infos{'in_dir'} = $in_dir;
 			$global_infos{'timezone'} = $TIMEZONE;
 			$global_infos{'stats_timezone'} = $STATS_TIMEZONE;
 			&dump_pg_binary($in_dir);
-
-		} else {
-
+		}
+		else
+		{
 			# Loop over statistic in memory to generate reports
 			print "DEBUG: Building PostgreSQL statistics reports\n" if ($DEBUG);
-			if ($#statistics_build > 0) {
+			if ($#statistics_build > 0)
+			{
 				foreach my $k (@statistics_build) {
 					&compute_postgresql_report($k, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
 				}
-			} else {
+			}
+			else
+			{
 				# Try to limit report generation to stats that exists in memory.
 				# The storage variable name are the same than the keys in DB_GRAPH_INFOS
 				# minus some transformation.
-				foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS) {
+				foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS)
+				{
 					my $inmem = $k;
 					$inmem =~ s/\.csv//;
 					$inmem =~ s/\./_/g;
@@ -1549,7 +1569,8 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 					# Skip this report if there's no statistics loaded in memory
 					next if (scalar keys %{$inmem} == 0);
 					print "DEBUG: Building report for $k (from memory \%$inmem)\n" if ($DEBUG);
-					if ($k =~ /_all_/) {
+					if ($k =~ /_all_/)
+					{
 						my $f = $k;
 						$f =~ s/_all_/_user_/;
 						&compute_postgresql_report($f, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
@@ -1572,12 +1593,11 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 				&end_html_file("$OUTPUT_DIR/$f");
 			}
 		}
-
-	} elsif (!$sar_file && !$DISABLE_SAR) {
-
+	}
+	elsif (!$sar_file && !$DISABLE_SAR)
+	{
 		print "FATAL: $in_dir is not a valid data directory\n";
 		exit 1;
-
 	}
 
 	# Clear memory from PostgreSQL statistics storage
@@ -8122,7 +8142,8 @@ sub generate_html_menu
 
 		my %data_info = %{$DB_GRAPH_INFOS{'pg_stat_user_tables.csv'}};
 		my $table_str = '';
-		foreach my $id (sort {$a <=> $b} keys %data_info) {
+		foreach my $id (sort {$a <=> $b} keys %data_info)
+		{
 			next if ($data_info{$id}{name} !~ /^table-/);
 			next if ($sysinfo{CONFIGURATION}{'capture'} && grep(/^$data_info{$id}{name}$/, 'table-vacuums-analyzes', 'table-indexes'));
 			$table_str .= qq{
@@ -8130,7 +8151,8 @@ sub generate_html_menu
 } if (-e "$OUTPUT_DIR/$db-$data_info{$id}{name}.html");
 		}
 		%data_info = %{$DB_GRAPH_INFOS{'pg_class_size.csv'}};
-		foreach my $id (sort {$a <=> $b} keys %data_info) {
+		foreach my $id (sort {$a <=> $b} keys %data_info)
+		{
 			next if ($data_info{$id}{name} !~ /^table-/);
 			$table_str .= qq{
 			      <li id="menu-database-$data_info{$id}{name}"><a href="$db-$data_info{$id}{name}.html">$data_info{$id}{menu}</a></li>
