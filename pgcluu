@@ -7799,7 +7799,7 @@ sub generate_html_menu
             <span class="icon-bar"></span>
           </button>
         </div>
-        <div class="navbar-collapse collapse">
+        <div class="navbar-inverse navbar-collapse collapse">
           <ul class="nav navbar-nav">
               <li id="menu-home" class="dropdown"><a href="index.html#home">Home</a></li>
 };
