@@ -7953,7 +7953,7 @@ AAAASUVORK5CYII=';
           </button>
         </div>
 
-        <div class="navbar-collapse collapse">
+        <div class="navbar-inverse navbar-collapse collapse">
           <ul class="nav navbar-nav">
               <li id="menu-home" class="dropdown"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=home&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Home</a></li>
 };
