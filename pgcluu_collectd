@@ -71,6 +71,7 @@ my @SKIP_BEGIN  = ();
 my @SKIP_END    = ();
 my $USE_BUFFERCACHE = 0;
 my $NO_STATEMENTS  = 0;
+my $NO_WAITEVENT  = 0;
 my $NO_SYSINFO  = 0;
 my $SHOW_VER    = 0;
 my $END_AFTER   = 0;
@@ -96,6 +97,9 @@ my $PKG_LIST_PROG  = '';
 my $DF_COMMAND  = 'LANG=C df --output="source,size,used,avail,itotal,iused,iavail,fstype,target" -x squashfs -x tmpfs -x devtmpfs';
 my $SAR_PID = 0;
 my $PIDSTAT_PID = 0;
+
+# Global storage of extensions installed in each database
+my @extensions = ();
 
 # Set the default mask for file and directory creation
 umask(UMASK);
@@ -251,6 +255,11 @@ my %METRICS_COMMANDS = (
 		'command'  => 'dump_pgstatstatements',
 		'override'  => 1,
 	},
+	'waitevent_stats' => {
+		'output'   => 'pg_stat_waitevent.csv',
+		'command'  => 'dump_pgwaitsampling',
+		'repeat'  => 1,
+	},
 	'xlog_stats' => {
 		'output' => 'pg_xlog_stat.csv',
 		'command' => 'dump_xlog_stat'
@@ -403,6 +412,7 @@ my $result = GetOptions(
 	"U|dbuser=s"     => \$DBUSER,
 	"v|verbose!"     => \$DEBUG,
 	"V|version!"     => \$SHOW_VER,
+	"w|no-waitevent!"=> \$NO_WAITEVENT,
 	"W|password=s"   => \$DBPASS,
 	"z|compress!"    => \$COMPRESS,
 	"pgversion=s"    => \$PG_VERSION,
@@ -1197,8 +1207,9 @@ sub get_initial_info
 	&get_uptime(1);
 
 	# Collect general information about each database
-	if ($#alldbs > -1) {
-		my @extensions = ();
+	if ($#alldbs > -1)
+	{
+		@extensions = ();
 		my @schemas = ();
 		my @json = ();
 		my @procs = ();
@@ -1366,7 +1377,14 @@ sub create_sql_script
 		next if ($type =~ /^pgbouncer_|configuration_/);
 		next if (($type =~ /^(user|all)_/) && ($type !~ /^$STAT_TYPE/)); 
 		next if (($#METRICS >= 0) && !grep(/^$type$/, @METRICS));
+		# Look if there is the pg_wait_sampling extension in this database
+		if ($type eq 'waitevent_stats')
+		{
+			next if (!$db || $NO_WAITEVENT);
+			next if (!grep(/^$db=.*pg_wait_sampling/, @extensions));
+		}
 
+		# Get the SQL command to execute for this metric
 		my $sql = $METRICS_COMMANDS{$type}->{command}->();
 		if (!$sql) {
 			return;
@@ -1672,7 +1690,6 @@ sub has_pgstatstatements
 	chomp($hasit);
 
 	return $hasit;
-
 }
 
 sub is_superuser
@@ -1903,6 +1920,7 @@ options:
   -U, --dbuser=USERNAME    database user to connect as. Default to current user.
   -v, --verbose            Print out debug informations.
   -V, --version            Show pgcluu_collectd version and exit.
+  -w, --no-waitevent       do not collect wait event statistics from pg_wait_sampling.
   -W, --password=pass      database password.
   -z, --compress           force compression of rotated data files.
   --included-db=DATABASE   collect statistics only for those databases present
@@ -2267,6 +2285,19 @@ sub dump_pgstatstatements
 
 	return $sql;
 }
+
+sub dump_pgwaitsampling
+{
+
+	my $sql = "SELECT date_trunc('seconds', now()), current_database(), " .
+			"event_type, event, SUM(count) " .
+			"FROM public.pg_wait_sampling_profile " .
+			"WHERE event IS NOT NULL " .
+			"GROUP BY event_type, event";
+
+	return $sql;
+}
+
 
 sub dump_xlog_stat
 {
