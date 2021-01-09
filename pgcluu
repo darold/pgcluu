@@ -1361,8 +1361,8 @@ if (!$INPUT_DIR && ($SAR_INPUT_FILE || $SADC_INPUT_FILE)) {
 # Now we will look over each statistics directories to compute stats
 ####
 my $ORIG_OUTPUT_DIR = $OUTPUT_DIR;
-foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
-
+foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
+{
 	# Reset global variables before processing a new work dir
 	&clear_stats();
 
@@ -1382,7 +1382,8 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 
 	# Check if we have binary file in the directory
 	my @binfiles = ();
-	if (-d "$in_dir") {
+	if (-d "$in_dir")
+	{
 		opendir(IDIR, "$in_dir") || die "FATAL: can't opendir $in_dir: $!";
 		@binfiles = grep { /^all_.*\.bin$/ } readdir(IDIR);
 		closedir(IDIR);
@@ -1397,7 +1398,8 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++) {
 	my $sar_file = '';
 	my $sadc_file = '';
 	my $pidstat_file = '';
-	if (!$DISABLE_SAR) {
+	if (!$DISABLE_SAR)
+	{
 		($sar_file, $sadc_file) = &set_sysstat_file($in_dir);
 		$pidstat_file = &set_pidstat_file($in_dir);
 	}
@@ -2440,13 +2442,13 @@ sub pg_stat_database_report
 {
 	my ($src_base, %data_info) = @_;
 
-
 	my %database_stat = ();
 	my %total_query_type = ();
 	my %has_conn = ();
 	my $has_tuples = 0;
 	my $has_temp = 0;
 	my $has_conflict = 0;
+
 	foreach my $t (sort {$a <=> $b} keys %all_stat_database)
 	{
 		foreach my $db (@global_databases)
@@ -2460,21 +2462,24 @@ sub pg_stat_database_report
 				$all_stat_database{$t}{$db}{$k} ||= 0;
 				$OVERALL_STATS{'cluster'}{$k} += $all_stat_database{$t}{$db}{$k};
 				$OVERALL_STATS{'database'}{$db}{$k} += $all_stat_database{$t}{$db}{$k};
-
 			}
 
 			$OVERALL_STATS{'start_date'} = $t if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} gt $t));
 			$OVERALL_STATS{'end_date'} = $t if (!$OVERALL_STATS{'end_date'} || ($OVERALL_STATS{'end_date'} lt $t));
 			# It depends on the postgresql version
-			if (!$has_tuples) {
-				foreach my $k (keys %{$all_stat_database{$t}{$db}}) {
-					if (grep(/^$k$/, 'insert','returned','fetched','update','delete')) {
+			if (!$has_tuples)
+			{
+				foreach my $k (keys %{$all_stat_database{$t}{$db}})
+				{
+					if (grep(/^$k$/, 'insert','returned','fetched','update','delete'))
+					{
 						$has_tuples = 1;
 						last;
 					}
 				}
 			}
-			if ($has_tuples) {
+			if ($has_tuples)
+			{
 				$database_stat{$db}{insert} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_database{$t}{$db}{insert}/$all_stat_database{$t}{$db}{interval})) . '],';
 				$database_stat{$db}{returned} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_database{$t}{$db}{returned}/$all_stat_database{$t}{$db}{interval})) . '],';
 				$database_stat{$db}{fetched} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_database{$t}{$db}{fetched}/$all_stat_database{$t}{$db}{interval})) . '],';
@@ -2503,9 +2508,12 @@ sub pg_stat_database_report
 			$database_stat{$db}{xact_rollback} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_database{$t}{$db}{xact_rollback}||0)/$all_stat_database{$t}{$db}{interval}) . '],';
 			$database_stat{$db}{xact_throughput} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_database{$t}{$db}{xact_throughput}||0)/$all_stat_database{$t}{$db}{interval}) . '],';
 			# It depends on the postgresql version
-			if (!$has_conflict) {
-				foreach my $k (keys %{$all_stat_database{$t}{$db}}) {
-					if ($k eq 'canceled_queries') {
+			if (!$has_conflict)
+			{
+				foreach my $k (keys %{$all_stat_database{$t}{$db}})
+				{
+					if ($k eq 'canceled_queries')
+					{
 						$has_conflict = 1;
 						last;
 					}
@@ -2515,15 +2523,19 @@ sub pg_stat_database_report
 				$database_stat{$db}{canceled_queries} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . ($all_stat_database{$t}{$db}{canceled_queries}||0) . '],';
 			}
 			# It depends on the postgresql version
-			if (!$has_temp) {
-				foreach my $k (keys %{$all_stat_database{$t}{$db}}) {
-					if (grep(/^$k$/, 'deadlocks','temp_files','temp_bytes')) {
+			if (!$has_temp)
+			{
+				foreach my $k (keys %{$all_stat_database{$t}{$db}})
+				{
+					if (grep(/^$k$/, 'deadlocks','temp_files','temp_bytes'))
+					{
 						$has_temp = 1;
 						last;
 					}
 				}
 			}
-			if ($has_temp) {
+			if ($has_temp)
+			{
 				$database_stat{$db}{deadlocks} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . ($all_stat_database{$t}{$db}{deadlocks}||0) . '],';
 				$database_stat{$db}{temp_files} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . ($all_stat_database{$t}{$db}{temp_files}||0) . '],';
 				$database_stat{$db}{temp_bytes} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_database{$t}{$db}{temp_bytes}||0)/$all_stat_database{$t}{$db}{interval}) . '],';
@@ -2538,11 +2550,13 @@ sub pg_stat_database_report
 		{
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 
-			my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html", $src_base);
+			my $dbfh = undef;
 			my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 			if ($data_info{$id}{name} eq 'database-write_ratio')
 			{
-				if ($has_tuples) {
+				$dbfh = &append_to_html_file("$OUTPUT_DIR/database-io-$db.html", $src_base);
+				if ($has_tuples)
+				{
 					$database_stat{$db}{insert} =~ s/,$//;
 					$database_stat{$db}{update} =~ s/,$//;
 					$database_stat{$db}{delete} =~ s/,$//;
@@ -2552,10 +2566,12 @@ sub pg_stat_database_report
 				} else {
 					print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-write_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{insert}, $database_stat{$db}{update}, $database_stat{$db}{delete});
 				}
-
-			} elsif ($data_info{$id}{name} eq 'database-read_ratio') {
-
-				if ($has_tuples) {
+			}
+			elsif ($data_info{$id}{name} eq 'database-read_ratio')
+			{
+				$dbfh = &append_to_html_file("$OUTPUT_DIR/database-io-$db.html", $src_base);
+				if ($has_tuples)
+				{
 					$database_stat{$db}{returned} =~ s/,$//;
 					$database_stat{$db}{fetched} =~ s/,$//;
 				}
@@ -2565,11 +2581,15 @@ sub pg_stat_database_report
 					print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-read_ratio', \%{$data_info{$id}}, $db, $database_stat{$db}{returned}, $database_stat{$db}{fetched});
 				}
 
-			} elsif ($data_info{$id}{name} eq 'database-read_write_query') {
-
-				if (exists $total_query_type{$db}{'all'} && ($total_query_type{$db}{'all'} > 0)) {
+			}
+			elsif ($data_info{$id}{name} eq 'database-read_write_query')
+			{
+				$dbfh = &append_to_html_file("$OUTPUT_DIR/database-io-$db.html", $src_base);
+				if (exists $total_query_type{$db}{'all'} && ($total_query_type{$db}{'all'} > 0))
+				{
 					my %data = ();
-					foreach my $t (keys %{$total_query_type{$db}}) {
+					foreach my $t (keys %{$total_query_type{$db}})
+					{
 						next if ($t eq 'all');
 						$data{$t} = sprintf("%0.2f", $total_query_type{$db}{$t}*100/$total_query_type{$db}{'all'});
 					}
@@ -2579,9 +2599,10 @@ sub pg_stat_database_report
 						print $fhcluster &jqplot_piegraph($IDX++, 'cluster-read_write_query', \%{$data_info{$id}}, $db, %data);
 					}
 				}
-
-			} elsif ($data_info{$id}{name} eq 'database-cache_ratio') {
-
+			}
+			elsif ($data_info{$id}{name} eq 'database-cache_ratio')
+			{
+				$dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html", $src_base);
 				$database_stat{$db}{blks_read} =~ s/,$//;
 				$database_stat{$db}{blks_hit} =~ s/,$//;
 				if ($db ne 'all') {
@@ -2592,9 +2613,10 @@ sub pg_stat_database_report
 				delete $database_stat{$db}{blks_hit};
 				delete $database_stat{$db}{blks_read};
 				delete $database_stat{$db}{ratio_hit_miss};
-
-			} elsif ($data_info{$id}{name} eq 'database-commits_rollbacks') {
-
+			}
+			elsif ($data_info{$id}{name} eq 'database-commits_rollbacks')
+			{
+				$dbfh = &append_to_html_file("$OUTPUT_DIR/database-tx-$db.html", $src_base);
 				$database_stat{$db}{xact_commit} =~ s/,$//;
 				$database_stat{$db}{xact_rollback} =~ s/,$//;
 				$database_stat{$db}{nbackend} =~ s/,$//;
@@ -2605,9 +2627,10 @@ sub pg_stat_database_report
 				}
 				delete $database_stat{$db}{xact_commit};
 				delete $database_stat{$db}{xact_rollback};
-
-			} elsif ($data_info{$id}{name} eq 'database-transactions') {
-
+			}
+			elsif ($data_info{$id}{name} eq 'database-transactions')
+			{
+				$dbfh = &append_to_html_file("$OUTPUT_DIR/database-tx-$db.html", $src_base);
 				$database_stat{$db}{xact_throughput} =~ s/,$//;
 				if ($db ne 'all') {
 					$dbfh->print( &jqplot_linegraph_array($IDX++, 'database-transactions', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_throughput}) );
@@ -2615,7 +2638,7 @@ sub pg_stat_database_report
 					print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-transactions', \%{$data_info{$id}}, $db, $database_stat{$db}{xact_throughput});
 				}
 			}
-			$dbfh->close();
+			$dbfh->close() if (defined $dbfh);
 			$fhcluster->close();
 		}
 	}
@@ -2628,9 +2651,10 @@ sub pg_stat_database_report
 		{
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 
-			my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html", $src_base);
+			my $dbfh = undef;
 			if ($data_info{$id}{name} eq 'database-backends')
 			{
+				$dbfh = &append_to_html_file("$OUTPUT_DIR/database-conn-$db.html", $src_base);
 				$database_stat{$db}{nbackend} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{nbackend};
 				if (($db ne 'all') && exists $has_conn{$db}) {
@@ -2639,8 +2663,10 @@ sub pg_stat_database_report
 				delete $database_stat{$db}{nbackend};
 				$found++;
 
-			} elsif ($has_conflict && ($data_info{$id}{name} eq 'database-canceled_queries')) {
-
+			}
+			elsif ($has_conflict && ($data_info{$id}{name} eq 'database-canceled_queries'))
+			{
+				$dbfh = &append_to_html_file("$OUTPUT_DIR/database-conflict-$db.html", $src_base);
 				$database_stat{$db}{canceled_queries} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{canceled_queries};
 				if ($db ne 'all') {
@@ -2649,7 +2675,10 @@ sub pg_stat_database_report
 				delete $database_stat{$db}{canceled_queries};
 				$found++;
 
-			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-deadlocks')) {
+			}
+			elsif ($has_temp && ($data_info{$id}{name} eq 'database-deadlocks'))
+			{
+				$dbfh = &append_to_html_file("$OUTPUT_DIR/database-lock-$db.html", $src_base);
 				$database_stat{$db}{deadlocks} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{deadlocks};
 				if ($db ne 'all') {
@@ -2658,8 +2687,10 @@ sub pg_stat_database_report
 				delete $database_stat{$db}{deadlocks};
 				$found++;
 
-			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-temporary_files')) {
-
+			}
+			elsif ($has_temp && ($data_info{$id}{name} eq 'database-temporary_files'))
+			{
+				$dbfh = &append_to_html_file("$OUTPUT_DIR/database-tmpf-$db.html", $src_base);
 				$database_stat{$db}{temp_files} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{temp_files};
 				if ($db ne 'all') {
@@ -2668,8 +2699,10 @@ sub pg_stat_database_report
 				delete $database_stat{$db}{temp_files};
 				$found++;
 
-			} elsif ($has_temp && ($data_info{$id}{name} eq 'database-temporary_bytes')) {
-
+			}
+			elsif ($has_temp && ($data_info{$id}{name} eq 'database-temporary_bytes'))
+			{
+				$dbfh = &append_to_html_file("$OUTPUT_DIR/database-tmpf-$db.html", $src_base);
 				$database_stat{$db}{temp_bytes} =~ s/,$//;
 				$data{$db} = $database_stat{$db}{temp_bytes};
 				if ($db ne 'all') {
@@ -2679,9 +2712,11 @@ sub pg_stat_database_report
 				$found++;
 
 			}
-			$dbfh->close();
+			$dbfh->close() if (defined $dbfh);
 		}
-		if ($found) {
+
+		if ($found)
+		{
 			my $name = $data_info{$id}{name};
 			$name =~ s/^database/cluster/;
 			my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
@@ -2715,7 +2750,8 @@ sub pg_stat_database_conflicts
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	$curfh->seek($offset,0);
-	while (my $l = <$curfh>) {
+	while (my $l = <$curfh>)
+	{
 		$offset += length($l);
 		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
@@ -2777,10 +2813,12 @@ sub pg_stat_database_conflicts_report
                 $conflict_type{$db}{snapshot} =~ s/,$//;
                 $conflict_type{$db}{bufferpin} =~ s/,$//;
                 $conflict_type{$db}{deadlock} =~ s/,$//;
-		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html", $src_base);
+		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-conflict-$db.html", $src_base);
 		if ($db ne 'all') {
 			$dbfh->print( &jqplot_linegraph_array($IDX++, $data_info{$id}{name}, \%{$data_info{$id}}, $db, $conflict_type{$db}{tablespace}, $conflict_type{$db}{lock}, $conflict_type{$db}{snapshot}, $conflict_type{$db}{bufferpin}, $conflict_type{$db}{deadlock}) );
-		} else {
+		}
+		else
+		{
 			my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 			print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-conflicts', \%{$data_info{$id}}, $db, $conflict_type{$db}{tablespace}, $conflict_type{$db}{lock}, $conflict_type{$db}{snapshot}, $conflict_type{$db}{bufferpin}, $conflict_type{$db}{deadlock});
 			$fhcluster->close();
@@ -2833,8 +2871,10 @@ sub pg_database_size_report
 
 	my %database_stat = ();
 	my $total_val = 0;
-	foreach my $t (sort {$a <=> $b} keys %all_database_size) {
-		foreach my $db (@global_databases) {
+	foreach my $t (sort {$a <=> $b} keys %all_database_size)
+	{
+		foreach my $db (@global_databases)
+		{
 			$database_stat{$db}{size} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . ($all_database_size{$t}{$db} || 0) . '],';
 			next if ($db eq 'all');
 			$OVERALL_STATS{'database'}{$db}{'size'} = $all_database_size{$t}{$db};
@@ -2846,7 +2886,8 @@ sub pg_database_size_report
 
 	my $id = &get_data_id('database-size', %data_info);
 	my %data = ();
-	foreach my $db (sort keys %database_stat) {
+	foreach my $db (sort keys %database_stat)
+	{
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 		$database_stat{$db}{size} =~ s/,$//;
 		$data{$db} = $database_stat{$db}{size};
@@ -2861,7 +2902,9 @@ sub pg_database_size_report
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 	if (!$sysinfo{CONFIGURATION}{'capture'}) {
 		print $fhcluster &jqplot_linegraph_hash($IDX++, 'cluster-size', \%{$data_info{$id}}, 'all', %data);
-	} else {
+	}
+	else
+	{
 		$data_info{$id}{title} =~ s/\%s/all/;
 		print $fhcluster qq{
 <li class="slide" id="cluster-size-slide">
@@ -2880,7 +2923,8 @@ sub pg_database_size_report
 					<tbody>
 					<tr><th>Database Name</th><th>Size</th></tr>
 };
-		foreach my $db (sort keys %{$OVERALL_STATS{'database'}}) {
+		foreach my $db (sort keys %{$OVERALL_STATS{'database'}})
+		{
                         next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			my $dbsize = &pretty_print_size($OVERALL_STATS{'database'}{$db}{size});
 			print $fhcluster "<tr><td>$db</td><td>$dbsize</td></tr>\n";
@@ -2909,7 +2953,8 @@ sub pg_prepared_xact
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	$curfh->seek($offset,0);
-	while (my $l = <$curfh>) {
+	while (my $l = <$curfh>)
+	{
 		$offset += length($l);
 		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
@@ -2944,8 +2989,10 @@ sub pg_prepared_xact_report
 
 	my %database_stat = ();
 	my $total_val = 0;
-	foreach my $t (sort {$a <=> $b} keys %all_prepared_xact) {
-		foreach my $db (@global_databases) {
+	foreach my $t (sort {$a <=> $b} keys %all_prepared_xact)
+	{
+		foreach my $db (@global_databases)
+		{
 			$database_stat{$db}{count} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . ($all_prepared_xact{$t}{$db}{count} || 0) . '],';
 			$database_stat{$db}{oldest} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . ($all_prepared_xact{$t}{$db}{oldest} || 0) . '],';
 			next if ($db eq 'all');
@@ -2963,8 +3010,9 @@ sub pg_prepared_xact_report
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 		$database_stat{$db}{count} =~ s/,$//;
 		$database_stat{$db}{oldest} =~ s/,$//;
-		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html", $src_base);
-		if ($db ne 'all') {
+		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-tx-$db.html", $src_base);
+		if ($db ne 'all')
+		{
 			$dbfh->print( &jqplot_linegraph_array($IDX++, 'database-prepared', \%{$data_info{$id}}, $db, $database_stat{$db}{count},$database_stat{$db}{oldest}) );
 			delete $database_stat{$db};
 		}
@@ -2974,7 +3022,9 @@ sub pg_prepared_xact_report
 	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 	if (!$sysinfo{CONFIGURATION}{'capture'}) {
 		print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-prepared', \%{$data_info{$id}}, 'all', $database_stat{'all'}{count}, $database_stat{'all'}{oldest});
-	} else {
+	}
+	else
+	{
 		$data_info{$id}{title} =~ s/\%s/all/;
 		print $fhcluster qq{
 <li class="slide" id="cluster-prepared-slide">
@@ -2993,7 +3043,8 @@ sub pg_prepared_xact_report
 					<tbody>
 					<tr><th>Database Name</th><th>Prepared xact</th><th>Oldest xact</th></tr>
 };
-		foreach my $db (sort keys %{$OVERALL_STATS{'database'}}) {
+		foreach my $db (sort keys %{$OVERALL_STATS{'database'}})
+		{
                         next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep(/^$db$/, @INCLUDE_DB)));
 			my $dbsize = &pretty_print_size($OVERALL_STATS{'database'}{$db}{prepared_count});
 			my $oldest = &format_duration($OVERALL_STATS{'database'}{$db}{prepared_oldest}*1000);
@@ -4506,17 +4557,20 @@ sub pg_stat_connections_report
 	%all_stat_connections = ();
 
 	my $id = &get_data_id('database-connections', %data_info);
-	foreach my $db (sort keys %connections_stat) {
+	foreach my $db (sort keys %connections_stat)
+	{
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 		$connections_stat{$db}{total} =~ s/,$//;
 		$connections_stat{$db}{active} =~ s/,$//;
 		$connections_stat{$db}{waiting} =~ s/,$//;
 		$connections_stat{$db}{idle_in_xact} =~ s/,$//;
 		$connections_stat{$db}{idle} =~ s/,$//;
-		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html", $src_base);
+		my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-conn-$db.html", $src_base);
 		if ($db ne 'all') {
 			$dbfh->print( &jqplot_linegraph_array($IDX++, 'database-connections', \%{$data_info{$id}}, $db, $connections_stat{$db}{active}, $connections_stat{$db}{idle}, $connections_stat{$db}{idle_in_xact}, $connections_stat{$db}{waiting}) );
-		} else {
+		}
+		else
+		{
 			my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
 			print $fhcluster &jqplot_linegraph_array($IDX++, 'cluster-connections', \%{$data_info{$id}}, 'all', $connections_stat{$db}{active}, $connections_stat{$db}{idle}, $connections_stat{$db}{idle_in_xact}, $connections_stat{$db}{waiting});
 			$fhcluster->close();
@@ -5342,27 +5396,37 @@ sub pg_stat_locks_report
 		}
 	}
 	%all_stat_locks = ();
-	foreach my $id (sort {$a <=> $b} keys %data_info) {
-		foreach my $db (sort keys %locks_stat) {
+	foreach my $id (sort {$a <=> $b} keys %data_info)
+	{
+		foreach my $db (sort keys %locks_stat)
+		{
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 			my @graph_data = ();
-			my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-$db.html", $src_base);
-			if ($data_info{$id}{name} eq 'database-lock-types') {
-				foreach my $k (sort keys %{$locks_stat{$db}{lock_type}}) {
+			my $dbfh = &append_to_html_file("$OUTPUT_DIR/database-lock-$db.html", $src_base);
+			if ($data_info{$id}{name} eq 'database-lock-types')
+			{
+				foreach my $k (sort keys %{$locks_stat{$db}{lock_type}})
+				{
 					$locks_stat{$db}{lock_type}{$k} =~ s/,$//;
 					push(@{$data_info{$id}{legends}}, $k);
 					push(@graph_data, $locks_stat{$db}{lock_type}{$k});
 				}
 				$dbfh->print( &jqplot_linegraph_array($IDX++, 'database-lock-types', \%{$data_info{$id}}, $db, @graph_data) );
-			} elsif ($data_info{$id}{name} eq 'database-lock-modes') {
-				foreach my $k (sort keys %{$locks_stat{$db}{lock_mode}}) {
+			}
+			elsif ($data_info{$id}{name} eq 'database-lock-modes')
+			{
+				foreach my $k (sort keys %{$locks_stat{$db}{lock_mode}})
+				{
 					$locks_stat{$db}{lock_mode}{$k} =~ s/,$//;
 					push(@{$data_info{$id}{legends}}, $k);
 					push(@graph_data, $locks_stat{$db}{lock_mode}{$k});
 				}
 				$dbfh->print( &jqplot_linegraph_array($IDX++, 'database-lock-modes', \%{$data_info{$id}}, $db, @graph_data) );
-			} elsif ($data_info{$id}{name} eq 'database-lock-granted') {
-				foreach my $k (sort keys %{$locks_stat{$db}{lock_granted}}) {
+			}
+			elsif ($data_info{$id}{name} eq 'database-lock-granted')
+			{
+				foreach my $k (sort keys %{$locks_stat{$db}{lock_granted}})
+				{
 					$locks_stat{$db}{lock_granted}{$k} =~ s/,$//;
 					push(@{$data_info{$id}{legends}}, $k);
 					push(@graph_data, $locks_stat{$db}{lock_granted}{$k});
@@ -6738,7 +6802,8 @@ sub pg_stat_statements_report
 	my ($src_base, %data_info) = @_;
 
 	my $id = &get_data_id('database-queries', %data_info);
-	foreach my $db (keys %all_stat_statements) {
+	foreach my $db (keys %all_stat_statements)
+	{
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 		my $header = '';
 		if (exists $all_stat_statements{$db}{has_temp}) {
@@ -7810,9 +7875,10 @@ sub generate_html_menu
 	}
 
 	opendir(ODIR, "$OUTPUT_DIR") || die "FATAL: can't opendir $OUTPUT_DIR: $!";
-	my @database_list = grep { !/^database-(all|queries-.*|fct-.*).html$/ && s/^database-(.*)\.html$/$1/; } readdir(ODIR);
+	my @database_list = grep { !/^database-all.html$/ && !/^database-(queries|fct|conflict|conn|lock|tx|io|tmpf)-.*.html$/ && s/^database-(.*)\.html$/$1/; } readdir(ODIR);
 	closedir(ODIR);
-	if ($#database_list >= 0) {
+	if ($#database_list >= 0)
+	{
 		my $disable_size = ' class="disabled"';
 		my $disable_tablespace = ' class="disabled"';
 		my $disable_backend = ' class="disabled"';
@@ -8292,7 +8358,8 @@ sub generate_html_menu
 };
 		$buffer_str = '';
 
-		if (-e "$OUTPUT_DIR/database-queries-$db.html") {
+		if (-e "$OUTPUT_DIR/database-queries-$db.html")
+		{
 			$menu_str .= qq{
 		      <li id="menu-database-queries"><a href="database-queries-$db.html#database-queries">Statements statistics</a></li>
 };
@@ -8319,53 +8386,52 @@ sub generate_html_menu
 		my $disable_transaction = ' class="disabled"';
 		my $disable_prepared = ' class="disabled"';
 		my $fh = IO::File->new("$OUTPUT_DIR/database-$db.html", 'r');
-		if (defined $fh) {
-			while (<$fh>) {
+		if (defined $fh)
+		{
+			while (<$fh>)
+			{
 				if (/<div id="database-size">/) {
 					$disable_size = '';
-				} elsif (/<div id="database-backends">/) {
-					$disable_backend = '';
-					$disable_connection = '';
-				} elsif (/<div id="database-connections">/) {
-					$disable_conntype = '';
-					$disable_connection = '';
-				} elsif (/<div id="database-lock-types">/) {
-					$disable_lock = '';
-					$disable_locks = "";
 				} elsif (/<div id="database-cache_ratio">/) {
 					$disable_cache = '';
-				} elsif (/<div id="database-read_ratio">/) {
-					$disable_read_ratio = "";
-					$disable_rw_ratio = "";
-				} elsif (/<div id="database-write_ratio">/) {
-					$disable_write_ratio = "";
-					$disable_rw_ratio = "";
-				} elsif (/<div id="database-read_write_query">/) {
-					$disable_write_query = "";
-					$disable_rw_ratio = "";
-				} elsif (/<div id="database-commits_rollbacks">/) {
-					$disable_commit = "";
-					$disable_rw_ratio = "";
-				} elsif (/<div id="database-transactions">/) {
-					$disable_transaction = "";
-				} elsif (/<div id="database-conflicts">/) {
-					$disable_conflicts = "";
-				} elsif (/<div id="database-canceled_queries">/) {
-					$disable_canceled = "";
-				} elsif (/<div id="database-deadlocks">/) {
-					$disable_deadlock = "";
-					$disable_locks = "";
-				} elsif (/<div id="database-temporary_files">/) {
-					$disable_tempfile = "";
-					$disable_temporary = "";
-				} elsif (/<div id="database-temporary_bytes">/) {
-					$disable_tempbytes = "";
-					$disable_temporary = "";
-				} elsif (/<div id="database-prepared">/) {
-					$disable_prepared = "";
 				}
 			}
 			close($fh);
+		}
+		if (-e "$OUTPUT_DIR/database-io-$db.html")
+		{
+			$disable_read_ratio = "";
+			$disable_write_query = "";
+			$disable_rw_ratio = "";
+		}
+		if (-e "$OUTPUT_DIR/database-conn-$db.html")
+		{
+			$disable_backend = '';
+			$disable_connection = '';
+			$disable_conntype = '';
+		}
+		if (-e "$OUTPUT_DIR/database-conflict-$db.html")
+		{
+			$disable_conflicts = "";
+			$disable_canceled = "";
+		}
+		if (-e "$OUTPUT_DIR/database-tmpf-$db.html")
+		{
+			$disable_tempfile = "";
+			$disable_temporary = "";
+			$disable_tempbytes = "";
+			$disable_temporary = "";
+		}
+		if (-e "$OUTPUT_DIR/database-lock-$db.html")
+		{
+			$disable_deadlock = "";
+			$disable_locks = "";
+		}
+		if (-e "$OUTPUT_DIR/database-tx-$db.html")
+		{
+			$disable_transaction = "";
+			$disable_prepared = "";
+			$disable_commit = "";
 		}
 
 		if (!$sysinfo{CONFIGURATION}{'capture'}) {
@@ -8375,8 +8441,8 @@ sub generate_html_menu
 		      <li id="menu-${db}_connections" class="dropdown-submenu$disable_connection">
 			<a href="#" tabindex="-1">Connections </a>
 			  <ul class="dropdown-menu">
-			      <li id="menu-database-backends"$disable_backend><a href="database-$db.html#database-backends">Connections</a></li>
-			      <li id="menu-database-connections"$disable_conntype><a href="database-$db.html#database-connections">Connections by type</a></li>
+			      <li id="menu-database-backends"$disable_backend><a href="database-conn-$db.html#database-backends">Connections</a></li>
+			      <li id="menu-database-connections"$disable_conntype><a href="database-conn-$db.html#database-connections">Connections by type</a></li>
 			  </ul>
 		      </li>
 		      <li id="menu-database-cache_ratio"$disable_cache><a href="database-$db.html#database-cache_ratio">Cache utilization</a></li>
@@ -8384,34 +8450,34 @@ sub generate_html_menu
 		      <li id="menu-${db}_locks" class="dropdown-submenu $disable_locks">
 			<a href="#" tabindex="-1">Locks </a>
 			  <ul class="dropdown-menu">
-			      <li id="menu-database-deadlocks"$disable_deadlock><a href="database-$db.html#database-deadlocks">Deadlocks</a></li>
-			      <li id="menu-database-lock-types"$disable_lock><a href="database-$db.html#database-lock-types">Locks per types</a></li>
-			      <li id="menu-database-lock-modes"$disable_lock><a href="database-$db.html#database-lock-modes">Locks per modes</a></li>
-			      <li id="menu-database-lock-granted"$disable_lock><a href="database-$db.html#database-lock-granted">Locks granted or not</a></li>
+			      <li id="menu-database-deadlocks"$disable_deadlock><a href="database-lock-$db.html#database-deadlocks">Deadlocks</a></li>
+			      <li id="menu-database-lock-types"$disable_lock><a href="database-lock-$db.html#database-lock-types">Locks per types</a></li>
+			      <li id="menu-database-lock-modes"$disable_lock><a href="database-lock-$db.html#database-lock-modes">Locks per modes</a></li>
+			      <li id="menu-database-lock-granted"$disable_lock><a href="database-lock-$db.html#database-lock-granted">Locks granted or not</a></li>
 			  </ul>
 		      </li>
 		      <li class="divider"></li>
 		      <li id="menu-${db}_temporaryfiles" class="dropdown-submenu $disable_temporary">
 			<a href="#" tabindex="-1">Temporary files </a>
 			  <ul class="dropdown-menu">
-			      <li id="menu-database-temporary_files"$disable_tempfile><a href="database-$db.html#database-temporary_files">Temporary files</a></li>
-			      <li id="menu-database-temporary_bytes"$disable_tempbytes><a href="database-$db.html#database-temporary_bytes">Temporary files size</a></li>
+			      <li id="menu-database-temporary_files"$disable_tempfile><a href="database-tmpf-$db.html#database-temporary_files">Temporary files</a></li>
+			      <li id="menu-database-temporary_bytes"$disable_tempbytes><a href="database-tmpf-$db.html#database-temporary_bytes">Temporary files size</a></li>
 			  </ul>
 		      </li>
 		      <li id="menu-${db}_rw" class="dropdown-submenu $disable_rw_ratio">
 			<a href="#" tabindex="-1">Queries Reads / Writes </a>
 			  <ul class="dropdown-menu">
-			      <li id="menu-database-read_ratio"$disable_read_ratio><a href="database-$db.html#database-read_ratio">Read tuples</a></li>
-			      <li id="menu-database-write_ratio"$disable_write_ratio><a href="database-$db.html#database-write_ratio">Write ratio</a></li>
-			      <li id="menu-database-read_write_query"$disable_write_query><a href="database-$db.html#database-read_write_query">Read vs Write queries</a></li>
-			      <li id="menu-database-commits_rollbacks"$disable_commit><a href="database-$db.html#database-commits_rollbacks">Commits vs Rollbacks</a></li>
+			      <li id="menu-database-read_ratio"$disable_read_ratio><a href="database-io-$db.html#database-read_ratio">Read tuples</a></li>
+			      <li id="menu-database-write_ratio"$disable_write_ratio><a href="database-io-$db.html#database-write_ratio">Write ratio</a></li>
+			      <li id="menu-database-read_write_query"$disable_write_query><a href="database-io-$db.html#database-read_write_query">Read vs Write queries</a></li>
+			      <li id="menu-database-commits_rollbacks"$disable_commit><a href="database-tx-$db.html#database-commits_rollbacks">Commits vs Rollbacks</a></li>
 			  </ul>
 		      </li>
-		      <li id="menu-database-transactions"$disable_transaction><a href="database-$db.html#database-transactions">Transaction thoughput</a></li>
-		      <li id="menu-database-prepared"$disable_prepared><a href="database-$db.html#database-prepared">Prepared transactions</a></li>
+		      <li id="menu-database-transactions"$disable_transaction><a href="database-tx-$db.html#database-transactions">Transaction thoughput</a></li>
+		      <li id="menu-database-prepared"$disable_prepared><a href="database-tx-$db.html#database-prepared">Prepared transactions</a></li>
 		      <li class="divider"></li>
-		      <li id="menu-database-canceled_queries"$disable_canceled><a href="database-$db.html#database-canceled_queries">Canceled queries</a></li>
-		      <li id="menu-database-conflicts"$disable_conflicts><a href="database-$db.html#database-conflicts">Conflicts</a></li>
+		      <li id="menu-database-canceled_queries"$disable_canceled><a href="database-conflict-$db.html#database-canceled_queries">Canceled queries</a></li>
+		      <li id="menu-database-conflicts"$disable_conflicts><a href="database-conflict-$db.html#database-conflicts">Conflicts</a></li>
 };
 		}
 		$menu_str .= qq{
