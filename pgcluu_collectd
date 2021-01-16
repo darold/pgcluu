@@ -123,6 +123,9 @@ my %ORIGINAL_PG_SETTINGS = ();
 my %ORIGINAL_DBROLE_SETTINGS = ();
 my %ORIGINAL_SYSTEM_SETTINGS = ();
 
+# Register a termination signal
+my $fini = 0;
+
 # Definition to collect metrics from the database
 my %METRICS_COMMANDS = (
 	'database_stats' => {
@@ -465,25 +468,28 @@ END {
 # The daemon should be stopped
 if ($KILL)
 {
-	if (-e "$PIDFILE")
-	{
-		my $proc = `cat $PIDFILE`;
-		chomp($proc);
+	my $proc = '';
+	if (-e "$PIDFILE") {
+		$proc = `cat $PIDFILE`;
+	} else {
+		$proc = `ps h -opid -Cpgcluu_collectd | head -1`;
+	}
+	chomp($proc);
+	$proc =~ s/ //g;
 
-		kill '-TERM', $proc;
-		if ($? == -1) {
-			print "FATAL: failed to execute: $!\n";
-		} elsif ($? & 127) {
-			printf "ERROR: child died with signal %d, %s coredump\n", ($? & 127),  ($? & 128) ? 'with' : 'without';
-		} else {
-			printf "OK: pgcluu_collectd exited with value %d\n", $? >> 8;
-		}
-		exit 0;
+	if (!$proc) {
+		die "ERROR: can't find a pid to kill, is $PROGRAM running?\n";
 	}
-	else
-	{
-		die "ERROR: can't find $PIDFILE, is $PROGRAM running?\n";
+
+	kill '-TERM', $proc;
+	if ($? == -1) {
+		print "FATAL: failed to execute: $!\n";
+	} elsif ($? & 127) {
+		printf "ERROR: child died with signal %d, %s coredump\n", ($? & 127),  ($? & 128) ? 'with' : 'without';
+	} else {
+		printf "OK: pgcluu_collectd exited with value %d\n", $? >> 8;
 	}
+	exit 0;
 }
 
 # Display usage if help is asked
@@ -502,14 +508,16 @@ my @dbports = split(/,/, $DBPORT);
 my @dbhosts = split(/,/, $DBHOST);
 my @dbusers = split(/,/, $DBUSER);
 my @dbpass = split(/,/, $DBPASS);
-for (my $i = 0; $i <= $#dbhosts; $i++) {
+for (my $i = 0; $i <= $#dbhosts; $i++)
+{
 	push(@MULTI_HOST_INFO, { 'ip' => $dbhosts[$i] || 'localhost', 'port' => $dbports[$i] || 5432, 'db' => $dbnames[$i] || 'postgres', 'user' => $dbusers[$i] || 'postgres', 'password' => $dbpass[$i] || ''});
 }
 
 # Get the output dir from command line
 my $OUTPUT_DIR = $ARGV[0] || '';
 # Overwrite the output directory in capture mode
-if ($CAPTURE) {
+if ($CAPTURE)
+{
 	$OUTPUT_DIR = 'pgcluu_capture';
 	unless(mkdir("$CAPTURE_DIR/$OUTPUT_DIR")) {
 		die "FATAL: can not create capture temporary directory $CAPTURE_DIR/$OUTPUT_DIR: $!.\n";
@@ -523,10 +531,11 @@ if ($USE_SSH && !$DBHOST) {
 }
 
 # List metrics and associated SQL commands, then exit
-if ($LIST_METRIC) {
-
+if ($LIST_METRIC)
+{
 	print "List of available metrics:\n\n";
-	foreach my $c (sort {$a cmp $b} keys %METRICS_COMMANDS) {
+	foreach my $c (sort {$a cmp $b} keys %METRICS_COMMANDS)
+	{
 		next if (($c =~ /^(user|all)_/) && ($c !~ /^$STAT_TYPE/)); 
 		$c =~ s/_stats$//;
 		print "\t$c\n";
@@ -536,7 +545,8 @@ if ($LIST_METRIC) {
 }
 
 # Check if an other process is already running
-if (-f $PIDFILE) {
+if (-f $PIDFILE)
+{
 	&dprint("FATAL: an other process is already started, see pid in $PIDFILE\n");
 	exit 1;
 }
@@ -545,9 +555,11 @@ if (-f $PIDFILE) {
 if ($SKIP_HOURS)
 {
 	my @timerange = split(/\s+/, $SKIP_HOURS);
-	foreach my $t (@timerange) {
+	foreach my $t (@timerange)
+	{
 		next if (!$t);
-		if ($t =~ m#(\d{2}):(\d{2})-(\d{2}):(\d{2})#) {
+		if ($t =~ m#(\d{2}):(\d{2})-(\d{2}):(\d{2})#)
+		{
 			push(@SKIP_BEGIN, "$1$2");
 			push(@SKIP_END, "$3$4");
 		} else {
@@ -557,7 +569,8 @@ if ($SKIP_HOURS)
 }
 
 # Normalize number of seconds before terminating
-if ($END_AFTER) {
+if ($END_AFTER)
+{
 	$END_AFTER =~ s/(\D+)//g;
 	$END_AFTER ||= 0;
 	if ($1 =~ /^M/i) {
@@ -573,32 +586,36 @@ if ($END_AFTER) {
 $MAX_SIZE = &parse_pretty_size($MAX_SIZE);
 
 # Validate action(s) to execute
-if ($#METRICS >= 0) {
-
+if ($#METRICS >= 0)
+{
 	my @list_metric = ();
 	push(@list_metric, split(/[,]+/, join(',', @METRICS)));
 	@METRICS = ();
-	foreach my $a (@list_metric) {
-		if (!grep(/^${a}_stats$/, keys %METRICS_COMMANDS)) {
+	foreach my $a (@list_metric)
+	{
+		if (!grep(/^${a}_stats$/, keys %METRICS_COMMANDS))
+		{
 			&dprint("FATAL: metric $a does not exist. Use --list-metric to show the available metrics.\n");
 			exit 1;
 		} else {
 			push(@METRICS, "${a}_stats");
 		}
 	}
-
-} else {
-
+}
+else
+{
 	# Perform all metrics actions per default
 	push(@METRICS, sort {$a cmp $b} keys %METRICS_COMMANDS);
-
 }
 
 # Check if output directory exists
-if (!$OUTPUT_DIR) {
+if (!$OUTPUT_DIR)
+{
 	&dprint("FATAL: no output directory\n");
 	exit 1;
-} elsif (!$CAPTURE) {
+}
+elsif (!$CAPTURE)
+{
 	# Ensure this is not a relative path
 	if (dirname($OUTPUT_DIR) eq '.') {
 		&dprint("FATAL: output directory ($OUTPUT_DIR) is not an absolute path.\n");
@@ -607,14 +624,19 @@ if (!$OUTPUT_DIR) {
 }
 
 # Go to that directory if we are not in capture mode otherwise go to /tmp
-if (!$CAPTURE) {
-	unless (chdir($OUTPUT_DIR)) {
+if (!$CAPTURE)
+{
+	unless (chdir($OUTPUT_DIR))
+	{
 		&dprint("FATAL: can not change directory to $OUTPUT_DIR: $!\n");
 		exit 1;
-	} else {
+	}
+	else
+	{
 		# Check if we can write in this directory
 		my $fh = IO::File->new("wtest", 'w');
-		if (not defined $fh) {
+		if (not defined $fh)
+		{
 			&dprint("FATAL: can not write into output directory $OUTPUT_DIR\n");
 			exit 1;
 		}
@@ -622,8 +644,11 @@ if (!$CAPTURE) {
 		unlink("wtest");
 
 	}
-} else {
-	unless(chdir("$CAPTURE_DIR")) {
+}
+else
+{
+	unless(chdir("$CAPTURE_DIR"))
+	{
 		&dprint("FATAL: can not change directory to $CAPTURE_DIR: $!\n");
 		exit 1;
 	}
@@ -638,10 +663,13 @@ my $sshcmd = '';
 if ($USE_SSH)
 {
 	# Force using the user defined ssh command
-	if ($SSH_COMMAND) {
+	if ($SSH_COMMAND)
+	{
 		$sshcmd = $SSH_COMMAND;
+	}
 	# else compute command following the configuration parameters
-	} else {
+	else
+	{
 		$sshcmd = $SSH_BIN || 'ssh';
 		$sshcmd .= " -i $SSH_IDENTITY" if ($SSH_IDENTITY);
 		$sshcmd .= " $SSH_OPTIONS" if ($SSH_OPTIONS);
@@ -653,13 +681,16 @@ if ($USE_SSH)
 	}
 
 # With remote database connection and no ssh acces, disable system and sar information
-} elsif ($DBHOST && !grep(/^$DBHOST$/, 'localhost', '127.0.0.1', '::1')) {
+}
+elsif ($DBHOST && !grep(/^$DBHOST$/, 'localhost', '127.0.0.1', '::1'))
+{
 	$NO_SYSINFO = 1;
 	$DISABLE_SAR = 1;
 }
 
 # Get Os information and exit
-if ($OS_INFO && !$NO_SYSINFO) {
+if ($OS_INFO && !$NO_SYSINFO)
+{
 	&grab_os_information();
 	exit 0;
 }
@@ -669,6 +700,8 @@ if ($OS_INFO && !$NO_SYSINFO) {
 sub terminate
 {
 	my $sig = shift;
+
+	$fini = 1;
 
 	&dprint("LOG: Received terminating signal $sig.\n");
 
@@ -767,8 +800,8 @@ if ($INCREMENTAL) {
 }
 
 my $previous_time = 0;
-while (1) {
-
+while (1)
+{
 	# Stores loop start time
 	my $t0 = time;
 
@@ -903,9 +936,7 @@ while (1) {
 	}
 
 	# Collect all metrics about the cluster
-	&spawn_collect(sub {
-		&collect_metrics();
-	});
+	&collect_metrics();
 
 	# stores previous directory to check when rotated files must compressed
 	$OLD_OUT_DIR = $OUT_DIR;
@@ -913,9 +944,14 @@ while (1) {
 	# Wait for metric + compress child process to terminate
 	&wait_all_childs();
 
-	if (!$CAPTURE) {
+	# We received a signal while waiting
+	last if ($fini);
+
+	if (!$CAPTURE)
+	{
 		# Lookup if output dir size is upper than limit
-		if ($MAX_SIZE) {
+		if ($MAX_SIZE)
+		{
 			my $lsize = `du -s $OUTPUT_DIR`;
 			chomp($lsize);
 			if ($lsize > $MAX_SIZE) {
@@ -925,17 +961,26 @@ while (1) {
 
 		# Wait next run following the interval value
 		my $t1 = time - $t0;
-		if ($t1 >= $INTERVAL) {
+		if ($t1 >= $INTERVAL)
+		{
 			print "WARNING: loop took: $t1 seconds, you may consider increase the interval ($INTERVAL sec) using -i option.\n";
 			# Wait next run following the interval value
 			sleep($INTERVAL);
-		} else {
+		}
+		else
+		{
 			# Wait next run following the interval value minus the loop time
 			sleep($INTERVAL - $t1);
 		}
 	}
+	else
+	{
+		# get out of the main loop
+		last;
+	}
 
-	last if ($CAPTURE);
+	# We received a signal when sleeping
+	last if ($fini);
 }
 
 # Wait for last child stop
