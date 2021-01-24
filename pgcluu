@@ -1499,14 +1499,14 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 				(-e "$in_dir/end-$k" && !-z "$in_dir/end-$k"))
 			{
 				&compute_postgresql_stat($in_dir, $k, $src_base, %{$DB_GRAPH_INFOS{$k}});
-				push(@statistics_build, $k);
+				push(@statistics_build, $k) if (!grep(/^$k$/, @statistics_build));
 			}
 			# Gzip data files are only available when they can't be appended anymore so
 			# if we have binary files and gzipped files, binary files contains all stats
 			elsif (($#binfiles == -1) && -e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz")
 			{
 				&compute_postgresql_stat($in_dir, "$k.gz", $src_base, %{$DB_GRAPH_INFOS{$k}}); 
-				push(@statistics_build, $k);
+				push(@statistics_build, $k) if (!grep(/^$k$/, @statistics_build));
 			}
 			# Files use 'all' instead of 'user' with pgcluu_collectd --stat-type option
 			elsif ($k =~ /_user_/)
@@ -1519,14 +1519,14 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 					(-e "$in_dir/end-$f" && !-z "$in_dir/end-$f"))
 				{
 					&compute_postgresql_stat($in_dir, $f, $src_base, %{$DB_GRAPH_INFOS{$k}});
-					push(@statistics_build, $k);
+					push(@statistics_build, $k) if (!grep(/^$k$/, @statistics_build));
 				}
 				# Gzip data files are only available when they can't be appended anymore so
 				# if we have binary files and gzipped files, binary files contains all stats
 				elsif (($#binfiles == -1) && -e "$in_dir/$f.gz" && !-z "$in_dir/$f.gz")
 				{
 					&compute_postgresql_stat($in_dir, "$f.gz", $src_base, %{$DB_GRAPH_INFOS{$k}});
-					push(@statistics_build, $k);
+					push(@statistics_build, $k) if (!grep(/^$k$/, @statistics_build));
 				}
 			}
 		}
@@ -2428,7 +2428,7 @@ sub pg_stat_database
 	# Store the full list of database
 	foreach my $d (keys %db_list)
 	{
-		push(@global_databases, $d) if (!grep/^$d$/, @global_databases);
+		push(@global_databases, $d) if (!grep(/^$d$/, @global_databases));
 	}
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
 
@@ -2856,7 +2856,7 @@ sub pg_database_size
 
 	# Store the full list of database
 	foreach my $d (keys %db_list) {
-		push(@global_databases, $d) if (!grep/^$d$/, @global_databases);
+		push(@global_databases, $d) if (!grep(/^$d$/, @global_databases));
 	}
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
 
@@ -2972,7 +2972,7 @@ sub pg_prepared_xact
 
 	# Store the full list of database
 	foreach my $d (keys %db_list) {
-		push(@global_databases, $d) if (!grep/^$d$/, @global_databases);
+		push(@global_databases, $d) if (!grep(/^$d$/, @global_databases));
 	}
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
 
@@ -4544,7 +4544,7 @@ sub pg_stat_connections
 
 	# Store the full list of database
 	foreach my $d (keys %db_list) {
-		push(@global_databases, $d) if (!grep/^$d$/, @global_databases);
+		push(@global_databases, $d) if (!grep(/^$d$/, @global_databases));
 	}
 	push(@global_databases, 'all') if (($#global_databases >= 0) && !grep(/^all$/, @global_databases));
 
