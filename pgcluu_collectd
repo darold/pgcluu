@@ -657,7 +657,7 @@ else
 
 # Generate the sar command
 my $def_sar_command = "LC_ALL=C $SAR_PROG -t -p -A 1 1 | grep -vE 'Average|Summary'";
-my $def_pidstat_command = "LC_ALL=C $PIDSTAT_PROG -T ALL -u -w -r -d -U postgres 1 1 | grep -v \"Average\"";
+my $def_pidstat_command = "LC_ALL=C $PIDSTAT_PROG -T ALL -u -w -r -d -U postgres 1 1 | grep -v 'Average'";
 my $sshcmd = '';
 # Set command to execute sar remotely using ssh if necessary 
 if ($USE_SSH)
