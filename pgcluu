@@ -44,8 +44,10 @@ my $IDX             = 1;
 my $HELP            = 0;
 my $SHOW_VER        = 0;
 my $DEBUG           = 0;
-my $BEGIN           = '';
+my $BEGIN           = '';  # for PG data
 my $END             = '';
+my $BEGIN_STAT      = '';  # for sar
+my $END_STAT        = '';
 my $NUMBER_CPU      = 0;
 my $TIMEZONE        = substr(strftime('%z', localtime()), 0, 3);
 my $STATS_TIMEZONE  = '00'; # Timezone is auto detected from data files
@@ -1246,6 +1248,7 @@ foreach (@net_opts) {
 
 # Check start/end date time
 if ($BEGIN) {
+	print "DEBUG: Found BEGIN parameter: $BEGIN \n" if ($DEBUG);
 	if ($BEGIN =~ /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/) {
 		$BEGIN = &timegm_nocheck($6, $5, $4, $3, $2 - 1, $1 - 1900) * 1000;
 		$o_day = $3;
@@ -1259,8 +1262,10 @@ if ($BEGIN) {
 	} else {
 		die "FATAL: bad format for begin datetime, should be yyyy-mm-dd hh:mm:ss\n";
 	}
+	print "DEBUG: Final BEGIN value: $BEGIN \n" if ($DEBUG);
 }
 if ($END) {
+        print "DEBUG: Found END parameter: $END \n" if ($DEBUG);
 	if ($END =~ /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/) {
 		$END = &timegm_nocheck($6, $5, $4, $3, $2 - 1, $1 - 1900) * 1000;
 	} elsif ($END =~ /^(\d{4})-(\d{2})-(\d{2})$/) {
@@ -1268,6 +1273,7 @@ if ($END) {
 	} else {
 		die "FATAL: bad format for ending datetime, should be yyyy-mm-dd hh:mm:ss\n";
 	}
+	print "DEBUG: Final END value: $BEGIN \n" if ($DEBUG);
 }
 
 # Force the user to give an output directory
@@ -1487,6 +1493,14 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 				$STATS_TIMEZONE = $global_infos{stats_timezone};
 			}
 
+		}
+
+		if ($BEGIN or $END)
+		{
+			print "DEBUG: Adjusting END/BEGIN dates for stats: ( $BEGIN - $END ) with timezone $STATS_TIMEZONE /\n" if ($DEBUG);
+			if ($BEGIN) { $BEGIN_STAT = $BEGIN - ($STATS_TIMEZONE*3600*1000) }
+			if ($END)   { $END_STAT   = $END   - ($STATS_TIMEZONE*3600*1000) }
+			print "DEBUG: BEGIN/END dates for stats: $BEGIN_STAT - $END_STAT /\n" if ($DEBUG);
 		}
 
 		# Loop over CSV files and graphics definition to generate reports
@@ -1751,7 +1765,7 @@ usage: $0 [options] [-i sar_file | -I sadc_file] [input_dir]
 		   files are stored.
 
 options:
-  -b, --begin  datetime      start date/time for the data to be parsed.
+  -b, --begin  datetime      start date/time for the data to be parsed (time of current timezone).
   -C, --cache                generate cache files only (.bin), no html output.
   -d, --db-only dbname       only report for the whole cluster and the given
                              database name. You can use it multiple time or
@@ -1759,7 +1773,7 @@ options:
   -D, --device-only dev      only report I/O stats for a particular device
                              You can use it multiple time or give a comma
                              separated list of device name, ex: sda,sdc.
-  -e, --end    datetime      end date/time for the data to be parsed.
+  -e, --end    datetime      end date/time for the data to be parsed (time of current timezone).
   -i, --sar-file=FILE        path to the sar text data file to read to generate
                              system reports. Default to input_dir/sar_stats.dat.
   -I, --sadc-file=FILE       sadc binary data file to read to generate system
@@ -1785,10 +1799,14 @@ options:
                              using w3-include-html attribut from w3.js. This will
 			     only work if acces to HTML reports is through a Web
 			     server, not using the file:// protocol.
-  -z, --timezone +/-XX       Set the number of hour(s) from GMT of the timezone.
+  -z, --timezone +/-XX       Set the number of hour(s) from GMT of the timezone,
+                             Eg: -z +02
+                             Usually autodetected.
                              Use this to adjust date/time from the sar output,
                              pgcluu use GMT time to draw charts.
   -Z, --stats-timezone +/-XX Set the number of hour(s) from GMT of the timezone.
+                             Eg: -Z +02
+                             Usually autodetected.
                              Use this to adjust date/time from the cluster and
                              system stats output, pgcluu use GMT time.
   --from-sa-file             instruct pgcluu that file specified by the -i option
@@ -8864,8 +8882,8 @@ sub compute_cpu_stat
 		# hostname;interval;timestamp;CPU;%usr;%nice;%sys;%iowait;%steal;%irq;%soft;%guest;%idle
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 
 		map { s/,/\./ } @data ;
 		# we only store all cpu statistics
@@ -8927,8 +8945,8 @@ sub compute_pidstatcpu_stat
 		# hostname;interval;timestamp;USER;PID;%usr;%system;%guest;%CPU;CPU;Command
 		# hostname;interval;timestamp;USER;PID;%usr;%system;%guest;%wait;%CPU;CPU;Command
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 
 		map { s/,/\./ } @data ;
 		# we only store all cpu statistics
@@ -9010,8 +9028,8 @@ sub compute_load_stat
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 
 		map { s/,/\./ } @data ;
 		$sar_load_stat{$data[2]}{'ldavg-1'}  = ($data[5]||0);
@@ -9052,8 +9070,8 @@ sub compute_process_stat
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 
 		map { s/,/\./ } @data ;
 		$sar_process_stat{$data[2]}{'plist-sz'}= ($data[4]||0);
@@ -9103,8 +9121,8 @@ sub compute_context_stat
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 
 		map { s/,/\./ } @data ;
 		$sar_context_stat{$data[2]}{'cswch'}  = ($data[4]||0);
@@ -9148,8 +9166,8 @@ sub compute_pidstatcontext_stat
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 
 		map { s/,/\./ } @data ;
 		$pidstat_context_stat{$data[2]}{'cswch'}  = ($data[5]||0);
@@ -9184,8 +9202,8 @@ sub compute_memory_stat
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 
 		map { s/,/\./ } @data ;
 		my $kbcached = ($data[7]*1024) || 0;
@@ -9231,8 +9249,8 @@ sub compute_pidstatmemory_stat
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 
 		map { s/,/\./ } @data ;
 		$pidstat_memory_stat{$data[2]}{'minflt/s'}  = ($data[5]||0);
@@ -9282,8 +9300,8 @@ sub compute_dirty_stat
 		next if ($#data <= 9);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 
 		map { s/,/\./ } @data ;
 
@@ -9323,8 +9341,8 @@ sub compute_swap_stat
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 
 		map { s/,/\./ } @data ;
 		$sar_swap_stat{$data[2]}{'pswpin/s'}  = ($data[3]||0);
@@ -9363,8 +9381,8 @@ sub compute_page_stat
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 
 		map { s/,/\./ } @data ;
 		$sar_pageswap_stat{$data[2]}{'pgpgin/s'}  = ($data[3]||0);
@@ -9491,8 +9509,8 @@ sub compute_block_stat
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 
 		map { s/,/\./ } @data;
 		$sar_block_stat{$data[2]}{'bread/s'} = ($data[6]||0);
@@ -9546,8 +9564,8 @@ sub compute_pidstatio_stat
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 
 		map { s/,/\./ } @data;
 		$pidstat_io_stat{$data[2]}{'kB_rd/s'} = ($data[5] > 0) ? $data[5] : 0;
@@ -9606,8 +9624,8 @@ sub compute_srvtime_stat
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 		next if (!&device_in_report($data[3]));
 
 		map { s/,/\./ } @data ;
@@ -9666,8 +9684,8 @@ sub compute_rw_device_stat
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 		next if (!&device_in_report($data[3]));
 
 		map { s/,/\./ } @data ;
@@ -9738,8 +9756,8 @@ sub compute_space_device_stat
 		next if ($data[10] =~ /^(loop|tmpfs|udev)/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 		next if (!&device_in_report($data[10]));
 		$sar_space_devices_stat{$data[2]}{$data[10]}{'%fsused'} = $data[5];
 		$sar_space_devices_stat{$data[2]}{$data[10]}{'%iused'} = $data[9];
@@ -9810,8 +9828,8 @@ sub compute_util_device_stat
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 		next if (!&device_in_report($data[3]));
 
 		map { s/,/\./ } @data ;
@@ -9867,8 +9885,8 @@ sub compute_network_stat
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 		next if (!&interface_in_report($data[3]));
 
 		map { s/,/\./ } @data ;
@@ -9925,8 +9943,8 @@ sub compute_network_error_stat
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
 		next if (!&interface_in_report($data[3]));
 
 		map { s/,/\./ } @data ;
@@ -10759,8 +10777,8 @@ sub compute_commit_memory_stat
 		next if ($data[0] !~ /^\d+/);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[0] < $BEGIN));
-		next if ($END   && ($data[0] > $END));
+		next if ($BEGIN && ($data[0] < $BEGIN_STAT));
+		next if ($END   && ($data[0] > $END_STAT));
 
 		my $tz = ((0-$TIMEZONE)*3600);
 		$data[0] -= $tz;
