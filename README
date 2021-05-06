@@ -273,105 +273,110 @@ COLLECTING STATISTICS
 
     options:
 
-        -B, --enable-buffercache enable buffercache statistics if pg_buffercache
+      -B, --enable-buffercache enable buffercache statistics if pg_buffercache
                                extension is installed.
-        -c, --capture            create a snapshot of the PostgreSQL installation
-                                 into tmp/pgcluu_capture.tar.gz.
-        -C, --end-counter=NUM    terminate program after NUM reports.
-        -d, --dbname=DATABASE    database name to connect to. Default to current user.
-        -D, --daemonize          detach from console and enter in daemon mode.
-        -E, --end-after=SECOND   self terminate program after a given number of seconds.
-                                 Can be written: 7200 or 120M or 2H, for days use 7D for
-                                 example to stop collecting data after seven days. 
-        -f, --pid-file=FILE      path to pid file. Default: /var/run/postgresql/pgcluu_collectd.pid.
-        -h, --host=HOSTNAME      database server host or socket directory
-        -i, --interval=NUM       time to wait between runs
-        -k, --kill             stop current pgcluu_collectd running daemon.
-        -m, --metric=METRIC      set a coma separated list of metrics to perform.
-        -M, --max-size=SIZE      self terminate program when the size of the output dir
-                                 exceed a given size. Can be written: 2GB or 2000MB. 
-        -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
-        -P, --psql=BIN           path to the psql command. Default: psql.
-        -Q, --no-statement       do not collect queries statistics from pg_stat_statements.
-        -r, --rotate-daily       force daily rotation of data files.
-        -R, --rotate-hourly      force hourly rotation of data files.
-        -s, --sar=BIN            path to sar sysstat command. Default: sar.
-        -S, --disable-sar        disable collect of system statistics with sar.
-        -T, --no-tablespace      disable lookup at tablespace when the connect user
+      -c, --capture            create a snapshot of the PostgreSQL installation
+                               into tmp/pgcluu_capture.tar.gz.
+      -C, --end-counter=NUM    terminate program after NUM reports.
+      -d, --dbname=DATABASE    database name to connect to. Default to current user.
+      -D, --daemonize          detach from console and enter in daemon mode.
+      -E, --end-after=NUM      self terminate the program after a given number of
+                               seconds. Can be written: 7200 or 120M or 2H, for
+                               days use 7D for example to stop collecting data
+                               after seven days. 
+      -f, --pid-file=FILE      path to pid file. Default: /var/run/postgresql/pgcluu_collectd.pid.
+      -h, --host=HOSTNAME      database server host or socket directory
+      -i, --interval=NUM       time to wait between runs
+      -k, --kill               stop current pgcluu_collectd running daemon.
+      -m, --metric=METRIC      set a coma separated list of metrics to perform.
+      -M, --max-size=SIZE      self terminate program when the size of the output
+                               directory exceed a given size. Can be written: 2GB
+                               or 2000MB. 
+      -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
+      -P, --psql=BIN           path to the psql command. Default: psql.
+      -Q, --no-statement       do not collect statistics from pg_stat_statements.
+      -r, --rotate-daily       force daily rotation of data files.
+      -R, --rotate-hourly      force hourly rotation of data files.
+      -s, --sar=BIN            path to sar sysstat command. Default: sar.
+      -S, --disable-sar        disable collect of system statistics with sar.
+      -t, --lock-timeout=NUM   terminate metric SQL query after N second in case it
+                               wait too much time because of a lock. Default: 3
+      -T, --no-tablespace      disable lookup at tablespace when the connect user
                                is not superuser to avoid printing an error message.
-        -U, --dbuser=USERNAME    database user to connect as. Default to current user.
-        -v, --verbose            Print out debug informations.
-        -V, --version            Show pgcluu_collectd version and exit.
-        -W, --password=pass      database password.
-        -z, --compress           force compression of rotated data files.
-        --included-db=DATABASE   collect statistics only for those databases present
-                                 in a comma separated list of database names.
-        --list-metric            list available metrics actions that can be performed.
-        --sysinfo                get operating system information and exit (sysinfo.txt).
-        --no-sysinfo             do not collect operating system information at all. 
-        --no-database            do not collect database statistics at all.
-        --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
+      -U, --dbuser=USERNAME    database user to connect as. Default to current user.
+      -v, --verbose            Print out debug informations.
+      -V, --version            Show pgcluu_collectd version and exit.
+      -w, --no-waitevent       don't collect wait event stats from pg_wait_sampling.
+      -W, --password=pass      database password.
+      -z, --compress           force compression of rotated data files.
+      --included-db=DATABASE   collect statistics only for those databases present
+                               in a comma separated list of database names.
+      --list-metric            list available metrics actions that can be performed.
+      --sysinfo                get operating system infos and exit (sysinfo.txt).
+      --no-sysinfo             do not collect operating system information at all. 
+      --no-database            do not collect database statistics at all.
+      --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
                                database. Ex: -p 6432 -U postgres -h 192.168.1.100
-                                 You must at least give one parameter to enable
-                                 pgbouncer monitoring.
-        --sar-file=FILE          path to sar output data file for sysstat stats
-                                 Default to output_dir/sar_stats.dat.
-        --stat-type all|user     Set stats tables to read. Values: 'all' or 'user' to
+                               You must at least give one parameter to enable
+                               pgbouncer monitoring.
+      --sar-file=FILE          path to sar output data file for sysstat stats
+                               Default to output_dir/sar_stats.dat.
+      --stat-type all|user     Set stats tables to read. Values: 'all' or 'user' to
                                look at pg_stat_(all|user) tables. Default: user.
-        --pgversion X.Y          force the PostgreSQL version to the given value.
-        --pgservice NAME         Name of service inside of the pg_service.conf file.
-        --exclude-time RANGE     exclude a laps of time by giving the start and end
+      --pgversion X.Y          force the PostgreSQL version to the given value.
+      --pgservice NAME         Name of service inside of the pg_service.conf file.
+      --exclude-time RANGE     exclude a laps of time by giving the start and end
                                hours.
-        --cron-user=USERNAME     collect crontab settings for the given username (in
-                                 this case pgcluu_collectd need to be run as root).
-                                 Default is to use USERNAME environment variable or
-                                 postgres when it is not defined.
-        --package-list=CMD       command to list PostgreSQL packages. Default is to
-                                 autodetect package type and using command 'rpm -qa'
-                                 or 'dpkg -l'. If you have an other system you can
-                                 set a custom command. A filter on keyword 'postgres'
+      --cron-user=USERNAME     collect crontab settings for the given username (in
+                               this case pgcluu_collectd need to be run as root).
+                               Default is to use USERNAME environment variable or
+                               postgres when it is not defined.
+      --package-list=CMD       command to list PostgreSQL packages. Default is to
+                               autodetect package type and using command 'rpm -qa'
+                               or 'dpkg -l'. If you have an other system you can
+                               set a custom command. A filter on keyword 'postgres'
                                is appended to the command: ' | grep postgres'.
-        --retention NDAYS        number of rolling days to keep in data directory in
-                                 incremental mode. Default is to store indefinitely.
-        --help                   print usage
+      --retention NDAYS        number of rolling days to keep in data directory in
+                               incremental mode. Default is to store indefinitely.
+      --help                   print usage
 
     Use those options to execute sar on the remote host defined by the -h
     option, otherwise it will be executed locally:
 
-        --enable-ssh             activate the use of ssh to run sysstat remotely.
-        --ssh-program ssh        path to the ssh program to use. Default: ssh.
-        --ssh-user username      connection login name. Default to running user.
-        --ssh-identity file      path to the identity file to use.
-        --ssh-timeout second     timeout to ssh connection failure. Default 10 seconds.
-        --ssh-options  options   list of -o options to use for the ssh connection. Options
-                               always used:
-                                     -o ConnectTimeout=$ssh_timeout
-                                     -o PreferredAuthentications=hostbased,publickey
+      --enable-ssh             activate the use of ssh to run sysstat remotely.
+      --ssh-program ssh        path to the ssh program to use. Default: ssh.
+      --ssh-user username      connection login name. Default to running user.
+      --ssh-identity file      path to the identity file to use.
+      --ssh-timeout second     timeout to ssh connection failure. Default 10.
+      --ssh-options  options   list of -o options to use for the ssh connection.
+                               Options always used:
+                                 -o ConnectTimeout=$ssh_timeout
+                                 -o PreferredAuthentications=hostbased,publickey
 
     For example, as postgres user to monitor locally a full PostgreSQL
     cluster:
 
-            mkdir /tmp/stat_db1/
-            pgcluu_collectd -D -i 60 /tmp/stat_db1/
+      mkdir /tmp/stat_db1/
+      pgcluu_collectd -D -i 60 /tmp/stat_db1/
 
     to collect statistics from pgbouncer too, and limit database statistics
     to a single database:
 
-            pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb 
+      pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.10.1.1 -U postgres -d mydb 
                     --pgbouncer-args='-p 5342'
 
     to disable statistics collect between 22:30 and 06:30 the next day:
 
-            pgcluu_collectd -D -i 60 /tmp/stat_db1/ --exclude-time "22:30-06:30"
+      pgcluu_collectd -D -i 60 /tmp/stat_db1/ --exclude-time "22:30-06:30"
 
     to collect statistics from a remote server:
 
-            pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.0.0.1 -U postgres --disable-sar
+        pgcluu_collectd -D -i 60 /tmp/statdb1/ -h 10.0.0.1 -U postgres --disable-sar
 
     the same but with collecting system statistics using remote sar calls:
 
-            pgcluu_collectd -D -i 60 /tmp/stat_db1/ -h 10.0.0.1 -U postgres --enable-ssh 
-                    --ssh-user postgres --ssh-identity /var/lib/postgresql/.ssh/id_rsa.pub
+      pgcluu_collectd -D -i 60 /tmp/statdb1/ -h 10.0.0.1 -U postgres --enable-ssh 
+            --ssh-user postgres --ssh-identity /var/lib/postgresql/.ssh/id_rsa.pub
 
     You may need a .pgpass and be able to establish passwordless ssh
     connections to be able to collect statistics from remote hosts.
@@ -379,14 +384,14 @@ COLLECTING STATISTICS
     Then after some time and activities on the database, stop the daemon as
     follow:
 
-            pgcluu_collectd -k
+      pgcluu_collectd -k
 
     or by sending sigterm to the pgcluu_collectd's pid.
 
     You can run the collector in incremental mode using a daily or a hourly
     statistics rotation:
 
-            pgcluu_collectd -D -i 60 /tmp/stat_db1/ --rotate-daily
+      pgcluu_collectd -D -i 60 /tmp/stat_db1/ --rotate-daily
 
     On a server with huge activity you may want to use --rotate-hourly and
     compression mode with --compress option. If you have limited disk space
