@@ -71,7 +71,7 @@ paths are used.
 
 =head2 Installation from sources
 
-Download the tarball from SourceForge and unpack the archive:
+Download the tarball from GitHub and unpack the archive:
 
         tar xzf pgcluu-3.x.tar.gz
         cd pgcluu-3.x/
@@ -140,7 +140,7 @@ saved into CONFDIR/pgcluu.conf. If the destination file exists it is
 not overridden. The file is also saved as example in the directory
 DOCDIR/pgcluu/examples/pgcluu.conf.dist
 
-The directory where pgcluu_colletd will store statistics is defined
+The directory where pgcluu_collectd will store statistics is defined
 with STATDIR which is by default /var/lib/pgcluu/data. The directory
 where pgcluu will generate static html reports is defined by REPORTDIR.
 The default is /var/lib/pgcluu/report. Both directory must be owned by
