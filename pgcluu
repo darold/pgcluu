@@ -10678,7 +10678,7 @@ sub load_pidstatfile_stats
 
 		# Get all values reported
 		my @values = ();
-		push(@values, split(m#\s+#, $content[$i]));
+		push(@values, split(m#\s+#, $content[$i], $#headers+2));
 		# Extract the timestamp of the line
 		my $timestamp = shift(@values);
 
