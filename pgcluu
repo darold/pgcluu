@@ -1652,7 +1652,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 				&compute_sarfile_stats($sar_file, $in_dir, %{$SAR_GRAPH_INFOS{$id}});
 			}
 			%fulldata = ();
-			if ( -e $pidstat_file  && (($#binfiles == -1) || ($pidstat_file !~ /\.gz$/)) )
+			if ( defined $pidstat_file && -e $pidstat_file  && (($#binfiles == -1) || ($pidstat_file !~ /\.gz$/)) )
 			{
 				print "DEBUG: looking for pidstatt data file $pidstat_file\n" if ($DEBUG);
 				foreach my $id (sort keys %PIDSTAT_GRAPH_INFOS) {
