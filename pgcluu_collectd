@@ -1158,7 +1158,8 @@ sub collect_metrics
 		}
 
 		# Keep track of settings change
-		if (scalar keys %ORIGINAL_PG_SETTINGS > 0) {
+		if (scalar keys %ORIGINAL_PG_SETTINGS > 0)
+		{
 			my %current_pg_settings = ();
 			my %current_dbrole_settings = ();
 			# Collect current PostgreSQL settings to look compare values
@@ -2749,14 +2750,16 @@ sub dump_unusedtrigfunc
 sub dump_pgsettings
 {
 
+	my $lto = $LOCK_TIMEOUT*1000;
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), category, name, " .
-		" setting, %s, context, source, %s, %s, %s " .
+		" (CASE WHEN name = 'lock_timeout' THEN (setting::bigint-$lto)::text ELSE setting END) as setting," .
+	        " %s, context, source, %s, %s, %s " .
 		"FROM pg_settings " . 
 		"ORDER BY category,name",
 		&backend_minimum_version(8, 2) ? "unit" : "''::text as unit",
 		&backend_minimum_version(8, 4) ? "boot_val" : "''::text as boot_val",
-		&backend_minimum_version(8, 4) ? "reset_val" : "''::text as reset_val",
+		&backend_minimum_version(8, 4) ? "(CASE WHEN name = 'lock_timeout' THEN (reset_val::bigint-$lto)::text ELSE reset_val END) as reset_val" : "''::text as reset_val",
 		&backend_minimum_version(9, 5) ? "pending_restart" : "''::text as pending_restart"
 	);
 
