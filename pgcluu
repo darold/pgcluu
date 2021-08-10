@@ -12735,16 +12735,19 @@ sub read_conf
 			next if (!$l);
 
 			my ($var, @vals) = split(/[\s]+/, $l);
-			if ($var eq 'STATS_REPORT_RETENTION') {
+			if ($var eq 'STATS_REPORT_RETENTION')
+			{
 				$vals[0] = int($vals[0]);
-				if ($RETENTION != $vals[0]) {
+				if ($RETENTION != $vals[0])
+				{
 					$RETENTION = $vals[0];
 					print STDERR "LOG: Setting retention from configuration file to $RETENTION\n";
 				}
-			} elsif ($var eq 'STATS_REPORT_CACHING') {
+			}
+			elsif ($var eq 'STATS_REPORT_CACHING')
+			{
 				my $tmp_outdir = '';
-				for (my $i = 0; $i <= $#ARGV; $i++)
-				{
+				for (my $i = 0; $i <= $#ARGV; $i++) {
 					$tmp_outdir = $ARGV[$i+1], last if ($ARGV[$i] =~ /^(-o|--output)$/);
 				}
 				if (is_interactive_mode() and !$CACHE and $tmp_outdir and $vals[0]) {
@@ -12753,6 +12756,11 @@ sub read_conf
 				} else {
 					$CACHE = $vals[0];
 				}
+			}
+			elsif ($var eq 'STATS_REPORT_OUTDIR')
+			{
+				$OUTPUT_DIR = $vals[0];
+				print STDERR "LOG: Setting output dir from configuration file to $OUTPUT_DIR\n";
 			}
 		}
 		close($fh);

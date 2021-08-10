@@ -118,6 +118,9 @@ STATS_REPORT_RETENTION	$RETENTION
 # This directive must be enabled in CGI mode. In this case pgcluu must be
 # run periodically at least each 5 minutes to build and update cached stats.
 STATS_REPORT_CACHING	0
+
+# Directory where the pgCluu reports must be saved
+STATS_REPORT_OUTDIR	$REPORTDIR
 };
 close(OUTCFG);
 
