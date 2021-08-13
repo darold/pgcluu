@@ -41,7 +41,7 @@ my $APACHECONF = $ENV{APACHECONF} || "$CONFDIR/apache2/conf-available";
 my $MANDIR = $ENV{MANDIR} || "$DESTDIR$PREFIX/share/man";
 my $DOCDIR = $ENV{DOCDIR} || "$DESTDIR$PREFIX/share/doc";
 my $SYSTEMDDIR = $ENV{SYSTEMDDIR} || "$DESTDIR/lib/systemd/system";
-my $RETENTION = $ENV{RETENTION} || 0;
+my $RETENTION = $ENV{RETENTION} || 30;
 my $STATDIR_SRVC = $ENV{STATDIR} || "/var/lib/pgcluu/data";
 my $REPORTDIR_SRVC = $ENV{REPORTDIR} || "/var/lib/pgcluu/report";
 my $PIDDIR_SRVC = $ENV{PIDDIR} || "/var/run/postgresql";
@@ -106,13 +106,13 @@ MAX_RENDERED_DAYS	7
 # Retention limit in the statistics directory expressed in number of days.
 # This directive is only used by pgcluu_collectd in incremental mode. Only
 # the last number of days will be preserved, obsolete directories will be
-# removed. It can be used to preserved disk space. Default store indefinitely.
+# removed. It can be used to preserved disk space. Default store 30 days.
 STATS_COLLECTD_RETENTION	$RETENTION
 
 # Retention limit in the report directory (static html) expressed in number
 # of days. This directive is only used by pgcluu in incremental mode. Only
 # the last number of days will be preserved, obsolete directories will be
-# removed. It can be used to preserved disk space. Default store indefinitely.
+# removed. It can be used to preserved disk space. Default store 30 days.
 STATS_REPORT_RETENTION	$RETENTION
 
 # This directive must be enabled in CGI mode. In this case pgcluu must be
