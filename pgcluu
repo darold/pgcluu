@@ -70,6 +70,7 @@ my $EXTERNAL_MENU   = 0;
 my $OVERRIDE        = 1; # Force overriding of resources files (css and js) at each pgcluu run
 
 my $SAR_UPPER_11_5_6 = 0;
+my $SAR_UPPER_12_1_1 = 0;
 
 my %RELKIND = (
 	'r' => 'tables',
@@ -1012,7 +1013,7 @@ my %SAR_GRAPH_INFOS = (
 	'9' => {
 		'name' =>  'system-srvtime',
 		'title' => 'Average wait/service time for I/O requests on device %s',
-		'description' => 'Await is the average time (in milliseconds) for I/O requests issued to the device to be served. This includes the time spent by the requests in queue and the time spent servicing them. Srvtime is the average service time (in milliseconds) for I/O requests that were issued to the device.',
+		'description' => 'Await is the average time (in milliseconds) for I/O requests issued to the device to be served. This includes the time spent by the requests in queue and the time spent servicing them. Srvtime is the average service time (in milliseconds) for I/O requests that were issued to the device. Service time have been removed since sar verion 12.1.2',
 		'ylabel' => 'Milliseconds',
 		'y2label' => 'Milliseconds',
 		'legends' => ['await','svctm'],
@@ -1108,6 +1109,14 @@ my %SAR_GRAPH_INFOS = (
 		'description' => 'CommitLimit is the total amount of memory currently available to be allocated on the system based on the overcommit ratio (vm.overcommit_ratio). This limit is only adhered to if strict overcommit accounting is enabled (vm.overcommit_memory = 2). CommitLimit is calculated with the following formula: (MemTotal - Hugetlb) * overcommit_ratio / 100. Committed_AS is the total amount of memory estimated to complete the workload. This value represents the worst case scenario value, and also includes swap memory.',
 		'ylabel' => 'Size',
 		'legends' => ['CommitLimit', 'Committed_AS'],
+	},
+	'23' => {
+		'name' =>  'system-await',
+		'title' => 'Average wait time for I/O requests on device %s',
+		'description' => 'Await is the average time (in milliseconds) for I/O requests issued to the device to be served. This includes the time spent by the requests in queue and the time spent servicing them.',
+		'ylabel' => 'Milliseconds',
+		'y2label' => 'Milliseconds',
+		'legends' => ['await'],
 	},
 );
 
@@ -2066,7 +2075,7 @@ sub set_device_list
 		}
 		while (my $l = <$fh>) {
 			chomp($l);
-			# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
+			# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;[svctm;]%util
 			my @data = split(/;/, $l);
 			next if ($data[2] !~ /^\d+/);
 			next if ( $data[3] =~ /^loop\d+/);
@@ -7097,14 +7106,25 @@ sub generate_html_index
 		} elsif (${$OVERALL_STATS{'system'}{'bwrite'}}[0] !~ /\D/) {
 			${$OVERALL_STATS{'system'}{'bwrite'}}[0] = localtime(${$OVERALL_STATS{'system'}{'bwrite'}}[0]/1000);
 		}
-		if (!exists $OVERALL_STATS{'system'}{'svctm'}) {
-			@{$OVERALL_STATS{'system'}{'svctm'}} = ('unknown', 0, 'unknown');
-		} elsif (${$OVERALL_STATS{'system'}{'svctm'}}[0] !~ /\D/) {
-			${$OVERALL_STATS{'system'}{'svctm'}}[0] = localtime(${$OVERALL_STATS{'system'}{'svctm'}}[0]/1000);
+		if (!$SAR_UPPER_12_1_1)
+		{
+			if (!exists $OVERALL_STATS{'system'}{'svctm'}) {
+				@{$OVERALL_STATS{'system'}{'svctm'}} = ('unknown', 0, 'unknown');
+			} elsif (${$OVERALL_STATS{'system'}{'svctm'}}[0] !~ /\D/) {
+				${$OVERALL_STATS{'system'}{'svctm'}}[0] = localtime(${$OVERALL_STATS{'system'}{'svctm'}}[0]/1000);
+			}
+		}
+		else
+		{
+			if (!exists $OVERALL_STATS{'system'}{'await'}) {
+				@{$OVERALL_STATS{'system'}{'await'}} = ('unknown', 0, 'unknown');
+			} elsif (${$OVERALL_STATS{'system'}{'await'}}[0] !~ /\D/) {
+				${$OVERALL_STATS{'system'}{'await'}}[0] = localtime(${$OVERALL_STATS{'system'}{'await'}}[0]/1000);
+			}
 		}
 
-		if (exists $OVERALL_STATS{'system'}{'devices'}) {
-
+		if (exists $OVERALL_STATS{'system'}{'devices'})
+		{
 			foreach my $d (sort keys %{$OVERALL_STATS{'system'}{'devices'}}) {
 				if (exists $OVERALL_STATS{'system'}{'devices'}{$d}{read}) {
 					if (! exists $overall_system_stats{read} || ($overall_system_stats{read}[1] < $OVERALL_STATS{'system'}{'devices'}{$d}{read})) {
@@ -7369,7 +7389,14 @@ EOF
 		<li><span class="figure">$OVERALL_STATS{'system'}{'cpu'}[1]%</span> <span class="figure-label">Highest CPU utilization</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'cpu'}[0])</span></li>
 		<li><span class="figure">$OVERALL_STATS{'system'}{'load'}[1]</span> <span class="figure-label">Highest system load</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'load'}[0])</span></li>
 		<li><span class="figure">$OVERALL_STATS{'system'}{'blocked'}[1]</span> <span class="figure-label">Highest blocked processes</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'blocked'}[0])</span></li>
-		<li><span class="figure">$OVERALL_STATS{'system'}{'svctm'}[1] ms</span> <span class="figure-label">Highest device service time</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'svctm'}[0] on device $OVERALL_STATS{'system'}{'svctm'}[2])</span></li>
+EOF
+
+		if (!$SAR_UPPER_12_1_1) {
+			print $fh qq{<li><span class="figure">$OVERALL_STATS{'system'}{'svctm'}[1] ms</span> <span class="figure-label">Highest device service time</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'svctm'}[0] on device $OVERALL_STATS{'system'}{'svctm'}[2])</span></li>\n};
+		} else {
+			print $fh qq{<li><span class="figure">$OVERALL_STATS{'system'}{'await'}[1] ms</span> <span class="figure-label">Highest device wait time</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'await'}[0] on device $OVERALL_STATS{'system'}{'await'}[2])</span></li>\n};
+		}
+		print $fh <<EOF;
 		<li><span class="figure">$overall_system_stats{kbcached}[1]</span> <span class="figure-label">Lowest system cache</span><br/><span class="figure-date">($overall_system_stats{kbcached}[0])</span></li>
 		<li><span class="figure">$overall_system_stats{kbdirty}[1]</span> <span class="figure-label">Highest dirty memory</span><br/><span class="figure-date">($overall_system_stats{kbdirty}[0])</span></li>
 		<!-- li><span class="figure">$overall_system_stats{bread}[1]</span> <span class="figure-label">Highest block read</span><br/><span class="figure-date">($overall_system_stats{bread}[0])</span></li -->
@@ -8718,6 +8745,7 @@ sub generate_html_menu
 			my $disable_device_read_write = ' class="disabled"';
 			my $disable_device_tps = ' class="disabled"';
 			my $disable_device_service_time = ' class="disabled"';
+			my $disable_device_await_time = ' class="disabled"';
 			if (-e "$OUTPUT_DIR/system-cpudevice-$DEVICE_LIST[$i].html") {
 				$disable_device_cpu = '';
 			}
@@ -8730,6 +8758,9 @@ sub generate_html_menu
 			if (-e "$OUTPUT_DIR/system-srvtime-$DEVICE_LIST[$i].html") {
 				$disable_device_service_time = '';
 			}
+			if (-e "$OUTPUT_DIR/system-await-$DEVICE_LIST[$i].html") {
+				$disable_device_await_time = '';
+			}
 			$menu_str .= qq{
 			  <li id="menu-device$i" class="dropdown-submenu">
 			     <a href="#" tabindex="-1">$DEVICE_LIST[$i] </a>
@@ -8737,8 +8768,19 @@ sub generate_html_menu
 			      <li id="menu-device-cpu"$disable_device_cpu><a href="system-cpudevice-$DEVICE_LIST[$i].html">Cpu utilization</a></li>
 			      <li id="menu-device-read_write"$disable_device_read_write><a href="system-device-$DEVICE_LIST[$i].html">Read/write bytes per second</a></li>
 			      <li id="menu-device-tps"$disable_device_tps><a href="system-tpsdevice-$DEVICE_LIST[$i].html">Transfert per second</a></li>
+};
+			if (-e "$OUTPUT_DIR/system-await-$DEVICE_LIST[$i].html") {
+				$menu_str .= qq{
+			      <li id="menu-device-await_time"$disable_device_await_time><a href="system-await-$DEVICE_LIST[$i].html">Average I/O wait time</a></li>
+			      </ul>
+};
+			} else {
+				$menu_str .= qq{
 			      <li id="menu-device-service_time"$disable_device_service_time><a href="system-srvtime-$DEVICE_LIST[$i].html">Average service time</a></li>
 			      </ul>
+};
+			}
+			$menu_str .= qq{
 			  </li>
 };
 		}
@@ -9613,13 +9655,16 @@ sub compute_pidstatio_report
 
 sub compute_srvtime_stat
 {
-	for (my $i = 0; $i <= $#_; $i++) {
-		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
+	for (my $i = 0; $i <= $#_; $i++)
+	{
+		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;[srvtm;]%util
 		# sysstat version 11.5.7:
 		# Replace "avgrq-sz" field (expressed in sectors) with "areq-sz" (expressed in kilobytes)
 		# Rename "avgqu-sz" field to "aqu-sz"
 		# "rd_sec/s" and "wr_sec/s" (expressed in sectors) fields have been replaced
 		# with "rkB/s" and "wkB/s" (expressed in kilobytes)
+		# sysstat version 12.1.2:
+		# Remove service time (svctm) metric.
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
 
@@ -9629,8 +9674,13 @@ sub compute_srvtime_stat
 		next if (!&device_in_report($data[3]));
 
 		map { s/,/\./ } @data ;
-		$sar_srvtime_stat{$data[2]}{$data[3]}{'await'} = ($data[9]||0);
-		$sar_srvtime_stat{$data[2]}{$data[3]}{'svctm'} = ($data[10]||0);
+		if ($SAR_UPPER_12_1_1 || $#data == 10)
+		{
+			$sar_srvtime_stat{$data[2]}{$data[3]}{'await'} = ($data[9]||0);
+		} else {
+			$sar_srvtime_stat{$data[2]}{$data[3]}{'await'} = ($data[9]||0);
+			$sar_srvtime_stat{$data[2]}{$data[3]}{'svctm'} = ($data[10]||0);
+		}
 	}
 }
 
@@ -9640,22 +9690,38 @@ sub compute_srvtime_report
 	my $src_base = shift();
 
 	my %srvtime_stat = ();
-	foreach my $t (sort {$a <=> $b} keys %sar_srvtime_stat) {
-		foreach my $dev (sort keys %{$sar_srvtime_stat{$t}}) {
-			if (!exists $OVERALL_STATS{'system'}{'svctm'} || ($OVERALL_STATS{'system'}{'svctm'}[1] < $sar_srvtime_stat{$t}{$dev}{'svctm'})) {
-				@{$OVERALL_STATS{'system'}{'svctm'}} = ($t, $sar_srvtime_stat{$t}{$dev}{'svctm'}, $dev);
+	foreach my $t (sort {$a <=> $b} keys %sar_srvtime_stat)
+	{
+		foreach my $dev (sort keys %{$sar_srvtime_stat{$t}})
+		{
+			if ($SAR_UPPER_12_1_1)
+			{
+				if (!exists $OVERALL_STATS{'system'}{'await'} || ($OVERALL_STATS{'system'}{'await'}[1] < $sar_srvtime_stat{$t}{$dev}{'await'})) {
+					@{$OVERALL_STATS{'system'}{'await'}} = ($t, $sar_srvtime_stat{$t}{$dev}{'await'}, $dev);
+				}
+				$srvtime_stat{$dev}{'await'} .= '[' . $t . ',' . $sar_srvtime_stat{$t}{$dev}{'await'} . '],';
 			}
-			$srvtime_stat{$dev}{'await'} .= '[' . $t . ',' . $sar_srvtime_stat{$t}{$dev}{'await'} . '],';
-			$srvtime_stat{$dev}{'svctm'} .= '[' . $t . ',' . $sar_srvtime_stat{$t}{$dev}{'svctm'} . '],';
+			else
+			{
+				if (!exists $OVERALL_STATS{'system'}{'svctm'} || ($OVERALL_STATS{'system'}{'svctm'}[1] < $sar_srvtime_stat{$t}{$dev}{'svctm'})) {
+					@{$OVERALL_STATS{'system'}{'svctm'}} = ($t, $sar_srvtime_stat{$t}{$dev}{'svctm'}, $dev);
+				}
+				$srvtime_stat{$dev}{'await'} .= '[' . $t . ',' . $sar_srvtime_stat{$t}{$dev}{'await'} . '],';
+				$srvtime_stat{$dev}{'svctm'} .= '[' . $t . ',' . $sar_srvtime_stat{$t}{$dev}{'svctm'} . '],';
+			}
 		}
 	}
 	%sar_srvtime_stat = ();
-	if (scalar keys %srvtime_stat > 0) {
-		foreach my $n (sort { $a cmp $b } keys %srvtime_stat) {
+	if (scalar keys %srvtime_stat > 0)
+	{
+		foreach my $n (sort { $a cmp $b } keys %srvtime_stat)
+		{
 			next if ($n =~ /^loop\d+/);
 			push(@DEVICE_LIST, $n) if (!grep(/^$n$/, @DEVICE_LIST));
 			$srvtime_stat{$n}{'await'} =~ s/,$//;
-			$srvtime_stat{$n}{'svctm'} =~ s/,$//;
+			if (exists $srvtime_stat{$n}{'svctm'}) {
+				$srvtime_stat{$n}{'svctm'} =~ s/,$//;
+			}
 			# Open a filehandle for each database
 			my $fh = IO::File->new("$OUTPUT_DIR/$data_info->{name}-$n.html", 'w');
 			if (not defined $fh) {
@@ -9663,7 +9729,11 @@ sub compute_srvtime_report
 			}
 			&html_header($fh, $src_base);
 			$fh->print("<ul id=\"slides\">\n");
-			$fh->print( &jqplot_linegraph_array($IDX++, 'device-service_time', $data_info, $n, $srvtime_stat{$n}{'await'}, $srvtime_stat{$n}{'svctm'}) );
+			if (exists $srvtime_stat{$n}{'svctm'}) {
+				$fh->print( &jqplot_linegraph_array($IDX++, 'device-service_time', $data_info, $n, $srvtime_stat{$n}{'await'}, $srvtime_stat{$n}{'svctm'}) );
+			} else {
+				$fh->print( &jqplot_linegraph_array($IDX++, 'device-await_time', $data_info, $n, $srvtime_stat{$n}{'await'}) );
+			}
                         $fh->print("</ul>\n");
                         &html_footer($fh, $n);
                         $fh->close;
@@ -9674,7 +9744,9 @@ sub compute_srvtime_report
 sub compute_rw_device_stat
 {
 	for (my $i = 0; $i <= $#_; $i++) {
-		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
+		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;%util
+		# sysstat version 12.1.2:
+		# Remove service time (svctime) field
 		# sysstat version 11.5.7:
 		# Replace "avgrq-sz" field (expressed in sectors) with "areq-sz" (expressed in kilobytes)
 		# Rename "avgqu-sz" field to "aqu-sz"
@@ -9818,7 +9890,9 @@ sub compute_util_device_stat
 	my %devices = ();
 
 	for (my $i = 0; $i <= $#_; $i++) {
-		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;svctm;%util
+		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;%util
+		# sysstat version 12.1.2:
+		# Remove service time (svctime) field
 		# sysstat version 11.5.7:
 		# Replace "avgrq-sz" field (expressed in sectors) with "areq-sz" (expressed in kilobytes)
 		# Rename "avgqu-sz" field to "aqu-sz"
@@ -10285,7 +10359,6 @@ sub compute_sarstat_stats
 		&compute_srvtime_stat(@content);
 	}
 
-
 	####
 	# Get Device block read/write utilization
 	####
@@ -10438,7 +10511,6 @@ sub load_sarfile_stats
 
 	my $interval = 0;
 	my $hostname = 'unknown';
-	my $has_changed = 0;
 
 	# Load data from file
 	my @content = ();
@@ -10457,7 +10529,7 @@ sub load_sarfile_stats
 			push(@content, $l);
 		}
 		# Look if the format of systat have changed
-		if (!$has_changed && $l =~ m#wkB/s#)
+		if (!$SAR_UPPER_11_5_6 && $l =~ m#wkB/s#)
 		{
 			# Replace "rd_sec/s" and "wr_sec/s" fields with "rkB/s" and "wkB/s".
 			# fields are now expressed in kilobytes instead of sectors. This also make
@@ -10467,7 +10539,11 @@ sub load_sarfile_stats
 			# Rename "avgqu-sz" field to "aqu-sz" to make it consistent with iostat's
 			# output.
 			$SAR_UPPER_11_5_6 = 1;
-			$has_changed = 1; # we don't expect several sar version upgrade on a single file
+		}
+		if (!$SAR_UPPER_12_1_1 && $l =~ /await/ && $l !~ /srvtime/)
+		{
+			# Since version 12.1.2 the obsolete metric srvtime has been removed.
+			$SAR_UPPER_12_1_1 = 1;
 		}
 	}
 	$curfh->close();
@@ -11019,6 +11095,7 @@ sub compute_sar_graph
 	my ($src_base, %data_info) = @_;
 
 	if (!grep(/^$data_info{name}$/,
+			'system-await', 'system-device',
 			'system-srvtime', 'system-device',
 			'system-tpsdevice', 'system-cpudevice',
 			'network-utilization', 'network-error'))
@@ -11181,10 +11258,24 @@ sub compute_sar_graph
 	####
 	# Show Device service time
 	####
-	if ($data_info{name} eq 'system-srvtime')
+	if (!$SAR_UPPER_12_1_1)
 	{
-		# Compute graphs for service time per device statistics
-		&compute_srvtime_report(\%data_info, $src_base);
+		if ($data_info{name} eq 'system-srvtime')
+		{
+			# Compute graphs for service time per device statistics
+			&compute_srvtime_report(\%data_info, $src_base);
+		}
+	}
+	else
+	{
+		####
+		# Show Device await time
+		####
+		if ($data_info{name} eq 'system-await')
+		{
+			# Compute graphs for service time per device statistics
+			&compute_srvtime_report(\%data_info, $src_base);
+		}
 	}
 
 	####
@@ -11224,7 +11315,7 @@ sub compute_sar_graph
 		&compute_network_error_report(\%data_info, $src_base);
 	}
 
-	if (!grep(/^$data_info{name}$/, 'system-srvtime', 'system-device', 'system-tpsdevice', 'system-cpudevice', 'network-utilization', 'network-error'))
+	if (!grep(/^$data_info{name}$/, 'system-await', 'system-srvtime', 'system-device', 'system-tpsdevice', 'system-cpudevice', 'network-utilization', 'network-error'))
 	{
 		# Write html footer in all reports
 		print $FH "</ul>\n";
