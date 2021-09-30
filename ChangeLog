@@ -9,8 +9,6 @@ previous release.  It also adds new reports and features.
   * Add command line option -t | --lock-timeout with default to 3 seconds
     to self terminate a SQL query that could be lock by the activity of
     an other session like a drop table for example.
-  * Add BEGIN_STAT/END_STAT variables dedicated to sar data on their
-    timezone, to avoid filtering on the wrong hours.
   * Add collect and report of unused trigger functions.
   * Add system statistics dedicated to PostgreSQL process through stats
     reported by pidstat.
@@ -40,6 +38,8 @@ Here is the full list of changes since previous release.
     the right values outside pgcluu.
   - Fix README typo ; releases come from Github. Thanks to Christophe
     Courtois for the patch.
+  - Add BEGIN_STAT/END_STAT variables dedicated to sar data on their
+    timezone, to avoid filtering on the wrong hours.
   - Add command line option -t | --lock-timeout with default to 3 seconds
     to self terminate a SQL query that could be lock by the activity of
     an other session like a drop table for example. Thanks to Christophe
