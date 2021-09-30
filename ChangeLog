@@ -1,3 +1,102 @@
+2021-09-30 - Version 3.2
+
+This release is a maintenance release that fixes issues reported since
+previous release.  It also adds new reports and features.
+
+  * Add STATS_REPORT_OUTDIR configuration directive to pgcluu.conf to set
+    the directory where the pgCluu reports will be saved. Default to
+    /var/lib/pgcluu/report/.
+  * Add command line option -t | --lock-timeout with default to 3 seconds
+    to self terminate a SQL query that could be lock by the activity of
+    an other session like a drop table for example.
+  * Add BEGIN_STAT/END_STAT variables dedicated to sar data on their
+    timezone, to avoid filtering on the wrong hours.
+  * Add collect and report of unused trigger functions.
+  * Add system statistics dedicated to PostgreSQL process through stats
+    reported by pidstat.
+  * Add report of CPU scaling_governor to check if it set to powersave,
+    setting it to performances can improve performances up to 20% following
+    the PostgreSQL load. For more information on this kernel parameter see
+    https://wiki.archlinux.org/index.php/CPU_frequency_scaling#Scaling_governors
+
+Backward compatibility:
+
+  - Change default retention time to 30 days instead of no storage limit
+    to avoid possible out of memory on uncontrolled installation. Thanks
+    to Jean Pierre Huart for the report.
+
+Here is the full list of changes since previous release.
+
+  - Remove service time report as per sysstat v12.1.2 it has been removed.
+  - Add STATS_REPORT_OUTDIR configuration directive to pgcluu.conf to set
+    the directory where the pgCluu reports will be saved. Default to
+    /var/lib/pgcluu/report/. Thanks to Jean Pierre Huart for the feature
+    request.
+  - Fix error "Use of uninitialized value $pidstat_file in -e at ..." when
+    generating report for sar file only.
+  - Fix possible bad format issue in pidstat parsing du to command with a
+    space character. Thanks to Christophe Courtois for the report.
+  - Subtract the lock_timeout setting when looking at pg_settings to have
+    the right values outside pgcluu.
+  - Fix README typo ; releases come from Github. Thanks to Christophe
+    Courtois for the patch.
+  - Add command line option -t | --lock-timeout with default to 3 seconds
+    to self terminate a SQL query that could be lock by the activity of
+    an other session like a drop table for example. Thanks to Christophe
+    Courtois for the feature request.
+  - Limit output length of usage to 80 characters.
+  - Fix for begin/end date filtering for sar data. Thanks to Christophe
+    Courtois for the patch.
+  - Fix failure of pidstat through ssh. Thanks to Christophe Courtois for
+    the patch.
+  - Verify that same statistic report is not built twice.
+  - Remove fork for collect of PostgreSQL metrics and add autodetection of
+    the main process pid when pid file is not found.
+  - Remove copyright from html footer.
+  - Split per database report in several HTML pages to avoid too large files.
+    Thanks to Andreas Schrafl for the report.
+  - Add collect of wait event if extension pg_wait_sampling is available
+    in a database. This collect can be disabled with new command line
+    option -w, --no-waitevent.
+  - Set hamburger dropdown menu background from transparent to grey. Thansk
+    to Andreas Schrafl for the patch.
+  - Fix missing report of tables and indexes statistics.
+  - Fix lookup at database list.
+  - Add collect of unused trigger functions. Thanks to Adrien Neyrat for
+    the feature request.
+  - Fix load of database list from binary files in CGI mode.
+  - Fix pidstat reports about CPU wait and iodelay with old systat version
+    where these information was not available. iodelay < sysstat v10.2.1
+    and wait < sysstat v11.5.5
+  - Add CGI reports for pidstat statistics.
+  - Add pidstat data caching.
+  - Fix link to page cluster-archive.html. Thanks to cyberioio for the
+    report.
+  - Fix view of configurations reports that was hidden. Thanks to Lionel for
+    the report.
+  - Fix formatting of README file for command line option.
+  - Add collect of PostgreSQL only system metrics through pidstat.
+  - Fix pgcluu error on reading compressed data files. Thanks to Damien
+    Clochard for the report.
+  - Fix wrong detection of --output option.
+  - Fix previous commit that was breaking GetOptions behaviors
+  - Do not take care of the STATS_REPORT_CACHING value in config file if
+    pgcluu is run in interactive mode with an ouptut directory (-o) and
+    not caching enabled (-c).
+  - Update year in copyright
+  - Fix Storable.pm error when reading empty file. Thanks to Christian Roux
+    for the report.
+  - Make update of system information stat file sysinfo.txt atomic to
+    prevent zero file size.
+  - Fix a bgwriter URL. Thanks to Guillaume Lelarge for the patch.
+  - Fix parsing of sar v12 header. Thanks to Christoph Berg for the report.
+  - Fix INPUT_DIR in generated pgcluu.conf. The path here must not have
+    DESTDIR prepended. Thanks to Christoph Berg for the patch.
+  - Prevent look at pg_statistic_ext if major version is bellow 10.0. Thanks
+    to Devrim Gunduz for the report.
+  - Fix use of DESTDIR vs PREFIX installation process. Thanks to Christoph
+    Berg for the report.
+
 2019-10-29 - Version 3.1 released
 
 This release is a maintenance release that adds support to PostgreSQL

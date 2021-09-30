@@ -232,7 +232,8 @@ by adding option '--retention ndays' to pgcluu_collectd call or by changing
 the value of STATS_COLLECTD_RETENTION configuration directive in file
 /usr/local/etc/pgcluu.conf or /etc/pgcluu.conf file following your installation.
 You can also set STATS_REPORT_RETENTION to limit the retention of reports
-directories or use option '--retention ndays' with pgcluu.
+directories or use option '--retention ndays' with pgcluu. Default is to
+preserve collected data for the past 30 days.
 
 If you want to use the CGI mode you also have activate pgcluu caching by
 enabling value STATS_REPORT_CACHING in the configuration file and using
@@ -258,6 +259,9 @@ The pgcluu.service file (client part) execute commands:
 
 In case you don't want to use systemd service files you will have to execute
 these commands manually before tunning pgCluu.
+
+For pgcluu reports, the output directory can be defined in the configuration
+file using the STATS_REPORT_OUTDIR directive.
 
 =head1 COLLECTING STATISTICS
 
@@ -701,7 +705,7 @@ configuration directive in pgcluu.conf
 
 =head1 LICENSE
 
-Copyright (c) 2012-2020, Gilles Darold
+Copyright (c) 2012-2021, Gilles Darold
 
 pgCluu is licenced under the PostgreSQL Licence a liberal Open Source license,
 similar to the BSD or MIT licenses. That mean that all parts of the program

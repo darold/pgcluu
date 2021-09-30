@@ -7,7 +7,7 @@
 # For license terms, see the LICENSE file.
 #
 # Author: Gilles Darold
-# Copyright: (C) 2012-2020 Gilles Darold - All rights reserved.
+# Copyright: (C) 2012-2021 Gilles Darold - All rights reserved.
 #------------------------------------------------------------------------------
 use vars qw($VERSION $PROGRAM);
 
@@ -24,7 +24,7 @@ use POSIX qw(locale_h sys_wait_h ceil strftime);
 setlocale(LC_ALL, 'C');
 use Storable qw(store_fd fd_retrieve);
 
-$VERSION = '3.1';
+$VERSION = '3.2';
 $PROGRAM = 'pgCluu';
 
 # Global variables
