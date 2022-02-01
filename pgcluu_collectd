@@ -520,6 +520,8 @@ for (my $i = 0; $i <= $#dbhosts; $i++)
 
 # Get the output dir from command line
 my $OUTPUT_DIR = $ARGV[0] || '';
+if ($OUTPUT_DIR =~ / +/) { die "FATAL: $OUTPUT_DIR contains 1 or more spaces - this is not yet supported. \n" }
+
 # Overwrite the output directory in capture mode
 if ($CAPTURE)
 {
