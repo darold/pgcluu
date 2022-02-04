@@ -445,7 +445,7 @@ if ($LIST_METRIC) {
 
 	print "List of available metrics:\n\n";
 	foreach my $c (sort {$a cmp $b} keys %METRICS_COMMANDS) {
-		next if (($c =~ /^(user|all)_/) && ($c !~ /^$STAT_TYPE/)); 
+		next if (($c =~ /^(user|all)_/) && ($c !~ /^$STAT_TYPE/));
 		$c =~ s/_stats$//;
 		print "\t$c\n";
 	}
@@ -550,7 +550,7 @@ if (!$CAPTURE) {
 # Generate the sar command
 my $def_sar_command = "LC_ALL=C $SAR_PROG -t -p -A 1 1";
 my $sshcmd = '';
-# Set command to execute sar remotely using ssh if necessary 
+# Set command to execute sar remotely using ssh if necessary
 if ($USE_SSH) {
 	# Force using the user defined ssh command
 	if ($SSH_COMMAND) {
@@ -600,7 +600,7 @@ sub terminate
 	exit 0;
 }
 
-# Die on kill -2, -3 or -15 
+# Die on kill -2, -3 or -15
 $SIG{'INT'} = $SIG{'QUIT'} = $SIG{'TERM'} = 'terminate';
 
 # Run in interactive mode if required
@@ -747,7 +747,7 @@ while (1) {
 		});
 	}
 
-	# Set daily rotation subdirectories 
+	# Set daily rotation subdirectories
 	if ($D_ROTATE && !$H_ROTATE && !-d "$year/$mon/$mday") {
 		mkdir "$year" if (!-d "$year");
 		mkdir "$year/$mon" if (!-d "$year/$mon");
@@ -767,7 +767,7 @@ while (1) {
 		});
 	}
 
-	# Set hourly rotation/incremental subdirectories 
+	# Set hourly rotation/incremental subdirectories
 	if ($H_ROTATE && !-d "$year/$mon/$mday/$hour") {
 		mkdir "$year" if (!-d "$year");
 		mkdir "$year/$mon" if (!-d "$year/$mon");
@@ -858,7 +858,7 @@ while (1) {
 		}
 	}
 
-	# Generating global statistics collector SQL script 
+	# Generating global statistics collector SQL script
 	my $script_sql = &create_sql_script();
 	if (!$script_sql && ($#METRICS < 0)) {
 		# No action can be perform with this PostgreSQL version
@@ -876,7 +876,7 @@ while (1) {
 			my @dblist = &get_databases();
 			push(@dblist, $DBNAME) if (($#dblist == -1) && $DBNAME);
 
-			# Generating per database statistics collector SQL script 
+			# Generating per database statistics collector SQL script
 			foreach my $db (@dblist) {
 
 				next if (($#included_dbs >= 0) && !grep(/^$db$/i, @included_dbs));
@@ -1173,7 +1173,7 @@ sub verify_action
 		delete $METRICS_COMMANDS{'database_usagecount_stats'};
 		delete $METRICS_COMMANDS{'relation_buffercache_stats'};
 		delete $METRICS_COMMANDS{'database_isdirty_stats'};
-	} 
+	}
 
 	return $ret;
 }
@@ -1188,7 +1188,7 @@ sub create_sql_script
 		next if (!$db && $METRICS_COMMANDS{$type}->{repeat});
 		next if ($db && !$METRICS_COMMANDS{$type}->{repeat});
 		next if ($type =~ /^pgbouncer_|configuration_/);
-		next if (($type =~ /^(user|all)_/) && ($type !~ /^$STAT_TYPE/)); 
+		next if (($type =~ /^(user|all)_/) && ($type !~ /^$STAT_TYPE/));
 		next if (($#METRICS >= 0) && !grep(/^$type$/, @METRICS));
 
 		my $sql = $METRICS_COMMANDS{$type}->{command}->();
@@ -1627,7 +1627,7 @@ sub grab_os_information
 	print OUT @pslist;
 	print OUT "[CRONTAB]\n";
 	print OUT @crontab;
-	
+
 	close(OUT);
 }
 
@@ -1650,14 +1650,14 @@ options:
   -D, --daemonize          detach from console and enter in daemon mode.
   -E, --end-after=SECOND   self terminate program after a given number of seconds.
                            Can be written: 7200 or 120M or 2H, for days use 7D for
-                           example to stop collecting data after seven days. 
+                           example to stop collecting data after seven days.
   -f, --pid-file=FILE      path to pid file. Default: $PIDFILE.
   -h, --host=HOSTNAME      database server host or socket directory
   -i, --interval=NUM       time to wait between runs
   -k, --kill		   stop current $PROGRAM running daemon.
   -m, --metric=METRIC      set a coma separated list of metrics to perform.
   -M, --max-size=SIZE      self terminate program when the size of the output dir
-                           exceed a given size. Can be written: 2GB or 2000MB. 
+                           exceed a given size. Can be written: 2GB or 2000MB.
   -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
   -P, --psql=BIN           path to the psql command. Default: $PSQL_PROG.
   -Q, --no-statement       do not collect queries statistics from pg_stat_statements.
@@ -1676,7 +1676,7 @@ options:
                            in a comma separated list of database names.
   --list-metric            list available metrics actions that can be performed.
   --sysinfo                get operating system information and exit (sysinfo.txt).
-  --no-sysinfo             do not collect operating system information at all. 
+  --no-sysinfo             do not collect operating system information at all.
   --no-database            do not collect database statistics at all.
   --pgbouncer-args=OPTIONS Option to used to connect to the pgbouncer system
 			   database. Ex: -p 6432 -U postgres -h 192.168.1.100
@@ -1928,7 +1928,7 @@ sub dump_pgstatiotables
 	$type ||= 'all';
 
 	my $sql = sprintf(
-		"SELECT date_trunc('seconds', now()), current_database(), * " . 
+		"SELECT date_trunc('seconds', now()), current_database(), * " .
 		"FROM pg_statio_${type}_tables " .
 		"WHERE schemaname <> 'information_schema' " .
 		"ORDER BY schemaname, relname"
@@ -1977,7 +1977,7 @@ sub dump_pgstatuserfunctions
 {
 
 	my $sql = sprintf(
-		"SELECT date_trunc('seconds', now()), current_database(), * " . 
+		"SELECT date_trunc('seconds', now()), current_database(), * " .
 		"FROM pg_stat_user_functions " .
 		"WHERE schemaname <> 'information_schema' " .
 		"ORDER BY schemaname, funcname"
@@ -2005,13 +2005,14 @@ sub dump_pgstatstatements
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), r.rolname, d.datname, " .
-		"regexp_replace(regexp_replace(query, E'[ \\n]+', ' ', 'g'), E';', '#SMCLN#', 'g'), calls, total_time, rows, " .
+		"regexp_replace(regexp_replace(query, E'[ \\n]+', ' ', 'g'), E';', '#SMCLN#', 'g'), calls, %s, rows, " .
 		"shared_blks_hit, shared_blks_read, shared_blks_written, " .
 		"local_blks_hit, local_blks_read, local_blks_written, " .
 		"temp_blks_read, temp_blks_written " .
 		"FROM $DB_INFO{pg_stat_statement} q, pg_database d, pg_roles r " .
 		"WHERE q.userid=r.oid and q.dbid=d.oid " .
-		"ORDER BY r.rolname, d.datname"
+		"ORDER BY r.rolname, d.datname",
+		&backend_minimum_version(13, 0) ? "(total_plan_time + total_exec_time) as total_time " : "total_time",
 	);
 
 	return $sql;
@@ -2171,7 +2172,7 @@ sub dump_pgbouncerquerystats
 
 sub get_current_timestamp
 {
-	
+
 	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
 
 	$year += 1900;
@@ -2185,7 +2186,7 @@ sub dump_pgstatxactuserfunctions
 {
 
 	my $sql = sprintf(
-		"SELECT date_trunc('seconds', now()), * " . 
+		"SELECT date_trunc('seconds', now()), * " .
 		"FROM pg_stat_xact_user_functions " .
 		"WHERE schemaname <> 'information_schema' " .
 		"ORDER BY 3, 4"
@@ -2203,7 +2204,7 @@ sub dump_pgstatxacttables
 	$type ||= 'all';
 
 	my $sql = sprintf(
-		"SELECT date_trunc('seconds', now()), * " . 
+		"SELECT date_trunc('seconds', now()), * " .
 		"FROM pg_stat_xact_${type}_tables " .
 		"WHERE schemaname <> 'information_schema' " .
 		"ORDER BY 3, 4"
@@ -2312,21 +2313,21 @@ sub dump_redundantindexes
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), current_database(), " .
-		"pg_get_indexdef(indexrelid) AS contained, " . 
-		"pg_get_indexdef(index_backward) AS container " . 
-		"FROM " . 
-		"( " . 
-		"  SELECT indexrelid, " . 
-		"    indrelid, " . 
-		"    array_to_string(indkey,'+') AS colindex, " . 
-		"    indisunique AS is_unique, " . 
-		"    lag(array_to_string(indkey,'+')) OVER search_window AS colindexbackward, " . 
-		"    lag(indexrelid) OVER search_window AS index_backward, " . 
-		"    lag(indisunique) OVER search_window AS is_unique_backward " . 
-		"  FROM pg_index " . 
-		"    WINDOW search_window AS (PARTITION BY indrelid " . 
-		"    ORDER BY array_to_string(indkey,'+') DESC) " . 
-		") AS tmp " . 
+		"pg_get_indexdef(indexrelid) AS contained, " .
+		"pg_get_indexdef(index_backward) AS container " .
+		"FROM " .
+		"( " .
+		"  SELECT indexrelid, " .
+		"    indrelid, " .
+		"    array_to_string(indkey,'+') AS colindex, " .
+		"    indisunique AS is_unique, " .
+		"    lag(array_to_string(indkey,'+')) OVER search_window AS colindexbackward, " .
+		"    lag(indexrelid) OVER search_window AS index_backward, " .
+		"    lag(indisunique) OVER search_window AS is_unique_backward " .
+		"  FROM pg_index " .
+		"    WINDOW search_window AS (PARTITION BY indrelid " .
+		"    ORDER BY array_to_string(indkey,'+') DESC) " .
+		") AS tmp " .
 		"WHERE (colindexbackward LIKE (colindex || '+%') OR colindexbackward = colindex) " .
 		"  AND (is_unique_backward <> is_unique OR (not is_unique_backward AND NOT is_unique)) " .
 		"  AND NOT is_unique"
@@ -2401,7 +2402,7 @@ sub dump_pgsettings
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), category, name, " .
 		" setting, %s, context, source, %s, %s, %s " .
-		"FROM pg_settings " . 
+		"FROM pg_settings " .
 		"ORDER BY category,name",
 		&backend_minimum_version(8, 2) ? "unit" : "''::text as unit",
 		&backend_minimum_version(8, 4) ? "boot_val" : "''::text as boot_val",
@@ -2498,28 +2499,28 @@ sub dump_missingfkindexes
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), current_database(), relname, " .
-		"'CREATE INDEX CONCURRENTLY idx_' || relname || '_' || " . 
-		"         array_to_string(column_name_list, '_') || ' ON ' || conrelid || " . 
-		"         ' (' || array_to_string(column_name_list, ',') || ')' AS ddl " . 
-		"FROM (SELECT DISTINCT conrelid, " . 
-		"       array_agg(attname) AS column_name_list, " . 
-		"       array_agg(attnum) AS column_list " . 
-		"     FROM pg_attribute " . 
-		"          JOIN (SELECT conrelid::regclass, conname, " . 
-		"                 unnest(conkey) AS column_index " . 
-		"                FROM (SELECT DISTINCT conrelid, conname, conkey " . 
-		"                      FROM pg_constraint " . 
-		"                        JOIN pg_class ON pg_class.oid = pg_constraint.conrelid " . 
-		"                        JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace " . 
-		"                      WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' AND pg_constraint.contype = 'f' " . 
-		"                      ) fkey " . 
-		"               ) fkey " . 
-		"               ON fkey.conrelid = pg_attribute.attrelid " . 
-		"                  AND fkey.column_index = pg_attribute.attnum " . 
-		"     GROUP BY conrelid, conname " . 
-		"     ) candidate_index " . 
-		"JOIN pg_class ON pg_class.oid = candidate_index.conrelid " . 
-		"LEFT JOIN pg_index ON pg_index.indrelid = conrelid " . 
+		"'CREATE INDEX CONCURRENTLY idx_' || relname || '_' || " .
+		"         array_to_string(column_name_list, '_') || ' ON ' || conrelid || " .
+		"         ' (' || array_to_string(column_name_list, ',') || ')' AS ddl " .
+		"FROM (SELECT DISTINCT conrelid, " .
+		"       array_agg(attname) AS column_name_list, " .
+		"       array_agg(attnum) AS column_list " .
+		"     FROM pg_attribute " .
+		"          JOIN (SELECT conrelid::regclass, conname, " .
+		"                 unnest(conkey) AS column_index " .
+		"                FROM (SELECT DISTINCT conrelid, conname, conkey " .
+		"                      FROM pg_constraint " .
+		"                        JOIN pg_class ON pg_class.oid = pg_constraint.conrelid " .
+		"                        JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace " .
+		"                      WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' AND pg_constraint.contype = 'f' " .
+		"                      ) fkey " .
+		"               ) fkey " .
+		"               ON fkey.conrelid = pg_attribute.attrelid " .
+		"                  AND fkey.column_index = pg_attribute.attnum " .
+		"     GROUP BY conrelid, conname " .
+		"     ) candidate_index " .
+		"JOIN pg_class ON pg_class.oid = candidate_index.conrelid " .
+		"LEFT JOIN pg_index ON pg_index.indrelid = conrelid " .
 		"                      AND indkey::text = array_to_string(column_list, ' ') " .
 		"WHERE pg_index.indrelid IS NULL "
 	);
@@ -2540,7 +2541,7 @@ sub dump_pgdatabase_buffercache
 		"round(100.0 * count(*) / (SELECT setting FROM pg_settings " .
 		"  WHERE name='shared_buffers')::integer,1) AS \"buffers %\", " .
 		"round(100.0 * count(*) * 8192 / pg_database_size(d.datname),1) AS \"database %\" " .
-		"FROM pg_database d INNER JOIN pg_buffercache b ON b.reldatabase=d.oid " . 
+		"FROM pg_database d INNER JOIN pg_buffercache b ON b.reldatabase=d.oid " .
 		"GROUP BY d.datname " .
 		"ORDER BY 2,3 DESC"
 	);
@@ -2561,7 +2562,7 @@ sub dump_pgrelation_buffercache
 		"round(100.0 * count(*) / (SELECT setting FROM pg_settings " .
 		"  WHERE name='shared_buffers')::integer,1) AS \"buffers %\", " .
 		"round(100.0 * count(*) * 8192 / pg_relation_size(c.oid),1) AS \"relation %\" " .
-		"FROM pg_class c INNER JOIN pg_buffercache b ON b.relfilenode=c.relfilenode " . 
+		"FROM pg_class c INNER JOIN pg_buffercache b ON b.relfilenode=c.relfilenode " .
 		"INNER JOIN pg_database d ON ( b.reldatabase=d.oid ) " .
 		"WHERE pg_relation_size(c.oid) > 0 " .
 #		"AND c.relname !~ '^pg_' " .
@@ -2583,7 +2584,7 @@ sub dump_pgdatabase_usercount
 		"SELECT date_trunc('seconds', now()), d.datname, usagecount, " .
 		"count(*) AS buffers, round(100.0 * count(*) / (SELECT setting FROM pg_settings " .
 		"  WHERE name='shared_buffers')::integer,1) AS \"buffers %\" " .
-		"FROM pg_database d INNER JOIN pg_buffercache b ON b.reldatabase=d.oid " . 
+		"FROM pg_database d INNER JOIN pg_buffercache b ON b.reldatabase=d.oid " .
 		"GROUP BY d.datname, usagecount " .
 		"ORDER BY 2,3 DESC"
 	);
@@ -2601,7 +2602,7 @@ sub dump_pgdatabase_isdirty
 		"SELECT date_trunc('seconds', now()), d.datname, usagecount, isdirty, " .
 		"count(*) AS buffers, round(100.0 * count(*) / (SELECT setting FROM pg_settings " .
 		"  WHERE name='shared_buffers')::integer,1) AS \"buffers %\" " .
-		"FROM pg_database d INNER JOIN pg_buffercache b ON b.reldatabase=d.oid " . 
+		"FROM pg_database d INNER JOIN pg_buffercache b ON b.reldatabase=d.oid " .
 		"GROUP BY d.datname, usagecount, isdirty " .
 		"ORDER BY 2,3,4 DESC"
 	);
@@ -2616,7 +2617,7 @@ sub dump_pgstatarchiver
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), archived_count, last_archived_wal, " .
-		"last_archived_time, failed_count, last_failed_wal, last_failed_time, stats_reset " . 
+		"last_archived_time, failed_count, last_failed_wal, last_failed_time, stats_reset " .
 		"FROM pg_stat_archiver"
 	);
 
@@ -2825,5 +2826,3 @@ sub save_dbrole_settings
 
 	return ($f1,$f2);
 }
-
-
