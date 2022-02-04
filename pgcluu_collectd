@@ -1202,7 +1202,7 @@ sub collect_metrics
 				}
 				die "FATAL: no SQL with metric command pgbouncer_stats ($sql).\n" if (!$sql || $@);
 			}
-			`$PGBOUNCER_PROG -c "$sql" | sed 's/^/$timestamp;/' $FILE_REDIR $OUT_DIR/$METRICS_COMMANDS{$c}->{output}`;
+			`$PGBOUNCER_PROG -c "$sql" | sed 's/^/$timestamp;/' '$FILE_REDIR $OUT_DIR/$METRICS_COMMANDS{$c}->{output}'`;
 			if ($? != 0) {
 				&dprint("LOG: $PGBOUNCER_PROG -c \"$sql\" | sed 's/^/$timestamp;/' $FILE_REDIR $OUT_DIR/$METRICS_COMMANDS{$c}->{output}\n");
 				&dprint("ERROR: pgbouncer pool query failure, $!\n");
