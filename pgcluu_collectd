@@ -1456,7 +1456,7 @@ sub create_sql_script
 \\o | cat > /dev/null
 $ALWAYS_SECURE_SEARCH_PATH_SQL
 -- $type
-\\o | cat $FILE_REDIR $OUT_DIR/$file_output
+\\o | cat $FILE_REDIR '$OUT_DIR/$file_output'
 COPY ($sql) TO STDOUT CSV DELIMITER ';';
 
 EOF
@@ -1467,7 +1467,7 @@ EOF
 \\o | cat > /dev/null
 $ALWAYS_SECURE_SEARCH_PATH_SQL
 -- $type
-\\o | cat $FILE_REDIR $OUT_DIR/$file_output
+\\o | cat $FILE_REDIR '$OUT_DIR/$file_output'
 BEGIN;
 CREATE TEMPORARY TABLE __pgcluu as $sql;
 COPY __pgcluu TO STDOUT CSV DELIMITER ';';
