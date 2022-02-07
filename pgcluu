@@ -209,6 +209,8 @@ our %sar_space_devices_stat = ();
 our %sar_util_devices_stat = ();
 our %sar_networks_stat = ();
 our %sar_neterror_stat = ();
+our %sar_tcputil_stat = ();
+our %sar_tcperror_stat = ();
 our %sar_commit_memory_stat = ();
 
 our @sar_to_be_stored = (
@@ -228,6 +230,8 @@ our @sar_to_be_stored = (
 	'sar_util_devices_stat',
 	'sar_networks_stat',
 	'sar_neterror_stat',
+	'sar_tcputil_stat',
+	'sar_tcperror_stat',
 	'sar_commit_memory_stat'
 );
 
@@ -1118,6 +1122,22 @@ my %SAR_GRAPH_INFOS = (
 		'y2label' => 'Milliseconds',
 		'legends' => ['await'],
 	},
+	'24' => {
+		'name' => 'network-utilization-tcp',
+		'title' => 'TCPv4 utilization',
+		'description' => 'TCPv4 network trafic (all interfaces)',
+		'ylabel' => 'Events/s',
+		'legends' => [ 'Initiated opens (active)', 'Passive opens (passive)', 'Received segments (iseg)', 'Sent segments (oseg)' ],
+		#              tcpActiveOpens           tcpPassiveOpens              tcpInSegs                tcpOutSegs
+	},
+	'25' => {
+		'name' => 'network-error-tcp',
+		'title' => 'TCPv4 errors',
+		'description' => 'TCPv4 network errors (all interfaces)',
+		'ylabel' => 'Errors/s',
+		'legends' => [ 'Failed attempts (atmptf)', 'Established & reset (estres)', 'Retransmitted segments (retrans)', 'Received in error (isegerr)', 'Reset flags (orsts)' ],
+		# (respectively:  tcpAttemptFails          tcpEstabResets               tcpRetransSegs              tcpInErrs                  tcpOutRsts
+	},
 );
 
 my %PIDSTAT_GRAPH_INFOS = (
@@ -1663,7 +1683,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 			%fulldata = ();
 			if ( defined $pidstat_file && -e $pidstat_file  && (($#binfiles == -1) || ($pidstat_file !~ /\.gz$/)) )
 			{
-				print "DEBUG: looking for pidstatt data file $pidstat_file\n" if ($DEBUG);
+				print "DEBUG: looking for pidstat data file $pidstat_file\n" if ($DEBUG);
 				foreach my $id (sort keys %PIDSTAT_GRAPH_INFOS) {
 					&compute_pidstatfile_stats($pidstat_file, $in_dir, %{$PIDSTAT_GRAPH_INFOS{$id}});
 				}
@@ -8817,6 +8837,15 @@ sub generate_html_menu
 };
 		}
 		$menu_str .= qq{
+		  <li id="menu-tcp" class="dropdown-submenu">
+		     <a href="#" tabindex="-1">TCP </a>
+		      <ul class="dropdown-menu">
+		      <li id="menu-network-utilization"><a href="network-utilization-tcp.html">TCP utilization</a></li>
+		      <li id="menu-network-error"><a href="network-error-tcp.html">TCP errors</a></li>
+		      </ul>
+		  </li>
+};
+		$menu_str .= qq{
 		    </ul>
 		  </li>
 } if ($#IFACE_LIST >= 0);
@@ -10057,10 +10086,104 @@ sub compute_network_error_report
 			$errors_stat{$n}{'coll/s'} =~ s/,$//;
 			$fh->print( &jqplot_linegraph_array($IDX++, 'network-error', $data_info, $n, $errors_stat{$n}{'rxerr/s'}, $errors_stat{$n}{'txerr/s'}, $errors_stat{$n}{'coll/s'}) );
 			$fh->print("</ul>\n");
-                        &html_footer($fh, $n);
-                        $fh->close;
-
+			&html_footer($fh, $n);
+			$fh->close;
 		}
+	}
+}
+
+# Network / TCP / Utilization
+sub compute_network_util_tcp_stat
+{
+    print "DEBUG: computing TCP utilization \n" if ($DEBUG);
+	for (my $i = 0; $i <= $#_; $i++) {
+        # 17:16:39     active/s passive/s    iseg/s    oseg/s
+        # 17:16:40         0.00      0.00      6.00      9.00
+		my @data = split(/;/, $_[$i]);
+		# print ("DEBUG: TCP util:  $data[2] - $data[3] - $data[4] - $data[5] - $data[6] \n") if ($DEBUG) ;
+		next if ($data[2] !~ /^\d+/);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
+
+		map { s/,/\./ } @data ;
+		$sar_tcputil_stat{$data[2]}{'active/s'}  = $data[3] || 0;
+		$sar_tcputil_stat{$data[2]}{'passive/s'}  = $data[4] || 0;
+		$sar_tcputil_stat{$data[2]}{'iseg/s'} = $data[5] || 0;
+		$sar_tcputil_stat{$data[2]}{'oseg/s'} = $data[6] || 0;
+	}
+}
+
+# Network / TCP / Utilization
+sub compute_network_util_tcp_report
+{
+	my $data_info = shift();
+	my $src_base = shift();
+	my %util_stat = ();
+    print "DEBUG: building TCP utilization report \n" if ($DEBUG);
+	foreach my $t (sort {$a <=> $b} keys %sar_tcputil_stat) {
+		$util_stat{'active/s'}  .= '[' . $t . ',' . $sar_tcputil_stat{$t}{'active/s'}  . '],';
+		$util_stat{'passive/s'} .= '[' . $t . ',' . $sar_tcputil_stat{$t}{'passive/s'} . '],';
+		$util_stat{'iseg/s'}    .= '[' . $t . ',' . $sar_tcputil_stat{$t}{'iseg/s'}    . '],';
+		$util_stat{'oseg/s'}    .= '[' . $t . ',' . $sar_tcputil_stat{$t}{'oseg/s'} . '],';
+	}
+	if (scalar keys %util_stat > 0) {
+			print "DEBUG: Writing data into $OUTPUT_DIR/$data_info->{name}.html \n" if ($DEBUG);
+			$util_stat{'active/s'} =~ s/,$//;
+			$util_stat{'passive/s'} =~ s/,$//;
+			$util_stat{'iseg/s'} =~ s/,$//;
+			$util_stat{'oseg/s'} =~ s/,$//;
+			print $FH &jqplot_linegraph_array($IDX++, 'network-error-tcp', $data_info, '', $util_stat{'active/s'}, $util_stat{'passive/s'}, $util_stat{'iseg/s'}, $util_stat{'oseg/s'});
+	}
+}
+
+# Network / TCP / Errrors
+sub compute_network_error_tcp_stat
+{
+    print "DEBUG: computing TCP errors \n" if ($DEBUG);
+	for (my $i = 0; $i <= $#_; $i++) {
+        # 12:27:43     atmptf/s  estres/s retrans/s isegerr/s   orsts/s
+        # 12:27:44         0,00      0,00      0,00      0,00      0,00
+		my @data = split(/;/, $_[$i]);
+		# print ("DEBUG: TCP error:  $data[2] - $data[3] - $data[4] - $data[5] - $data[6]  - $data[6] \n") if ($DEBUG) ;
+		next if ($data[2] !~ /^\d+/);
+
+		# Skip unwanted lines
+		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
+		next if ($END   && ($data[2] > $END_STAT));
+
+		map { s/,/\./ } @data ;
+		$sar_tcperror_stat{$data[2]}{'atmptf/s'}  = $data[3] || 0;
+		$sar_tcperror_stat{$data[2]}{'estres/s'}  = $data[4] || 0;
+		$sar_tcperror_stat{$data[2]}{'retrans/s'} = $data[5] || 0;
+		$sar_tcperror_stat{$data[2]}{'isegerr/s'} = $data[6] || 0;
+		$sar_tcperror_stat{$data[2]}{'orsts/s'}   = $data[7] || 0;
+	}
+}
+
+# Network / TCP / Errrors
+sub compute_network_error_tcp_report
+{
+	my $data_info = shift();
+	my $src_base = shift();
+	my %errors_stat = ();
+    print "DEBUG: building TCP errors report \n" if ($DEBUG);
+	foreach my $t (sort {$a <=> $b} keys %sar_tcperror_stat) {
+		$errors_stat{'atmptf/s'}  .= '[' . $t . ',' . $sar_tcperror_stat{$t}{'atmptf/s'}  . '],';
+		$errors_stat{'estres/s'}  .= '[' . $t . ',' . $sar_tcperror_stat{$t}{'estres/s'}  . '],';
+		$errors_stat{'retrans/s'} .= '[' . $t . ',' . $sar_tcperror_stat{$t}{'retrans/s'} . '],';
+		$errors_stat{'isegerr/s'} .= '[' . $t . ',' . $sar_tcperror_stat{$t}{'isegerr/s'} . '],';
+		$errors_stat{'orsts/s'}   .= '[' . $t . ',' . $sar_tcperror_stat{$t}{'orsts/s'}   . '],';
+	}
+	if (scalar keys %errors_stat > 0) {
+			print "DEBUG: Writing data into $OUTPUT_DIR/$data_info->{name}.html \n" if ($DEBUG);
+			$errors_stat{'atmptf/s'} =~ s/,$//;
+			$errors_stat{'estres/s'} =~ s/,$//;
+			$errors_stat{'retrans/s'} =~ s/,$//;
+			$errors_stat{'isegerr/s'} =~ s/,$//;
+			$errors_stat{'orsts/s'} =~ s/,$//;
+			print $FH &jqplot_linegraph_array($IDX++, 'network-error-tcp', $data_info, '', $errors_stat{'atmptf/s'}, $errors_stat{'estres/s'}, $errors_stat{'retrans/s'}, $errors_stat{'isegerr/s'}, $errors_stat{'orsts/s'} );
 	}
 }
 
@@ -10436,6 +10559,44 @@ sub compute_sarstat_stats
 		# Compute network errors statistics
 		&compute_network_error_stat(@content);
 	}
+
+	####
+	# Get TCP utilization
+	####
+	if ($data_info{name} eq 'network-utilization-tcp') {
+		my $command = "$SADF_PROG -t -P ALL -d $file -- -n TCP";
+		print "DEBUG: TCP utilization : running $command'\n" if ($DEBUG);
+		# Load data from file
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <$fh>;
+		close($fh);
+		chomp(@content);
+
+		# Compute network errors statistics
+		&compute_network_util_tcp_stat(@content);
+	}
+
+    ####
+	# Get TCP errors
+	####
+	if ($data_info{name} eq 'network-error-tcp') {
+		my $command = "$SADF_PROG -t -P ALL -d $file -- -n ETCP";
+		print "DEBUG: TCP errors : running $command'\n" if ($DEBUG);
+		# Load data from file
+		my $fh = IO::File->new("$command", '-|');
+		if (defined $fh) {
+			die "FATAL: can't read output from command ($command): $!\n";
+		}
+		my @content = <$fh>;
+		close($fh);
+		chomp(@content);
+
+		# Compute network errors statistics
+		&compute_network_error_tcp_stat(@content);
+	}
 }
 
 sub find_report_type
@@ -10495,8 +10656,10 @@ sub find_report_type
 	} elsif ($data =~ m#runq-sz\s+#) {
 		$type = 'load';
 	# New in 8.1.7
-	} elsif ($data =~ m#active\/s\s+#) {
+	} elsif ($data =~ m#active\/s\s+#) {   # sar -n TCP
 		$type = 'tcp';
+	} elsif ($data =~ m#atmptf\/s\s+#) {   # sar -n ETCP
+		$type = 'tcperr';
 	# Since 11.1.4
 	} elsif ($data =~ m#\%ufsused#) {
 		$type = 'space';
@@ -10888,6 +11051,8 @@ sub compute_sarfile_stats
 {
 	my ($file, $in_dir, %data_info) = @_;
 
+    print "DEBUG: Computing sarfile stats: $data_info{name} \n" if ($DEBUG);
+
 	$SAR_UPPER_11_5_6 = 0;
 
 	# Load sar statistics from file if not already done
@@ -11088,11 +11253,31 @@ sub compute_sarfile_stats
 		&compute_network_error_stat(@{$fulldata{err}});
 	}
 
+	####
+	# Set network TCP errors
+	####
+	if ($data_info{name} eq 'network-utilization-tcp')
+	{
+		# Compute network error statistics
+		&compute_network_util_tcp_stat(@{$fulldata{tcp}});
+	}
+
+	####
+	# Set network TCP errors
+	####
+	if ($data_info{name} eq 'network-error-tcp')
+	{
+		# Compute network error statistics
+		&compute_network_error_tcp_stat(@{$fulldata{tcperr}});
+	}
+
 }
 
 sub compute_sar_graph
 {
 	my ($src_base, %data_info) = @_;
+
+    print "DEBUG: Computing sar data: $data_info{name} \n" if ($DEBUG);
 
 	if (!grep(/^$data_info{name}$/,
 			'system-await', 'system-device',
@@ -11101,6 +11286,7 @@ sub compute_sar_graph
 			'network-utilization', 'network-error'))
 	{
 		# Open global filehandle
+		print ("DEBUG: opening $data_info{name} \n") if ($DEBUG) ;
 		$FH = IO::File->new("$OUTPUT_DIR/$data_info{name}.html", 'w');
 		if (not defined $FH) {
 			die "FATAL: can't write to $OUTPUT_DIR/$data_info{name}.html, $!\n";
@@ -11313,6 +11499,24 @@ sub compute_sar_graph
 	{
 		# Compute graphs for network errors statistics
 		&compute_network_error_report(\%data_info, $src_base);
+	}
+
+	####
+	# Show TCP utilization
+	####
+	if ($data_info{name} eq 'network-utilization-tcp')
+	{
+		# Compute graphs for network errors statistics
+		&compute_network_util_tcp_report(\%data_info, $src_base);
+	}
+
+	####
+	# Show TCP errors
+	####
+	if ($data_info{name} eq 'network-error-tcp')
+	{
+		# Compute graphs for network errors statistics
+		&compute_network_error_tcp_report(\%data_info, $src_base);
 	}
 
 	if (!grep(/^$data_info{name}$/, 'system-await', 'system-srvtime', 'system-device', 'system-tpsdevice', 'system-cpudevice', 'network-utilization', 'network-error'))
