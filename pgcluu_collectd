@@ -913,11 +913,11 @@ while (1)
 		# year overlap.
 		$year--;
 		if (-d "$OUTPUT_DIR/$year") {
-			`find $OUTPUT_DIR/$year/ -name '*' -mtime +$RETENTION -delete`;
+			`find '$OUTPUT_DIR/$year/' -name '*' -mtime +$RETENTION -delete`;
 		}
 		$year++;
 		if (-d "$OUTPUT_DIR/$year") {
-			`find $OUTPUT_DIR/$year/ -name '*' -mtime +$RETENTION -delete`;
+			`find '$OUTPUT_DIR/$year/' -name '*' -mtime +$RETENTION -delete`;
 		}
 	}
 
@@ -957,7 +957,7 @@ while (1)
 		# Lookup if output dir size is upper than limit
 		if ($MAX_SIZE)
 		{
-			my $lsize = `du -s $OUTPUT_DIR`;
+			my $lsize = `du -s '$OUTPUT_DIR'`;
 			chomp($lsize);
 			if ($lsize > $MAX_SIZE) {
 				unlink_pid_and_exit("LOG: max size limit reach, terminating.", 0);
@@ -997,11 +997,11 @@ if ($CAPTURE) {
 	chdir($CAPTURE_DIR);
 	# Then create a tarball before removing the output directory
 	print "INFO: creating archive $CAPTURE_DIR/pgcluu_capture.tar.gz of the capture directory $CAPTURE_DIR/$OUTPUT_DIR.\n";
-	`$TAR_PROG pgcluu_capture.tar.gz $OUTPUT_DIR`;
+	`$TAR_PROG pgcluu_capture.tar.gz '$OUTPUT_DIR'`;
 	# Removing temporary directory and ensure that we are not removing anything else
 	print "INFO: removing capture temporary directory: $CAPTURE_DIR/$OUTPUT_DIR\n";
 	if ($OUTPUT_DIR eq 'pgcluu_capture') {
-		`rm -rf $OUTPUT_DIR`;
+		`rm -rf '$OUTPUT_DIR'`;
 	}
 }
 
