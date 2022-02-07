@@ -1084,9 +1084,9 @@ sub collect_metrics
 				rename ("$OUT_DIR/$filename","$OUT_DIR/$filename.tmpold");
 			}
 			if ($sshcmd) {
-				`$sshcmd "$CAT_PROG $f" >$outdir/$filename 2>/dev/null`;
+				`$sshcmd "$CAT_PROG $f" >"$outdir/$filename" 2>/dev/null`;
 			} else {
-				`$CAT_PROG $f >$outdir/$filename 2>/dev/null`;
+				`$CAT_PROG $f >"$outdir/$filename" 2>/dev/null`;
 			}
 			if (-z "$OUT_DIR/$filename") {
 				# remove file when empty
