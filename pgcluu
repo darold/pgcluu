@@ -1595,7 +1595,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 			else
 			{
 				# Try to limit report generation to stats that exists in memory.
-				# The storage variable name are the same than the keys in DB_GRAPH_INFOS
+				# The storage variable names are the same than the keys in DB_GRAPH_INFOS
 				# minus some transformation.
 				foreach my $k (sort {$a cmp $b} keys %DB_GRAPH_INFOS)
 				{
@@ -10063,8 +10063,8 @@ sub compute_network_error_report
 	my $src_base = shift();
 
 	my %errors_stat = ();
-	foreach my $t (sort {$a <=> $b} keys %sar_networks_stat) {
-		foreach my $dev (keys %{$sar_networks_stat{$t}}) {
+	foreach my $t (sort {$a <=> $b} keys %sar_neterror_stat) {
+		foreach my $dev (keys %{$sar_neterror_stat{$t}}) {
 			$errors_stat{$dev}{'rxerr/s'} .= '[' . $t . ',' . $sar_neterror_stat{$t}{$dev}{'rxerr/s'} . '],';
 			$errors_stat{$dev}{'txerr/s'} .= '[' . $t . ',' . $sar_neterror_stat{$t}{$dev}{'txerr/s'} . '],';
 			$errors_stat{$dev}{'coll/s'}  .= '[' . $t . ',' . $sar_neterror_stat{$t}{$dev}{'coll/s'} . '],';
@@ -10074,7 +10074,7 @@ sub compute_network_error_report
 		foreach my $n (sort { $a cmp $b } keys %errors_stat) {
 			push(@IFACE_LIST, $n) if (!grep(/^$n$/, @IFACE_LIST));
 
-			# Open a filehandle for each database
+			# Open a filehandle for each interface
 			my $fh = IO::File->new("$OUTPUT_DIR/$data_info->{name}-$n.html", 'w');
 			if (not defined $fh) {
 				die "FATAL: can't write to $OUTPUT_DIR/$data_info->{name}-$n.html, $!\n";
