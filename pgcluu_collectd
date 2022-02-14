@@ -2329,13 +2329,14 @@ sub dump_pgstatstatements
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), r.rolname, d.datname, " .
-		"regexp_replace(regexp_replace(query, E'[ \\n]+', ' ', 'g'), E';', '#SMCLN#', 'g'), calls, total_time, rows, " .
+		"regexp_replace(regexp_replace(query, E'[ \\n]+', ' ', 'g'), E';', '#SMCLN#', 'g'), calls, %s, rows, " .
 		"shared_blks_hit, shared_blks_read, shared_blks_written, " .
 		"local_blks_hit, local_blks_read, local_blks_written, " .
 		"temp_blks_read, temp_blks_written " .
 		"FROM $DB_INFO{pg_stat_statement} q, pg_database d, pg_roles r " .
 		"WHERE q.userid=r.oid and q.dbid=d.oid " .
-		"ORDER BY r.rolname, d.datname"
+		"ORDER BY r.rolname, d.datname",
+		&backend_minimum_version(13, 0) ? "(total_plan_time + total_exec_time) as total_time " : "total_time"
 	);
 
 	return $sql;
