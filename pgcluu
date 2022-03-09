@@ -1329,7 +1329,7 @@ if (!$CACHE)
 		foreach my $y (sort { $a <=> $b } @years)
 		{
 			print "DEBUG: looking for obsolete directories under $OUTPUT_DIR/$y/\n" if ($DEBUG);
-			`find $OUTPUT_DIR/$y/ -name '*' -mtime +$RETENTION -delete`;
+			`find '$OUTPUT_DIR/$y/' -name '*' -mtime +$RETENTION -delete`;
 		}
 	}
 
@@ -1406,7 +1406,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 	} else {
 		$OUTPUT_DIR = "$ORIG_OUTPUT_DIR";
 	}
-	
+
 	# Check if this directory have already been processed
 	if (-e "$OUTPUT_DIR/done")
 	{
@@ -1455,7 +1455,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 		# Create output subdirectories if not exists yet
 		if (!$CACHE && !-e "$OUTPUT_DIR")
 		{
-			my $ret = `mkdir -p $OUTPUT_DIR 2>&1`;
+			my $ret = `mkdir -p '$OUTPUT_DIR' 2>&1`;
 			if ($ret) {
 				die "FATAL: $ret\n";
 			}
@@ -1548,7 +1548,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 			# if we have binary files and gzipped files, binary files contains all stats
 			elsif (($#binfiles == -1) && -e "$in_dir/$k.gz" && !-z "$in_dir/$k.gz")
 			{
-				&compute_postgresql_stat($in_dir, "$k.gz", $src_base, %{$DB_GRAPH_INFOS{$k}}); 
+				&compute_postgresql_stat($in_dir, "$k.gz", $src_base, %{$DB_GRAPH_INFOS{$k}});
 				push(@statistics_build, $k) if (!grep(/^$k$/, @statistics_build));
 			}
 			# Files use 'all' instead of 'user' with pgcluu_collectd --stat-type option
@@ -1589,7 +1589,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 			if ($#statistics_build > 0)
 			{
 				foreach my $k (@statistics_build) {
-					&compute_postgresql_report($k, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
+					&compute_postgresql_report($k, $src_base, %{$DB_GRAPH_INFOS{$k}});
 				}
 			}
 			else
@@ -1617,9 +1617,9 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 					{
 						my $f = $k;
 						$f =~ s/_all_/_user_/;
-						&compute_postgresql_report($f, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
+						&compute_postgresql_report($f, $src_base, %{$DB_GRAPH_INFOS{$k}});
 					} else {
-						&compute_postgresql_report($k, $src_base, %{$DB_GRAPH_INFOS{$k}}); 
+						&compute_postgresql_report($k, $src_base, %{$DB_GRAPH_INFOS{$k}});
 					}
 				}
 			}
@@ -2688,7 +2688,7 @@ sub pg_stat_database_report
 			$fhcluster->close();
 		}
 	}
-	
+
 	foreach my $id (sort {$a <=> $b} keys %data_info)
 	{
 		my %data = ();
@@ -5152,7 +5152,7 @@ sub pgbouncer_ini_report
 	&show_diff($fhcluster, %all_pgbouncer_ini_diff);
 
 	%all_pgbouncer_ini_diff = ();
-	
+
 	$fhcluster->close();
 }
 
@@ -5412,7 +5412,7 @@ sub pg_class_size_report
 			$fhtable->close;
 		}
 	}
-	
+
 	%all_class_size = ();
 }
 
@@ -5991,7 +5991,7 @@ sub postgresql_conf_report
 	&show_diff($fhcluster, %all_postgresql_conf_diff);
 
 	%all_postgresql_conf_diff = ();
-	
+
 	$fhcluster->close();
 }
 
@@ -6061,7 +6061,7 @@ sub recovery_conf_report
 	&show_diff($fhcluster, %all_recovery_conf_diff);
 
 	%all_recovery_conf_diff = ();
-	
+
 	$fhcluster->close();
 }
 
@@ -6131,7 +6131,7 @@ sub postgresql_auto_conf_report
 	&show_diff($fhcluster, %all_postgresql_auto_conf_diff);
 
 	%all_postgresql_auto_conf_diff = ();
-	
+
 	$fhcluster->close();
 }
 
@@ -6203,7 +6203,7 @@ sub pg_hba_conf_report
 	&show_diff($fhcluster, %all_pg_hba_conf_diff);
 
 	%all_pg_hba_conf_diff = ();
-	
+
 	$fhcluster->close();
 }
 
@@ -6274,7 +6274,7 @@ sub pg_ident_conf_report
 	&show_diff($fhcluster, %all_pg_ident_conf_diff);
 
 	%all_pg_ident_conf_diff = ();
-	
+
 	$fhcluster->close();
 }
 
@@ -6384,7 +6384,7 @@ sub pg_settings_report
 	&show_diff($fhcluster, %all_settings_diff);
 
 	%all_settings_diff = ();
-	
+
 	$fhcluster->close();
 }
 
@@ -6548,7 +6548,7 @@ sub pg_db_role_setting_report
 	&show_diff($fhcluster, %all_db_role_setting_diff);
 
 	%all_db_role_setting_diff = ();
-	
+
 	$fhcluster->close();
 }
 
@@ -7900,7 +7900,7 @@ sub html_footer
   <!-- Modal -->
   <div class="modal fade" id="pgcluuModal" role="dialog">
     <div class="modal-dialog">
-    
+
       <!-- Modal content-->
       <div class="modal-content">
         <div class="modal-header">
@@ -7914,10 +7914,10 @@ sub html_footer
           <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
         </div>
       </div>
-      
+
     </div>
   </div>
-                                                                            
+
     </div><!--/.container-->
   </body>
 </html>
@@ -8979,7 +8979,7 @@ sub compute_cpu_report
 
 			# We only process values from total CPU
 			next if ($cpu ne 'all');
-	
+
 			if (!exists $OVERALL_STATS{'system'}{'cpu'} || ($OVERALL_STATS{'system'}{'cpu'}[1] < $sar_cpu_stat{$t}{$cpu}{total})) {
 				@{$OVERALL_STATS{'system'}{'cpu'}} = ($t, $sar_cpu_stat{$t}{$cpu}{total});
 			}
@@ -9806,7 +9806,7 @@ sub compute_rw_device_report
 	my %devices_stat = ();
 	foreach my $t (sort {$a <=> $b} keys %sar_rw_devices_stat) {
 		foreach my $dev (keys %{$sar_rw_devices_stat{$t}}) {
-			if ($data_info->{name} eq 'system-device') { 
+			if ($data_info->{name} eq 'system-device') {
 				$OVERALL_STATS{'system'}{'devices'}{$dev}{read} += $sar_rw_devices_stat{$t}{$dev}{'rd_sec/s'};
 				$OVERALL_STATS{'system'}{'devices'}{$dev}{write} += $sar_rw_devices_stat{$t}{$dev}{'wr_sec/s'};
 				$devices_stat{$dev}{'rd_sec/s'} .= '[' . $t . ',' . $sar_rw_devices_stat{$t}{$dev}{'rd_sec/s'} . '],';
@@ -9831,7 +9831,7 @@ sub compute_rw_device_report
 			}
 			&html_header($fh, $src_base);
 			$fh->print("<ul id=\"slides\">\n");
-			if ($data_info->{name} eq 'system-device') { 
+			if ($data_info->{name} eq 'system-device') {
 				$devices_stat{$n}{'rd_sec/s'} =~ s/,$//;
 				$devices_stat{$n}{'wr_sec/s'} =~ s/,$//;
 				$fh->print( &jqplot_linegraph_array($IDX++, 'device-read_write', $data_info, $n, $devices_stat{$n}{'rd_sec/s'}, $devices_stat{$n}{'wr_sec/s'}) );
@@ -9879,7 +9879,7 @@ sub compute_space_device_report
 	my %devices_stat = ();
 	foreach my $t (sort {$a <=> $b} keys %sar_space_devices_stat) {
 		foreach my $dev (keys %{$sar_space_devices_stat{$t}}) {
-			if ($data_info->{name} eq 'system-space') { 
+			if ($data_info->{name} eq 'system-space') {
 				$OVERALL_STATS{'system'}{'space'}{$dev}{'fsused'} = $sar_space_devices_stat{$t}{$dev}{'%fsused'} if (!exists $OVERALL_STATS{'system'}{'space'}{$dev}{'fsused'} || $sar_space_devices_stat{$t}{$dev}{'%fsused'} > $OVERALL_STATS{'system'}{'space'}{$dev}{'fsused'});
 				$OVERALL_STATS{'system'}{'space'}{$dev}{'iused'} = $sar_space_devices_stat{$t}{$dev}{'%iused'} if (!exists $OVERALL_STATS{'system'}{'space'}{$dev}{'iused'} || $sar_space_devices_stat{$t}{$dev}{'%iused'} > $OVERALL_STATS{'system'}{'space'}{$dev}{'iused'});
 				$devices_stat{$dev}{'%fsused'} .= '[' . $t . ',' . $sar_space_devices_stat{$t}{$dev}{'%fsused'} . '],';
@@ -9901,7 +9901,7 @@ sub compute_space_device_report
 			}
 			&html_header($fh, $src_base);
 			$fh->print("<ul id=\"slides\">\n");
-			if ($data_info->{name} eq 'system-space') { 
+			if ($data_info->{name} eq 'system-space') {
 				$devices_stat{$n}{'%fsused'} =~ s/,$//;
 				$devices_stat{$n}{'%iused'} =~ s/,$//;
 				$fh->print( &jqplot_linegraph_array($IDX++, 'device-space', $data_info, $n, $devices_stat{$n}{'%fsused'}, $devices_stat{$n}{'%iused'}) );
@@ -10015,7 +10015,7 @@ sub compute_network_report
 		}
 	}
 	%sar_networks_stat = ();
-	
+
 	if (scalar keys %networks_stat > 0) {
 		foreach my $n (sort { $a cmp $b } keys %networks_stat) {
 
@@ -11692,7 +11692,7 @@ sub convert_sar_time
 		} elsif ($am_pm && ($am_pm eq 'PM')) {
 			$h += 12 if ($h < 12);
 		}
-			
+
 		my $time = ($h*3600)+($m*60)+$s;
 
 		my $tz = ((0-$TIMEZONE)*3600);
@@ -11733,7 +11733,7 @@ sub convert_pidstat_time
 		} elsif ($am_pm && ($am_pm eq 'PM')) {
 			$h += 12 if ($h < 12);
 		}
-			
+
 		my $time = ($h*3600)+($m*60)+$s;
 
 		my $tz = ((0-$TIMEZONE)*3600);
@@ -12268,7 +12268,7 @@ sub clear_stats
 	%sysinfo = ();
 	foreach my $name (@sar_to_be_stored) {
 		%{$name} = ();
-	}		
+	}
 
 }
 
@@ -12656,7 +12656,7 @@ sub build_incremental_index
 sub IsLeapYear
 {
 	return ((($_[0] & 3) == 0) && (($_[0] % 100 != 0) || ($_[0] % 400 == 0)));
-} 
+}
 
 sub get_calendar
 {
