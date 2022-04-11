@@ -2665,7 +2665,8 @@ sub dump_redundantindexes
 		") AS tmp " .
 		"WHERE (colindexbackward LIKE (colindex || '+%') OR colindexbackward = colindex) " .
 		"  AND (is_unique_backward <> is_unique OR (not is_unique_backward AND NOT is_unique)) " .
-		"  AND NOT is_unique";
+		"  AND NOT is_unique AND " .
+		"  coalesce(regexp_match(pg_get_indexdef(indexrelid), ' (WHERE .*)')::text, 'A') = coalesce(regexp_match(pg_get_indexdef(index_backward), ' (WHERE .*)')::text, 'A')";
 
 	return $sql;
 }
