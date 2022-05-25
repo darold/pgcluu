@@ -2659,7 +2659,7 @@ sub dump_unusedindexes
 sub dump_redundantindexes
 {
 
-	my $sql =
+	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), current_database(), " .
 		"pg_get_indexdef(indexrelid) AS contained, " .
 		"pg_get_indexdef(index_backward) AS container " .
@@ -2678,8 +2678,11 @@ sub dump_redundantindexes
 		") AS tmp " .
 		"WHERE (colindexbackward LIKE (colindex || '+%') OR colindexbackward = colindex) " .
 		"  AND (is_unique_backward <> is_unique OR (not is_unique_backward AND NOT is_unique)) " .
-		"  AND NOT is_unique AND " .
-		"  coalesce(regexp_match(pg_get_indexdef(indexrelid), ' (WHERE .*)')::text, 'A') = coalesce(regexp_match(pg_get_indexdef(index_backward), ' (WHERE .*)')::text, 'A')";
+		"  AND NOT is_unique AND %s",
+		&backend_minimum_version(10,0) ? 
+		"  coalesce(regexp_match(pg_get_indexdef(indexrelid), ' (WHERE .*)')::text, 'A') = coalesce(regexp_match(pg_get_indexdef(index_backward), ' (WHERE .*)')::text, 'A')" : 
+		"  coalesce((SELECT (regexp_matches(pg_get_indexdef(indexrelid), ' (WHERE .*)'))[1])::text, 'A') = coalesce((SELECT (regexp_matches(pg_get_indexdef(index_backward), ' (WHERE .*)'))[1])::text, 'A')"
+	);
 
 	return $sql;
 }
