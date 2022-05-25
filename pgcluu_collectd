@@ -412,7 +412,7 @@ my $result = GetOptions(
 	"R|rotate-hourly!"=> \$H_ROTATE,
 	"s|sar=s"        => \$SAR_PROG,
 	"S|disable-sar!" => \$DISABLE_SAR,
-	"t|lock-timeout" => \$LOCK_TIMEOUT,
+	"t|lock-timeout=i" => \$LOCK_TIMEOUT,
 	"T|no-tablespace!"=> \$NOTABLESPACE,
 	"U|dbuser=s"     => \$DBUSER,
 	"v|verbose!"     => \$DEBUG,
