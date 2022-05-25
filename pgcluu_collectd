@@ -759,9 +759,11 @@ if (not defined $fhp) {
 print $fhp $$;
 close($fhp);
 
-# Generate the psql command
-$PSQL_PROG .= " -XAtq -F';' -f - ";
+# Generate the psql commands
+$PSQL_PROG .= " -XAtq -F';' ";
 my $PGBOUNCER_PROG = $PSQL_PROG . ' ' . $PGBOUNCER_ARGS . ' pgbouncer';
+$PSQL_PROG .= " -f - ";
+
 
 if ($NO_DATABASE) {
 	$PSQL_PROG = '';
