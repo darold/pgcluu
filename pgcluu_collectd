@@ -1204,7 +1204,16 @@ sub collect_metrics
 				}
 				die "FATAL: no SQL with metric command pgbouncer_stats ($sql).\n" if (!$sql || $@);
 			}
+
+			# Remove lock_timeout from PGOPTIONS environment variable
+			# when querying pgbouncer, it is restored after the command
+			my $tmp_pgopt = $ENV{PGOPTIONS};
+			$tmp_pgopt =~ s/ -c lock_timeout=\d+s//;
+			$ENV{PGOPTIONS} = $tmp_pgopt;
+			# Get statistics from pgbouncer
 			`$PGBOUNCER_PROG -c "$sql" | sed 's/^/$timestamp;/' $FILE_REDIR '$OUT_DIR/$METRICS_COMMANDS{$c}->{output}'`;
+			# Restore PGOPTIONS environment variable
+			$ENV{PGOPTIONS} = "$ENV{PGOPTIONS} -c lock_timeout=${LOCK_TIMEOUT}s";
 			if ($? != 0) {
 				&dprint("LOG: $PGBOUNCER_PROG -c \"$sql\" | sed 's/^/$timestamp;/' $FILE_REDIR '$OUT_DIR/$METRICS_COMMANDS{$c}->{output}'\n");
 				&dprint("ERROR: pgbouncer pool query failure, $!\n");
