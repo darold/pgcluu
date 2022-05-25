@@ -1763,6 +1763,12 @@ sub is_superuser
 
 	$DB_INFO{is_superuser} = `echo "SELECT 1 FROM pg_user WHERE usename='$usr' AND usesuper" | $PSQL_PROG`;
 	chomp($DB_INFO{is_superuser});
+	# If not super user look if the user has pg_monitor role
+	if (!$DB_INFO{is_superuser} && &backend_minimum_version(10, 0))
+	{
+		$DB_INFO{is_superuser} = `echo "SELECT 1 from pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles r ON (m.member = r.oid) WHERE m.member='$usr'::regrole AND m.roleid = 'pg_monitor'::regrole" | $PSQL_PROG`;
+		chomp($DB_INFO{is_superuser});
+	}
 
 	return $DB_INFO{is_superuser};
 
@@ -2430,7 +2436,7 @@ sub dump_pgdatabase_size
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), datid, datname, pg_database_size(datid) AS size " .
-		"FROM pg_stat_database " .
+		"FROM pg_stat_database WHERE datid > 0" .
 		"ORDER BY datname"
 	);
 
