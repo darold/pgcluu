@@ -1,3 +1,45 @@
+2022-06-02 - Version 3.3
+
+This release is a maintenance release that fixes issues reported since
+previous release.  It also adds new reports and features.
+
+  - Add TCP utilization and TCP errors reports, from sar -nTCP,ETCP.
+  - Add a comment in the suggested index if it could be redundant
+    with existing ones.
+  - Add support to run pgcluu_collect as user with the pg_monitor role.
+
+Here is the full list of changes since previous release.
+
+  - Add support to run pgcluu_collect as user with the pg_monitor role.
+    Thanks to Nicolas Gollet for the report.
+  - Fix redundant index query to work with PG < 10, regexp_match() must be
+    replaced by regexp_matches() with some additional rewrite.
+  - Replace call to pg_ls_dir by pg_ls_waldir to be able to use pg_monitor
+    privilege starting from PG10. Thanks to Nicolas Gollet for the report.
+  - Fix impossibility to use --lock-timeout. Thanks to Christophe Courtois
+    for the report.
+  - Remove lock_timeout from internally set of PGOPTIONS when querying
+    pgbouncer, the old value is restored after. Thanks to Christophe Courtois
+    for the report.
+  - Fix empty pgbouncer statistics file when running in interactive mode.
+    Thanks to Christophe Courtois for the report.
+  - Add a comment in the CREATE INDEX when the suggested index may be redundant
+    with existing ones. Thanks to Christophe Courtois for the patch.
+  - Fix false report of redundant index when the WHERE clause is different.
+    Thanks to Guillaume Lelarge for the report.
+  - Fix in pgcluu for OUTPUT_DIR always be quoted, especially if their value
+    may contain a white space or separator character. Thanks to Nicolas Gollet
+    for the patch.
+  - Fix network errors disabled. Thanks to Christophe Courtois for the patch.
+  - Add TCP utilization and TCP errors reports, from sar -nTCP,ETCP. Thanks to
+    Christophe Courtois for the patch.
+  - Fix pgbouncer command. Thanks to Nicolas Gollet for the patch.
+  - Modification of the query on pg_stat_statement so that under PostgreSQL 13
+    and higher total_time = total_plan_time + total_execution_time. Thanks to
+    Nicolas Gollet for the patch.
+  - Fix STATS_REPORT_RETENTION directory in config file. Don't prepend DESTDIR
+    to paths in config file. Thanks to Christoph Berg for the patch.
+
 2021-09-30 - Version 3.2
 
 This release is a maintenance release that fixes issues reported since
