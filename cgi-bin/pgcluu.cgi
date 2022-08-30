@@ -11953,6 +11953,7 @@ sub load_pidstat_binary
 
 	foreach my $name (@pidstat_to_be_stored)
 	{
+		next if (!-e "$in_dir/$name.bin");
 		my $lfh = IO::File->new("$in_dir/$name.bin", 'r');
 		if (not defined $lfh) {
 			die "FATAL: can't read file $in_dir/$name.bin, $!\n";
