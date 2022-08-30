@@ -11787,25 +11787,6 @@ sub clear_stats
 
 }
 
-# Dump relevant memory to file for incremental use
-sub dump_pg_binary
-{
-        my ($input_dir, $outfile) = @_;
-
-	foreach my $name (@pg_to_be_stored) {
-		my $lfh = new IO::File ">$input_dir/$name.bin";
-		if (not defined $lfh) {
-			die "FATAL: can't write to $input_dir/$name.bin, $!\n";
-		}
-		if (grep(/^$name$/, 'global_databases', 'global_tbspnames', )) {
-			store_fd({ $name => \@{$name} }, $lfh) || die ("Couldn't save binary data to \"$input_dir/$name.bin\"!\n");
-		} else {
-			store_fd({ $name => \%{$name} }, $lfh) || die ("Couldn't save binary data to \"$input_dir/$name.bin\"!\n");
-		}
-		$lfh->close;
-	}
-}
-
 # Load statistics from pg cache into memory
 sub load_pg_binary
 {
@@ -11974,7 +11955,7 @@ sub load_pidstat_binary
 	{
 		my $lfh = IO::File->new("$in_dir/$name.bin", 'r');
 		if (not defined $lfh) {
-			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
+			die "FATAL: can't read file $in_dir/$name.bin, $!\n";
 		}
 		my %stats = %{ fd_retrieve($lfh) };
 		$lfh->close();
