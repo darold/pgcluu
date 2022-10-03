@@ -880,9 +880,11 @@ while (1)
 		mkdir("$year/$mon/$mday");
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday";
+		dprint ("Created OUT_DIR: $OUT_DIR \n") ;
 	} elsif ($D_ROTATE) {
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday";
+		dprint ("OUT_DIR is: $OUT_DIR \n") ;
         }
 
 	# Compress previous hourly directory if required
@@ -901,11 +903,14 @@ while (1)
 		mkdir("$year/$mon/$mday/$hour");
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday/$hour";
+		dprint ("Created OUT_DIR: $OUT_DIR \n") ;
 	} elsif ($H_ROTATE) {
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday/$hour";
-	} else {
+		dprint ("OUT_DIR is: $OUT_DIR \n") ;
+	} elsif (!$D_ROTATE) {
 		$OUT_DIR = $OUTPUT_DIR;
+		dprint ("OUT_DIR is: $OUT_DIR \n") ;
         }
 
 	# If we have a retention limit remove everything older
