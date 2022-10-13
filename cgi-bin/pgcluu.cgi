@@ -1584,15 +1584,20 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 			# Then build sar statistics from data file starting at begining
 			# when there's no cache file or starting at last cache offset.
 			# In cache/binary mode we can not process sadc binary data file
-			if (($#binfiles == -1) && -f "$sadc_file") {
+			if (defined $sadc_file && -f "$sadc_file" && $#binfiles == -1)
+			{
 				print STDERR "DEBUG: looking for sadc binary data file $sadc_file\n" if ($DEBUG);
-				foreach my $id (sort keys %SAR_GRAPH_INFOS) {
+				foreach my $id (sort keys %SAR_GRAPH_INFOS)
+				{
 					next if (($ACTION ne 'home') && ($REAL_ACTION ne $SAR_GRAPH_INFOS{$id}->{name}));
 					&compute_sarstat_stats($sadc_file, %{$SAR_GRAPH_INFOS{$id}});
 				}
 			# Read sar file from the start of the file or from the offset stored a previous
 			# run of the cache. Gzipped files do not need to be read again with binary files
-			} elsif ( -f "$sar_file" && (($#binfiles == -1) || ($sar_file !~ /\.gz$/)) ) {
+			}
+			elsif ( defined $sar_file && -f "$sar_file"
+				&& ($#binfiles == -1 || $sar_file !~ /\.gz$/) )
+			{
 
 				# Load sar statistics from file if not already done
 				my %fulldata = &load_sarfile_stats($sar_file);
@@ -1705,7 +1710,9 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 		{
 			# Then build pidstat statistics from data file starting at begining
 			# when there's no cache file or starting at last cache offset.
-			if ( -f "$pidstat_file" && (($#binfiles == -1) || ($pidstat_file !~ /\.gz$/)) ) {
+			if ( defined $pidstat_file && -f "$pidstat_file"
+				&& (($#binfiles == -1) || ($pidstat_file !~ /\.gz$/)) )
+			{
 
 				print STDERR "DEBUG: looking for pidstatt data file $pidstat_file\n" if ($DEBUG);
 				%fullpidstatdata = &load_sarfile_stats($sar_file);
@@ -11787,25 +11794,6 @@ sub clear_stats
 
 }
 
-# Dump relevant memory to file for incremental use
-sub dump_pg_binary
-{
-        my ($input_dir, $outfile) = @_;
-
-	foreach my $name (@pg_to_be_stored) {
-		my $lfh = new IO::File ">$input_dir/$name.bin";
-		if (not defined $lfh) {
-			die "FATAL: can't write to $input_dir/$name.bin, $!\n";
-		}
-		if (grep(/^$name$/, 'global_databases', 'global_tbspnames', )) {
-			store_fd({ $name => \@{$name} }, $lfh) || die ("Couldn't save binary data to \"$input_dir/$name.bin\"!\n");
-		} else {
-			store_fd({ $name => \%{$name} }, $lfh) || die ("Couldn't save binary data to \"$input_dir/$name.bin\"!\n");
-		}
-		$lfh->close;
-	}
-}
-
 # Load statistics from pg cache into memory
 sub load_pg_binary
 {
@@ -11972,9 +11960,10 @@ sub load_pidstat_binary
 
 	foreach my $name (@pidstat_to_be_stored)
 	{
+		next if (!-e "$in_dir/$name.bin");
 		my $lfh = IO::File->new("$in_dir/$name.bin", 'r');
 		if (not defined $lfh) {
-			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
+			die "FATAL: can't read file $in_dir/$name.bin, $!\n";
 		}
 		my %stats = %{ fd_retrieve($lfh) };
 		$lfh->close();

@@ -880,9 +880,11 @@ while (1)
 		mkdir("$year/$mon/$mday");
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday";
+		dprint ("Created OUT_DIR: $OUT_DIR \n") ;
 	} elsif ($D_ROTATE) {
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday";
+		dprint ("OUT_DIR is: $OUT_DIR \n") ;
         }
 
 	# Compress previous hourly directory if required
@@ -901,11 +903,14 @@ while (1)
 		mkdir("$year/$mon/$mday/$hour");
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday/$hour";
+		dprint ("Created OUT_DIR: $OUT_DIR \n") ;
 	} elsif ($H_ROTATE) {
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday/$hour";
-	} else {
+		dprint ("OUT_DIR is: $OUT_DIR \n") ;
+	} elsif (!$D_ROTATE) {
 		$OUT_DIR = $OUTPUT_DIR;
+		dprint ("OUT_DIR is: $OUT_DIR \n") ;
         }
 
 	# If we have a retention limit remove everything older
@@ -2646,7 +2651,7 @@ sub dump_unusedindexes
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), current_database(), " .
-		"schemaname, relname, indexrelname, pg_get_indexdef(pg_stat_user_indexes.indexrelid) " .
+		"schemaname, relname, indexrelname, regexp_replace(pg_get_indexdef(pg_stat_user_indexes.indexrelid), E'[\\\\n\\\\r]+', ' ', 'g') " .
 		"FROM pg_stat_user_indexes " .
 		"INNER JOIN pg_index ON pg_index.indexrelid = pg_stat_user_indexes.indexrelid " .
 		"WHERE NOT indexrelname ILIKE 'fki%%' " .
@@ -2667,8 +2672,8 @@ sub dump_redundantindexes
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), current_database(), " .
-		"pg_get_indexdef(indexrelid) AS contained, " .
-		"pg_get_indexdef(index_backward) AS container " .
+		"regexp_replace(pg_get_indexdef(indexrelid), E'[\\\\n\\\\r]+', ' ', 'g') AS contained, " .
+		"regexp_replace(pg_get_indexdef(index_backward), E'[\\\\n\\\\r]+', ' ', 'g') AS container " .
 		"FROM " .
 		"( " .
 		"  SELECT indexrelid, " .
@@ -2701,7 +2706,7 @@ sub dump_invalidindexes
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), current_database(), " .
-		"schemaname, relname, indexrelname, pg_get_indexdef(pg_stat_user_indexes.indexrelid) " .
+		"schemaname, relname, indexrelname, regexp_replace(pg_get_indexdef(pg_stat_user_indexes.indexrelid), E'[\\\\n\\\\r]+', ' ', 'g') " .
 		"FROM pg_stat_user_indexes " .
 		"INNER JOIN pg_index ON pg_index.indexrelid = pg_stat_user_indexes.indexrelid " .
 		"WHERE NOT pg_index.indisvalid " .
@@ -2719,11 +2724,13 @@ sub dump_hashindexes
 
         my $sql =
 		"WITH indexes AS ( " .
-		"SELECT date_trunc('seconds', now()), current_database(), schemaname, relname, indexrelname, pg_get_indexdef(pg_stat_user_indexes.indexrelid) " .
+		"SELECT date_trunc('seconds', now()), current_database(), " .
+		"schemaname,relname, indexrelname, " .
+		"regexp_replace(pg_get_indexdef(pg_stat_user_indexes.indexrelid), E'[\\\\n\\\\r]+', ' ', 'g') as indexdef " .
 		"FROM pg_stat_user_indexes " .
 		"INNER JOIN pg_index ON pg_index.indexrelid = pg_stat_user_indexes.indexrelid " .
 		"ORDER BY schemaname, relname, indexrelname) " .
-		"SELECT * from indexes where pg_get_indexdef like '%%USING hash (%' ";
+		"SELECT * from indexes where indexdef like '%%USING hash (%' ";
         return $sql;
 }
 
