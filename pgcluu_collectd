@@ -126,6 +126,7 @@ my %ORIGINAL_SYSTEM_SETTINGS = ();
 
 # Register a termination signal
 my $fini = 0;
+my $done = 0;
 
 # Definition to collect metrics from the database
 my %METRICS_COMMANDS = (
@@ -483,7 +484,7 @@ if ($KILL)
 		die "ERROR: can't find a pid to kill, is $PROGRAM running?\n";
 	}
 
-	kill '-TERM', $proc;
+	kill '-HUP', $proc;
 	if ($? == -1) {
 		print "FATAL: failed to execute: $!\n";
 	} elsif ($? & 127) {
@@ -711,6 +712,7 @@ sub terminate
 	&dprint("LOG: Received terminating signal $sig.\n");
 
         $SIG{INT} = \&terminate;
+        $SIG{QUIT} = \&terminate;
         $SIG{TERM} = \&terminate;
 
 	if (-f $PIDFILE) {
@@ -722,11 +724,26 @@ sub terminate
 	exit 0;
 }
 
+# Die gracefully at end of all collects
+sub end_gracefully
+{
+	my $sig = shift;
+
+	$done = 1;
+
+	&dprint("LOG: Received terminating signal $sig.\n");
+
+        $SIG{HUP} = \&end_gracefully;
+}
+
+
 # Die on kill -2, -3 or -15
 $SIG{'INT'} = $SIG{'QUIT'} = $SIG{'TERM'} = \&terminate;
+$SIG{'HUP'} = \&end_gracefully;
 
 # Run in interactive mode if required
-if (!$DAEMONIZE) {
+if (!$DAEMONIZE)
+{
 	# Start in interactive mode
 	print "\n*** $PROGRAM v$VERSION (pid:$$) started at " . localtime(time) . "\n";
 	if ($CAPTURE) {
@@ -734,7 +751,9 @@ if (!$DAEMONIZE) {
 	} else {
 		print "Type Ctrl+c to quit.\n\n";
 	}
-} else {
+}
+else
+{
 	# detach from terminal
 	my $pid = fork;
 	exit 0 if ($pid);
@@ -842,17 +861,24 @@ while (1)
 	$mon++;
 	$mon = "0$mon" if ($mon < 10);
 	$year += 1900;
-	if (!$CAPTURE) {
-		for (my $i = 0; $i <= $#SKIP_BEGIN; $i++) {
-			if ( $SKIP_BEGIN[$i] <= $SKIP_END[$i] ) {
-				if ( ("$hour$min" >= $SKIP_BEGIN[$i]) && ("$hour$min" <= $SKIP_END[$i]) ) {
+	if (!$CAPTURE)
+	{
+		for (my $i = 0; $i <= $#SKIP_BEGIN; $i++)
+		{
+			if ( $SKIP_BEGIN[$i] <= $SKIP_END[$i] )
+			{
+				if ( ("$hour$min" >= $SKIP_BEGIN[$i]) && ("$hour$min" <= $SKIP_END[$i]) )
+				{
 					# Wait next run
 					sleep($INTERVAL);
 					next;
 				}
-			} elsif ( $SKIP_BEGIN[$i] > $SKIP_END[$i] ) {
+			}
+			elsif ( $SKIP_BEGIN[$i] > $SKIP_END[$i] )
+			{
 				if ( ("$hour$min" >= $SKIP_BEGIN[$i]) && ("$hour$min" < 2400) ||
-						("$hour$min" <= $SKIP_END[$i]) && ("$hour$min" > 0)) {
+						("$hour$min" <= $SKIP_END[$i]) && ("$hour$min" > 0))
+				{
 					# Wait for next run
 					sleep($INTERVAL);
 					next;
@@ -866,7 +892,8 @@ while (1)
 	####
 
 	# Compress previous daily directory if required
-	if ($COMPRESS && $OLD_OUT_DIR && ($OLD_OUT_DIR ne "$year/$mon/$mday") && $D_ROTATE && !$H_ROTATE) {
+	if ($COMPRESS && $OLD_OUT_DIR && ($OLD_OUT_DIR ne "$year/$mon/$mday") && $D_ROTATE && !$H_ROTATE)
+	{
 		# Fork a process to compress old data files in parallel
 		&spawn_compress(sub {
 			&compress_files($OLD_OUT_DIR);
@@ -874,21 +901,25 @@ while (1)
 	}
 
 	# Set daily rotation subdirectories
-	if ($D_ROTATE && !$H_ROTATE && !-d "$year/$mon/$mday") {
+	if ($D_ROTATE && !$H_ROTATE && !-d "$year/$mon/$mday")
+	{
 		mkdir("$year") if (!-d "$year");
 		mkdir("$year/$mon") if (!-d "$year/$mon");
 		mkdir("$year/$mon/$mday");
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday";
 		dprint ("Created OUT_DIR: $OUT_DIR \n") ;
-	} elsif ($D_ROTATE) {
+	}
+	elsif ($D_ROTATE)
+	{
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday";
 		dprint ("OUT_DIR is: $OUT_DIR \n") ;
         }
 
 	# Compress previous hourly directory if required
-	if ($COMPRESS && $OLD_OUT_DIR && ($OLD_OUT_DIR ne "$year/$mon/$mday/$hour") && $H_ROTATE) {
+	if ($COMPRESS && $OLD_OUT_DIR && ($OLD_OUT_DIR ne "$year/$mon/$mday/$hour") && $H_ROTATE)
+	{
 		# Fork a process to compress old data files in parallel
 		&spawn_compress(sub {
 			&compress_files($OLD_OUT_DIR);
@@ -896,7 +927,8 @@ while (1)
 	}
 
 	# Set hourly rotation/incremental subdirectories
-	if ($H_ROTATE && !-d "$year/$mon/$mday/$hour") {
+	if ($H_ROTATE && !-d "$year/$mon/$mday/$hour")
+	{
 		mkdir("$year") if (!-d "$year");
 		mkdir("$year/$mon") if (!-d "$year/$mon");
 		mkdir("$year/$mon/$mday") if (!-d "$year/$mon/$mday");
@@ -904,17 +936,22 @@ while (1)
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday/$hour";
 		dprint ("Created OUT_DIR: $OUT_DIR \n") ;
-	} elsif ($H_ROTATE) {
+	}
+	elsif ($H_ROTATE)
+	{
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday/$hour";
 		dprint ("OUT_DIR is: $OUT_DIR \n") ;
-	} elsif (!$D_ROTATE) {
+	}
+	elsif (!$D_ROTATE)
+	{
 		$OUT_DIR = $OUTPUT_DIR;
 		dprint ("OUT_DIR is: $OUT_DIR \n") ;
         }
 
 	# If we have a retention limit remove everything older
-	if ($RETENTION > 0 && $OUTPUT_DIR && $year) {
+	if ($RETENTION > 0 && $OUTPUT_DIR && $year)
+	{
 		# We don't use the output directory as root dir but the year
 		# subdirectory. Rewind to previous year first in case we have
 		# year overlap.
@@ -949,7 +986,6 @@ while (1)
 
 	# Collect all metrics about the cluster
 	&collect_metrics();
-
 	# stores previous directory to check when rotated files must compressed
 	$OLD_OUT_DIR = $OUT_DIR;
 
@@ -957,7 +993,7 @@ while (1)
 	&wait_all_childs();
 
 	# We received a signal while waiting
-	last if ($fini);
+	last if ($done || $fini);
 
 	if (!$CAPTURE)
 	{
@@ -991,8 +1027,8 @@ while (1)
 		last;
 	}
 
-	# We received a signal when sleeping
-	last if ($fini);
+	# We received a HUP signal or a TERM/INT signal
+	last if ($done || $fini);
 }
 
 # Wait for last child stop
@@ -1116,6 +1152,13 @@ sub collect_metrics
 		if ($METRICS_COMMANDS{$type}->{override} && -e "$OUT_DIR/$METRICS_COMMANDS{$type}->{output}")
 		{
 			unlink("$OUT_DIR/$METRICS_COMMANDS{$type}->{output}");
+		}
+		if ($METRICS_COMMANDS{$type}->{'start-end'} && -e "$OUT_DIR/end-$METRICS_COMMANDS{$type}->{output}")
+		{
+			# Keep the file but remove its content
+			if ( open(my $outf, '>', "$OUT_DIR/end-$METRICS_COMMANDS{$type}->{output}") ) {
+				close($outf);
+			}
 		}
 	}
 
@@ -1463,8 +1506,6 @@ sub create_sql_script
 		{
 			# Add a prefix to end file so that the first file will be preserved
 			$file_output = 'end-' . $METRICS_COMMANDS{$type}->{output};
-			# and this one is overridden each time, we only keep the last one
-			unlink("$OUT_DIR/$file_output");
 		}
 
 		if (&backend_minimum_version(8, 2)) {
@@ -1576,7 +1617,7 @@ sub get_extensions
 	}
 	chomp(@db_extension);
 
-	return @db_extension;
+	return sort @db_extension;
 }
 
 ####
@@ -1630,13 +1671,13 @@ sub get_schemas
 
 	my $LOCAL_PSQL_PROG = &set_local_psql_command($database);
 
-	my @db_schema = `echo "SELECT nspname FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' ORDER BY 1" | $LOCAL_PSQL_PROG`;
+	my @db_schema = `echo "SELECT nspname FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname <> 'information_schema'" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
 		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
 	chomp(@db_schema);
 
-	return @db_schema;
+	return sort @db_schema;
 }
 
 ####
@@ -1648,13 +1689,13 @@ sub get_json_cols
 
 	my $LOCAL_PSQL_PROG = &set_local_psql_command($database);
 
-	my @db_json = `echo "SELECT c.relname||'.'||a.attname FROM pg_attribute a JOIN pg_class c ON (a.attrelid=c.relfilenode) WHERE a.atttypid = 114 ORDER BY 1" | $LOCAL_PSQL_PROG`;
+	my @db_json = `echo "SELECT c.relname||'.'||a.attname FROM pg_attribute a JOIN pg_class c ON (a.attrelid=c.relfilenode) WHERE a.atttypid = 114" | $LOCAL_PSQL_PROG`;
 	if ($? != 0) {
 		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
 	chomp(@db_json);
 
-	return @db_json;
+	return sort @db_json;
 }
 
 
@@ -2118,8 +2159,7 @@ sub dump_pgstatactivity
 		"usesysid, usename, %s%s%s%s%s" .
 		"date_trunc('seconds', query_start) AS query_start, " .
 		"%s%s%s " .
-		"FROM pg_stat_activity %s" .
-		"ORDER BY %s",
+		"FROM pg_stat_activity %s",
 		&backend_minimum_version(9, 2) ? "pid" : "procpid",
 		&backend_minimum_version(9, 0) ? "application_name, " : "",
 		&backend_minimum_version(8, 1) ? "client_addr, " : "",
@@ -2159,8 +2199,7 @@ sub dump_pgstatdatabase
 		"SELECT date_trunc('seconds', now()), datid, datname, " .
 		"numbackends, xact_commit, xact_rollback, blks_read, blks_hit" .
 		"%s%s%s " .
-		"FROM pg_stat_database " .
-		"ORDER BY datname",
+		"FROM pg_stat_database ",
 		&backend_minimum_version(8, 3) ? ", tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted" : "",
 		&backend_minimum_version(9, 1) ? ", conflicts, date_trunc('seconds', stats_reset) AS stats_reset" : "",
 		&backend_minimum_version(9, 2) ? ", temp_files, temp_bytes, deadlocks, blk_read_time, blk_write_time" : ""
@@ -2176,8 +2215,7 @@ sub dump_pgtablespace_size
 		"SELECT date_trunc('seconds', now()), spcname, " .
 		"pg_tablespace_size(spcname), " .
 		"CASE WHEN %s = '' THEN CASE WHEN spcname = 'pg_default' THEN (select setting from pg_settings where name='data_directory')||'/base' ELSE (select setting from pg_settings where name='data_directory')||'/global' END ELSE %s END as tablespace_location " .
-		"FROM pg_tablespace " .
-		"ORDER BY spcname",
+		"FROM pg_tablespace ",
 		&backend_minimum_version(9, 2) ? "pg_tablespace_location(oid)" : "spclocation",
 		&backend_minimum_version(9, 2) ? "pg_tablespace_location(oid)" : "spclocation"
 	);
@@ -2190,8 +2228,7 @@ sub dump_pgstatdatabaseconflicts
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), * " .
-		"FROM pg_stat_database_conflicts " .
-		"ORDER BY datname"
+		"FROM pg_stat_database_conflicts "
 	);
 
 	return $sql;
@@ -2208,8 +2245,7 @@ sub dump_pgstatreplication
 		"%s, %s, %s, %s, " .
 		"sync_priority, " .
 		"sync_state " .
-		"FROM pg_stat_replication " .
-		"ORDER BY application_name",
+		"FROM pg_stat_replication ",
 		&backend_minimum_version(9, 2) ? "pid" : "procpid",
 		&backend_minimum_version(10, 0) ? "pg_current_wal_lsn()" : "pg_current_xlog_location()",
 		&backend_minimum_version(10, 0) ? "sent_lsn" : "sent_location",
@@ -2237,8 +2273,7 @@ sub dump_pgstattables
 		"%s" .
 		"%s" .
 		" FROM pg_stat_${type}_tables " .
-		"WHERE schemaname <> 'information_schema' " .
-		"ORDER BY schemaname, relname",
+		"WHERE schemaname <> 'information_schema' ",
 		&backend_minimum_version(8, 3) ? ", n_tup_hot_upd, n_live_tup, n_dead_tup" : "",
 		&backend_minimum_version(8, 2) ? ", date_trunc('seconds', last_vacuum) AS last_vacuum, date_trunc('seconds', last_autovacuum) AS last_autovacuum, date_trunc('seconds',last_analyze) AS last_analyze, date_trunc('seconds',last_autoanalyze) AS last_autoanalyze" : "",
 		&backend_minimum_version(9, 1) ? ", vacuum_count, autovacuum_count, analyze_count, autoanalyze_count" : ""
@@ -2258,8 +2293,7 @@ sub dump_pgstatindexes
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), current_database(), * " .
 		"FROM pg_stat_${type}_indexes " .
-		"WHERE schemaname <> 'information_schema' " .
-		"ORDER BY schemaname, relname, indexrelname"
+		"WHERE schemaname <> 'information_schema' ",
 	);
 
 	return $sql;
@@ -2276,8 +2310,7 @@ sub dump_pgstatiotables
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), current_database(), * " .
 		"FROM pg_statio_${type}_tables " .
-		"WHERE schemaname <> 'information_schema' " .
-		"ORDER BY schemaname, relname"
+		"WHERE schemaname <> 'information_schema' "
 	);
 
 	return $sql;
@@ -2294,8 +2327,7 @@ sub dump_pgstatioindexes
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), current_database(), * " .
 		"FROM pg_statio_${type}_indexes " .
-		"WHERE schemaname <> 'information_schema' " .
-		"ORDER BY schemaname, relname, indexrelname"
+		"WHERE schemaname <> 'information_schema' "
 	);
 
 	return $sql;
@@ -2312,8 +2344,7 @@ sub dump_pgstatiosequences
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), current_database(), * " .
 		"FROM pg_statio_${type}_sequences " .
-		"WHERE schemaname <> 'information_schema' " .
-		"ORDER BY schemaname, relname"
+		"WHERE schemaname <> 'information_schema' "
 	);
 
 	return $sql;
@@ -2325,8 +2356,7 @@ sub dump_pgstatuserfunctions
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), current_database(), * " .
 		"FROM pg_stat_user_functions " .
-		"WHERE schemaname <> 'information_schema' " .
-		"ORDER BY schemaname, funcname"
+		"WHERE schemaname <> 'information_schema' "
 	);
 
 	return $sql;
@@ -2338,8 +2368,7 @@ sub dump_pgclass_size
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), current_database(), n.nspname, c.relname, c.relkind, c.reltuples, c.relpages%s " .
 		"FROM pg_class c, pg_namespace n " .
-		"WHERE n.oid=c.relnamespace AND n.nspname <> 'information_schema' AND n.nspname <> 'pg_catalog' " .
-		"ORDER BY n.nspname, c.relname",
+		"WHERE n.oid=c.relnamespace AND n.nspname <> 'information_schema' AND n.nspname <> 'pg_catalog' ",
 		($CAPTURE && &backend_minimum_version(8, 1)) ? ", pg_relation_size(c.oid)" : ""
 	);
 
@@ -2356,8 +2385,7 @@ sub dump_pgstatstatements
 		"local_blks_hit, local_blks_read, local_blks_written, " .
 		"temp_blks_read, temp_blks_written " .
 		"FROM $DB_INFO{pg_stat_statement} q, pg_database d, pg_roles r " .
-		"WHERE q.userid=r.oid and q.dbid=d.oid " .
-		"ORDER BY r.rolname, d.datname",
+		"WHERE q.userid=r.oid and q.dbid=d.oid ",
 		&backend_minimum_version(13, 0) ? "(total_plan_time + total_exec_time) as total_time " : "total_time"
 	);
 
@@ -2441,8 +2469,7 @@ sub dump_pgdatabase_size
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), datid, datname, pg_database_size(datid) AS size " .
-		"FROM pg_stat_database WHERE datid > 0" .
-		"ORDER BY datname"
+		"FROM pg_stat_database WHERE datid > 0"
 	);
 
 	return $sql;
@@ -2549,8 +2576,7 @@ sub dump_pgstatxactuserfunctions
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), * " .
 		"FROM pg_stat_xact_user_functions " .
-		"WHERE schemaname <> 'information_schema' " .
-		"ORDER BY 3, 4"
+		"WHERE schemaname <> 'information_schema' "
 	);
 
 	return $sql;
@@ -2567,8 +2593,7 @@ sub dump_pgstatxacttables
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), * " .
 		"FROM pg_stat_xact_${type}_tables " .
-		"WHERE schemaname <> 'information_schema' " .
-		"ORDER BY 3, 4"
+		"WHERE schemaname <> 'information_schema' "
 	);
 
 	return $sql;
@@ -2657,8 +2682,7 @@ sub dump_unusedindexes
 		"WHERE NOT indexrelname ILIKE 'fki%%' " .
 		"AND NOT indisprimary " .
 		"AND NOT indisunique AND idx_scan = 0 " .
-		(&backend_minimum_version(9,1) ? "AND NOT indisexclusion " : "") .
-		"ORDER BY schemaname, relname, indexrelname"
+		(&backend_minimum_version(9,1) ? "AND NOT indisexclusion " : "")
 	);
 
 	return $sql;
@@ -2709,8 +2733,7 @@ sub dump_invalidindexes
 		"schemaname, relname, indexrelname, regexp_replace(pg_get_indexdef(pg_stat_user_indexes.indexrelid), E'[\\\\n\\\\r]+', ' ', 'g') " .
 		"FROM pg_stat_user_indexes " .
 		"INNER JOIN pg_index ON pg_index.indexrelid = pg_stat_user_indexes.indexrelid " .
-		"WHERE NOT pg_index.indisvalid " .
-		"ORDER BY schemaname, relname, indexrelname"
+		"WHERE NOT pg_index.indisvalid "
 	);
 
 	return $sql;
@@ -2728,8 +2751,7 @@ sub dump_hashindexes
 		"schemaname,relname, indexrelname, " .
 		"regexp_replace(pg_get_indexdef(pg_stat_user_indexes.indexrelid), E'[\\\\n\\\\r]+', ' ', 'g') as indexdef " .
 		"FROM pg_stat_user_indexes " .
-		"INNER JOIN pg_index ON pg_index.indexrelid = pg_stat_user_indexes.indexrelid " .
-		"ORDER BY schemaname, relname, indexrelname) " .
+		"INNER JOIN pg_index ON pg_index.indexrelid = pg_stat_user_indexes.indexrelid)" .
 		"SELECT * from indexes where indexdef like '%%USING hash (%' ";
         return $sql;
 }
@@ -2747,8 +2769,7 @@ sub dump_count_indexes
 		"FROM pg_stat_user_tables " .
 		"lEFT JOIN pg_stat_user_indexes ON pg_stat_user_indexes.schemaname = pg_stat_user_tables.schemaname " .
 		"AND pg_stat_user_indexes.relname = pg_stat_user_tables.relname " .
-		"GROUP BY pg_stat_user_tables.schemaname, pg_stat_user_tables.relname " .
-		"ORDER BY pg_stat_user_tables.schemaname, pg_stat_user_tables.relname "
+		"GROUP BY pg_stat_user_tables.schemaname, pg_stat_user_tables.relname "
 	);
 
 	return $sql;
@@ -2767,8 +2788,7 @@ sub dump_unusedtrigfunc
 		"JOIN pg_namespace c ON a.pronamespace = c.oid " .
 		"WHERE %s " .
 		"AND b.typname = 'trigger' AND c.nspname NOT IN ('pg_catalog', 'information_schema') " .
-		"AND a.proname NOT IN (SELECT funcname FROM pg_stat_user_functions) " .
-		"ORDER BY c.nspname, a.proname",
+		"AND a.proname NOT IN (SELECT funcname FROM pg_stat_user_functions) ",
 		(&backend_minimum_version(11, 0) ? "a.prokind = 'f'" : " NOT a.proiswindow AND NOT a.proisagg")
 	);
 
@@ -2786,8 +2806,7 @@ sub dump_pgsettings
 		"SELECT date_trunc('seconds', now()), category, name, " .
 		" (CASE WHEN name = 'lock_timeout' THEN (setting::bigint-$lto)::text ELSE setting END) as setting," .
 	        " %s, context, source, %s, %s, %s " .
-		"FROM pg_settings " .
-		"ORDER BY category,name",
+		"FROM pg_settings ",
 		&backend_minimum_version(8, 2) ? "unit" : "''::text as unit",
 		&backend_minimum_version(8, 4) ? "boot_val" : "''::text as boot_val",
 		&backend_minimum_version(8, 4) ? "(CASE WHEN name = 'lock_timeout' THEN (reset_val::bigint-$lto)::text ELSE reset_val END) as reset_val" : "''::text as reset_val",
@@ -2807,8 +2826,7 @@ sub dump_nondefault_pgsettings
 		"SELECT date_trunc('seconds', now()), category, name, " .
 		" setting, %s, context, source, %s, %s " .
 		"FROM pg_settings " .
-        "WHERE source != 'default' AND source != 'override' %s" .
-		"ORDER BY category,name",
+		"WHERE source != 'default' AND source != 'override' %s",
 		&backend_minimum_version(8, 2) ? "unit" : "''::text as unit",
 		&backend_minimum_version(8, 4) ? "boot_val" : "''::text as boot_val",
 		&backend_minimum_version(8, 4) ? "reset_val" : "''::text as reset_val",
@@ -2827,8 +2845,7 @@ sub dump_pgdbrolesetting
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), b.datname, c.rolname, a.setconfig " .
 		"FROM pg_db_role_setting a LEFT JOIN pg_database b ON (a.setdatabase=b.oid) " .
-		"LEFT JOIN pg_roles c ON (a.setrole=c.oid) " .
-		"ORDER BY 2,3"
+		"LEFT JOIN pg_roles c ON (a.setrole=c.oid) "
 	);
 
 	return $sql;
@@ -2842,8 +2859,7 @@ sub dump_unlogged
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), current_database(), n.nspname, c.relname, c.relkind " .
 		"FROM pg_class c, pg_namespace n " .
-		"WHERE n.oid=c.relnamespace AND c.relpersistence='u' and n.nspname != 'pg_toast' and c.relkind = 'r'" .
-		"ORDER BY n.nspname, c.relname"
+		"WHERE n.oid=c.relnamespace AND c.relpersistence='u' and n.nspname != 'pg_toast' and c.relkind = 'r'"
 	);
 
 	return $sql;
@@ -2856,7 +2872,7 @@ sub dump_unlogged
 ####
 sub get_configuration_files
 {
-	my @cfiles = `echo "SELECT setting FROM pg_settings WHERE name IN ('config_file','hba_file','ident_file','data_directory') ORDER BY name;" | $PSQL_PROG`;
+	my @cfiles = `echo "SELECT setting FROM pg_settings WHERE name IN ('config_file','hba_file','ident_file','data_directory');" | $PSQL_PROG`;
 	if ($? != 0) {
 		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
@@ -2872,7 +2888,7 @@ sub get_configuration_files
 	}
 	push(@cfiles, $alter_system_conf);
 
-	return @cfiles;
+	return sort @cfiles;
 }
 
 ####
@@ -2935,8 +2951,7 @@ sub dump_pgdatabase_buffercache
 		"  WHERE name='shared_buffers')::integer,1) AS \"buffers %\", " .
 		"round(100.0 * count(*) * 8192 / pg_database_size(d.datname),1) AS \"database %\" " .
 		"FROM pg_database d INNER JOIN public.pg_buffercache b ON b.reldatabase=d.oid " .
-		"GROUP BY d.datname " .
-		"ORDER BY 2,3 DESC"
+		"GROUP BY d.datname "
 	);
 
 	return $sql;
@@ -2959,8 +2974,7 @@ sub dump_pgrelation_buffercache
 		"INNER JOIN pg_database d ON ( b.reldatabase=d.oid ) " .
 		"WHERE pg_relation_size(c.oid) > 0 " .
 #		"AND c.relname !~ '^pg_' " .
-		"GROUP BY d.datname, c.relname, c.relpages, c.oid " .
-		"ORDER BY 2,4 DESC"
+		"GROUP BY d.datname, c.relname, c.relpages, c.oid "
 	);
 
 	return $sql;
@@ -2978,8 +2992,7 @@ sub dump_pgdatabase_usercount
 		"count(*) AS buffers, round(100.0 * count(*) / (SELECT setting FROM pg_settings " .
 		"  WHERE name='shared_buffers')::integer,1) AS \"buffers %\" " .
 		"FROM pg_database d INNER JOIN public.pg_buffercache b ON b.reldatabase=d.oid " .
-		"GROUP BY d.datname, usagecount " .
-		"ORDER BY 2,3 DESC"
+		"GROUP BY d.datname, usagecount"
 	);
 	return $sql;
 }
@@ -2996,8 +3009,7 @@ sub dump_pgdatabase_isdirty
 		"count(*) AS buffers, round(100.0 * count(*) / (SELECT setting FROM pg_settings " .
 		"  WHERE name='shared_buffers')::integer,1) AS \"buffers %\" " .
 		"FROM pg_database d INNER JOIN public.pg_buffercache b ON b.reldatabase=d.oid " .
-		"GROUP BY d.datname, usagecount, isdirty " .
-		"ORDER BY 2,3,4 DESC"
+		"GROUP BY d.datname, usagecount, isdirty "
 	);
 	return $sql;
 }
