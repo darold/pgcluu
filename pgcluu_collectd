@@ -127,6 +127,7 @@ my %ORIGINAL_SYSTEM_SETTINGS = ();
 # Register a termination signal
 my $fini = 0;
 my $done = 0;
+my $initial_run = 1;
 
 # Definition to collect metrics from the database
 my %METRICS_COMMANDS = (
@@ -986,6 +987,8 @@ while (1)
 
 	# Collect all metrics about the cluster
 	&collect_metrics();
+	$initial_run = 1;
+
 	# stores previous directory to check when rotated files must compressed
 	$OLD_OUT_DIR = $OUT_DIR;
 
@@ -1501,7 +1504,7 @@ sub create_sql_script
 		}
 		my $file_output = $METRICS_COMMANDS{$type}->{output};
 		# Metrics that must be saved at start and end only
-		if ($METRICS_COMMANDS{$type}->{'start-end'}
+		if ($METRICS_COMMANDS{$type}->{'start-end'} && !$initial_run
 			&& -e "$OUT_DIR/$METRICS_COMMANDS{$type}->{output}")
 		{
 			# Add a prefix to end file so that the first file will be preserved
