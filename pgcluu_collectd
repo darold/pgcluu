@@ -987,7 +987,7 @@ while (1)
 
 	# Collect all metrics about the cluster
 	&collect_metrics();
-	$initial_run = 1;
+	$initial_run = 0;
 
 	# stores previous directory to check when rotated files must compressed
 	$OLD_OUT_DIR = $OUT_DIR;

@@ -29,7 +29,7 @@ $VERSION = '3.1';
 $PROGRAM = 'pgCluu';
 
 
-my $CONFIG_FILE     = "/etc/pgcluu.conf";
+my $CONFIG_FILE     = "/usr/local/etc/pgcluu.conf";
 my $SADF_PROG       = '/usr/bin/sadf';
 my $DISABLE_SAR     = 0;
 my $HTML            = '';
@@ -6828,7 +6828,7 @@ sub show_home
 		}
 		foreach my $db (keys %{$OVERALL_STATS{'database'}}) {
 			next if ($db eq 'all');
-			$OVERALL_STATS{'cluster'}{'size'} += $OVERALL_STATS{'database'}{$db}{'size'};
+			$OVERALL_STATS{'cluster'}{'size'} += ($OVERALL_STATS{'database'}{$db}{'size'} || 0);
 			next if (($#INCLUDE_DB >= 0) && !grep($db =~ /^$_$/, @INCLUDE_DB));
 			if (exists $OVERALL_STATS{'database'}{$db}{'size'}) {
 				if (!exists $overall_stat_databases{'size'} || $OVERALL_STATS{'database'}{$db}{'size'} > $overall_stat_databases{'size'}[1]) {
@@ -11917,16 +11917,19 @@ sub load_sar_binary
 		if ($name eq 'global_infos')
 		{
 			# Setting global information
-			my %_global_infos = %{$stats{global_infos}} ;
-			foreach my $inf (keys %_global_infos) {
-				$_global_infos{$inf} //= 0;
-				if ($_global_infos{$inf} =~ /ARRAY/) {
-					push(@{$global_infos{$inf}}, @{$_global_infos{$inf}});
-				} else {
-					$global_infos{$inf} = $_global_infos{$inf};
+			if (exists $stats{global_infos})
+			{
+				my %_global_infos = %{$stats{global_infos}} ;
+				foreach my $inf (keys %_global_infos) {
+					$_global_infos{$inf} //= 0;
+					if ($_global_infos{$inf} =~ /ARRAY/) {
+						push(@{$global_infos{$inf}}, @{$_global_infos{$inf}});
+					} else {
+						$global_infos{$inf} = $_global_infos{$inf};
+					}
 				}
+				delete $stats{global_infos};
 			}
-			delete $stats{global_infos};
 		}
 		else
 		{
