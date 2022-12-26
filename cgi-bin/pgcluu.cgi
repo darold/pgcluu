@@ -8044,13 +8044,13 @@ AAAASUVORK5CYII=';
 			      </ul>
 		        </li>
 		      <li id="menu-cluster-transactions"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-transactions&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Transactions throughput</a></li>
+		      <li id="menu-cluster-canceled_queries"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-canceled_queries&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Canceled queries</a></li>
 		      <li class="divider"></li>
 			<li id="menu-replication" class="dropdown-submenu">
 			   <a href="#" tabindex="-1">Replication statistics </a>
 			      <ul class="dropdown-menu">
 			      <li id="menu-cluster-xlog"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-xlog&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Wal bytes written</a></li>
 			      <li id="menu-cluster-replication"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-replication&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Replication lag</a></li>
-			      <li id="menu-cluster-canceled_queries"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-canceled_queries&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Canceled queries</a></li>
 			      <li id="menu-cluster-conflicts"><a href="" onclick="document.location.href='$SCRIPT_NAME?db=all&action=cluster-conflicts&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Conflicts</a></li>
 			      </ul>
 		        </li>

@@ -8202,13 +8202,13 @@ sub generate_html_menu
 		        </li>
 		      <li id="menu-cluster-transactions"$disable_transactions><a href="cluster-database-transactions.html">Transaction throughput</a></li>
 		      <li id="menu-cluster-prepared"$disable_prepared><a href="cluster-database-prepared.html">Prepared transactions</a></li>
+		      <li id="menu-cluster-canceled_queries"$disable_canceled><a href="cluster-database-canceled_queries.html">Canceled queries</a></li>
 		      <li class="divider"></li>
 			<li id="menu-replication" class="dropdown-submenu$disable_allrepli">
 			   <a href="#" tabindex="-1">Replication statistics </a>
 			      <ul class="dropdown-menu">
 			      <li id="menu-cluster-xlog"$disable_xlog><a href="cluster-xlog.html">Wal bytes written</a></li>
 			      <li id="menu-cluster-replication"$disable_replication><a href="cluster-replication.html">Replication lag</a></li>
-			      <li id="menu-cluster-canceled_queries"$disable_canceled><a href="cluster-database-canceled_queries.html">Canceled queries</a></li>
 			      <li id="menu-cluster-conflicts"$disable_conflicts><a href="cluster-database-conflicts.html">Conflicts</a></li>
 			      </ul>
 		        </li>
