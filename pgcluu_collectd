@@ -2712,7 +2712,7 @@ sub dump_redundantindexes
 		"    lag(indisunique) OVER search_window AS is_unique_backward " .
 		"  FROM pg_index " .
 		"    WINDOW search_window AS (PARTITION BY indrelid " .
-		"    ORDER BY array_to_string(indkey,'+') DESC) " .
+		"    ORDER BY array_to_string(indkey,'+') DESC, length(regexp_replace(pg_get_indexdef(indexrelid), E'[\\n\\r]+', ' ', 'g')))" .
 		") AS tmp " .
 		"WHERE (colindexbackward LIKE (colindex || '+%') OR colindexbackward = colindex) " .
 		"  AND (is_unique_backward <> is_unique OR (not is_unique_backward AND NOT is_unique)) " .
