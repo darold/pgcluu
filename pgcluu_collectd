@@ -2918,7 +2918,8 @@ FROM (SELECT DISTINCT conrelid,
                       FROM pg_constraint
                         JOIN pg_class ON pg_class.oid = pg_constraint.conrelid
                         JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
-                      WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' AND pg_constraint.contype = 'f'
+                      WHERE NOT pg_class.relispartition AND nspname !~ '^pg_'
+		         AND nspname <> 'information_schema' AND pg_constraint.contype = 'f'
                       ) fkey
                ) fkey
                ON fkey.conrelid = pg_attribute.attrelid
