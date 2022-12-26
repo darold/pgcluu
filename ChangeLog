@@ -1,3 +1,34 @@
+2022-12-26 - Version 3.4
+
+This release is a maintenance release that fixes issues reported since
+the past six months.
+
+  - Fix unwanted report of missing index from partition. Thanks to
+    Christophe Courtois for the report.
+  - Fix cases where detection of redundant indexes was depending on the
+    creation order.Thanks to Guillaume Lelarge for the report.
+    Move Cancelled queries report from Replication sub menu to upper level.
+    Thanks to Guillaume Lelarge for the report.
+  - Allow -k option to make pgcluu_collectd exit gracefully. Previous
+    behavior was to exit immediately, it now calls the HUP signal (-1).
+    This change is done to not interrupt the running execution of the
+    metrics collect, the process will die only if all SQL queries are
+    executed. For an immediate interrupt use the TERM (-15) signal.
+  - Remove all ORDER BY clause in the metrics collect queries to improve
+    the performances. Ordering is done when reports are generated.
+  - Fix collect of the pg_stat_user_indexes, pg_stat_user_tables and
+    corresponding io stats.
+  - Fix --rotate-daily spill directory. Thanks to Chistophe Courtois for
+    the patch.
+  - Fix potential use of uninitialized value when sar and pidstat files are
+    not present. Thanks to geostart123 for the report.
+  - [CGI] verify that pidstat statistics exists before trying to load them.
+    Thanks to geostar123 foir the report.
+  - [CGI] Fix wrong error message when attempt to read binary files and remove
+    useless code. Thanks to geostar123 for the report.
+  - Remove newline from indexes definition to avoid data import error when
+    building reports.
+
 2022-06-02 - Version 3.3
 
 This release is a maintenance release that fixes issues reported since
