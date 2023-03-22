@@ -2918,7 +2918,7 @@ FROM (SELECT DISTINCT conrelid,
                       FROM pg_constraint
                         JOIN pg_class ON pg_class.oid = pg_constraint.conrelid
                         JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
-                      WHERE NOT pg_class.relispartition AND nspname !~ '^pg_'
+                      WHERE %s AND nspname !~ '^pg_'
 		         AND nspname <> 'information_schema' AND pg_constraint.contype = 'f'
                       ) fkey
                ) fkey
@@ -2935,7 +2935,8 @@ LEFT JOIN pg_index redi ON redi.indrelid = conrelid
                        AND redi.indkey::text != array_to_string(column_list, ' ')
 WHERE i.indrelid IS NULL
 GROUP BY relname, conrelid, column_name_list
-ORDER BY ddl"
+ORDER BY ddl",
+      &backend_minimum_version(10, 0) ? "NOT pg_class.relispartition" : "true"
 	);
 
 	return $sql;
