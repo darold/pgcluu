@@ -341,6 +341,7 @@ COLLECTING STATISTICS
                                is appended to the command: ' | grep postgres'.
       --retention NDAYS        number of rolling days to keep in data directory in
                                incremental mode. Default is to store indefinitely.
+      --disable-pidstat        do not collect metrics from pidstat command.
       --help                   print usage
 
     Use those options to execute sar on the remote host defined by the -h

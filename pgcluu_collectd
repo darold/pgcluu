@@ -98,6 +98,7 @@ my $DF_COMMAND  = 'LANG=C df --output="source,size,used,avail,itotal,iused,iavai
 my $SAR_PID = 0;
 my $PIDSTAT_PID = 0;
 my $LOCK_TIMEOUT = 3;
+my $DISABLE_PIDSTAT = 0;
 
 # Global storage of extensions installed in each database
 my @extensions = ();
@@ -446,6 +447,7 @@ my $result = GetOptions(
 	'retention=i'    => \$RETENTION,
 	"pidstat=s"      => \$PIDSTAT_PROG,
 	"pidstat-file=s" => \$PIDSTAT_FILE,
+	"disable-pidstat!" => \$DISABLE_PIDSTAT,
 ) or die &usage();
 
 # Clean retention value
@@ -973,16 +975,22 @@ while (1)
 	{
 		$sar_command = ($sshcmd) ? $sshcmd . ' "' . $def_sar_command . ' "' : $def_sar_command;
 		$sar_command .= " >>'$OUT_DIR/$SAR_FILE'";
-		$pidstat_command = ($sshcmd) ? $sshcmd . ' "' . $def_pidstat_command . ' "' : $def_pidstat_command;
-		$pidstat_command .= " >>'$OUT_DIR/$PIDSTAT_FILE'";
+		if (!$DISABLE_PIDSTAT)
+		{
+			$pidstat_command = ($sshcmd) ? $sshcmd . ' "' . $def_pidstat_command . ' "' : $def_pidstat_command;
+			$pidstat_command .= " >>'$OUT_DIR/$PIDSTAT_FILE'";
+		}
 
 		# Start processes to collect system statistics permanently
 		&spawn_sar(sub {
 			&collect_sysstat($sar_command);
 		});
-		&spawn_pidstat(sub {
-			&collect_sysstat($pidstat_command);
-		});
+		if (!$DISABLE_PIDSTAT)
+		{
+			&spawn_pidstat(sub {
+				&collect_sysstat($pidstat_command);
+			});
+		}
 	}
 
 	# Collect all metrics about the cluster
@@ -2073,6 +2081,7 @@ options:
 			   is appended to the command: ' | grep postgres'.
   --retention NDAYS        number of rolling days to keep in data directory in
                            incremental mode. Default is to store indefinitely.
+  --disable-pidstat        do not collect metrics from pidstat command.
   --help                   print usage
 
 Use those options to execute sar on the remote host defined by the -h option,
