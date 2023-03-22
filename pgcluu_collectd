@@ -2441,7 +2441,7 @@ sub dump_xlog_stat
 	} else {
 		$sql = sprintf(
 			"SELECT date_trunc('seconds', now()), count(*) AS num_file, " .
-			"%s AS current, " .
+      "(CASE WHEN pg_is_in_recovery() THEN '-'::text ELSE %s END) AS current, " .
 			"sum(recycled::int) AS is_recycled, " .
 			"sum((NOT recycled)::int) AS written, " .
 			"%s " .
