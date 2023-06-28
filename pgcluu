@@ -5901,8 +5901,9 @@ sub pg_stat_ext_report
 				</thead>
 				<tbody>
 };
-		my %stat_kinds = ('f' => 'dependencies', 'd' => 'ndistinct', 'm' => 'mcv');
-		foreach my $r (sort {"$a->[4].$a->[5]" cmp "$b->[4].$b->[5]"} @{$all_stat_extended_statistics{$db}}) {
+		my %stat_kinds = ('f' => 'dependencies', 'd' => 'ndistinct', 'm' => 'mcv', 'e' => 'expression');
+		foreach my $r (sort {"$a->[4].$a->[5]" cmp "$b->[4].$b->[5]"} @{$all_stat_extended_statistics{$db}})
+		{
 			$r->[2] =~ s/\{//;
 			$r->[2] =~ s/\}//;
 			my @skind = split(',', $r->[2]);
