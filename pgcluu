@@ -3308,10 +3308,8 @@ sub pg_stat_user_tables
 			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} = $data[11] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} < 0);
 			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} = $data[12] - ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} || 0);
 			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} = $data[12] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} < 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup} = $data[14] - ($all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup} || 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup} = $data[14] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup} < 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup} = $data[13] - ($all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup} || 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup} = $data[13] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup} < 0);
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup} = $data[14];
+			$all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup} = $data[13];
 			$all_stat_user_tables{$data[1]}{$data[4]}{dead_vs_live} = sprintf("%.2f", ($data[14]*100)/(($data[13]+$data[14])||1));
 			if ($#data > 19) {
 				$all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} = $data[19] - ($all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} || 0);
