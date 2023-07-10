@@ -3500,43 +3500,64 @@ sub pg_stat_user_indexes
 
 	# Read start file
 	my $curfh = open_filehdl("$in_dir/$file");
-	if (defined $curfh) {
-		while (my $l = <$curfh>) {
+	if (defined $curfh)
+	{
+		while (my $l = <$curfh>)
+		{
 			chomp($l);
 			next if (!$l);
 			my @data = split(/;/, $l);
 			next if (!&normalize_line(\@data));
 
 			# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | idx_tup_read | idx_tup_fetch
+			# PG16: timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | last_idx_scan | idx_tup_read | idx_tup_fetch
 			$data[6] = "$data[4].$data[5].$data[6]";
 
 			# Get database statistics
 			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} = $data[7];
-			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} = $data[8];
-			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} = $data[9];
+			my $idx = 8;
+			$all_stat_user_indexes{$data[1]}{$data[6]}{last_idx_scan} = '';
+			if ($#data > 9)
+			{
+				$idx = 9;
+				$all_stat_user_indexes{$data[1]}{$data[6]}{last_idx_scan} = $data[8];
+			}
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} = $data[$idx++];
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} = $data[$idx];
 		}
 		$curfh->close();
 	}
 
 	# Read end file and set the final value
 	$curfh = open_filehdl("$in_dir/end-$file");
-	if (defined $curfh) {
-		while (my $l = <$curfh>) {
+	if (defined $curfh)
+	{
+		while (my $l = <$curfh>)
+		{
 			chomp($l);
 			next if (!$l);
 			my @data = split(/;/, $l);
 			next if (!&normalize_line(\@data));
 
 			# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | idx_tup_read | idx_tup_fetch
+			# PG16: timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | last_idx_scan | idx_tup_read | idx_tup_fetch
 			$data[6] = "$data[4].$data[5].$data[6]";
 
 			# Get database statistics
 			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} = $data[7] - ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} || 0);
 			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} = $data[7] if ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} < 0);
-			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} = $data[8] - ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} || 0);
-			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} = $data[8] if ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} < 0);
-			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} = $data[9] - ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} || 0);
-			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} = $data[9] if ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} < 0);
+			my $idx = 8;
+			$all_stat_user_indexes{$data[1]}{$data[6]}{last_idx_scan} = '';
+			if ($#data > 9)
+			{
+				$idx = 9;
+				$all_stat_user_indexes{$data[1]}{$data[6]}{last_idx_scan} = $data[8];
+			}
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} = $data[$idx] - ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} || 0);
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} = $data[$idx] if ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} < 0);
+			$idx++;
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} = $data[$idx] - ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} || 0);
+			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} = $data[$idx] if ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} < 0);
 		}
 		$curfh->close();
 	}
