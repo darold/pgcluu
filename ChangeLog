@@ -1,3 +1,19 @@
+2023-07-11 - Version 3.5
+
+This release is a maintenance release that fixes issues reported since
+the past six months and adds support to PostgreSQL 16.
+
+  - Fix pgcluu for PG16 changes on pg_stat_user_indexes.
+  - Fix live/dead tuples statistics. Thanks to Frederic Yhuel for the patch.
+  - Add e as expression for kind of extended statistics.
+  - Add --disable-pidstat option to disable the collect of metrics from the
+    pidstat command. This can be useful with old versions of pidstat that do
+    not support the -U option. Thanks to Guillaume Lelarge for the report.
+  - If on a secondary server, don't execute pg_current_wal_lsn(). Thanks to
+    Guillaume Lelarge for the patch.
+    Use relispartition only for PG version 10 and upper. Thanks to Guillaume
+    Lelarge for the patch.
+
 2022-12-26 - Version 3.4
 
 This release is a maintenance release that fixes issues reported since
