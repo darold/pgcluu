@@ -387,6 +387,12 @@ my %METRICS_COMMANDS = (
 		'repeat'  => 1,
 		'override'  => 1,
 	},
+	'stats_stats' => {
+		'output' => 'pg_stats.csv',
+		'command' => 'dump_pg_stats_view',
+		'repeat'  => 1,
+		'start-end' => 1,
+	},
 );
 
 # Read configuration file before reading command line parameters
@@ -2289,6 +2295,22 @@ sub dump_pgstattables
 		&backend_minimum_version(8, 3) ? ", n_tup_hot_upd, n_live_tup, n_dead_tup" : "",
 		&backend_minimum_version(8, 2) ? ", date_trunc('seconds', last_vacuum) AS last_vacuum, date_trunc('seconds', last_autovacuum) AS last_autovacuum, date_trunc('seconds',last_analyze) AS last_analyze, date_trunc('seconds',last_autoanalyze) AS last_autoanalyze" : "",
 		&backend_minimum_version(9, 1) ? ", vacuum_count, autovacuum_count, analyze_count, autoanalyze_count" : ""
+	);
+
+	return $sql;
+}
+
+sub dump_pg_stats_view
+{
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), current_database(), schemaname, tablename, attname, " .
+		"%s" .
+		"null_frac, avg_width, n_distinct, " .
+		"most_common_vals, most_common_freqs, " .
+		"histogram_bounds, correlation" .
+		" FROM pg_stats " .
+		"WHERE schemaname NOT IN ('pg_catalog', 'information_schema')",
+		&backend_minimum_version(9, 0) ? "inherited, " : "",
 	);
 
 	return $sql;
