@@ -72,6 +72,7 @@ my @SKIP_END    = ();
 my $USE_BUFFERCACHE = 0;
 my $NO_STATEMENTS  = 0;
 my $NO_WAITEVENT  = 0;
+my $NO_PGSTATS_DUMP  = 0;
 my $NO_SYSINFO  = 0;
 my $SHOW_VER    = 0;
 my $END_AFTER   = 0;
@@ -427,6 +428,7 @@ my $result = GetOptions(
 	"v|verbose!"     => \$DEBUG,
 	"V|version!"     => \$SHOW_VER,
 	"w|no-waitevent!"=> \$NO_WAITEVENT,
+	"n|no-pg_stats-dump!"=> \$NO_PGSTATS_DUMP,
 	"W|password=s"   => \$DBPASS,
 	"z|compress!"    => \$COMPRESS,
 	"pgversion=s"    => \$PG_VERSION,
@@ -1510,6 +1512,10 @@ sub create_sql_script
 			next if (!$db || $NO_WAITEVENT);
 			next if (!grep(/^$db=.*pg_wait_sampling/, @extensions));
 		}
+		if ($type eq 'stats_stats')
+		{
+			next if (!$db || $NO_PGSTATS_DUMP);
+		}
 
 		# Get the SQL command to execute for this metric
 		my $sql = $METRICS_COMMANDS{$type}->{command}->();
@@ -2056,6 +2062,7 @@ options:
   -v, --verbose            Print out debug informations.
   -V, --version            Show pgcluu_collectd version and exit.
   -w, --no-waitevent       don't collect wait event stats from pg_wait_sampling.
+  -n, --no-pg_stats-dump   don't collect statistics from the pg_stats view.
   -W, --password=pass      database password.
   -z, --compress           force compression of rotated data files.
   --included-db=DATABASE   collect statistics only for those databases present
