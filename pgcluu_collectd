@@ -722,7 +722,6 @@ sub terminate
 
 	&dprint("LOG: Received terminating signal $sig.\n");
 
-        $SIG{INT} = \&terminate;
         $SIG{QUIT} = \&terminate;
         $SIG{TERM} = \&terminate;
 
@@ -744,13 +743,14 @@ sub end_gracefully
 
 	&dprint("LOG: Received terminating signal $sig.\n");
 
+        $SIG{INT} = \&end_gracefully;
         $SIG{HUP} = \&end_gracefully;
 }
 
 
-# Die on kill -2, -3 or -15
-$SIG{'INT'} = $SIG{'QUIT'} = $SIG{'TERM'} = \&terminate;
-$SIG{'HUP'} = \&end_gracefully;
+# Die on kill -3 or -15
+$SIG{'QUIT'} = $SIG{'TERM'} = \&terminate;
+$SIG{'INT'} = $SIG{'HUP'} = \&end_gracefully;
 
 # Run in interactive mode if required
 if (!$DAEMONIZE)
@@ -839,6 +839,13 @@ if ($INCREMENTAL) {
 my $previous_time = 0;
 while (1)
 {
+	# We received a HUP signal or a TERM/INT signal
+	if ($done || $fini) {
+		# collect metrics one last time before exit
+		&collect_metrics();
+		last;
+	}
+
 	# Stores loop start time
 	my $t0 = time;
 
@@ -1011,10 +1018,7 @@ while (1)
 	# Wait for metric + compress child process to terminate
 	&wait_all_childs();
 
-	# We received a signal while waiting
-	last if ($done || $fini);
-
-	if (!$CAPTURE)
+	if (!$CAPTURE && !$done && !$fini)
 	{
 		# Lookup if output dir size is upper than limit
 		if ($MAX_SIZE)
@@ -1045,9 +1049,6 @@ while (1)
 		# get out of the main loop
 		last;
 	}
-
-	# We received a HUP signal or a TERM/INT signal
-	last if ($done || $fini);
 }
 
 # Wait for last child stop
@@ -1503,6 +1504,8 @@ sub create_sql_script
 	{
 		next if (!$db && $METRICS_COMMANDS{$type}->{repeat});
 		next if ($db && !$METRICS_COMMANDS{$type}->{repeat});
+		next if (!$initial_run && !$done && !$fini && $METRICS_COMMANDS{$type}->{'start-end'});
+		next if (($done || $fini) && !$METRICS_COMMANDS{$type}->{'start-end'});
 		next if ($type =~ /^pgbouncer_|configuration_/);
 		next if (($type =~ /^(user|all)_/) && ($type !~ /^$STAT_TYPE/));
 		next if (($#METRICS >= 0) && !grep(/^$type$/, @METRICS));
@@ -2141,7 +2144,7 @@ Then after some time and activities on the database, stop the daemon as follow:
 
   pgcluu_collectd -k
 
-or by sending sigterm to the pgcluu_collectd's pid.
+or by sending sigint to the pgcluu_collectd's pid.
 
 You can run the collector in incremental mode using a daily or a hourly
 statistics rotation:
