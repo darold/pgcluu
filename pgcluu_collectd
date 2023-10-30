@@ -1924,7 +1924,8 @@ sub grab_os_information
 	$cmd = 'cat /sys/kernel/mm/*transparent_hugepage/enabled 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 	my $ret = `$cmd`;
-	if ($ret ne '') {
+	if ($ret ne '')
+	{
 		push(@system, "/sys/kernel/mm/transparent_hugepage/enabled: " . $ret);
 		$cmd = 'cat /sys/kernel/mm/*transparent_hugepage/defrag 2>/dev/null';
 		$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
@@ -1940,6 +1941,14 @@ sub grab_os_information
 	$ret = `$cmd`;
 	if ($ret ne '') {
 		push(@system, "scaling_governor: " . $ret);
+	}
+	# Since kernel 5.19, the migration cost is define in a file
+	if (!grep(/sched_migration_cost/, @system)) {
+		$cmd = 'cat /sys/kernel/debug/sched/migration_cost_ns 2>/dev/null';
+		$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+		$ret = `$cmd`;
+		chomp($ret);
+		push(@system, "/sys/kernel/debug/sched/migration_cost_ns: " . $ret);
 	}
 	# Look at block devices informations
 	my @devices;
@@ -2223,11 +2232,12 @@ sub dump_pgstatdatabase
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), datid, datname, " .
 		"numbackends, xact_commit, xact_rollback, blks_read, blks_hit" .
-		"%s%s%s " .
+		"%s%s%s%s " .
 		"FROM pg_stat_database ",
 		&backend_minimum_version(8, 3) ? ", tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted" : "",
 		&backend_minimum_version(9, 1) ? ", conflicts, date_trunc('seconds', stats_reset) AS stats_reset" : "",
-		&backend_minimum_version(9, 2) ? ", temp_files, temp_bytes, deadlocks, blk_read_time, blk_write_time" : ""
+		&backend_minimum_version(9, 2) ? ", temp_files, temp_bytes, deadlocks" : "",
+		&backend_minimum_version(17, 0) ? ", shared_blk_read_time, shared_blk_write_time" : ", blk_read_time, blk_write_time"
 	);
 
 	return $sql;
@@ -2454,7 +2464,7 @@ sub dump_xlog_stat
 	if (&backend_minimum_version(8, 4)) {
 		$sql = sprintf(
 			"SELECT date_trunc('seconds', now()), count(*) AS num_file, " .
-			"%s AS current, " .
+		        "(CASE WHEN pg_is_in_recovery() THEN '-'::text ELSE %s END) AS current, " .
 			"sum(is_recycled::int) AS is_recycled, " .
 			"sum((NOT is_recycled)::int) AS written, " .
 			"%s " .
@@ -2479,7 +2489,7 @@ sub dump_xlog_stat
 	} else {
 		$sql = sprintf(
 			"SELECT date_trunc('seconds', now()), count(*) AS num_file, " .
-      "(CASE WHEN pg_is_in_recovery() THEN '-'::text ELSE %s END) AS current, " .
+		        "(CASE WHEN pg_is_in_recovery() THEN '-'::text ELSE %s END) AS current, " .
 			"sum(recycled::int) AS is_recycled, " .
 			"sum((NOT recycled)::int) AS written, " .
 			"%s " .
