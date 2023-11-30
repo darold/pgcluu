@@ -268,6 +268,10 @@ my %METRICS_COMMANDS = (
 		'command'  => 'dump_pgwaitsampling',
 		'repeat'  => 1,
 	},
+	'subxact_stats' => {
+		'output'   => 'pg_subxact_counters.csv',
+		'command'  => 'dump_pgsubxactcounters',
+	},
 	'xlog_stats' => {
 		'output' => 'pg_xlog_stat.csv',
 		'command' => 'dump_xlog_stat'
@@ -1183,6 +1187,7 @@ sub collect_metrics
 
 	# Generating global statistics collector SQL script
 	my $script_sql = &create_sql_script();
+
 	if (!$script_sql && ($#METRICS < 0))
 	{
 		# No action can be perform with this PostgreSQL version
@@ -1313,7 +1318,6 @@ sub collect_metrics
 		`mv -f '$OUT_DIR/sysinfo.txt.tmp' '$OUT_DIR/sysinfo.txt'`;
 	}
 }
-
 
 sub get_initial_info
 {
@@ -1475,6 +1479,10 @@ sub verify_action
 	if ($NO_STATEMENTS || !$DB_INFO{pg_stat_statement}) {
 		delete $METRICS_COMMANDS{'statements_stats'};
 	}
+	$DB_INFO{pg_subxact_counters} = &has_pgsubxactcounters();
+	if (!$DB_INFO{pg_subxact_counters}) {
+		delete $METRICS_COMMANDS{'subxact_stats'};
+	}
 	if (!&is_superuser($DBUSER)) {
 		delete $METRICS_COMMANDS{'xlog_stats'};
 	}
@@ -1506,15 +1514,34 @@ sub create_sql_script
 		next if ($type =~ /^pgbouncer_|configuration_/);
 		next if (($type =~ /^(user|all)_/) && ($type !~ /^$STAT_TYPE/));
 		next if (($#METRICS >= 0) && !grep(/^$type$/, @METRICS));
-		# Look if there is the pg_wait_sampling extension in this database
-		if ($type eq 'waitevent_stats')
+
+		# For these extensions a database to connect is required as they use
+		# shared memory and must always be run only one time. They must all
+		# be installed is the same database.
+		if ($db)
 		{
-			next if (!$db || $NO_WAITEVENT);
-			next if (!grep(/^$db=.*pg_wait_sampling/, @extensions));
+			# Look if there is the pg_stat_statements extension in this database
+			if ($type eq 'statements_stats')
+			{
+				next if ($NO_STATEMENTS);
+				next if (!grep(/^$db=.*pg_stat_statements/, @extensions));
+			}
+			# Look if there is the pg_wait_sampling extension in this database
+			if ($type eq 'waitevent_stats')
+			{
+				next if ($NO_WAITEVENT);
+				next if (!grep(/^$db=.*pg_wait_sampling/, @extensions));
+			}
+			# Look if there is the pg_subxact_counters extension in this database
+			if ($type eq 'subxact_stats')
+			{
+				next if (!grep(/^$db=.*pg_subxact_counters/, @extensions));
+			}
 		}
+
 		if ($type eq 'stats_stats')
 		{
-			next if (!$db || $NO_PGSTATS_DUMP);
+			next if ($NO_PGSTATS_DUMP);
 		}
 
 		# Get the SQL command to execute for this metric
@@ -1814,7 +1841,7 @@ sub has_pg_buffercache
 sub has_pgstatstatements
 {
 
-	my $hasit = ` echo "SELECT n.nspname||'.'||p.proname FROM pg_proc p, pg_namespace n, pg_settings s WHERE p.proname='pg_stat_statements' AND p.pronamespace=n.oid AND s.name='shared_preload_libraries' AND s.setting LIKE '%pg_stat_statements%';" | $PSQL_PROG`;
+	my $hasit = `echo "SELECT n.nspname||'.'||p.proname FROM pg_proc p, pg_namespace n, pg_settings s WHERE p.proname='pg_stat_statements' AND p.pronamespace=n.oid AND s.name='shared_preload_libraries' AND s.setting LIKE '%pg_stat_statements%';" | $PSQL_PROG`;
 	if ($? != 0) {
 		unlink_pid_and_exit("FATAL: psql error.", 0);
 	}
@@ -1822,6 +1849,22 @@ sub has_pgstatstatements
 
 	return $hasit;
 }
+
+####
+# Check if the database have the pg_subxact_counters extension
+####
+sub has_pgsubxactcounters
+{
+
+	my $hasit = `echo "SELECT n.nspname||'.'||p.proname FROM pg_proc p, pg_namespace n, pg_settings s WHERE p.proname='pg_subxact_counters' AND p.pronamespace=n.oid AND s.name='shared_preload_libraries' AND s.setting LIKE '%pg_subxact_counters%';" | $PSQL_PROG`;
+	if ($? != 0) {
+		unlink_pid_and_exit("FATAL: psql error.", 0);
+	}
+	chomp($hasit);
+
+	return $hasit;
+}
+
 
 sub is_superuser
 {
@@ -2455,6 +2498,15 @@ sub dump_pgwaitsampling
 	return $sql;
 }
 
+sub dump_pgsubxactcounters
+{
+
+	my $sql = "SELECT date_trunc('seconds', now()), current_database(), " .
+			"subxact_start, subxact_commit, subxact_abort, subxact_overflow " .
+			"FROM public.pg_subxact_counters ";
+
+	return $sql;
+}
 
 sub dump_xlog_stat
 {

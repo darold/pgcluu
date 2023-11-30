@@ -136,6 +136,7 @@ our %all_settings_diff = ();
 our %all_db_role_setting_diff = ();
 our %all_pgbouncer_ini_diff = ();
 our %all_prepared_xact = ();
+our %all_subxact_counters = ();
 
 # Names of the variables that need to be saved as binary file
 our @pg_to_be_stored = (
@@ -191,6 +192,7 @@ our @pg_to_be_stored = (
 	'all_stat_statements',
 	'all_stat_unlogged',
 	'all_prepared_xact',
+	'all_subxact_counters',
 );
 
 # Names of sar variables that need to be saved as binary file
@@ -950,6 +952,16 @@ my %DB_GRAPH_INFOS = (
 			'legends' => ['Extended stats'],
 			'active' => 1,
 			'menu' => 'Extended statistics',
+		},
+	},
+	'pg_subxact_counters.csv' => {
+		'1' => {
+			'name' =>  'cluster-subxact_counters',
+			'title' => 'Global subtransactions counters',
+			'description' => 'Subtransactions can lead to performance issue. Counters to monitor the subtransactions (generation rate, overflow, state).',
+			'ylabel' => 'Number of subxact',
+			'legends' => ['Start','Commit','Abort', 'Overflow'],
+			'y2label' => 'Number of overflow',
 		},
 	},
 );
@@ -4571,6 +4583,76 @@ sub pg_stat_bgwriter_report
 	}
 }
 
+# Compute statistics of pg_subxact_counters
+sub pg_subxact_counters
+{
+	my ($in_dir, $file, $offset) = @_;
+
+	my @start_vals = ();
+	my %total_count = ();
+	my $tmp_val = 0;
+	# Load data from file
+	my $curfh = open_filehdl("$in_dir/$file");
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>)
+	{
+		$offset += length($l);
+		my @data = split(/;/, $l);
+		next if (!&normalize_line(\@data));
+
+		push(@start_vals, @data) if ($#start_vals < 0);
+
+		# Store interval between previous run
+		$all_subxact_counters{$data[0]}{interval} = ($data[0] - $start_vals[0])/1000;
+
+		if (($data[2] - $start_vals[2]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[2] - $start_vals[2]) };
+		$all_subxact_counters{$data[0]}{subxact_start} = $tmp_val;
+		if (($data[3] - $start_vals[3]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[3] - $start_vals[3]) };
+		$all_subxact_counters{$data[0]}{subxact_commit} = $tmp_val;
+		if (($data[4] - $start_vals[4]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[4] - $start_vals[4]) };
+		$all_subxact_counters{$data[0]}{subxact_abort} = $tmp_val;
+		if (($data[5] - $start_vals[5]) < 0) { $tmp_val = 0 } else { $tmp_val = ($data[5] - $start_vals[5]) };
+		$all_subxact_counters{$data[0]}{subxact_overflow} = $tmp_val;
+
+		@start_vals = ();
+		push(@start_vals, @data);
+	}
+	$curfh->close();
+
+	return $offset || 0;
+}
+
+# Compute graphs of pgbouncer statistics
+sub pg_subxact_counters_report
+{
+	my ($src_base, %data_info) = @_;
+
+	my %subxact_stat = ();
+	foreach my $t (sort {$a <=> $b} keys %all_subxact_counters)
+	{
+		$subxact_stat{start} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . ($all_subxact_counters{$t}{subxact_start} || 0) . '],';
+		$subxact_stat{commit} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . ($all_subxact_counters{$t}{subxact_commit} || 0) . '],';
+		$subxact_stat{abort} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . ($all_subxact_counters{$t}{subxact_abort} || 0) . '],';
+		$subxact_stat{overflow} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . ($all_subxact_counters{$t}{subxact_overflow} || 0) . '],';
+	}
+	%all_subxact_counters = ();
+
+	# Build graph dataset
+	foreach my $id (sort {$a <=> $b} keys %data_info)
+	{
+		my $pgbfh = &append_to_html_file("$OUTPUT_DIR/cluster-subxact_counters.html", $src_base);
+		if ($data_info{$id}{name} eq 'cluster-subxact_counters') {
+			$subxact_stat{start} =~ s/,$//;
+			$subxact_stat{commit} =~ s/,$//;
+			$subxact_stat{abort} =~ s/,$//;
+			$subxact_stat{overflow} =~ s/,$//;
+			$pgbfh->print( &jqplot_linegraph_array($IDX++, 'cluster-subxact_counters', \%{$data_info{$id}}, '', $subxact_stat{start}, $subxact_stat{commit}, $subxact_stat{abort}, $subxact_stat{overflow}) );
+			$pgbfh->print("</li>\n");
+		}
+		$pgbfh->close();
+	}
+}
+
 # Compute statistics of connections
 sub pg_stat_connections
 {
@@ -8023,6 +8105,7 @@ sub generate_html_menu
 		my $disable_pgbouncer = ' class="disabled"';
 		my $disable_transactions = ' class="disabled"';
 		my $disable_prepared = ' class="disabled"';
+		my $disable_subxact_counters = ' class="disabled"';
 
 		# Enable all menu that have a dedicated report.
 		if (-e "$OUTPUT_DIR/cluster-database-size.html") {
@@ -8159,6 +8242,9 @@ sub generate_html_menu
 			$disable_conf = '';
 			$disable_pgbouncer = '';
 		}
+		if (-e "$OUTPUT_DIR/cluster-subxact_counters.html") {
+			$disable_subxact_counters = '';
+		}
 
 		$menu_str .= qq{
               <li id="menu-cluster" class="dropdown">
@@ -8225,6 +8311,7 @@ sub generate_html_menu
 		      <li id="menu-cluster-transactions"$disable_transactions><a href="cluster-database-transactions.html">Transaction throughput</a></li>
 		      <li id="menu-cluster-prepared"$disable_prepared><a href="cluster-database-prepared.html">Prepared transactions</a></li>
 		      <li id="menu-cluster-canceled_queries"$disable_canceled><a href="cluster-database-canceled_queries.html">Canceled queries</a></li>
+		      <li id="menu-cluster-subxact_counters"$disable_subxact_counters><a href="cluster-subxact_counters.html">Subxact counters</a></li>
 		      <li class="divider"></li>
 			<li id="menu-replication" class="dropdown-submenu$disable_allrepli">
 			   <a href="#" tabindex="-1">Replication statistics </a>
