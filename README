@@ -455,6 +455,15 @@ COLLECTING STATISTICS
 
     Then now you can proceed with pgcluu to generate reports.
 
+  Additional statistics from extensions
+    To be able to report top statements, wait events and subxact statistics
+    you need to create the related extensions into a single database and use
+    this database for primary connection to pgcluu_collectd using the -d
+    option.
+
+    The related extension are pg_stat_statements, pg_wait_sampling and
+    pg_subxact_counters.
+
   Rotation and compression
     When used the --rotate-daily or --rotate-hourly commands line option
     will force pgcluu_collectd to rotate daily or hourly all statistic's
