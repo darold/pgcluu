@@ -12340,7 +12340,6 @@ sub read_sysinfo_file
 			push(@{$sysinfo{$section}}, '<tr><td>' . join('</td><td>', split(/\s+/, $l)) . "</td></tr>");
 		}
 		elsif ($section eq 'MOUNT') {
-			next if ($l !~ /^\//);
 			push(@{$sysinfo{$section}}, '<tr><td>' . join('</td><td>', split(/\s+on\s+|\s+type\s+|\s+/, $l)) . '</td></tr>');
 		}
 		elsif ($section eq 'SYSTEM') {
