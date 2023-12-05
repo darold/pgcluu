@@ -8289,7 +8289,7 @@ sub generate_html_menu
 		if (&backend_minimum_version(9.2) && (-e "$OUTPUT_DIR/cluster-database-deadlocks.html")) {
 			$disable_deadlock = '';
 		}
-		if (-e "$OUTPUT_DIR/cluster-database-buffersused.html") {
+		if (-e "$OUTPUT_DIR/cluster-buffersused.html") {
 			$disable_buffercache = '';
 			$disable_buffer = '';
 		}
@@ -8437,10 +8437,10 @@ sub generate_html_menu
 			<li id="menu-pgbuffercache" class="dropdown-submenu$disable_buffer">
 			   <a href="#" tabindex="-1">Shared buffers statistics </a>
 			      <ul class="dropdown-menu">
-			      <li id="menu-cluster-buffersused"$disable_buffercache><a href="cluster-database-buffersused.html">Shared buffers utilization</a></li>
-			      <li id="menu-cluster-databaseloaded"$disable_buffercache><a href="cluster-database-databaseloaded.html">Database in shared buffers</a></li>
-			      <li id="menu-cluster-usagecount"$disable_buffercache><a href="cluster-database-usagecount.html">Usagecount in shared buffers</a></li>
-			      <li id="menu-cluster-isdirty"$disable_buffercache><a href="cluster-database-isdirty.html">Usagecount in dirty buffers</a></li>
+			      <li id="menu-cluster-buffersused"$disable_buffercache><a href="cluster-buffersused.html">Shared buffers utilization</a></li>
+			      <li id="menu-cluster-databaseloaded"$disable_buffercache><a href="cluster-databaseloaded.html">Database in shared buffers</a></li>
+			      <li id="menu-cluster-usagecount"$disable_buffercache><a href="cluster-usagecount.html">Usagecount in shared buffers</a></li>
+			      <li id="menu-cluster-isdirty"$disable_buffercache><a href="cluster-isdirty.html">Usagecount in dirty buffers</a></li>
 			      </ul>
 			</li>
 		      <li class="divider"></li>
