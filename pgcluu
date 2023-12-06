@@ -5689,9 +5689,14 @@ sub pg_stat_locks
 		next if (!&normalize_line(\@data));
 
 		# timestamp|database|label|(type|mode|granted)|count
-		$data[3] = 'granted' if ($data[3] eq 't');
-		$data[3] = 'waiting' if ($data[3] eq 'f');
+		$data[3] = 'granted' if ($data[2] eq 'lock_granted' && $data[3] eq 't');
+		$data[3] = 'waiting' if ($data[2] eq 'lock_granted' && $data[3] eq 'f');
 		$all_stat_locks{$data[0]}{$data[1]}{$data[2]}{$data[3]} += $data[4];
+		if ($data[3] eq 'granted') {
+			$all_stat_locks{$data[0]}{$data[1]}{$data[2]}{'waiting'} += 0;
+		} elsif ($data[3] eq 'waiting') {
+			$all_stat_locks{$data[0]}{$data[1]}{$data[2]}{'granted'} += 0;
+		}
 	}
 	$curfh->close();
 
@@ -5708,8 +5713,7 @@ sub pg_stat_locks_report
 	foreach my $t (keys %all_stat_locks) {
 		foreach my $db (keys %{$all_stat_locks{$t}}) {
 			foreach my $lbl (keys %{$all_stat_locks{$t}{$db}}) {
-				push(@{$legends{$db}{$lbl}}, 'waiting') if ( grep(/^waiting$/, @{$legends{$db}{$lbl}}) && (${$legends{$db}{$lbl}}[0] eq 'granted') );
-				foreach my $k (@{$legends{$db}{$lbl}}) {
+				foreach my $k (sort keys %{$all_stat_locks{$t}{$db}{$lbl}}) {
 					$locks_stat{$db}{$lbl}{$k} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . ($all_stat_locks{$t}{$db}{$lbl}{$k}||0) . '],';
 				}
 			}
@@ -8790,6 +8794,7 @@ sub generate_html_menu
 		{
 			$disable_deadlock = "";
 			$disable_locks = "";
+			$disable_lock = "";
 		}
 		if (-e "$OUTPUT_DIR/database-tx-$db.html")
 		{
