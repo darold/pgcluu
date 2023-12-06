@@ -5683,7 +5683,8 @@ sub pg_stat_locks
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
 	$curfh->seek($offset,0);
-	while (my $l = <$curfh>) {
+	while (my $l = <$curfh>)
+	{
 		$offset += length($l);
 		my @data = split(/;/, $l);
 		next if (!&normalize_line(\@data));
@@ -5714,7 +5715,21 @@ sub pg_stat_locks_report
 		foreach my $db (keys %{$all_stat_locks{$t}}) {
 			foreach my $lbl (keys %{$all_stat_locks{$t}{$db}}) {
 				foreach my $k (sort keys %{$all_stat_locks{$t}{$db}{$lbl}}) {
+					push(@{$legends{$db}{$lbl}}, $k) if (!grep(/^$k$/, @{$legends{$db}{$lbl}}));
+				}
+			}
+		}
+	}
+	foreach my $t (keys %all_stat_locks) {
+		foreach my $db (keys %{$all_stat_locks{$t}}) {
+			foreach my $lbl (keys %{$all_stat_locks{$t}{$db}}) {
+				foreach my $k (sort keys %{$all_stat_locks{$t}{$db}{$lbl}}) {
 					$locks_stat{$db}{$lbl}{$k} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . ($all_stat_locks{$t}{$db}{$lbl}{$k}||0) . '],';
+				}
+				# Complete inexisting values for other labels
+				foreach my $e (@{$legends{$db}{$lbl}}) {
+					next if (exists $all_stat_locks{$t}{$db}{$lbl}{$e});
+					$locks_stat{$db}{$lbl}{$e} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',0],';
 				}
 			}
 		}
@@ -12160,10 +12175,10 @@ sub jqplot_linegraph
 <script type="text/javascript">
 /* <![CDATA[ */
 @$data
-var series_arr = [ $options_series ];
+var series_arr_$buttonid = [ $options_series ];
 
 create_download_button($buttonid, 'btn');
-var graph_${buttonid} = create_linegraph('$divid$buttonid', '$title', '$ylabel', series_arr, $dateTracker_dataopts, '$y2label');
+var graph_${buttonid} = create_linegraph('$divid$buttonid', '$title', '$ylabel', series_arr_$buttonid, $dateTracker_dataopts, '$y2label');
 add_download_button_event($buttonid, '$divid$buttonid', graph_${buttonid});
 /* ]]> */
 </script>
