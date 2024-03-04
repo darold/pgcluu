@@ -66,11 +66,11 @@ my $MAX_INDEXES     = 5;
 my $RETENTION       = 0;
 my $EXTERNAL_MENU   = 0;
 
-
 my $OVERRIDE        = 1; # Force overriding of resources files (css and js) at each pgcluu run
 
 my $SAR_UPPER_11_5_6 = 0;
 my $SAR_UPPER_12_1_1 = 0;
+my $SAR_UPPER_12_3_9 = 0;
 
 my %RELKIND = (
 	'r' => 'tables',
@@ -7407,7 +7407,8 @@ sub generate_html_index
 		} elsif (${$OVERALL_STATS{'system'}{'bwrite'}}[0] !~ /\D/) {
 			${$OVERALL_STATS{'system'}{'bwrite'}}[0] = localtime(${$OVERALL_STATS{'system'}{'bwrite'}}[0]/1000);
 		}
-		if (!$SAR_UPPER_12_1_1)
+
+		if (!$SAR_UPPER_12_1_1)  # Service time (disappears in 12.1.2)
 		{
 			if (!exists $OVERALL_STATS{'system'}{'svctm'}) {
 				@{$OVERALL_STATS{'system'}{'svctm'}} = ('unknown', 0, 'unknown');
@@ -7415,13 +7416,10 @@ sub generate_html_index
 				${$OVERALL_STATS{'system'}{'svctm'}}[0] = localtime(${$OVERALL_STATS{'system'}{'svctm'}}[0]/1000);
 			}
 		}
-		else
-		{
-			if (!exists $OVERALL_STATS{'system'}{'await'}) {
-				@{$OVERALL_STATS{'system'}{'await'}} = ('unknown', 0, 'unknown');
-			} elsif (${$OVERALL_STATS{'system'}{'await'}}[0] !~ /\D/) {
-				${$OVERALL_STATS{'system'}{'await'}}[0] = localtime(${$OVERALL_STATS{'system'}{'await'}}[0]/1000);
-			}
+		if (!exists $OVERALL_STATS{'system'}{'await'}) {
+			@{$OVERALL_STATS{'system'}{'await'}} = ('unknown', 0, 'unknown');
+		} elsif (${$OVERALL_STATS{'system'}{'await'}}[0] !~ /\D/) {
+			${$OVERALL_STATS{'system'}{'await'}}[0] = localtime(${$OVERALL_STATS{'system'}{'await'}}[0]/1000);
 		}
 
 		if (exists $OVERALL_STATS{'system'}{'devices'})
@@ -7691,7 +7689,7 @@ EOF
 		<li><span class="figure">$OVERALL_STATS{'system'}{'load'}[1]</span> <span class="figure-label">Highest system load</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'load'}[0])</span></li>
 		<li><span class="figure">$OVERALL_STATS{'system'}{'blocked'}[1]</span> <span class="figure-label">Highest blocked processes</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'blocked'}[0])</span></li>
 EOF
-
+		# service time or await depending on sar version
 		if (!$SAR_UPPER_12_1_1) {
 			print $fh qq{<li><span class="figure">$OVERALL_STATS{'system'}{'svctm'}[1] ms</span> <span class="figure-label">Highest device service time</span><br/><span class="figure-date">($OVERALL_STATS{'system'}{'svctm'}[0] on device $OVERALL_STATS{'system'}{'svctm'}[2])</span></li>\n};
 		} else {
@@ -9991,29 +9989,29 @@ sub compute_srvtime_stat
 {
 	for (my $i = 0; $i <= $#_; $i++)
 	{
-		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;[srvtm;]%util
-		# sysstat version 11.5.7:
-		# Replace "avgrq-sz" field (expressed in sectors) with "areq-sz" (expressed in kilobytes)
-		# Rename "avgqu-sz" field to "aqu-sz"
-		# "rd_sec/s" and "wr_sec/s" (expressed in sectors) fields have been replaced
-		# with "rkB/s" and "wkB/s" (expressed in kilobytes)
-		# sysstat version 12.1.2:
-		# Remove service time (svctm) metric.
-		my @data = split(/;/, $_[$i]);
+	    # See compute_rw_device_stat for explanation of columns of $data,
+	    # and sar_stats.dat examples in load_sarfile_stats
+
+	    my @data = split(/;/, $_[$i]);
+		# print ("DEBUG : CC, data2 = $data[2] ; data3 = $data[3] ; data9 = $data[9] \n");
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
 		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
 		next if ($END   && ($data[2] > $END_STAT));
-		next if (!&device_in_report($data[3]));
+		my $device = $data[3 + (8 * $SAR_UPPER_12_3_9)] ;
+		next if (!&device_in_report($device));
 
 		map { s/,/\./ } @data ;
-		if ($SAR_UPPER_12_1_1 || $#data == 10)
-		{
-			$sar_srvtime_stat{$data[2]}{$data[3]}{'await'} = ($data[9]||0);
-		} else {
-			$sar_srvtime_stat{$data[2]}{$data[3]}{'await'} = ($data[9]||0);
-			$sar_srvtime_stat{$data[2]}{$data[3]}{'svctm'} = ($data[10]||0);
+
+		if ($SAR_UPPER_12_3_9) {
+			$sar_srvtime_stat{$data[2]}{$device}{'await'} = ($data[9]||0);
+		} elsif ($SAR_UPPER_12_1_1) {
+			# sar > 12.1.1 and sar < 12.4.0
+			$sar_srvtime_stat{$data[2]}{$device}{'await'} = ($data[10]||0);
+		} else {     # sar < 12.1.2
+			$sar_srvtime_stat{$data[2]}{$device}{'await'} = ($data[9]||0);
+			$sar_srvtime_stat{$data[2]}{$device}{'svctm'} = ($data[10]||0);
 		}
 	}
 }
@@ -10078,28 +10076,33 @@ sub compute_srvtime_report
 sub compute_rw_device_stat
 {
 	for (my $i = 0; $i <= $#_; $i++) {
-		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;%util
-		# sysstat version 12.1.2:
-		# Remove service time (svctime) field
-		# sysstat version 11.5.7:
-		# Replace "avgrq-sz" field (expressed in sectors) with "areq-sz" (expressed in kilobytes)
-		# Rename "avgqu-sz" field to "aqu-sz"
-		# "rd_sec/s" and "wr_sec/s" (expressed in sectors) fields have been replaced
-		# with "rkB/s" and "wkB/s" (expressed in kilobytes)
+
+		# See function load_sarfile_stats for explanations of sar -dp output
+		#
+		# timestamp        : data[2]
+		# device           : data[3] (sar < 12.4.0)  or   data [11] (sar >=12.4.0)
+		# tps              : data[4]
+		# rd_sec/s (rkB/s) : data[5]
+		# wr_sec/s (wkB/s) : data[6]
+		# await            : data[9]   (except sar > 12.1.1 and sar < 12.4.0 : data[10] )
+		# %util            : data[10]  (          "                 "        : data[11] )
+
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
 		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
 		next if ($END   && ($data[2] > $END_STAT));
-		next if (!&device_in_report($data[3]));
+
+		my $device = $data[3 + (8 * $SAR_UPPER_12_3_9)] ;  # 3 or 11
+		next if (!&device_in_report($device));
 
 		map { s/,/\./ } @data ;
 		my $sector = 512;
 		$sector = 1024 if ($SAR_UPPER_11_5_6);
-		$sar_rw_devices_stat{$data[2]}{$data[3]}{'rd_sec/s'} = ($data[5]*$sector);
-		$sar_rw_devices_stat{$data[2]}{$data[3]}{'wr_sec/s'} = ($data[6]*$sector);
-		$sar_rw_devices_stat{$data[2]}{$data[3]}{'tps'}      = ($data[4]||0);
+		$sar_rw_devices_stat{$data[2]}{$device}{'rd_sec/s'} = ($data[5]*$sector);
+		$sar_rw_devices_stat{$data[2]}{$device}{'wr_sec/s'} = ($data[6]*$sector);
+		$sar_rw_devices_stat{$data[2]}{$device}{'tps'}      = ($data[4]||0);
 	}
 }
 
@@ -10109,8 +10112,13 @@ sub compute_rw_device_report
 	my $src_base = shift();
 
 	my %devices_stat = ();
+
+	# for each timestamp
 	foreach my $t (sort {$a <=> $b} keys %sar_rw_devices_stat) {
+
+		# for each device
 		foreach my $dev (keys %{$sar_rw_devices_stat{$t}}) {
+
 			if ($data_info->{name} eq 'system-device') {
 				$OVERALL_STATS{'system'}{'devices'}{$dev}{read} += $sar_rw_devices_stat{$t}{$dev}{'rd_sec/s'};
 				$OVERALL_STATS{'system'}{'devices'}{$dev}{write} += $sar_rw_devices_stat{$t}{$dev}{'wr_sec/s'};
@@ -10149,6 +10157,7 @@ sub compute_rw_device_report
                         $fh->close;
 		}
 	}
+	@DEVICE_LIST = sort @DEVICE_LIST
 }
 
 sub compute_space_device_stat
@@ -10221,28 +10230,26 @@ sub compute_space_device_report
 
 sub compute_util_device_stat
 {
+	# See function compute_rw_device_stat for explanation of columns of $data
+	# and function load_sarfile_stats for examples of sar_stats.dat
+
 	my %devices = ();
 
 	for (my $i = 0; $i <= $#_; $i++) {
-		# hostname;interval;timestamp;DEV;tps;rd_sec/s;wr_sec/s;avgrq-sz;avgqu-sz;await;%util
-		# sysstat version 12.1.2:
-		# Remove service time (svctime) field
-		# sysstat version 11.5.7:
-		# Replace "avgrq-sz" field (expressed in sectors) with "areq-sz" (expressed in kilobytes)
-		# Rename "avgqu-sz" field to "aqu-sz"
-		# "rd_sec/s" and "wr_sec/s" (expressed in sectors) fields have been replaced
-		# with "rkB/s" and "wkB/s" (expressed in kilobytes)
+
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
 		next if ($BEGIN && ($data[2] < $BEGIN_STAT));
 		next if ($END   && ($data[2] > $END_STAT));
-		next if (!&device_in_report($data[3]));
+		my $device = $data[3 + (8 * $SAR_UPPER_12_3_9)] ;
+		next if (!&device_in_report($device));
 
 		map { s/,/\./ } @data ;
-		$sar_util_devices_stat{$data[2]}{$data[3]}{'%util'} = ($data[11]||0);
-		$devices{$data[3]} = 1;
+		# %util is stored in data[10], except for sar > 12.1.1 and sar < 12.4.0, where it is data[11]
+		$sar_util_devices_stat{$data[2]}{$device}{'%util'} = ($data[10 + $SAR_UPPER_12_1_1 - $SAR_UPPER_12_3_9 ]||0);
+		$devices{$device} = 1;
 	}
 	foreach my $k (keys %devices) {
 		push(@DEVICE_LIST, $k) if (!grep(/^$k$/, @DEVICE_LIST));
@@ -10909,6 +10916,7 @@ sub find_report_type
 	my $data = shift;
 	my $type = '';
 
+	# print ("DEBUG: candidate data : $data \n") if ($DEBUG);
 	if ($data =~ m#nvcswch/s#) {
 		$type = 'pcswch';
 	} elsif ($data =~ m#cswch/s#) {
@@ -10935,7 +10943,8 @@ sub find_report_type
 		$type = 'page';
 	} elsif ($data =~ m#pswpin/s\s+#) {
 		$type = 'pswap';
-	} elsif ( ($data =~ m#tps\s+#) && ($data !~ m#DEV\s+#) ) {
+	# sar -b (IO)
+	} elsif ( ($data =~ m#tps\s+#) && ($data !~ m#DEV\s+#) && ($data !~ m#\s+DEV$#) ) {
 		$type = 'io';
 	} elsif ($data =~ m#kB_ccwr/s\s+#) {
 		$type = 'pio';
@@ -10947,7 +10956,8 @@ sub find_report_type
 		$type = 'net';
 	} elsif ($data =~ m#IFACE\s+rxerr/s\s+#) {
 		$type = 'err';
-	} elsif ($data =~ m#DEV\s+#) {
+	# devices (sar -dp) : from sar 12.4.0, DEV may be at the end
+	} elsif ($data =~ m#DEV\s+# or $data =~ m#\s+DEV$#) {
 		$type = 'dev';
 	} elsif ($data =~ m#kbmemfree\s+#) {
 		$type = 'mem';
@@ -10969,7 +10979,7 @@ sub find_report_type
 	} elsif ($data =~ m#\%ufsused#) {
 		$type = 'space';
 	}
-
+	# print ("DEBUG : type = $type \n")  if ($DEBUG);
 	return $type;
 }
 
@@ -10983,6 +10993,7 @@ sub load_sarfile_stats
 	# Load data from file
 	my @content = ();
 	my $offset = 0;
+	print ("DEBUG : loading sar file \n") if ($DEBUG) ;
 	$offset = $global_infos{"$file"} if (exists $global_infos{"$file"});
 
 	my $curfh = open_filehdl("$file");
@@ -10996,22 +11007,65 @@ sub load_sarfile_stats
 		if ( ($l eq '') || ($l =~ /^\d+:\d+:\d+/) || ($l =~ /\d+[\-\/]\d+[\-\/]\d+/)) {
 			push(@content, $l);
 		}
-		# Look if the format of systat have changed
+
+		# Detecting the sysstat version from the sar -dp output
+		# (pgcluu_collectd does ask for -p)
+
+		# sysstat 10.1.5 (eg CentOS 7) ; DEV always at the beginning (-p or not)
+		#
+		# 12:14:34          DEV       tps  rd_sec/s  wr_sec/s  avgrq-sz  avgqu-sz     await     svctm     %util
+		# 12:14:34          vda      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
+		# 12:14:34          vdb      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
+		# 12:14:34          vdc      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
+
+		# systat 11.5.7:
+		#   Replace "avgrq-sz" field (unit: sectors) with "areq-sz" (kilobytes)
+		#   Rename "avgqu-sz" field to "aqu-sz"
+		#   Replace "rd_sec/s" and "wr_sec/s" (sectors/s) with "rkB/s" and "wkB/s" (kilobytes/s)
+		#   (to be consistent with iostat output)
+		#
+		# 18:43:05          DEV       tps     rkB/s     wkB/s   areq-sz    aqu-sz     await     svctm     %util
+		# 18:43:06      nvme0n1      3.00      0.00     44.00     14.67      0.02      7.33      8.00      2.40
+
+		# sysstat 11.7.3 (Rocky 8), sysstat 12.0.3 (Debian 10) : same as above
+		#
+		# 12:03:57          DEV       tps     rkB/s     wkB/s   areq-sz    aqu-sz     await     svctm     %util
+		# 12:03:58          vda      1.00      0.00      4.00      4.00      0.02     28.00     24.00      2.40
+		# 12:03:59          vda      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
+
+		# sysstat 12.1.2:
+		#   Remove obsolete metric service time (svctime)
+		#   Add discard metric (dkB/s)
+		#
+		# 15:14:59          DEV       tps     rkB/s     wkB/s     dkB/s   areq-sz    aqu-sz     await     %util
+		# 15:15:00      nvme0n1      6.00      0.00     40.00      0.00      6.67      0.04      6.83      1.60
+
+		# sysstat 12.4.0: DEV goes at the (with -p)
+		#
+		# 15:18:38          tps     rkB/s     wkB/s     dkB/s   areq-sz    aqu-sz     await     %util DEV
+		# 15:18:39         3.00      0.00     40.00      0.00     13.33      0.01      3.67      1.20 nvme0n1
+		# 15:18:39        11.00      0.00     40.00      0.00      3.64      0.07      6.55      1.20 nvme0n1p3_crypt
+
+		# sysstat 12.5.2 (Ubuntu 22.04, Debian 11) , 12.5.4  (Rocky 9), 12.6.1 (Debian 12) : same as above
+		#
+		# 14:07:06          tps     rkB/s     wkB/s     dkB/s   areq-sz    aqu-sz     await     %util DEV
+		# 14:07:07         0,00      0,00      0,00      0,00      0,00      0,00      0,00      0,00 nvme0n1
+		# 14:07:07         0,00      0,00      0,00      0,00      0,00      0,00      0,00      0,00 nvme0n1p3_crypt
+
 		if (!$SAR_UPPER_11_5_6 && $l =~ m#wkB/s#)
 		{
-			# Replace "rd_sec/s" and "wr_sec/s" fields with "rkB/s" and "wkB/s".
-			# fields are now expressed in kilobytes instead of sectors. This also make
-			# them consistent with iostat's output.
-			# Replace "avgrq-sz" field with "areq-sz". This field is now expressed in
-			# kilobytes instead of sectors and make it consistent with iostat's output.
-			# Rename "avgqu-sz" field to "aqu-sz" to make it consistent with iostat's
-			# output.
 			$SAR_UPPER_11_5_6 = 1;
+			print ("DEBUG : sar > 11.5.6 detected \n") ;
 		}
 		if (!$SAR_UPPER_12_1_1 && $l =~ /await/ && $l !~ /srvtime/)
 		{
-			# Since version 12.1.2 the obsolete metric srvtime has been removed.
 			$SAR_UPPER_12_1_1 = 1;
+			print ("DEBUG : sar > 12.1.1 detected \n") ;
+			if (!$SAR_UPPER_12_3_9 && $l =~ /%util DEV$/)
+			{
+				$SAR_UPPER_12_3_9 = 1 ;
+				print ("DEBUG : sar > 12.4.0 detected \n") ;
+			}
 		}
 	}
 	$curfh->close();
@@ -11357,10 +11411,7 @@ sub compute_sarfile_stats
 	my ($file, $in_dir, %data_info) = @_;
 
     print "DEBUG: Computing sarfile stats: $data_info{name} \n" if ($DEBUG);
-
-	$SAR_UPPER_11_5_6 = 0;
-
-	# Load sar statistics from file if not already done
+	# Load sar statistics from file if not already done
 	load_sarfile_stats($file) if (scalar keys %fulldata == 0);
 
 	# With old sar version there is no filesystem use stats
@@ -11383,7 +11434,6 @@ sub compute_sarfile_stats
 	{
 		# Compute cpu statistics
 		&compute_cpu_stat(@{$fulldata{cpu}});
-
 	}
 
 	####
@@ -11746,11 +11796,11 @@ sub compute_sar_graph
 		&compute_space_device_report(\%data_info, $src_base);
 	}
 
-	####
-	# Show Device service time
-	####
 	if (!$SAR_UPPER_12_1_1)
 	{
+		####
+		# Show Device service time (old sar versions)
+		####
 		if ($data_info{name} eq 'system-srvtime')
 		{
 			# Compute graphs for service time per device statistics
