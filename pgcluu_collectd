@@ -1711,6 +1711,20 @@ sub get_uptime
 	return $uptime;
 }
 
+####
+# Get PGDATA path
+####
+sub get_pgdata_path
+{
+	my $path = `echo "SELECT setting FROM pg_settings WHERE name='data_directory';" | $PSQL_PROG`;
+	if ($? != 0) {
+	       unlink_pid_and_exit("FATAL: psql error.", 0);
+	}
+	chomp($path);
+
+	return $path;
+}
+
 
 ####
 # Retrieve schemas for a given database.
@@ -1985,14 +1999,16 @@ sub grab_os_information
 	if ($ret ne '') {
 		push(@system, "scaling_governor: " . $ret);
 	}
-	# Since kernel 5.19, the migration cost is define in a file
+	# Since kernel 5.19, the migration cost is define in a file, /sys/kernel/debug
+	# must be readable by the user running pgcluu_collectd
 	if (!grep(/sched_migration_cost/, @system)) {
 		$cmd = 'cat /sys/kernel/debug/sched/migration_cost_ns 2>/dev/null';
 		$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 		$ret = `$cmd`;
 		chomp($ret);
-		push(@system, "/sys/kernel/debug/sched/migration_cost_ns: " . $ret);
+		push(@system, "/sys/kernel/debug/sched/migration_cost_ns: " . $ret) if ($ret ne '');
 	}
+
 	# Look at block devices informations
 	my @devices;
 	$cmd = 'ls /sys/block/ | grep -v "^loop"';
@@ -2001,16 +2017,16 @@ sub grab_os_information
 		chomp($device);
 		push(@row , 'Device : ' . $device . "\n");
 		# Fetch scheduler setting
-		$cmd = 'cat /sys/block/' . $device . '/queue/scheduler';
+		$cmd = 'cat /sys/block/' . $device . '/queue/scheduler 2>/dev/null';
 		push(@row , '/queue/scheduler : ' . `$cmd`);
 		# Fetch add_random setting
-		$cmd = 'cat /sys/block/' . $device . '/queue/add_random';
+		$cmd = 'cat /sys/block/' . $device . '/queue/add_random 2>/dev/null';
 		push(@row , '/queue/add_random : ' . `$cmd`);
 		# Fetch rq_affinity setting
-		$cmd = 'cat /sys/block/' . $device . '/queue/rq_affinity';
+		$cmd = 'cat /sys/block/' . $device . '/queue/rq_affinity 2>/dev/null';
 		push(@row , '/queue/rq_affinity : ' . `$cmd`);
 		# Fetch rotational setting
-		$cmd = 'cat /sys/block/' . $device . '/queue/rotational';
+		$cmd = 'cat /sys/block/' . $device . '/queue/rotational 2>/dev/null';
 		push(@row , '/queue/rotational : ' . `$cmd`);
 		push(@devices, @row);
 	}
@@ -2040,6 +2056,12 @@ sub grab_os_information
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 	@installation = `$cmd`;
 
+	# Get all file status from PGDATA directory
+	my $pgdata = &get_pgdata_path();
+	$cmd = "ls -la $pgdata/ 2>/dev/null";
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my @list_pgdatafiles = `$cmd`;
+
 	print $fhl "[CPU]\n";
 	print $fhl @cpuinfo;
 	print $fhl "[KERNEL]\n";
@@ -2066,6 +2088,8 @@ sub grab_os_information
 	print $fhl @crontab;
 	print $fhl "[INSTALLATION]\n";
 	print $fhl @installation;
+	print $fhl "[PGDATA]\n";
+	print $fhl @list_pgdatafiles;
 
 	close($fhl);
 }

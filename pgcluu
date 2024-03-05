@@ -7841,6 +7841,30 @@ EOF
 EOF
 	}
 
+	if (exists $sysinfo{PGDATA}) {
+		my $pgdata_infos = join('', @{$sysinfo{PGDATA}});
+		print $fh <<EOF;
+      <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="glyphicon icon-briefcase icon-2x pull-left"></i><h2>PGDATA</h2>
+              </div>
+              <div class="panel-body">
+		<div class="key-figures">
+		<ul>
+		<li></li>
+		<pre>$pgdata_infos</pre>
+		</ul>
+		</div>
+              </div>
+              </div>
+            </div><!--/span-->
+	</div>
+EOF
+	}
+
+
 	print $fh <<EOF;
 </li>
 
@@ -11055,16 +11079,13 @@ sub load_sarfile_stats
 		if (!$SAR_UPPER_11_5_6 && $l =~ m#wkB/s#)
 		{
 			$SAR_UPPER_11_5_6 = 1;
-			print ("DEBUG : sar > 11.5.6 detected \n") ;
 		}
 		if (!$SAR_UPPER_12_1_1 && $l =~ /await/ && $l !~ /srvtime/)
 		{
 			$SAR_UPPER_12_1_1 = 1;
-			print ("DEBUG : sar > 12.1.1 detected \n") ;
 			if (!$SAR_UPPER_12_3_9 && $l =~ /%util DEV$/)
 			{
 				$SAR_UPPER_12_3_9 = 1 ;
-				print ("DEBUG : sar > 12.4.0 detected \n") ;
 			}
 		}
 	}
@@ -12317,7 +12338,7 @@ sub read_sysinfo
 {
         my $in_dir = shift;
 
-	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA JSON/;
+	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA JSON PGDATA/;
 	foreach my $s (@toclear) {
 		delete $sysinfo{$s};
 	}
@@ -12494,7 +12515,7 @@ sub read_sysinfo_file
 			my ($name, $val) = split(/[=]+/, $l);
 			$sysinfo{$section}{$name} = $val;
 		}
-		elsif ($section =~ /^(PCI|CRONTAB|INSTALLATION)$/) {
+		elsif ($section =~ /^(PCI|CRONTAB|INSTALLATION|PGDATA)$/) {
 			push(@{$sysinfo{$section}}, "$l\n");
 		}
 	}
@@ -12872,7 +12893,7 @@ sub load_sysinfo_binary
 	my %_sysinfo = %{$stats{sysinfo}};
 
 	# Empty arrays before filling them
-	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA JSON/;
+	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA JSON PGDATA/;
 	foreach my $s (@toclear) {
 		delete $sysinfo{$s};
 	}
