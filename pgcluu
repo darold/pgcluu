@@ -5864,7 +5864,8 @@ sub pg_stat_redundant_indexes
 
 	# Load data from file
 	my $curfh = open_filehdl("$in_dir/$file");
-	while (my $l = <$curfh>) {
+	while (my $l = <$curfh>)
+	{
 		chomp($l);
 		next if (!$l);
 		my @data = split(/;/, $l);
@@ -5872,6 +5873,12 @@ sub pg_stat_redundant_indexes
 		# Do not report indexes when one is partial and not the other one
 		# otherwise keep it for user recheck
 		next if (grep(/\bWHERE\b/i, $data[2], $data[3]) == 1);
+
+		if ($data[2] =~ / USING ([^\s]+)/)
+		{
+			my $using = $1;
+			next if ($data[3] !~ / USING $using/);
+		}
 
 		# timestamp | dbname | contained | containing
 		push(@{$all_stat_redundant_indexes{$data[1]}}, [ ($data[2], $data[3]) ] );
