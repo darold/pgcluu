@@ -39,7 +39,7 @@ my $CAT_PROG    = 'cat ';
 my $PIDSTAT_PROG = 'pidstat';
 
 # Global variables
-my $CONFIG_FILE     = "/etc/pgcluu.conf";
+my $CONFIG_FILE     = "/usr/local/etc/pgcluu.conf";
 my $SAR_FILE    = 'sar_stats.dat';
 my $PIDSTAT_FILE    = 'pidstat_stats.dat';
 my $PIDFILE     = "/var/run/postgresql/pgcluu_collectd.pid";
@@ -2012,22 +2012,27 @@ sub grab_os_information
 	# Look at block devices informations
 	my @devices;
 	$cmd = 'ls /sys/block/ | grep -v "^loop"';
-	foreach my $device ( `$cmd` ) {
+	foreach my $device ( `$cmd` )
+	{
 		my @row;
 		chomp($device);
 		push(@row , 'Device : ' . $device . "\n");
 		# Fetch scheduler setting
 		$cmd = 'cat /sys/block/' . $device . '/queue/scheduler 2>/dev/null';
-		push(@row , '/queue/scheduler : ' . `$cmd`);
+		my $ret = `$cmd`;
+		push(@row , '/queue/scheduler : ' . $ret) if ($ret);
 		# Fetch add_random setting
 		$cmd = 'cat /sys/block/' . $device . '/queue/add_random 2>/dev/null';
-		push(@row , '/queue/add_random : ' . `$cmd`);
+		$ret = `$cmd`;
+		push(@row , '/queue/add_random : ' . $ret) if ($ret);
 		# Fetch rq_affinity setting
 		$cmd = 'cat /sys/block/' . $device . '/queue/rq_affinity 2>/dev/null';
-		push(@row , '/queue/rq_affinity : ' . `$cmd`);
+		$ret = `$cmd`;
+		push(@row , '/queue/rq_affinity : ' . $ret) if ($ret);
 		# Fetch rotational setting
 		$cmd = 'cat /sys/block/' . $device . '/queue/rotational 2>/dev/null';
-		push(@row , '/queue/rotational : ' . `$cmd`);
+		$ret = `$cmd`;
+		push(@row , '/queue/rotational : ' . $ret) if ($ret);
 		push(@devices, @row);
 	}
 	print $fhl "[DEVICES]\n";

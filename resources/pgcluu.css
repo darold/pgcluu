@@ -63,6 +63,7 @@ ul#slides li div div {
 .dropdown-submenu:hover>a:after{border-left-color:#ffffff;}
 .dropdown-submenu.pull-left{float:none;}.dropdown-submenu.pull-left>.dropdown-menu{left:-100%;margin-left:10px;-webkit-border-radius:6px 0 6px 6px;-moz-border-radius:6px 0 6px 6px;border-radius:6px 0 6px 6px;}
 
+.container { width: 90%; }
 .panel { background-color: #f5f5f5;}
 .panel-body { background-color: #ffffff; font-size: 1.2em;}
 .panel-body a {        margin: 5px; }
