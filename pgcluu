@@ -1157,16 +1157,14 @@ my %SAR_GRAPH_INFOS = (
 		'title' => 'TCPv4 utilization',
 		'description' => 'TCPv4 network trafic (all interfaces)',
 		'ylabel' => 'Events/s',
-		'legends' => [ 'Initiated opens (active)', 'Passive opens (passive)', 'Received segments (iseg)', 'Sent segments (oseg)' ],
-		#              tcpActiveOpens           tcpPassiveOpens              tcpInSegs                tcpOutSegs
+		'legends' => [ 'Initiated opens', 'Passive opens', 'Received segments', 'Sent segments' ],
 	},
 	'25' => {
 		'name' => 'network-error-tcp',
 		'title' => 'TCPv4 errors',
 		'description' => 'TCPv4 network errors (all interfaces)',
 		'ylabel' => 'Errors/s',
-		'legends' => [ 'Failed attempts (atmptf)', 'Established & reset (estres)', 'Retransmitted segments (retrans)', 'Received in error (isegerr)', 'Reset flags (orsts)' ],
-		# (respectively:  tcpAttemptFails          tcpEstabResets               tcpRetransSegs              tcpInErrs                  tcpOutRsts
+		'legends' => [ 'Failed attempts', 'Established & reset', 'Retransmitted segments', 'Received in error', 'Reset flags' ],
 	},
 );
 
@@ -10503,10 +10501,10 @@ sub compute_network_error_tcp_stat
 {
     print "DEBUG: computing TCP errors \n" if ($DEBUG);
 	for (my $i = 0; $i <= $#_; $i++) {
+        # sysstat >= 12.7.6 => 12:27:43     atmptf/s  estres/s **retrseg**/s isegerr/s   orsts/s
         # 12:27:43     atmptf/s  estres/s retrans/s isegerr/s   orsts/s
         # 12:27:44         0,00      0,00      0,00      0,00      0,00
 		my @data = split(/;/, $_[$i]);
-		# print ("DEBUG: TCP error:  $data[2] - $data[3] - $data[4] - $data[5] - $data[6]  - $data[6] \n") if ($DEBUG) ;
 		next if ($data[2] !~ /^\d+/);
 
 		# Skip unwanted lines
