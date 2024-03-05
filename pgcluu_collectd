@@ -726,6 +726,7 @@ sub terminate
 
 	&dprint("LOG: Received terminating signal $sig.\n");
 
+        $SIG{INT} = \&terminate;
         $SIG{QUIT} = \&terminate;
         $SIG{TERM} = \&terminate;
 
@@ -748,13 +749,12 @@ sub end_gracefully
 	&dprint("LOG: Received terminating signal $sig.\n");
 
         $SIG{HUP} = \&end_gracefully;
-        $SIG{INT} = \&end_gracefully;
 }
 
 
 # Die on kill -2, -3 or -15
-$SIG{'QUIT'} = $SIG{'TERM'} = \&terminate;
-$SIG{'HUP'} = $SIG{'INT'} = \&end_gracefully;
+$SIG{'INT'} = $SIG{'QUIT'} = $SIG{'TERM'} = \&terminate;
+$SIG{'HUP'} = \&end_gracefully;
 
 # Run in interactive mode if required
 if (!$DAEMONIZE)
