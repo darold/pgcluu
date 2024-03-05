@@ -719,7 +719,7 @@ configuration directive in pgcluu.conf
 
 =head1 LICENSE
 
-Copyright (c) 2012-2023, Gilles Darold
+Copyright (c) 2012-2024, Gilles Darold
 
 pgCluu is licenced under the PostgreSQL Licence a liberal Open Source license,
 similar to the BSD or MIT licenses. That mean that all parts of the program
