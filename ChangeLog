@@ -1,3 +1,81 @@
+2024-03-06 - Version 4.0
+
+This release is a major release that fixes issues reported since
+the past six months and adds several new features.
+
+New features:
+
+  * Add report of devices /sys/block/queue informations (scheduler,
+    rotational, rq_affinity and add_random) to the System report.
+  * Add report of PGDATA files to be able to detect symlinks and
+    unwanted files in this directory.
+  * Add reports for Wait Event when the pg_wait_sampling extension is use.
+    First report show the distribution by Wait Event Type and second report
+    show the distribution by Wait Events.
+  * Add report for Global subtransactions counters if extension
+    pg_subxact_counters is installed in the connection database.
+    Subtransactions can lead to performance issue, report Counters
+    to monitor the subtransactions (generation rate, overflow, state).
+  * Add collect of /sys/kernel/debug/sched/migration_cost_ns with kernel >= 5.19
+    collect start-end metrics only twice (start and end)
+  * Add a chapter in documentation about additional statistics
+    collected from extensions pg_stat_statements, pg_wait_sampling
+    and pg_subxact_counters.
+  * Add option --no-pg_stats-dump to pgcluu_collectd to avoid collecting such
+    statistics for performances reasons. Thanks for the patch to Frederic Yhuel.
+  * Make SIGINT interrupts gracefully pgcluu_collectd like SIGHUP. Thanks to
+    Frederic Yhuel for the patch.
+  * Add ddump of the pg_stats view to pgcluu_collectd. The point is for the
+    DBA to study the statistics, and nothing else. Thanks for the patch to
+    Frederic Yhuel.
+    It is useful to dump the pg_stats views. The dump can be imported in a table
+    created like this:
+    
+    CREATE TABLE my_client_pgstats (
+      export_time TEXT,
+      dbname TEXT,
+      schemaname TEXT,
+      tablename TEXT,
+      attname TEXT,
+      inherited BOOLEAN,
+      null_frac REAL,
+      avg_width INT,
+      n_distinct REAL,
+      most_common_vals TEXT[],
+      most_common_freqs REAL[],
+      histogram_bounds TEXT[],
+      correlation REAL
+    );
+    
+    Note that the columns most_common_vals and histogram_bounds have
+    the type TEXT[] instead of anyarray.
+
+Compatibility:
+
+There is not compatibility issues but a change of behavior with default
+to dump the pg_stats view. Following the number of table/indexes in the
+databases it could take more time collecting the statistic so in this case
+the interval of polling should be increase. There is an new option to disable
+the pg_stats dump, --no-pg_stats-dump, if you want to get back to the previous
+behavior.
+
+Here is the full list of fixes since previous release.
+
+  - Fix graph labels for TCPv4 errors. Thanks to Christophe Courtois for
+    the report.
+  - Avoid reporting redundant index if they are not using the same type of
+    index. Thanks to Christophe Courtois for the report.
+  - Fix file not exists error message when looking at block devices information.
+  - Fix broken report when /sys/kernel/debug/sched/migration_cost_ns is not
+    readable by the user running pgcluu_colletd
+  - Fix devices info (sar -d) for sar >= 12.4.0. Thanks to Christophe Courtois
+    for the patch.
+  - Fix legend of locks reports.
+  - Fix report of locks per database.
+  - Fix disable menu for buffercache use
+  - Fix mount report that was not reporting NFS mount points.
+  - Fix wait_all_childs() function.
+
 2023-07-11 - Version 3.5
 
 This release is a maintenance release that fixes issues reported since

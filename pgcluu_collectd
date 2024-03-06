@@ -26,7 +26,7 @@ use constant UMASK => 0022;
 
 $| = 1;
 
-$VERSION = '3.5';
+$VERSION = '4.0';
 $PROGRAM = 'pgcluu_collectd';
 
 $SIG{'CHLD'} = 'DEFAULT';

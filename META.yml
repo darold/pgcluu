@@ -25,4 +25,4 @@ resources:
     git: git@github.com:darold/pgcluu.git
     type: git
     web: http://pgcluu.darold.net/
-version: 3.5
+version: 4.0

@@ -25,7 +25,7 @@ use POSIX qw(locale_h sys_wait_h ceil strftime);
 setlocale(LC_ALL, 'C');
 use Storable qw(store_fd fd_retrieve);
 
-$VERSION = '3.5';
+$VERSION = '4.0';
 $PROGRAM = 'pgCluu';
 
 
