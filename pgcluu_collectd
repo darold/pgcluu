@@ -929,7 +929,7 @@ while (1)
 	{
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday";
-		dprint ("OUT_DIR is: $OUT_DIR \n") ;
+		dprint ("OUT_DIR is: $OUT_DIR \n") if ($initial_run);
         }
 
 	# Compress previous hourly directory if required
@@ -956,12 +956,12 @@ while (1)
 	{
 		# Set the new output directory
 		$OUT_DIR = "$year/$mon/$mday/$hour";
-		dprint ("OUT_DIR is: $OUT_DIR \n") ;
+		dprint ("OUT_DIR is: $OUT_DIR \n") if ($initial_run);
 	}
 	elsif (!$D_ROTATE)
 	{
 		$OUT_DIR = $OUTPUT_DIR;
-		dprint ("OUT_DIR is: $OUT_DIR \n") ;
+		dprint ("OUT_DIR is: $OUT_DIR \n") if ($initial_run);
         }
 
 	# If we have a retention limit remove everything older
@@ -1196,8 +1196,9 @@ sub collect_metrics
 	if (!$NO_DATABASE)
 	{
 		# Collecting database statistics if there other than pgbouncer metrics to collect
-		if ($PG_RET >= 0) {
-			if (open($fhl, '|-', $PSQL_PROG)) {
+		if ($PG_RET >= 0)
+		{
+			if (open(my $fhl, '|-', $PSQL_PROG)) {
 				print $fhl $script_sql, "\n";
 				close($fhl);
 			} else {
@@ -1221,7 +1222,7 @@ sub collect_metrics
 				my $LOCAL_PSQL_PROG = &set_local_psql_command($db);
 
 				# Collecting database statistics
-				if (open($fhl, '|-', $LOCAL_PSQL_PROG)) {
+				if (open(my $fhl, '|-', $LOCAL_PSQL_PROG)) {
 					print $fhl $script_repeat_sql, "\n";
 					close($fhl);
 				} else {
