@@ -2128,6 +2128,7 @@ options:
   -M, --max-size=SIZE      self terminate program when the size of the output
                            directory exceed a given size. Can be written: 2GB
                            or 2000MB.
+  -n, --no-pg_stats-dump   don't collect statistics from the pg_stats view.
   -p, --port=PORT          database port(s) to connect to. Defaults to 5432.
   -P, --psql=BIN           path to the psql command. Default: $PSQL_PROG.
   -Q, --no-statement       do not collect statistics from pg_stat_statements.
@@ -2143,7 +2144,6 @@ options:
   -v, --verbose            Print out debug informations.
   -V, --version            Show pgcluu_collectd version and exit.
   -w, --no-waitevent       don't collect wait event stats from pg_wait_sampling.
-  -n, --no-pg_stats-dump   don't collect statistics from the pg_stats view.
   -W, --password=pass      database password.
   -z, --compress           force compression of rotated data files.
   --included-db=DATABASE   collect statistics only for those databases present
