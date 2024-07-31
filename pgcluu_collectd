@@ -337,7 +337,13 @@ my %METRICS_COMMANDS = (
 	'pg_settings_stats' => {
 		'output' => 'pg_settings.csv',
 		'command' => 'dump_pgsettings',
-		'repeat'  => 1,
+		'repeat'  => 0,
+		'override'  => 1,
+	},
+	'pg_hba_rules' => {
+		'output' => 'pg_hba_rules.csv',
+		'command' => 'dump_pghba',
+		'repeat'  => 0,
 		'override'  => 1,
 	},
 	'pg_nondefault_settings_stats' => {
@@ -349,7 +355,7 @@ my %METRICS_COMMANDS = (
 	'pg_db_role_setting_stats' => {
 		'output' => 'pg_db_role_setting.csv',
 		'command' => 'dump_pgdbrolesetting',
-		'repeat'  => 1,
+		'repeat'  => 0,
 		'override'  => 1,
 	},
 	'database_buffercache_stats' => {
@@ -1445,6 +1451,7 @@ sub verify_action
 	# Remove some metric collection following the PostgreSQL version.
 	if (!&backend_minimum_version(10, 0)) {
 		delete $METRICS_COMMANDS{'statistics_stats'};
+		delete $METRICS_COMMANDS{'pg_hba_rules'};
 	}
 	if (!&backend_minimum_version(9, 4)) {
 		delete $METRICS_COMMANDS{'archiver_stats'};
@@ -2945,6 +2952,20 @@ sub dump_pgsettings
 		&backend_minimum_version(8, 4) ? "(CASE WHEN name = 'lock_timeout' THEN (reset_val::bigint-$lto)::text ELSE reset_val END) as reset_val" : "''::text as reset_val",
 		&backend_minimum_version(9, 5) ? "pending_restart" : "''::text as pending_restart"
 	);
+
+	return $sql;
+}
+
+####
+# Get PostgreSQL HBA rules
+####
+sub dump_pghba
+{
+
+	my $lto = $LOCK_TIMEOUT*1000;
+	my $sql = 
+		"SELECT date_trunc('seconds',now()),line_number,type,database,user_name," .
+			"address,netmask,auth_method,options,error FROM pg_hba_file_rules";
 
 	return $sql;
 }
