@@ -119,6 +119,7 @@ our %all_postgresql_auto_conf = ();
 our %all_pg_hba_conf = ();
 our %all_pg_ident_conf = ();
 our %all_settings = ();
+our %all_hba_rules = ();
 our %all_nondefault_settings = ();
 our %all_db_role_setting = ();
 our %all_database_buffercache = ();
@@ -176,6 +177,7 @@ our @pg_to_be_stored = (
 	'all_pg_hba_conf',
 	'all_pg_ident_conf',
 	'all_settings',
+	'all_hba_rules',
 	'all_nondefault_settings',
 	'all_db_role_setting',
 	'all_pgbouncer_ini_diff',
@@ -838,6 +840,17 @@ my %DB_GRAPH_INFOS = (
 			'legends' => ['Settings'],
 			'active' => 1,
 			'menu' => 'Database/Roles settings',
+		},
+	},
+	'pg_hba_rules.csv' => {
+		'1' => {
+			'name' =>  'cluster-hba',
+			'title' => 'PostgreSQL HBA rules',
+			'description' => 'All pg_hba.conf rules defined.',
+			'ylabel' => 'Number',
+			'legends' => ['Rules'],
+			'active' => 1,
+			'menu' => 'PostgreSQL HBA rules',
 		},
 	},
 	'pgbouncer.ini' => {
@@ -3257,8 +3270,10 @@ sub pg_stat_user_tables
 	my $tmp_val = 0;
 	# Read start file
 	my $curfh = open_filehdl("$in_dir/$file");
-	if (defined $curfh) {
-		while (my $l = <$curfh>) {
+	if (defined $curfh)
+	{
+		while (my $l = <$curfh>)
+		{
 			chomp($l);
 			next if (!$l);
 			my @data = split(/;/, $l);
@@ -3299,58 +3314,63 @@ sub pg_stat_user_tables
 		$curfh->close();
 	}
 
-	# Read end file and set the final value
-	$curfh = open_filehdl("$in_dir/end-$file");
-	if (defined $curfh) {
-		while (my $l = <$curfh>) {
-			chomp($l);
-			next if (!$l);
-			my @data = split(/;/, $l);
-			next if (!&normalize_line(\@data));
+	if (!$sysinfo{CONFIGURATION}{'capture'})
+	{
+		# Read end file and set the final value
+		$curfh = open_filehdl("$in_dir/end-$file");
+		if (defined $curfh)
+		{
+			while (my $l = <$curfh>)
+			{
+				chomp($l);
+				next if (!$l);
+				my @data = split(/;/, $l);
+				next if (!&normalize_line(\@data));
 
-			# timestamp | dbname | relid | schemaname | relname | seq_scan | seq_tup_read | idx_scan | idx_tup_fetch | n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | last_vacuum | last_autovacuum | last_analyze | last_autoanalyze | vacuum_count | autovacuum_count | analyze_count | autoanalyze_count
+				# timestamp | dbname | relid | schemaname | relname | seq_scan | seq_tup_read | idx_scan | idx_tup_fetch | n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | last_vacuum | last_autovacuum | last_analyze | last_autoanalyze | vacuum_count | autovacuum_count | analyze_count | autoanalyze_count
 
-			$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} = $data[15] if (!$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} || ($data[15] gt $OVERALL_STATS{'database'}{$data[1]}{last_vacuum}));
-			$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} = $data[16] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} || ($data[16] gt $OVERALL_STATS{'database'}{$data[1]}{last_autovacuum}));
-			$OVERALL_STATS{'database'}{$data[1]}{last_analyze} = $data[17] if (!$OVERALL_STATS{'database'}{$data[1]}{last_analyze} || ($data[17] gt $OVERALL_STATS{'database'}{$data[1]}{last_analyze}));
-			$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} = $data[18] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} || ($data[18] gt $OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze}));
+				$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} = $data[15] if (!$OVERALL_STATS{'database'}{$data[1]}{last_vacuum} || ($data[15] gt $OVERALL_STATS{'database'}{$data[1]}{last_vacuum}));
+				$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} = $data[16] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autovacuum} || ($data[16] gt $OVERALL_STATS{'database'}{$data[1]}{last_autovacuum}));
+				$OVERALL_STATS{'database'}{$data[1]}{last_analyze} = $data[17] if (!$OVERALL_STATS{'database'}{$data[1]}{last_analyze} || ($data[17] gt $OVERALL_STATS{'database'}{$data[1]}{last_analyze}));
+				$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} = $data[18] if (!$OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze} || ($data[18] gt $OVERALL_STATS{'database'}{$data[1]}{last_autoanalyze}));
 
-			$data[4] = "$data[3].$data[4]";
+				$data[4] = "$data[3].$data[4]";
 
-			# Stores last manual vacuum/analyze
-			$all_stat_user_tables{$data[1]}{$data[4]}{last_vacuum} = $data[15] if ($data[15]);
-			$all_stat_user_tables{$data[1]}{$data[4]}{last_autovacuum} = $data[16] if ($data[16]);
-			$all_stat_user_tables{$data[1]}{$data[4]}{last_analyze} = $data[17] if ($data[17]);
-			$all_stat_user_tables{$data[1]}{$data[4]}{last_autoanalyze} = $data[18] if ($data[18]);
+				# Stores last manual vacuum/analyze
+				$all_stat_user_tables{$data[1]}{$data[4]}{last_vacuum} = $data[15] if ($data[15]);
+				$all_stat_user_tables{$data[1]}{$data[4]}{last_autovacuum} = $data[16] if ($data[16]);
+				$all_stat_user_tables{$data[1]}{$data[4]}{last_analyze} = $data[17] if ($data[17]);
+				$all_stat_user_tables{$data[1]}{$data[4]}{last_autoanalyze} = $data[18] if ($data[18]);
 
-			# Get database statistics
-			$all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} = $data[5] - ($all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} || 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} = $data[5] if ($all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} < 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} = $data[6] - ($all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} || 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} = $data[6] if ($all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} < 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} = $data[9] - ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} || 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} = $data[9] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} < 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} = $data[10] - ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} || 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} = $data[10] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} < 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} = $data[11] - ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} || 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} = $data[11] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} < 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} = $data[12] - ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} || 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} = $data[12] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} < 0);
-			$all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup} = $data[14];
-			$all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup} = $data[13];
-			$all_stat_user_tables{$data[1]}{$data[4]}{dead_vs_live} = sprintf("%.2f", ($data[14]*100)/(($data[13]+$data[14])||1));
-			if ($#data > 19) {
-				$all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} = $data[19] - ($all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} || 0);
-				$all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} = $data[19] if ($all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} < 0);
-				$all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} = $data[20] - ($all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} || 0);
-				$all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} = $data[20] if ($all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} < 0);
-				$all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} = $data[21] - ($all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} || 0);
-				$all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} = $data[21] if ($all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} < 0);
-				$all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} = $data[22] - ($all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} || 0);
-				$all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} = $data[22] if ($all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} < 0);
+				# Get database statistics
+				$all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} = $data[5] - ($all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} || 0);
+				$all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} = $data[5] if ($all_stat_user_tables{$data[1]}{$data[4]}{seq_scan} < 0);
+				$all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} = $data[6] - ($all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} || 0);
+				$all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} = $data[6] if ($all_stat_user_tables{$data[1]}{$data[4]}{idx_scan} < 0);
+				$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} = $data[9] - ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} || 0);
+				$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} = $data[9] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_ins} < 0);
+				$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} = $data[10] - ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} || 0);
+				$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} = $data[10] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_upd} < 0);
+				$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} = $data[11] - ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} || 0);
+				$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} = $data[11] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_del} < 0);
+				$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} = $data[12] - ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} || 0);
+				$all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} = $data[12] if ($all_stat_user_tables{$data[1]}{$data[4]}{n_tup_hot_upd} < 0);
+				$all_stat_user_tables{$data[1]}{$data[4]}{n_dead_tup} = $data[14];
+				$all_stat_user_tables{$data[1]}{$data[4]}{n_live_tup} = $data[13];
+				$all_stat_user_tables{$data[1]}{$data[4]}{dead_vs_live} = sprintf("%.2f", ($data[14]*100)/(($data[13]+$data[14])||1));
+				if ($#data > 19) {
+					$all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} = $data[19] - ($all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} || 0);
+					$all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} = $data[19] if ($all_stat_user_tables{$data[1]}{$data[4]}{vacuum_count} < 0);
+					$all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} = $data[20] - ($all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} || 0);
+					$all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} = $data[20] if ($all_stat_user_tables{$data[1]}{$data[4]}{autovacuum_count} < 0);
+					$all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} = $data[21] - ($all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} || 0);
+					$all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} = $data[21] if ($all_stat_user_tables{$data[1]}{$data[4]}{analyze_count} < 0);
+					$all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} = $data[22] - ($all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} || 0);
+					$all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} = $data[22] if ($all_stat_user_tables{$data[1]}{$data[4]}{autoanalyze_count} < 0);
+				}
 			}
+			$curfh->close();
 		}
-		$curfh->close();
 	}
 }
 
@@ -3556,38 +3576,41 @@ sub pg_stat_user_indexes
 		$curfh->close();
 	}
 
-	# Read end file and set the final value
-	$curfh = open_filehdl("$in_dir/end-$file");
-	if (defined $curfh)
+	if (!$sysinfo{CONFIGURATION}{'capture'})
 	{
-		while (my $l = <$curfh>)
+		# Read end file and set the final value
+		$curfh = open_filehdl("$in_dir/end-$file");
+		if (defined $curfh)
 		{
-			chomp($l);
-			next if (!$l);
-			my @data = split(/;/, $l);
-			next if (!&normalize_line(\@data));
-
-			# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | idx_tup_read | idx_tup_fetch
-			# PG16: timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | last_idx_scan | idx_tup_read | idx_tup_fetch
-			$data[6] = "$data[4].$data[5].$data[6]";
-
-			# Get database statistics
-			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} = $data[7] - ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} || 0);
-			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} = $data[7] if ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} < 0);
-			my $idx = 8;
-			$all_stat_user_indexes{$data[1]}{$data[6]}{last_idx_scan} = '';
-			if ($#data > 9)
+			while (my $l = <$curfh>)
 			{
-				$idx = 9;
-				$all_stat_user_indexes{$data[1]}{$data[6]}{last_idx_scan} = $data[8];
+				chomp($l);
+				next if (!$l);
+				my @data = split(/;/, $l);
+				next if (!&normalize_line(\@data));
+
+				# timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | idx_tup_read | idx_tup_fetch
+				# PG16: timestamp | dbname | relid | indexrelid | schemaname | relname | indexrelname | idx_scan | last_idx_scan | idx_tup_read | idx_tup_fetch
+				$data[6] = "$data[4].$data[5].$data[6]";
+
+				# Get database statistics
+				$all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} = $data[7] - ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} || 0);
+				$all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} = $data[7] if ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_scan} < 0);
+				my $idx = 8;
+				$all_stat_user_indexes{$data[1]}{$data[6]}{last_idx_scan} = '';
+				if ($#data > 9)
+				{
+					$idx = 9;
+					$all_stat_user_indexes{$data[1]}{$data[6]}{last_idx_scan} = $data[8];
+				}
+				$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} = $data[$idx] - ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} || 0);
+				$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} = $data[$idx] if ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} < 0);
+				$idx++;
+				$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} = $data[$idx] - ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} || 0);
+				$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} = $data[$idx] if ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} < 0);
 			}
-			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} = $data[$idx] - ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} || 0);
-			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} = $data[$idx] if ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_read} < 0);
-			$idx++;
-			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} = $data[$idx] - ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} || 0);
-			$all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} = $data[$idx] if ($all_stat_user_indexes{$data[1]}{$data[6]}{idx_tup_fetch} < 0);
+			$curfh->close();
 		}
-		$curfh->close();
 	}
 }
 
@@ -4678,6 +4701,8 @@ sub pg_stat_waitevent
 	$curfh->seek($offset,0);
 	my @etype = ();
 	my @wevent = ();
+	my %total_wait_event = ();
+	my $total_count = 0;
 	while (my $l = <$curfh>)
 	{
 		my @data = split(/;/, $l);
@@ -4689,6 +4714,8 @@ sub pg_stat_waitevent
 		# wait events
 		$all_wait_events{$data[0]}{event}{$data[3]} += $data[4];
 		push(@wevent, $data[3]) if (!grep(/^$data[3]$/, @wevent));
+		$total_wait_event{$data[3]} += $data[4];
+		$total_count += $data[4];
 	}
 	$curfh->close();
 
@@ -4707,6 +4734,18 @@ sub pg_stat_waitevent
 			}
 		}
 	}
+	# Remove unused wait events
+	foreach my $e (keys %total_wait_event)
+	{
+		if ($total_wait_event{$e} < ($total_count*0.1/100))
+		{
+			foreach my $t (sort {$a <=> $b } keys %all_wait_events)
+			{
+				delete $all_wait_events{$t}{event}{$e};
+			}
+		}
+	}
+
 	my $prev_time = '';
 	my %prev_value = ();
 	my $wprev_time = '';
@@ -4729,6 +4768,7 @@ sub pg_stat_waitevent
 		}
 		foreach my $w (@wevent)
 		{
+			next if not exists $all_wait_events{$t}{event}{$w};
 			if (!$wprev_time)
 			{
 				$wprev_value{$w} = $all_wait_events{$t}{event}{$w};
@@ -5099,20 +5139,26 @@ sub pg_stat_replication_report
 	my ($src_base, %data_info) = @_;
 
 	my %xlog_stat = ();
-	foreach my $t (sort {$a <=> $b} keys %all_stat_replication) {
-		foreach my $name (sort {$a cmp $b} keys %{$all_stat_replication{$t}}) {
+	foreach my $t (sort {$a <=> $b} keys %all_stat_replication)
+	{
+		foreach my $name (sort {$a cmp $b} keys %{$all_stat_replication{$t}})
+		{
 			next if ($name eq 'interval');
 			$all_stat_replication{$t}{interval} = 1 if ($sysinfo{CONFIGURATION}{'capture'});
-			if ($name eq 'master_location') {
-				next if (!$all_stat_replication{$t}{interval});
-				$all_stat_replication{$t}{master_location} ||= 0;
-				$xlog_stat{master_location} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_replication{$t}{master_location}||0)) . '],';
-				next;
+			if (!$sysinfo{CONFIGURATION}{'capture'})
+			{
+				if ($name eq 'master_location')
+				{
+					next if (!$all_stat_replication{$t}{interval});
+					$all_stat_replication{$t}{master_location} ||= 0;
+					$xlog_stat{master_location} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_replication{$t}{master_location}||0)) . '],';
+					next;
+				}
+				$xlog_stat{$name}{replay_location} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_replication{$t}{$name}{replay_location} || 0)) . '],';
+				$xlog_stat{$name}{sent_location} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_replication{$t}{$name}{sent_location} || 0)) . '],';
+				$xlog_stat{$name}{write_location} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_replication{$t}{$name}{write_location} || 0)) . '],';
+				$xlog_stat{$name}{flush_location} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_replication{$t}{$name}{flush_location} || 0)) . '],';
 			}
-			$xlog_stat{$name}{replay_location} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_replication{$t}{$name}{replay_location} || 0)) . '],';
-			$xlog_stat{$name}{sent_location} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_replication{$t}{$name}{sent_location} || 0)) . '],';
-			$xlog_stat{$name}{write_location} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_replication{$t}{$name}{write_location} || 0)) . '],';
-			$xlog_stat{$name}{flush_location} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . sprintf("%0.2f", ($all_stat_replication{$t}{$name}{flush_location} || 0)) . '],';
 		}
 	}
 	%all_stat_replication = ();
@@ -6836,6 +6882,82 @@ sub pg_db_role_setting_report
 	$fhcluster->close();
 }
 
+# Get configuration from pg_hba_files_rules
+sub pg_hba_rules
+{
+	my ($in_dir, $file) = @_;
+
+	%all_hba_rules = ();
+
+	# Load data from file
+	my $curfh = open_filehdl("$in_dir/$file");
+	while (my $l = <$curfh>)
+	{
+		chomp($l);
+		next if (!$l);
+		my @data = split(/;/, $l);
+		next if (!&normalize_line(\@data));
+
+		# timestamp | type | database | user | address | netmask | auth_method | optuions | errors
+		my $line = shift(@data);
+
+		$all_hba_rules{$line} = join(' ', @data);;
+	}
+	$curfh->close();
+
+	# Load change on pg_settings from diff file
+	#$file =~ s/\.csv/.diff/;
+	#&get_diff("$in_dir/$file", \%all_hba_rules_diff);
+}
+
+# Show configuration from pg_settings
+sub pg_hba_rules_report
+{
+	my ($src_base, %data_info) = @_;
+
+	return if (scalar keys %all_hba_rules == 0);
+
+	my $id = &get_data_id('cluster-hba', %data_info);
+	my $fhcluster = &append_to_html_file("$OUTPUT_DIR/cluster-$data_info{$id}{name}.html", $src_base);
+	print $fhcluster qq{
+      <div id="cluster-hba"><br><br><br><br></div>
+
+	<div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+		<h2>$data_info{$id}{menu}</h2>
+		<p>$data_info{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<div class="analysis-item row-fluid" id="$data_info{$id}{name}-report">
+			<div class="span11">
+				<table class="table table-striped" id="$data_info{$id}{name}-table">
+					<tbody>
+};
+	print $fhcluster "<tr><th>Line</th><th>Rule</th></tr>\n";
+	foreach my $line (sort {$a <=> $b} keys %all_hba_rules)
+	{
+		print $fhcluster "<tr><th>$line</th><th>$all_hba_rules{$line}</th></tr>\n";
+	}
+	print $fhcluster qq{
+					</tbody>
+				</table>
+			</div>
+		</div>
+		</div>
+	    </div>
+	    </div>
+	</div>
+};
+	%all_hba_rules = ();
+
+	#&show_diff($fhcluster, %all_hba_rules_diff);
+
+	#%all_hba_rules_diff = ();
+
+	$fhcluster->close();
+}
 
 # Compute statistics of buffercache database
 sub pg_database_buffercache
