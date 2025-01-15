@@ -11224,7 +11224,7 @@ sub load_sarfile_stats
 		{
 			$SAR_UPPER_11_5_6 = 1;
 		}
-		if (!$SAR_UPPER_12_1_1 && $l =~ /await/ && $l !~ /srvtime/)
+		if (!$SAR_UPPER_12_1_1 && $l =~ /await/ && $l !~ /(srvtime|svctm)/)
 		{
 			$SAR_UPPER_12_1_1 = 1;
 			if (!$SAR_UPPER_12_3_9 && $l =~ /%util DEV$/)
