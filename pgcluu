@@ -10127,9 +10127,9 @@ sub compute_pidstatio_stat
 		$pidstat_io_stat{$data[2]}{'kB_rd/s'} = ($data[5] > 0) ? $data[5] : 0;
 		$pidstat_io_stat{$data[2]}{'kB_wr/s'} = ($data[6] > 0) ? $data[6] : 0;
 		$pidstat_io_stat{$data[2]}{'kB_ccwr/s'} = ($data[7] > 0) ? $data[7] : 0;
-		if ($#data > 8)
+		if ($#data > 7)
 		{
-			$pidstat_io_stat{$data[2]}{'iodelay'} = ($data[8] > 0) ? $data[8] : 0;
+			$pidstat_io_stat{$data[2]}{'iodelay'} = $data[8];
 		}
 	}
 }
@@ -10138,30 +10138,28 @@ sub compute_pidstatio_report
 {
 	my $data_info = shift();
 
-	my %pidstatio_stat = ();
+	my %lpidstatio_stat = ();
 	foreach my $t (sort {$a <=> $b} keys %pidstat_io_stat)
 	{
-		$pidstatio_stat{'kB_rd/s'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'kB_rd/s'} . '],';
-		$pidstatio_stat{'kB_wr/s'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'kB_wr/s'} . '],';
-		$pidstatio_stat{'kB_ccwr/s'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'kB_ccwr/s'} . '],';
-		if (exists $pidstatio_stat{'iodelay'})
-		{
-			$pidstatio_stat{'iodelay'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'iodelay'} . '],';
-		}
+		$lpidstatio_stat{'kB_rd/s'} .= '[' . $t . ',' . ($pidstat_io_stat{$t}{'kB_rd/s'}||0) . '],';
+		$lpidstatio_stat{'kB_wr/s'} .= '[' . $t . ',' . ($pidstat_io_stat{$t}{'kB_wr/s'}||0) . '],';
+		$lpidstatio_stat{'kB_ccwr/s'} .= '[' . $t . ',' . ($pidstat_io_stat{$t}{'kB_ccwr/s'}||0) . '],';
+		$lpidstatio_stat{'iodelay'} .= '[' . $t . ',' . ($pidstat_io_stat{$t}{'iodelay'}||0) . '],';
 	}
-	if (scalar keys %pidstatio_stat > 0)
+
+	if (scalar keys %lpidstatio_stat > 0)
 	{
 		if ($data_info->{name} eq 'postgres-io')
 		{
-			$pidstatio_stat{'kB_rd/s'} =~ s/,$//;
-			$pidstatio_stat{'kB_wr/s'} =~ s/,$//;
-			$pidstatio_stat{'kB_ccwr/s'} =~ s/,$//;
-			print $FH &jqplot_linegraph_array($IDX++, 'postgres-io', $data_info, '', $pidstatio_stat{'kB_rd/s'}, $pidstatio_stat{'kB_wr/s'}, $pidstatio_stat{'kB_ccwr/s'});
+			$lpidstatio_stat{'kB_rd/s'} =~ s/,$//;
+			$lpidstatio_stat{'kB_wr/s'} =~ s/,$//;
+			$lpidstatio_stat{'kB_ccwr/s'} =~ s/,$//;
+			print $FH &jqplot_linegraph_array($IDX++, 'postgres-io', $data_info, '', $lpidstatio_stat{'kB_rd/s'}, $lpidstatio_stat{'kB_wr/s'}, $lpidstatio_stat{'kB_ccwr/s'});
 		}
-		elsif ($data_info->{name} eq 'postgres-iodelay' && exists $pidstatio_stat{'iodelay'})
+		elsif ($data_info->{name} eq 'postgres-iodelay')
 		{
-			$pidstatio_stat{'iodelay'} =~ s/,$//;
-			print $FH &jqplot_linegraph_array($IDX++, 'postgres-iodelay', $data_info, '', $pidstatio_stat{'iodelay'});
+			$lpidstatio_stat{'iodelay'} =~ s/,$//;
+			print $FH &jqplot_linegraph_array($IDX++, 'postgres-iodelay', $data_info, '', $lpidstatio_stat{'iodelay'});
 			%pidstat_io_stat = ();
 		}
 	}
