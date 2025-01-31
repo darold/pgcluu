@@ -9740,6 +9740,7 @@ sub compute_memory_stat
 {
 	for (my $i = 0; $i <= $#_; $i++) {
 		# hostname;interval;timestamp;kbmemfree;kbmemused;%memused;kbbuffers;kbcached;kbcommit;%commit;kbactive;kbinact;kbdirty
+		# hostname;interval;timestamp;kbmemfree;kbavail;kbmemused;%memused;kbbuffers;kbcached;kbcommit;%commit;kbactive;kbinact;kbdirty;kbanonpg;kbslab;kbkstack;kbpgtbl;kbvmuse
 		my @data = split(/;/, $_[$i]);
 		next if ($data[2] !~ /^\d+/);
 
@@ -9748,15 +9749,28 @@ sub compute_memory_stat
 		next if ($END   && ($data[2] > $END_STAT));
 
 		map { s/,/\./ } @data ;
-		my $kbcached = ($data[7]*1024) || 0;
-		$sar_memory_stat{$data[2]}{'kbcached'}  = $kbcached;
-		$sar_memory_stat{$data[2]}{'kbbuffers'} = ($data[6]*1024)||0;
 		$sar_memory_stat{$data[2]}{'kbmemfree'} = ($data[3]*1024)||0;
+		# kbavail have been added which change other data indices (sysstat v11.7.4)
+		my $i = 0;
+		if ($#data > 13) {
+			$i = 1;
+			$sar_memory_stat{$data[2]}{'kbavail'}  = ($data[4]*1024)||0;
+		}
+		my $kbcached = ($data[7+$i]*1024) || 0;
+		$sar_memory_stat{$data[2]}{'kbcached'}  = $kbcached;
+		$sar_memory_stat{$data[2]}{'kbbuffers'} = ($data[6+$i]*1024)||0;
 		# New sar version has dirty memory information: kbactive;kbinact;kbdirty
 		if ($#data > 9) {
-			$sar_memory_stat{$data[2]}{'kbactive'}= ($data[10]*1024)||0;
-			$sar_memory_stat{$data[2]}{'kbinact'} = ($data[11]*1024)||0;
-			$sar_memory_stat{$data[2]}{'kbdirty'} = ($data[12]*1024)||0;
+			$sar_memory_stat{$data[2]}{'kbactive'}= ($data[10+$i]*1024)||0;
+			$sar_memory_stat{$data[2]}{'kbinact'} = ($data[11+$i]*1024)||0;
+			$sar_memory_stat{$data[2]}{'kbdirty'} = ($data[12+$i]*1024)||0;
+		}
+		if ($#data > 13) {
+			$sar_memory_stat{$data[2]}{'kbanonpg'}= ($data[14]*1024)||0;
+			$sar_memory_stat{$data[2]}{'kbslab'}= ($data[15]*1024)||0;
+			$sar_memory_stat{$data[2]}{'kbkstac'}= ($data[16]*1024)||0;
+			$sar_memory_stat{$data[2]}{'kbpgtbl'}= ($data[17]*1024)||0;
+			$sar_memory_stat{$data[2]}{'kbvmused'}= ($data[18]*1024)||0;
 		}
 	}
 }
