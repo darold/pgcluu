@@ -141,7 +141,7 @@ my %METRICS_COMMANDS = (
 		'output' => 'pg_tablespace_size.csv',
 		'command' => 'dump_pgtablespace_size'
 	},
-	'bgwriter_stats' => {
+	'bgwriter_stats' => {   # including pg_stat_checkpoints & parts of pg_stat_io for PG17+
 		'output' => 'pg_stat_bgwriter.csv',
 		'command' => 'dump_pgstatbgwriter'
 	},
@@ -2292,17 +2292,37 @@ sub dump_pgstatactivity
 
 sub dump_pgstatbgwriter
 {
-
-	my $sql = sprintf(
-		"SELECT date_trunc('seconds', now()), checkpoints_timed, " .
-		"checkpoints_req, %sbuffers_checkpoint, buffers_clean, " .
-		"maxwritten_clean, buffers_backend, %sbuffers_alloc%s " .
-		"FROM pg_stat_bgwriter ",
-		&backend_minimum_version(9, 2) ? "checkpoint_write_time, checkpoint_sync_time, " : "",
-		&backend_minimum_version(9, 1) ? "buffers_backend_fsync, " : "",
-		&backend_minimum_version(9, 1) ? ", date_trunc('seconds', stats_reset) AS stats_reset " : ""
+	my $sql ;
+	if (&backend_minimum_version(17, 0)) {
+		print STDERR "DEBUG: PG17+ dump_pgstatbgwriter " if ($DEBUG);
+		# Some columns were moved & renamed in PG17 from pg_stat_bgwriter
+		# to pg_stat_checkpointer (commit 96f052613f35d07d001c8dd2f284ca8d95f82d1b)
+		# & pg_stat_io (commit 74604a37f)
+		# This query is a hack to avoid to change too many things in pgcluu
+		$sql = sprintf(
+			"SELECT date_trunc('seconds', now()), c.num_timed AS checkpoints_timed, " .
+			"c.num_requested AS checkpoints_req, c.write_time AS checkpoint_write_time, " .
+			"c.sync_time AS checkpoint_sync_time, c.buffers_written AS buffers_checkpoint, " .
+			"b.buffers_clean, b.maxwritten_clean, " .
+			# recomputing from pg_stat_io ; no temp relations
+			"(SELECT sum(writes*op_bytes/8192) FROM pg_stat_io WHERE object='relation' AND backend_type IN ('client backend','autovacuum worker') ) AS buffers_backend, " .
+			"(SELECT coalesce(sum(fsyncs),0) FROM pg_stat_io WHERE object='relation' AND backend_type IN ('client backend','autovacuum worker') ) AS buffers_backend_fsync, " .
+			"b.buffers_alloc, " .
+			"date_trunc('seconds', b.stats_reset) AS stats_reset " .
+			"FROM pg_stat_bgwriter b, pg_stat_checkpointer c"
+		);
+	} else { # PG <= 16
+		print STDERR "DEBUG: PG16- dump_pgstatbgwriter " if ($DEBUG);
+		$sql = sprintf(
+			"SELECT date_trunc('seconds', now()), checkpoints_timed, " .
+			"checkpoints_req, %sbuffers_checkpoint, buffers_clean, " .
+			"maxwritten_clean, buffers_backend, %sbuffers_alloc%s " .
+			"FROM pg_stat_bgwriter ",
+			&backend_minimum_version(9, 2) ? "checkpoint_write_time, checkpoint_sync_time, " : "",
+			&backend_minimum_version(9, 1) ? "buffers_backend_fsync, " : "",
+			&backend_minimum_version(9, 1) ? ", date_trunc('seconds', stats_reset) AS stats_reset " : ""
 	);
-
+	}
 	return $sql;
 }
 
