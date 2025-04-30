@@ -2332,12 +2332,11 @@ sub dump_pgstatdatabase
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), datid, datname, " .
 		"numbackends, xact_commit, xact_rollback, blks_read, blks_hit" .
-		"%s%s%s%s " .
+		"%s%s%s, blk_read_time, blk_write_time " .
 		"FROM pg_stat_database ",
 		&backend_minimum_version(8, 3) ? ", tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted" : "",
 		&backend_minimum_version(9, 1) ? ", conflicts, date_trunc('seconds', stats_reset) AS stats_reset" : "",
-		&backend_minimum_version(9, 2) ? ", temp_files, temp_bytes, deadlocks" : "",
-		&backend_minimum_version(17, 0) ? ", shared_blk_read_time, shared_blk_write_time" : ", blk_read_time, blk_write_time"
+		&backend_minimum_version(9, 2) ? ", temp_files, temp_bytes, deadlocks" : ""
 	);
 
 	return $sql;
