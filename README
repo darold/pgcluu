@@ -424,6 +424,7 @@ COLLECTING STATISTICS
             |-- pg_ident.conf
             |-- pg_nondefault_settings.csv
             |-- pg_prepared_xact.csv
+            |-- pg_replication_slots.csv
             |-- pg_settings.csv
             |-- pg_stat_archiver.csv
             |-- pg_stat_bgwriter.csv

@@ -126,6 +126,7 @@ our %all_database_buffercache = ();
 our %all_database_usagecount = ();
 our %all_database_isdirty = ();
 our %all_stat_archiver = ();
+our @all_stat_slots = ();
 our %all_stat_statements = ();
 our %all_stat_unlogged = ();
 our %all_postgresql_conf_diff = ();
@@ -197,6 +198,7 @@ our @pg_to_be_stored = (
 	'all_prepared_xact',
 	'all_subxact_counters',
 	'all_wait_events',
+	'all_stat_slots',
 );
 
 # Names of sar variables that need to be saved as binary file
@@ -7191,6 +7193,49 @@ sub pg_stat_archiver_report
 	}
 }
 
+# Compute statistics of replication slots
+sub pg_replication_slots
+{
+	my ($in_dir, $file, $offset) = @_;
+
+	# Load data from file
+	my $curfh = open_filehdl("$in_dir/$file");
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>)
+	{
+		$offset += length($l);
+		my @data = split(/;/, $l);
+		next if (!&normalize_line(\@data));
+
+		# timestamp | slot_name | plugin | slot_type | database | active
+		# timestamp | slot_name | plugin | slot_type | database | active | wal_status | safe_wal_size | inactive_since | conflicting | invalidation_reason | failover | synced
+
+		# Get replication slot statistics
+		push(@all_stat_slots, $data[1] || '');
+		push(@all_stat_slots, $data[2] || '');
+		push(@all_stat_slots, $data[3] || '');
+		push(@all_stat_slots, $data[4] || '');
+		push(@all_stat_slots, $data[5] || '');
+		if ($#data > 5)
+		{
+			push(@all_stat_slots, $data[6] || '');
+			push(@all_stat_slots, $data[7] || '');
+			push(@all_stat_slots, $data[8] || '');
+			push(@all_stat_slots, $data[9] || '');
+			push(@all_stat_slots, $data[10] || '');
+			push(@all_stat_slots, $data[11] || '');
+			push(@all_stat_slots, $data[12] || '');
+		}
+		else
+		{
+			push(@all_stat_slots, '', '', '', '', '', '', '');
+		}
+	}
+	$curfh->close();
+
+	return $offset || 0;
+}
+
 # Compute graphs of statements statistics
 sub pg_stat_statements
 {
@@ -7865,7 +7910,8 @@ EOF
 EOF
        }
 
-	if (exists $OVERALL_STATS{'archiver'}) {
+	if (exists $OVERALL_STATS{'archiver'})
+	{
 		my $archiver_infos = '';
 		if (exists $OVERALL_STATS{'archiver'}{last_archived_wal}) {
 			$archiver_infos = qq{<li><span class="figure">$OVERALL_STATS{'archiver'}{last_archived_wal}</span> <span class="figure-label">Last archived wal</span></li>};
@@ -7900,7 +7946,49 @@ EOF
 EOF
 	}
 
-	if ($parts_info) {
+	if ($#all_stat_slots >= 0)
+	{
+		# timestamp | slot_name | plugin | slot_type | database | active
+		my $slots_infos = "<table>\n<tr><th>timestamp</th><th>slot_name</th><th>plugin</th><th>slot_type</th><th>database</th><th>active</th><th>wal_status</th><th>safe_wal_size</th><th>inactive_since</th><th>conflicting</th><th>invalidation_reason</th><th>failover</th><th>synced</th></tr>\n";
+		# Get archiver size statistics
+		$slots_infos .= "<tr>";
+		$slots_infos .= "<td>$all_stat_slots[0]</td>";
+		$slots_infos .= "<td>$all_stat_slots[0]</td>";
+		$slots_infos .= "<td>$all_stat_slots[0]</td>";
+		$slots_infos .= "<td>$all_stat_slots[0]</td>";
+		$slots_infos .= "<td>$all_stat_slots[0]</td>";
+		$slots_infos .= "<td>$all_stat_slots[0]</td>";
+		$slots_infos .= "<td>$all_stat_slots[0]</td>";
+		$slots_infos .= "<td>$all_stat_slots[0]</td>";
+		$slots_infos .= "<td>$all_stat_slots[0]</td>";
+		$slots_infos .= "<td>$all_stat_slots[0]</td>";
+		$slots_infos .= "<td>$all_stat_slots[0]</td>";
+		$slots_infos .= "<td>$all_stat_slots[0]</td>";
+		$slots_infos .= "</tr>\n</table>";
+
+		print $fh <<EOF;
+      <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <i class="glyphicon icon-archive icon-2x pull-left"></i><h2>Replication Slots</h2>
+              </div>
+              <div class="panel-body">
+		<div class="key-figures">
+		<ul>
+		<li></li>
+		$slots_infos
+		</ul>
+		</div>
+              </div>
+              </div>
+            </div><!--/span-->
+	</div>
+EOF
+	}
+
+	if ($parts_info)
+	{
 		print $fh <<EOF;
       <div class="row">
             <div class="col-md-12">

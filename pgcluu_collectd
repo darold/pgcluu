@@ -378,6 +378,12 @@ my %METRICS_COMMANDS = (
 		'output' => 'pg_stat_archiver.csv',
 		'command' => 'dump_pgstatarchiver',
 	},
+	'slot_stats' => {
+		'output' => 'pg_replication_slots.csv',
+		'command' => 'dump_pgreplicationslots',
+		'repeat'  => 1,
+		'override'  => 1,
+	},
 	'configuration_stats' => {
 		'output' => '',
 		'command' => 'get_configuration_files',
@@ -3199,6 +3205,23 @@ sub dump_pgstatarchiver
 		"SELECT date_trunc('seconds', now()), archived_count, last_archived_wal, " .
 		"last_archived_time, failed_count, last_failed_wal, last_failed_time, stats_reset " .
 		"FROM pg_stat_archiver"
+	);
+
+	return $sql;
+}
+
+####
+# Get information about replication slots
+####
+sub dump_pgreplicationslots
+{
+
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), slot_name, plugin, slot_type, database, " .
+		"temporary, active %s %s " .
+		"FROM pg_replication_slots",
+		&backend_minimum_version(13, 0) ? ", wal_status, safe_wal_size" : "",
+		&backend_minimum_version(17, 0) ? ", inactive_since, conflicting, invalidation_reason, failover, synced " : ""
 	);
 
 	return $sql;
