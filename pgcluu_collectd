@@ -2299,7 +2299,22 @@ sub dump_pgstatactivity
 sub dump_pgstatbgwriter
 {
 	my $sql ;
-	if (&backend_minimum_version(17, 0)) {
+	if (&backend_minimum_version(18, 0)) {
+		print STDERR "DEBUG: PG18+ dump_pgstatbgwriter " if ($DEBUG);
+		# Commit f92c854 removed/added columns in pg_stat_io in PG18
+		$sql = sprintf(
+			"SELECT date_trunc('seconds', now()), c.num_timed AS checkpoints_timed, " .
+			"c.num_requested AS checkpoints_req, c.write_time AS checkpoint_write_time, " .
+			"c.sync_time AS checkpoint_sync_time, c.buffers_written AS buffers_checkpoint, " .
+			"b.buffers_clean, b.maxwritten_clean, " .
+			# recomputing from pg_stat_io ; no temp relations
+			"(SELECT sum(write_bytes/8192) FROM pg_stat_io WHERE object='relation' AND backend_type IN ('client backend','autovacuum worker') ) AS buffers_backend, " .
+			"(SELECT coalesce(sum(fsyncs),0) FROM pg_stat_io WHERE object='relation' AND backend_type IN ('client backend','autovacuum worker') ) AS buffers_backend_fsync, " .
+			"b.buffers_alloc, " .
+			"date_trunc('seconds', b.stats_reset) AS stats_reset " .
+			"FROM pg_stat_bgwriter b, pg_stat_checkpointer c"
+		);
+	} elsif (&backend_minimum_version(17, 0)) {
 		print STDERR "DEBUG: PG17+ dump_pgstatbgwriter " if ($DEBUG);
 		# Some columns were moved & renamed in PG17 from pg_stat_bgwriter
 		# to pg_stat_checkpointer (commit 96f052613f35d07d001c8dd2f284ca8d95f82d1b)
