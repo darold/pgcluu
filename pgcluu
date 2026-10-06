@@ -6472,7 +6472,7 @@ sub pg_stat_locks_report
 			}
 		}
 	}
-	foreach my $t (keys %all_stat_locks) {
+	foreach my $t (sort {$a <=> $b} keys %all_stat_locks) {
 		foreach my $db (keys %{$all_stat_locks{$t}}) {
 			foreach my $lbl (keys %{$all_stat_locks{$t}{$db}}) {
 				foreach my $k (sort keys %{$all_stat_locks{$t}{$db}{$lbl}}) {
