@@ -370,7 +370,7 @@ our %pg_action_map = (
 	'index-invalid' => 'all_stat_invalid_indexes',
 	'index-hash' => 'all_stat_hash_indexes',
 	'statio-index' => 'all_statio_user_indexes',
-	'database-function' => 'all_stat_user_functions',
+	'database-functions' => 'all_stat_user_functions',
 	'pgbouncer-connections' => 'all_pgbouncer_stats',
 	'pgbouncer-duration' => 'all_pgbouncer_req_stats',
 	'pgbouncer-number' => 'all_pgbouncer_req_stats',
@@ -383,6 +383,7 @@ our %pg_action_map = (
 	'redundant-index' => 'all_stat_redundant_indexes',
 	'missing-index' => 'all_stat_missing_fkindexes',
 	'count-index' => 'all_stat_count_indexes',
+	'zero-index' => 'all_stat_count_indexes',
 	'cluster-pgconf' => 'all_postgresql_conf',
 	'cluster-recoveryconf' => 'all_recovery_conf',
 	'cluster-alterconf' => 'all_postgresql_auto_conf',
@@ -394,10 +395,12 @@ our %pg_action_map = (
 	'cluster-pgbouncer' => 'all_pgbouncer_ini',
 	'database-queries' => 'all_stat_statements',
 );
-# Actions of the pg_stat_io reports are added to the map above,
-# the third element of a page definition is the storage to load.
+# Actions of the pg_stat_io reports are added to the map above, the third
+# element of a page definition is the coma separated list of storages to
+# load. The previous raw values are required to compute the deltas of the
+# csv lines written after the cache files.
 foreach my $p (@STAT_IO_PAGES) {
-	$pg_action_map{$p->[0]} = $p->[2] || 'all_stat_io';
+	$pg_action_map{$p->[0]} = $p->[2] || 'all_stat_io,all_stat_io_prev';
 }
 
 
@@ -1367,6 +1370,16 @@ my %DB_GRAPH_INFOS = (
 	},
 
 );
+
+# A graph that is part of a page can also be called alone with its name as
+# action, it uses the same storages than its page.
+foreach my $k (keys %DB_GRAPH_INFOS) {
+	foreach my $n (keys %{$DB_GRAPH_INFOS{$k}}) {
+		my $g = $DB_GRAPH_INFOS{$k}{$n};
+		next if (!$g->{page} || !exists $pg_action_map{$g->{page}});
+		$pg_action_map{$g->{name}} ||= $pg_action_map{$g->{page}};
+	}
+}
 
 my %SAR_GRAPH_INFOS = (
 	'1' => {
@@ -12565,9 +12578,15 @@ sub load_pg_binary
 {
         my ($input_dir, $varname) = @_;
 
+	# Storages to load: the ones associated to the action (a coma separated
+	# list) and the global information that are always required (offsets
+	# in the csv files, timezone, databases and tablespaces lists). The home
+	# page and the database information page use all statistics.
+	my @wanted = ('global_infos', 'global_databases', 'global_tbspnames', split(/,/, $varname));
 	foreach my $name (@pg_to_be_stored)
 	{
-                next if ($varname ne 'home' && $name ne $varname && !grep($name, 'global_databases', 'global_tbspnames')); # Just load the right binary file
+		# Just load the right binary file
+		next if ($varname ne 'home' && $varname ne 'database-info' && !grep { $_ eq $name } @wanted);
 		next if ( !-e "$input_dir/$name.bin");
 
 		print STDERR "DEBUG: Loading PostgreSQL statistics from cache file $in_dir/$name.bin\n" if ($DEBUG);
