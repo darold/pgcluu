@@ -132,6 +132,8 @@ our %all_pgbouncer_ini_diff = ();
 our %all_stat_io = ();
 our %all_stat_io_prev = ();
 our %all_stat_aio = ();
+our %kernel_stats = ();
+our %kernel_stats_prev = ();
 # Cumulative columns collected from pg_stat_io (see pg_stat_io())
 our @STAT_IO_COLUMNS = qw(
 	reads read_bytes read_time writes write_bytes write_time writebacks
@@ -231,6 +233,8 @@ our @pg_to_be_stored = (
 	'all_stat_io',
 	'all_stat_io_prev',
 	'all_stat_aio',
+	'kernel_stats',
+	'kernel_stats_prev',
 );
 
 # Names of sar variables that need to be saved as binary file
@@ -394,6 +398,8 @@ our %pg_action_map = (
 	'cluster-dbrolesetting' => 'all_db_role_setting',
 	'cluster-pgbouncer' => 'all_pgbouncer_ini',
 	'database-queries' => 'all_stat_statements',
+	'kernel-pressure' => 'kernel_stats,kernel_stats_prev',
+	'kernel-events' => 'kernel_stats,kernel_stats_prev',
 );
 # Actions of the pg_stat_io reports are added to the map above, the third
 # element of a page definition is the coma separated list of storages to
@@ -1098,6 +1104,118 @@ my %DB_GRAPH_INFOS = (
 			'y2label' => 'percent',
 			'legends' => ['buffered','relation %'],
 			'menu' => 'Buffer I/O per relation',
+		},
+	},
+	'kernel_stats.csv' => {
+		'1' => {
+			'name' =>  'kernel-psi_host_some',
+			'page' =>  'kernel-pressure',
+			'title' => 'Host pressure stall: some tasks stalled',
+			'description' => 'Percentage of time during which at least one task was stalled waiting for CPU, memory or I/O (pressure stall information, /proc/pressure, kernel 4.20+). This is the best indicator of a resource saturation: a sustained memory pressure means reclaim or swap activity, an I/O pressure means that the storage is the bottleneck.',
+			'ylabel' => 'Percent',
+			'legends' => [],
+			'source' => 'host',
+			'metrics' => ['psi_cpu_some', 'psi_memory_some', 'psi_io_some'],
+			'mode' => 'psi',
+		},
+		'2' => {
+			'name' =>  'kernel-psi_host_full',
+			'page' =>  'kernel-pressure',
+			'title' => 'Host pressure stall: all tasks stalled',
+			'description' => 'Percentage of time during which all non-idle tasks were stalled at the same time waiting for memory or I/O (CPU full pressure since kernel 5.13). Time lost for any work on the host.',
+			'ylabel' => 'Percent',
+			'legends' => [],
+			'source' => 'host',
+			'metrics' => ['psi_cpu_full', 'psi_memory_full', 'psi_io_full'],
+			'mode' => 'psi',
+		},
+		'3' => {
+			'name' =>  'kernel-psi_cgroup_some',
+			'page' =>  'kernel-pressure',
+			'title' => 'PostgreSQL cgroup pressure stall: some tasks stalled',
+			'description' => 'Percentage of time during which at least one task of the cgroup of the postmaster was stalled waiting for CPU, memory or I/O (cgroup v2 cpu.pressure, memory.pressure and io.pressure). Shows the effect of the cgroup limits on PostgreSQL.',
+			'ylabel' => 'Percent',
+			'legends' => [],
+			'source' => 'cgroup',
+			'metrics' => ['psi_cpu_some', 'psi_memory_some', 'psi_io_some'],
+			'mode' => 'psi',
+		},
+		'4' => {
+			'name' =>  'kernel-psi_cgroup_full',
+			'page' =>  'kernel-pressure',
+			'title' => 'PostgreSQL cgroup pressure stall: all tasks stalled',
+			'description' => 'Percentage of time during which all non-idle tasks of the cgroup of the postmaster were stalled at the same time (cgroup v2).',
+			'ylabel' => 'Percent',
+			'legends' => [],
+			'source' => 'cgroup',
+			'metrics' => ['psi_cpu_full', 'psi_memory_full', 'psi_io_full'],
+			'mode' => 'psi',
+		},
+		'5' => {
+			'name' =>  'kernel-alloc_stalls',
+			'page' =>  'kernel-events',
+			'title' => 'Memory allocation stalls and compaction',
+			'description' => 'Number of direct reclaims (allocstall) and memory compactions (compact_stall, compact_fail) per second (/proc/vmstat). A process doing a direct reclaim is blocked until memory is freed, see vm.min_free_kbytes and vm.watermark_scale_factor.',
+			'ylabel' => 'Events per second',
+			'legends' => [],
+			'source' => 'host',
+			'metrics' => ['allocstall', 'compact_stall', 'compact_fail'],
+			'mode' => 'rate',
+		},
+		'6' => {
+			'name' =>  'kernel-thp',
+			'page' =>  'kernel-events',
+			'title' => 'Transparent huge pages allocations',
+			'description' => 'Transparent huge pages allocated on page fault, failures falling back to normal pages and failed collapses by khugepaged per second (/proc/vmstat). Fallbacks and compaction stalls are the usual cost of transparent huge pages.',
+			'ylabel' => 'Events per second',
+			'legends' => [],
+			'source' => 'host',
+			'metrics' => ['thp_fault_alloc', 'thp_fault_fallback', 'thp_collapse_alloc_failed'],
+			'mode' => 'rate',
+		},
+		'7' => {
+			'name' =>  'kernel-oom',
+			'page' =>  'kernel-events',
+			'title' => 'Out of memory kills',
+			'description' => 'Number of processes killed by the OOM killer on the host per interval (/proc/vmstat oom_kill). The OOM events of the cgroup of the postmaster are in the cgroup memory events graph.',
+			'ylabel' => 'Number of events',
+			'legends' => [],
+			'source' => 'host',
+			'metrics' => ['oom_kill'],
+			'mode' => 'count',
+		},
+		'8' => {
+			'name' =>  'kernel-cgroup_memory_events',
+			'page' =>  'kernel-events',
+			'title' => 'PostgreSQL cgroup memory events',
+			'description' => 'Number of times the cgroup of the postmaster was throttled because its memory usage was above memory.high (high), reached memory.max (max), had an OOM event (oom) or a process killed (oom_kill) per interval (cgroup v2 memory.events).',
+			'ylabel' => 'Number of events',
+			'legends' => [],
+			'source' => 'cgroup',
+			'metrics' => ['memory_events_high', 'memory_events_max', 'memory_events_oom', 'memory_events_oom_kill'],
+			'mode' => 'count',
+		},
+		'9' => {
+			'name' =>  'kernel-refaults',
+			'page' =>  'kernel-events',
+			'title' => 'Page cache refaults',
+			'description' => 'Number of pages read again shortly after being evicted from memory per second (/proc/vmstat workingset_refault). A high value means that the working set does not fit in memory: the page cache is thrashing.',
+			'ylabel' => 'Pages per second',
+			'legends' => [],
+			'source' => 'host',
+			'metrics' => ['workingset_refault'],
+			'mode' => 'rate',
+		},
+		'10' => {
+			'name' =>  'kernel-numa',
+			'page' =>  'kernel-events',
+			'title' => 'NUMA allocations',
+			'description' => 'Number of pages allocated on their preferred NUMA node (numa_hit) or on an other node (numa_miss, numa_foreign) per second (/proc/vmstat). Misses mean remote memory accesses, see kernel.numa_balancing and vm.zone_reclaim_mode.',
+			'ylabel' => 'Pages per second',
+			'legends' => [],
+			'source' => 'host',
+			'metrics' => ['numa_hit', 'numa_miss', 'numa_foreign'],
+			'mode' => 'rate',
 		},
 	},
 	'pg_stat_aio.csv' => {
@@ -4870,6 +4988,116 @@ sub pg_stat_aio_report
 	}
 }
 
+####
+# Kernel pressure stall information and memory events (kernel_stats.csv)
+#
+# CSV format produced by pgcluu_collectd, one cumulative counter per line:
+#   timestamp;source;metric;value
+# source is 'host' or 'cgroup' (cgroup v2 of the postmaster). The deltas
+# between two snapshots are computed here, the last raw values are kept in
+# %kernel_stats_prev which is saved in the binary cache:
+#   $kernel_stats{$time}{interval} = seconds since the previous snapshot
+#   $kernel_stats{$time}{"source|metric"} = delta
+####
+sub kernel_stats
+{
+	my ($input_dir, $file, $offset) = @_;
+
+	my $cur_time = '';
+	my $curfh = open_filehdl("$input_dir/$file");
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>)
+	{
+		$offset += length($l);
+		chomp($l);
+		my @data = split(/;/, $l);
+		next if ($#data < 3);
+		next if (!&normalize_line(\@data));
+
+		my $t = $data[0];
+		if ($t ne $cur_time)
+		{
+			# Skip snapshot already seen in a previous run
+			next if ($kernel_stats_prev{time} && $t <= $kernel_stats_prev{time});
+			if ($kernel_stats_prev{time}) {
+				$kernel_stats{$t}{interval} = ($t - $kernel_stats_prev{time})/1000;
+			}
+			$kernel_stats_prev{lasttime} = $kernel_stats_prev{time} || 0;
+			$kernel_stats_prev{time} = $t;
+			$cur_time = $t;
+		}
+		my $key = "$data[1]|$data[2]";
+		# A counter that was not in the previous snapshot has no delta
+		if ($kernel_stats_prev{lasttime} && exists $kernel_stats_prev{vals}{$key})
+		{
+			my $delta = $data[3] - $kernel_stats_prev{vals}{$key};
+			$kernel_stats{$t}{$key} = ($delta > 0) ? $delta : 0;
+		}
+		$kernel_stats_prev{vals}{$key} = $data[3];
+	}
+	$curfh->close();
+
+	return $offset || 0;
+}
+
+# Compute graphs of the kernel statistics. Each graph definition gives the
+# source, the metrics and how values are shown (mode):
+#   psi:   percentage of the interval time with stalled tasks
+#   rate:  events per second
+#   count: number of events per interval
+sub kernel_stats_report
+{
+	my ($src_base, $db, %data_info) = @_;
+
+	return if ( ($ACTION eq 'home') || ($ACTION eq 'database-info') );
+
+	my @times = ();
+	foreach my $t (sort {$a <=> $b} keys %kernel_stats) {
+		push(@times, $t) if ($kernel_stats{$t}{interval});
+	}
+
+	my $printed = 0;
+	foreach my $id (sort {$a <=> $b} keys %data_info)
+	{
+		my $g = $data_info{$id};
+		next if (!&stat_io_requested($g));
+		my %series = ();
+		foreach my $m (@{$g->{metrics}})
+		{
+			my $key = "$g->{source}|$m";
+			# Only metrics collected on this host are shown
+			next if (!grep { exists $kernel_stats{$_}{$key} } @times);
+			my $label = $m;
+			$label =~ s/^(psi|memory_events)_//;
+			$label =~ s/_(some|full)$//;
+			foreach my $t (@times)
+			{
+				next if (!exists $kernel_stats{$t}{$key});
+				my $val = $kernel_stats{$t}{$key};
+				if ($g->{mode} eq 'psi') {
+					$val = sprintf("%.2f", $val*100/($kernel_stats{$t}{interval}*1000000));
+				} elsif ($g->{mode} eq 'rate') {
+					$val = sprintf("%.2f", $val/$kernel_stats{$t}{interval});
+				}
+				$series{$label} .= '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . $val . '],';
+			}
+		}
+		next if (scalar keys %series == 0);
+
+		my @legends = sort keys %series;
+		my @graphs = map { my $s = $series{$_}; $s =~ s/,$//; $s } @legends;
+		my %infos = %{$g};
+		$infos{legends} = \@legends;
+		print &jqplot_linegraph_array($IDX++, $g->{name}, \%infos, '', @graphs);
+		$printed++;
+	}
+	%kernel_stats = ();
+
+	if (!$printed) {
+		print qq{<div class="jqplot-graph linegraph"><blockquote><b>NO DATASET</b></blockquote></div>};
+	}
+}
+
 # Compute graphs of pg_stat_io statistics
 sub pg_stat_io_report
 {
@@ -7511,6 +7739,56 @@ sub normalize_line
 	return 1;
 }
 
+####
+# Format a value of the POSTMASTER section of sysinfo.txt for display
+####
+sub format_postmaster_value
+{
+	my ($key, $val) = @_;
+
+	# Values above 2^62 are the cgroup v1 way to say no limit
+	return 'unlimited' if ($val eq 'max' || $val eq '-1' || ($val =~ /^\d+$/ && $val >= 2**62));
+	if ($key =~ /^memory\.(max|high|swap\.max|limit_in_bytes|memsw\.limit_in_bytes)$/) {
+		return &pretty_print_size($val) if ($val =~ /^\d+$/);
+	} elsif ($key eq 'limit locked memory') {
+		return join(' / ', map { /^\d+$/ ? &pretty_print_size($_) : $_ } split(/\s*\/\s*/, $val));
+	} elsif ($key eq 'cpu.max') {
+		my ($quota, $period) = split(/\s+/, $val);
+		return 'unlimited' if ($quota eq 'max');
+		return sprintf("%.2f CPUs", $quota/$period) if ($period);
+	} elsif ($key =~ /^limit (open files|processes)$/) {
+		$val =~ s/unlimited/-/g;
+	}
+	return $val;
+}
+
+# Return the html list of the postmaster limits
+sub postmaster_info_html
+{
+	return '' if (!exists $sysinfo{POSTMASTER} || $#{$sysinfo{POSTMASTER}} < 0);
+
+	my %tips = (
+		'oom_score_adj' => 'Should be -1000 for the postmaster so that it is not chosen by the OOM killer, see PG_OOM_ADJUST_FILE',
+		'limit open files' => 'Soft / hard limits, compare with max_files_per_process * max_connections',
+		'limit processes' => 'Soft / hard limits, compare with max_connections and the background workers',
+	);
+	my $html = qq{
+                <span class="figure-label"><b>postmaster process limits</b></span>
+                <ul>
+                <li></li>
+};
+	foreach my $r (@{$sysinfo{POSTMASTER}})
+	{
+		my ($k, $v) = @{$r};
+		my $val = &format_postmaster_value($k, $v);
+		my $tip = $tips{$k} || $k;
+		$html .= qq{\t\t<li><span class="figure-label" data-toggle="tooltip" data-placement="top" title="$tip">$k</span> <span class="figure">$val</span></li>\n};
+	}
+	$html .= "\t\t</ul>\n";
+
+	return $html;
+}
+
 sub pretty_print_size
 {
         my $val = shift;
@@ -8239,14 +8517,23 @@ sub show_sysinfo
 		$release_version = qq{<li><span class="figure">$sysinfo{RELEASE}{'version'}</span> <span class="figure-label">Version</span></li>};
 	}
 	my $sysctl_info = '';
+	my $postmaster_info = &postmaster_info_html();
 	my $hugepage_info = '';
+	my $cpu_info = '';
 	foreach my $k (sort keys %{$sysinfo{SYSTEM}}) {
+		# shmmax and shmall are useless since PostgreSQL 9.3, they can
+		# still be found in the files collected by older versions
 		next if ($k =~ /^kernel.*shm/);
 		if ($k =~ /transparent_hugepage/) {
 			my $k2 = $k;
 			$k2 =~ s/\/sys\/kernel\/mm\/transparent_hugepage\///;
 			$sysinfo{SYSTEM}{$k} =~ s/.*\[(.*)\].*/$1/;
 			$hugepage_info .= <<EOF;
+		<li><span class="figure-label" data-toggle="tooltip" data-placement="top" title="$k">$k2</span> <span class="figure">$sysinfo{SYSTEM}{$k}</span></li>
+EOF
+		} elsif ($k =~ /scaling_governor|cpuidle|intel_pstate|energy_performance_preference|numa_nodes/) {
+			my $k2 = basename($k);
+			$cpu_info .= <<EOF;
 		<li><span class="figure-label" data-toggle="tooltip" data-placement="top" title="$k">$k2</span> <span class="figure">$sysinfo{SYSTEM}{$k}</span></li>
 EOF
 		} else {
@@ -8315,6 +8602,7 @@ EOF
                 <li></li>
                 $sysctl_info
                 </ul>
+                $postmaster_info
                 </div>
               </div>
               </div>
@@ -8334,6 +8622,7 @@ EOF
 	      <li><span class="figure">$sysinfo{CPU}{'cache size'}</span> <span class="figure-label">Cache</span></li>
 	      $core_info
 	      <li><span class="figure">$sysinfo{CPU}{'processor'}</span> <span class="figure-label">Cores</span></li>
+	      $cpu_info
 		</ul>
 		</div>
               </div>
@@ -8366,18 +8655,6 @@ EOF
 				print <<EOF;
 	      <li><span class="figure">$sysinfo{MEMORY}{'commitlimit'}</span> <span class="figure-label">Commit limit</span></li>
 	      <li><span class="figure">$sysinfo{MEMORY}{'committed_as'}</span> <span class="figure-label">Committed</span></li>
-EOF
-			}
-			if (exists $sysinfo{SYSTEM}{'kernel.shmmax'} and exists $sysinfo{SYSTEM}{'kernel.shmall'}) {
-			  $sysinfo{SYSTEM}{'kernel.shmmax'} = pretty_print_size($sysinfo{SYSTEM}{'kernel.shmmax'});
-			  $sysinfo{SYSTEM}{'kernel.shmall'} = pretty_print_size($sysinfo{SYSTEM}{'kernel.shmall'} * 1024 * 4);
-			  print <<EOF;
-                </ul>
-                <span class="figure-label"><b>sysctl parameters</b></span>
-                <ul>
-                <li></li>
-            <li><span class="figure">$sysinfo{SYSTEM}{'kernel.shmmax'}</span> <span class="figure-label">kernel.shmmax</span></li>
-            <li><span class="figure">$sysinfo{SYSTEM}{'kernel.shmall'}</span> <span class="figure-label">kernel.shmall</span></li>
 EOF
 			}
 		} else {
@@ -9136,6 +9413,9 @@ $stat_io_menu			      </ul>
                   <li id="menu-system-runqueue"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-runqueue&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Run queue</a></li>
                   <li id="menu-system-cswch"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-cswch&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Context switches</a></li>
                   <li id="menu-system-pcrea"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-pcrea&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Tasks created per second</a></li>
+				  <li class="divider"></li>
+                  <li id="menu-kernel-pressure"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=kernel-pressure&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Pressure stall information</a></li>
+                  <li id="menu-kernel-events"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=kernel-events&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Kernel memory events</a></li>
                   <li class="divider"></li>
                   <li id="menu-system-block"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-block&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Blocks</a></li>
                   <li id="menu-system-tps"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=system-tps&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Transfers per second</a></li>
@@ -9258,6 +9538,17 @@ $stat_io_menu			      </ul>
 };
 
 		$menu_str .= qq{
+                </ul>
+              </li>
+};
+	} else {
+		# Without sar statistics, the System menu only shows the kernel pages
+		$menu_str .= qq{
+              <li id="menu-system" class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown">System <b class="caret"></b></a>
+                <ul class="dropdown-menu">
+                  <li id="menu-kernel-pressure"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=kernel-pressure&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Pressure stall information</a></li>
+                  <li id="menu-kernel-events"><a href="" onclick="document.location.href='$SCRIPT_NAME?action=kernel-events&end='+document.getElementById('end-date').value+'&start='+document.getElementById('start-date').value; return false;">Kernel memory events</a></li>
                 </ul>
               </li>
 };
@@ -12221,7 +12512,7 @@ sub read_sysinfo
 	my $input_dir = shift;
 
 	# Empty arrays before filling them
-	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA JSON/;
+	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA JSON POSTMASTER/;
 	foreach my $s (@toclear) {
 		delete $sysinfo{$s};
 	}
@@ -12357,6 +12648,12 @@ sub read_sysinfo_file
 		elsif ($section eq 'SYSTEM') {
 			my ($key, $val) = split(/\s*[=:]\s+/, $l);
 			$sysinfo{$section}{$key} = $val if ($key && defined $val);
+		}
+		elsif ($section eq 'POSTMASTER')
+		{
+			# Limits of the postmaster process, ordered list of key: value
+			my ($key, $val) = split(/:\s+/, $l, 2);
+			push(@{$sysinfo{$section}}, [ $key, $val ]) if ($key && defined $val);
 		}
 		elsif ($section eq 'PGVERSION') {
 			$sysinfo{$section}{full_version} = $l;
@@ -12789,7 +13086,7 @@ sub load_sysinfo_binary
 	my %_sysinfo = %{$stats{sysinfo}};
 
 	# Empty arrays before filling them
-	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA JSON/;
+	my @toclear = qw/DF MOUNT PROCESS PCI CRONTAB INSTALLATION EXTENSION SCHEMA JSON POSTMASTER/;
 	foreach my $s (@toclear) {
 		delete $sysinfo{$s};
 	}

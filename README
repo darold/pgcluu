@@ -417,6 +417,7 @@ COLLECTING STATISTICS
             |-- end-pg_stat_xact_user_functions.csv
             |-- end-pg_stat_xact_user_tables.csv
             |-- fs_stat_use.csv
+            |-- kernel_stats.csv
             |-- pg_class_size.csv
             |-- pg_database_size.csv
             |-- pg_db_role_setting.csv

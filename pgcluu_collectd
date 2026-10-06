@@ -700,6 +700,25 @@ else
 my $def_sar_command = "LC_ALL=C $SAR_PROG -t -p -A 1 1 | grep -vE 'Average|Summary'";
 my $def_pidstat_command = "LC_ALL=C $PIDSTAT_PROG -T ALL -u -w -r -d -U postgres 1 1 | grep -v 'Average'";
 my $sshcmd = '';
+# cgroup v2 directory of the postmaster, set by get_postmaster_info()
+my $POSTMASTER_CGROUP = '';
+
+# Kernel parameters collected from sysctl -a
+my $SYSCTL_FILTER = join('|',
+	# Memory: huge pages, overcommit, writeback of dirty pages, reclaim
+	'vm\.nr_hugepages ', 'vm\.nr_overcommit_hugepages', 'vm\.overcommit',
+	'vm\.dirty_', 'vm\.swappiness', 'vm\.zone_reclaim_mode',
+	'vm\.min_free_kbytes', 'vm\.watermark_scale_factor',
+	# NUMA and scheduler
+	'kernel\.numa_balancing ', 'kernel\.sched_autogroup_enabled',
+	'kernel\.sched_migration_cost',
+	# Network: listen backlog, local ports, socket buffers, keepalive
+	'net\.core\.somaxconn', 'net\.ipv4\.ip_local_port_range',
+	'net\.core\.rmem_max', 'net\.core\.wmem_max', 'keepalive',
+	# Files
+	'fs\.file-max', 'fs\.nr_open'
+);
+
 # Set command to execute sar remotely using ssh if necessary
 if ($USE_SSH)
 {
@@ -721,20 +740,15 @@ if ($USE_SSH)
 		}
 	}
 
-# With remote database connection and no ssh acces, disable system and sar information
+# With remote database connection and no ssh acces, disable system and sar information.
+# A host starting with a slash is the directory of a local Unix socket.
 }
-elsif ($DBHOST && !grep(/^$DBHOST$/, 'localhost', '127.0.0.1', '::1'))
+elsif ($DBHOST && ($DBHOST !~ m#^/#) && !grep(/^$DBHOST$/, 'localhost', '127.0.0.1', '::1'))
 {
 	$NO_SYSINFO = 1;
 	$DISABLE_SAR = 1;
 }
 
-# Get Os information and exit
-if ($OS_INFO && !$NO_SYSINFO)
-{
-	&grab_os_information();
-	exit 0;
-}
 
 
 # Die cleanly on signal
@@ -835,6 +849,17 @@ if ($NO_DATABASE) {
 	if ($DBPASS) {
 		$ENV{PGPASSWORD} = $DBPASS;
 	}
+}
+
+# Get Os information and exit, the psql command must be set to get the
+# PGDATA directory. Information are written into a temporary file renamed
+# at end like in collect_metrics().
+if ($OS_INFO && !$NO_SYSINFO)
+{
+	&grab_os_information();
+	rename("$OUT_DIR/sysinfo.txt.tmp", "$OUT_DIR/sysinfo.txt") if (-e "$OUT_DIR/sysinfo.txt.tmp");
+	unlink($PIDFILE);
+	exit 0;
 }
 
 # Try to grab the sysstat version
@@ -1143,6 +1168,8 @@ sub collect_metrics
 	# Diff with old collected information will be saved to sysinfo.txt.diff
 	if (!$NO_SYSINFO) {
 		&grab_os_information($OUT_DIR);
+		# Kernel pressure and memory events counters
+		&collect_kernel_stats($OUT_DIR);
 	}
 
 	####
@@ -2001,7 +2028,7 @@ sub grab_os_information
 	# System kernel tuning parameters
 	$cmd = '/sbin/sysctl -a 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
-	my @system = `$cmd | grep -E "vm.nr_hugepages |vm.nr_overcommit_hugepages|vm.overcommit|vm.dirty_.*(ratio|bytes|kbytes)|swappiness|zone_reclaim_mode|shmmax|shmall|sched_autogroup_enabled|sched_migration_cost|keepalive"`;
+	my @system = `$cmd | grep -E "$SYSCTL_FILTER"`;
 
 	my $fhl = IO::File->new("$OUT_DIR/sysinfo.txt.tmp", 'a');
 	if (not defined $fhl) {
@@ -2022,13 +2049,37 @@ sub grab_os_information
 		$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 		$ret = `$cmd`;
 		push(@system, "/sys/kernel/mm/transparent_hugepage/khugepaged/defrag: " . $ret);
+		# PostgreSQL shared memory is anonymous shared memory (shmem), the
+		# use of transparent huge pages for shared buffers is set here.
+		$cmd = 'cat /sys/kernel/mm/*transparent_hugepage/shmem_enabled 2>/dev/null';
+		$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+		$ret = `$cmd`;
+		push(@system, "/sys/kernel/mm/transparent_hugepage/shmem_enabled: " . $ret) if ($ret ne '');
 	}
-	$cmd = "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null | grep -E 'performance|powersave|userspace|ondemand|conservative|schedutil'";
+	# CPU frequency governor of all CPUs, ex: "performance (16 cpus)"
+	$cmd = "cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null | sort | uniq -c";
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	my @governors = ();
+	foreach my $l (`$cmd`) {
+		push(@governors, "$2 ($1 cpus)") if ($l =~ /^\s*(\d+)\s+(\S+)/);
+	}
+	push(@system, "scaling_governor: " . join(', ', @governors) . "\n") if ($#governors >= 0);
+	# CPU idle driver and Intel P-state driver settings
+	foreach my $f ('/sys/devices/system/cpu/cpuidle/current_driver',
+			'/sys/devices/system/cpu/intel_pstate/status',
+			'/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference')
+	{
+		$cmd = "cat $f 2>/dev/null";
+		$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+		$ret = `$cmd`;
+		push(@system, "$f: " . $ret) if ($ret ne '');
+	}
+	# Number of NUMA nodes
+	$cmd = 'ls -d /sys/devices/system/node/node[0-9]* 2>/dev/null | wc -l';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 	$ret = `$cmd`;
-	if ($ret ne '') {
-		push(@system, "scaling_governor: " . $ret);
-	}
+	$ret =~ s/\s+//g;
+	push(@system, "numa_nodes: $ret\n") if ($ret);
 	# Since kernel 5.19, the migration cost is define in a file, /sys/kernel/debug
 	# must be readable by the user running pgcluu_collectd
 	if (!grep(/sched_migration_cost/, @system)) {
@@ -2042,31 +2093,34 @@ sub grab_os_information
 	# Look at block devices informations
 	my @devices;
 	$cmd = 'ls /sys/block/ | grep -v "^loop"';
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
 	foreach my $device ( `$cmd` )
 	{
 		my @row;
 		chomp($device);
 		push(@row , 'Device : ' . $device . "\n");
-		# Fetch scheduler setting
-		$cmd = 'cat /sys/block/' . $device . '/queue/scheduler 2>/dev/null';
-		my $ret = `$cmd`;
-		push(@row , '/queue/scheduler : ' . $ret) if ($ret);
-		# Fetch add_random setting
-		$cmd = 'cat /sys/block/' . $device . '/queue/add_random 2>/dev/null';
-		$ret = `$cmd`;
-		push(@row , '/queue/add_random : ' . $ret) if ($ret);
-		# Fetch rq_affinity setting
-		$cmd = 'cat /sys/block/' . $device . '/queue/rq_affinity 2>/dev/null';
-		$ret = `$cmd`;
-		push(@row , '/queue/rq_affinity : ' . $ret) if ($ret);
-		# Fetch rotational setting
-		$cmd = 'cat /sys/block/' . $device . '/queue/rotational 2>/dev/null';
-		$ret = `$cmd`;
-		push(@row , '/queue/rotational : ' . $ret) if ($ret);
+		# Fetch the queue settings: I/O scheduler, entropy contribution,
+		# completion CPU affinity, rotational device, read ahead, queue
+		# depth, maximum I/O size and writeback throttling latency target.
+		foreach my $param ('scheduler', 'add_random', 'rq_affinity', 'rotational',
+				'read_ahead_kb', 'nr_requests', 'max_sectors_kb', 'wbt_lat_usec')
+		{
+			$cmd = "cat /sys/block/$device/queue/$param 2>/dev/null";
+			$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+			my $ret = `$cmd`;
+			push(@row , "/queue/$param : " . $ret) if ($ret);
+		}
 		push(@devices, @row);
 	}
 	print $fhl "[DEVICES]\n";
 	print $fhl @devices;
+	# Limits of the postmaster process: resource limits, OOM killer score
+	# adjustment and cgroup limits
+	if (!$NO_DATABASE)
+	{
+		print $fhl "[POSTMASTER]\n";
+		print $fhl &get_postmaster_info();
+	}
 	# Look at uptime informations
 	$cmd = 'uptime 2>/dev/null';
 	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
@@ -2092,10 +2146,14 @@ sub grab_os_information
 	@installation = `$cmd`;
 
 	# Get all file status from PGDATA directory
-	my $pgdata = &get_pgdata_path();
-	$cmd = "ls -la $pgdata/ 2>/dev/null";
-	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
-	my @list_pgdatafiles = `$cmd`;
+	my @list_pgdatafiles = ();
+	if (!$NO_DATABASE)
+	{
+		my $pgdata = &get_pgdata_path();
+		$cmd = "ls -la $pgdata/ 2>/dev/null";
+		$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+		@list_pgdatafiles = `$cmd`;
+	}
 
 	print $fhl "[CPU]\n";
 	print $fhl @cpuinfo;
@@ -2127,6 +2185,223 @@ sub grab_os_information
 	print $fhl @list_pgdatafiles;
 
 	close($fhl);
+}
+
+####
+# Run a command on the database host, through ssh when required, and return
+# its output.
+####
+sub run_os_command
+{
+	my $cmd = shift;
+
+	$cmd = $sshcmd . ' "' . $cmd . "\"" if ($sshcmd);
+	return `$cmd`;
+}
+
+####
+# Return the pid of the postmaster process. Since PostgreSQL 10 the parent
+# of the checkpointer process is used, its /proc entry is readable by any
+# user, else the pid is read from the postmaster.pid file in PGDATA.
+####
+sub get_postmaster_pid
+{
+	my $pid = `echo "SELECT pid FROM pg_stat_activity WHERE backend_type = 'checkpointer';" | $PSQL_PROG 2>/dev/null`;
+	chomp($pid);
+	if ($pid =~ /^\d+$/)
+	{
+		my $ppid = join('', &run_os_command("grep '^PPid:' /proc/$pid/status 2>/dev/null"));
+		return $1 if ($ppid =~ /^PPid:\s+(\d+)/);
+	}
+	my $pgdata = &get_pgdata_path();
+	$pid = join('', &run_os_command("head -1 $pgdata/postmaster.pid 2>/dev/null"));
+	return $1 if ($pid =~ /^(\d+)/);
+
+	return 0;
+}
+
+####
+# Return the cgroup directories of a process: the cgroup v2 directory (also
+# in hybrid mode where the unified hierarchy is mounted on
+# /sys/fs/cgroup/unified) and the cgroup v1 directories of the memory and
+# cpu controllers.
+####
+sub get_cgroup_dirs
+{
+	my $pid = shift;
+
+	my %dirs = ();
+	my $v2root = '';
+	if (join('', &run_os_command("ls /sys/fs/cgroup/cgroup.controllers 2>/dev/null")) ne '') {
+		$v2root = '/sys/fs/cgroup';
+	} elsif (join('', &run_os_command("ls /sys/fs/cgroup/unified/cgroup.controllers 2>/dev/null")) ne '') {
+		$v2root = '/sys/fs/cgroup/unified';
+	}
+	foreach my $l (&run_os_command("cat /proc/$pid/cgroup 2>/dev/null"))
+	{
+		chomp($l);
+		my ($id, $controllers, $path) = split(/:/, $l, 3);
+		next if (!defined $path);
+		$path = '' if ($path eq '/');
+		if ($id eq '0' && $controllers eq '' && $v2root) {
+			$dirs{v2} = "$v2root$path";
+			$dirs{v2path} = $path || '/';
+		} elsif ($controllers =~ /(^|,)memory(,|$)/) {
+			$dirs{memory} = "/sys/fs/cgroup/$controllers$path";
+			$dirs{memorypath} = $path || '/';
+		} elsif ($controllers =~ /(^|,)cpu(,|$)/) {
+			$dirs{cpu} = "/sys/fs/cgroup/$controllers$path";
+		}
+	}
+
+	return %dirs;
+}
+
+####
+# Return the values of the given files of a cgroup directory as lines
+# "file: value", multi-line values are joined.
+####
+sub get_cgroup_values
+{
+	my ($dir, @files) = @_;
+
+	my @lines = ();
+	my $list = join(' ', map { "$dir/$_" } @files);
+	my %vals = ();
+	foreach my $l (&run_os_command("grep -H . $list 2>/dev/null"))
+	{
+		chomp($l);
+		next if ($l !~ m#^\Q$dir\E/([^:]+):(.*)$#);
+		push(@{$vals{$1}}, $2);
+	}
+	foreach my $f (@files)
+	{
+		next if (!exists $vals{$f});
+		if ($f eq 'memory.events') {
+			# Only the number of OOM events and OOM kills are reported
+			foreach my $v (@{$vals{$f}}) {
+				push(@lines, "memory.events $1: $2\n") if ($v =~ /^(oom|oom_kill)\s+(\d+)/);
+			}
+		} else {
+			push(@lines, "$f: " . join(', ', @{$vals{$f}}) . "\n");
+		}
+	}
+
+	return @lines;
+}
+
+####
+# Return information about the limits of the postmaster process as lines
+# "key: value" saved in the POSTMASTER section of sysinfo.txt
+####
+sub get_postmaster_info
+{
+	my $pid = &get_postmaster_pid();
+	return () if (!$pid);
+
+	my @info = ("pid: $pid\n");
+
+	# OOM killer score adjustment, should be -1000 for the postmaster
+	my $ret = join('', &run_os_command("cat /proc/$pid/oom_score_adj 2>/dev/null"));
+	$ret =~ s/\s+//g;
+	push(@info, "oom_score_adj: $ret\n") if ($ret ne '');
+
+	# Resource limits: soft and hard values
+	foreach my $l (&run_os_command("cat /proc/$pid/limits 2>/dev/null"))
+	{
+		if ($l =~ /^Max (open files|processes|locked memory)\s{2,}(\S+)\s+(\S+)/) {
+			push(@info, "limit $1: $2 / $3\n");
+		}
+	}
+
+	# cgroup limits
+	my %dirs = &get_cgroup_dirs($pid);
+	# The root cgroup gives the same values than the host
+	$POSTMASTER_CGROUP = ($dirs{v2} && $dirs{v2path} ne '/') ? $dirs{v2} : '';
+	if ($dirs{v2})
+	{
+		my @v2 = &get_cgroup_values($dirs{v2}, 'memory.max', 'memory.high',
+					'memory.swap.max', 'cpu.max', 'cpu.weight',
+					'io.max', 'pids.max', 'memory.events');
+		push(@info, "cgroup v2: $dirs{v2path}\n", @v2) if ($#v2 >= 0 || !$dirs{memory});
+	}
+	if ($dirs{memory})
+	{
+		push(@info, "cgroup v1: $dirs{memorypath}\n");
+		push(@info, &get_cgroup_values($dirs{memory}, 'memory.limit_in_bytes',
+					'memory.memsw.limit_in_bytes'));
+	}
+	if ($dirs{cpu}) {
+		push(@info, &get_cgroup_values($dirs{cpu}, 'cpu.cfs_quota_us', 'cpu.cfs_period_us'));
+	}
+
+	return @info;
+}
+
+####
+# Collect the kernel pressure stall information (PSI) and memory events
+# counters, of the host and of the cgroup of the postmaster (cgroup v2), and
+# append them to kernel_stats.csv. All values are cumulative counters:
+#   timestamp;source;metric;value
+# source is 'host' or 'cgroup'. PSI metrics (psi_<resource>_<some|full>) are
+# the total stall time in microseconds. The timestamp is the local time of
+# the host like for sar statistics.
+####
+sub collect_kernel_stats
+{
+	my $outdir = shift;
+
+	my @vmstat = qw(
+		allocstall compact_stall compact_fail thp_fault_alloc thp_fault_fallback
+		thp_collapse_alloc_failed oom_kill numa_hit numa_miss numa_foreign
+		workingset_refault
+	);
+
+	my @files = ('/proc/pressure/cpu', '/proc/pressure/memory', '/proc/pressure/io');
+	if ($POSTMASTER_CGROUP) {
+		push(@files, map { "$POSTMASTER_CGROUP/$_" } ('cpu.pressure', 'memory.pressure', 'io.pressure', 'memory.events'));
+	}
+	my $cmd = 'grep -H . ' . join(' ', @files) . " 2>/dev/null; grep -E '^(allocstall|compact_stall |compact_fail |thp_fault_alloc |thp_fault_fallback |thp_collapse_alloc_failed |oom_kill |numa_hit |numa_miss |numa_foreign |workingset_refault)' /proc/vmstat 2>/dev/null";
+
+	my %vals = ();
+	foreach my $l (&run_os_command($cmd))
+	{
+		chomp($l);
+		# PSI: /proc/pressure/memory:some avg10=0.00 avg60=0.00 avg300=0.00 total=1234
+		if ($l =~ m#^(.*)/(cpu|memory|io)(?:\.pressure)?:(some|full) .*total=(\d+)#)
+		{
+			my $src = ($1 eq '/proc/pressure') ? 'host' : 'cgroup';
+			$vals{$src}{"psi_$2_$3"} = $4;
+		}
+		# cgroup memory events: <dir>/memory.events:oom_kill 0
+		elsif ($l =~ m#/memory\.events:(low|high|max|oom|oom_kill) (\d+)$#)
+		{
+			$vals{cgroup}{"memory_events_$1"} = $2;
+		}
+		# /proc/vmstat counters, the allocstall_<zone> and the anon/file
+		# workingset_refault_<type> counters are summed
+		elsif ($l =~ /^(\w+) (\d+)$/)
+		{
+			my ($k, $v) = ($1, $2);
+			$k =~ s/^(allocstall|workingset_refault)_.*/$1/;
+			next if (!grep { $_ eq $k } @vmstat);
+			$vals{host}{$k} += $v;
+		}
+	}
+	return if (scalar keys %vals == 0);
+
+	my $fh = IO::File->new("$outdir/kernel_stats.csv", 'a');
+	if (not defined $fh) {
+		&dprint("ERROR: can not write into file $outdir/kernel_stats.csv, $!\n");
+		return;
+	}
+	my $now = &get_current_timestamp();
+	foreach my $src (sort keys %vals) {
+		foreach my $k (sort keys %{$vals{$src}}) {
+			print $fh "$now;$src;$k;$vals{$src}{$k}\n";
+		}
+	}
+	$fh->close();
 }
 
 sub usage
