@@ -268,6 +268,14 @@ my %METRICS_COMMANDS = (
 		'command'  => 'dump_pgwaitsampling',
 		'repeat'  => 1,
 	},
+	'io_stats' => {         # pg_stat_io, PG16+
+		'output'   => 'pg_stat_io.csv',
+		'command'  => 'dump_pgstatio',
+	},
+	'aio_stats' => {        # asynchronous I/O, PG18+
+		'output'   => 'pg_stat_aio.csv',
+		'command'  => 'dump_pgstataio',
+	},
 	'subxact_stats' => {
 		'output'   => 'pg_subxact_counters.csv',
 		'command'  => 'dump_pgsubxactcounters',
@@ -1455,6 +1463,12 @@ sub verify_action
 		return $ret;
 	}
 	# Remove some metric collection following the PostgreSQL version.
+	if (!&backend_minimum_version(16, 0)) {
+		delete $METRICS_COMMANDS{'io_stats'};
+	}
+	if (!&backend_minimum_version(18, 0)) {
+		delete $METRICS_COMMANDS{'aio_stats'};
+	}
 	if (!&backend_minimum_version(10, 0)) {
 		delete $METRICS_COMMANDS{'statistics_stats'};
 		delete $METRICS_COMMANDS{'pg_hba_rules'};
@@ -1499,6 +1513,8 @@ sub verify_action
 	}
 	if (!&is_superuser($DBUSER)) {
 		delete $METRICS_COMMANDS{'xlog_stats'};
+		# pg_aios requires the pg_read_all_stats privilege
+		delete $METRICS_COMMANDS{'aio_stats'};
 	}
 	if ($NOTABLESPACE) {
 		delete $METRICS_COMMANDS{'tablespace_size_stats'};
@@ -1653,10 +1669,10 @@ sub fetch_version
 	}
 
 	if ($save) {
-		my $fhl = IO::File->new("$OUT_DIR/sysinfo.txt", 'a');
+		my $fhl = IO::File->new("$OUT_DIR/sysinfo.txt.tmp", 'a');
 		if (not defined $fhl) {
-			&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
-			unlink_pid_and_exit("FATAL: can not write into file $OUT_DIR/sysinfo.txt, $!", 1);
+			&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt.tmp\n");
+			unlink_pid_and_exit("FATAL: can not write into file $OUT_DIR/sysinfo.txt.tmp, $!", 1);
 		}
 		print $fhl "[PGVERSION]\n";
 		print $fhl "$pg_ver\n";
@@ -1713,10 +1729,10 @@ sub get_uptime
 	chomp($uptime);
 
 	if ($save) {
-		my $fhl = IO::File->new("$OUT_DIR/sysinfo.txt", 'a');
+		my $fhl = IO::File->new("$OUT_DIR/sysinfo.txt.tmp", 'a');
 		if (not defined $fhl) {
-			&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt\n");
-			unlink_pid_and_exit("FATAL: can not write into file $OUT_DIR/sysinfo.txt, $!", 1);
+			&dprint("FATAL: can not write into file $OUT_DIR/sysinfo.txt.tmp\n");
+			unlink_pid_and_exit("FATAL: can not write into file $OUT_DIR/sysinfo.txt.tmp, $!", 1);
 		}
 		print $fhl "[PGUPTIME]\n";
 		print $fhl "$uptime\n";
@@ -2571,6 +2587,52 @@ sub dump_pgwaitsampling
 			"FROM public.pg_wait_sampling_profile " .
 			"WHERE event IS NOT NULL " .
 			"GROUP BY event_type, event";
+
+	return $sql;
+}
+
+sub dump_pgstatio
+{
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), backend_type, object, context, " .
+		"reads, %s AS read_bytes, read_time, " .
+		"writes, %s AS write_bytes, write_time, " .
+		"writebacks, writeback_time, " .
+		"extends, %s AS extend_bytes, extend_time, " .
+		"hits, evictions, reuses, fsyncs, fsync_time, " .
+		"current_setting('block_size')::integer AS block_size " .
+		"FROM pg_stat_io " .
+		"WHERE coalesce(reads,0) + coalesce(writes,0) + coalesce(writebacks,0) " .
+		"+ coalesce(extends,0) + coalesce(hits,0) + coalesce(evictions,0) " .
+		"+ coalesce(reuses,0) + coalesce(fsyncs,0) > 0",
+		&backend_minimum_version(18, 0) ? "read_bytes" : "reads*op_bytes",
+		&backend_minimum_version(18, 0) ? "write_bytes" : "writes*op_bytes",
+		&backend_minimum_version(18, 0) ? "extend_bytes" : "extends*op_bytes"
+	);
+
+	return $sql;
+}
+
+####
+# Get information about asynchronous I/O (PG18+): I/O method, number of
+# I/O workers configured and running, and the number of asynchronous I/O
+# in progress at the time of the snapshot (pg_aios). With PG19 the I/O
+# workers pool is automatically sized between io_min_workers and
+# io_max_workers.
+#   timestamp;io_method;io_workers;io_min_workers;io_max_workers;
+#   running_io_workers;aio_in_progress;aio_readv;aio_writev
+####
+sub dump_pgstataio
+{
+	my $sql = sprintf(
+		"SELECT date_trunc('seconds', now()), current_setting('io_method'), " .
+		"current_setting('io_workers', true), %s, " .
+		"(SELECT count(*) FROM pg_stat_activity WHERE backend_type = 'io worker'), " .
+		"count(*), count(*) FILTER (WHERE operation = 'readv'), " .
+		"count(*) FILTER (WHERE operation = 'writev') " .
+		"FROM pg_aios",
+		&backend_minimum_version(19, 0) ? "current_setting('io_min_workers', true), current_setting('io_max_workers', true)" : "NULL, NULL"
+	);
 
 	return $sql;
 }

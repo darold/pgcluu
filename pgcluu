@@ -140,6 +140,50 @@ our %all_pgbouncer_ini_diff = ();
 our %all_prepared_xact = ();
 our %all_subxact_counters = ();
 our %all_wait_events = ();
+our %all_stat_io = ();
+our %all_stat_io_prev = ();
+our %all_stat_aio = ();
+# Cumulative columns collected from pg_stat_io (see pg_stat_io())
+our @STAT_IO_COLUMNS = qw(
+	reads read_bytes read_time writes write_bytes write_time writebacks
+	writeback_time extends extend_bytes extend_time hits evictions reuses
+	fsyncs fsync_time
+);
+# Dispatch table between pg_stat_io graph names and the functions building them
+our %STAT_IO_GRAPHS = (
+	'cluster-io_read_throughput'   => sub { &stat_io_rate_graph(@_, 'read_bytes', 0, 'relation|temp relation', undef); },
+	'cluster-io_write_throughput'  => sub { &stat_io_rate_graph(@_, 'write_bytes', 0, 'relation|temp relation', undef); },
+	'cluster-io_extend_throughput' => sub { &stat_io_rate_graph(@_, 'extend_bytes', 0, 'relation|temp relation', undef); },
+	'cluster-io_buffer_writes'     => sub { &stat_io_rate_graph(@_, 'write_bytes', 0, 'relation', 'normal'); },
+	'cluster-io_evictions'         => sub { &stat_io_rate_graph(@_, 'evictions', 0, 'relation', 'normal'); },
+	'cluster-io_backend_fsyncs'    => sub { &stat_io_rate_graph(@_, 'fsyncs', 0, 'relation', undef, 'checkpointer'); },
+	'cluster-io_hit_ratio'         => \&stat_io_hit_ratio_graph,
+	'cluster-io_ring_buffers'      => \&stat_io_ring_graph,
+	'cluster-io_read_latency'      => sub { &stat_io_latency_graph(@_, 'read_time', 'reads', 0, 'relation|temp relation', undef); },
+	'cluster-io_write_latency'     => sub { &stat_io_latency_graph(@_, 'write_time', 'writes', 0, 'relation|temp relation', undef); },
+	'cluster-io_extend_latency'    => sub { &stat_io_latency_graph(@_, 'extend_time', 'extends', 0, 'relation|temp relation', undef); },
+	'cluster-io_fsync_latency'     => sub { &stat_io_latency_graph(@_, 'fsync_time', 'fsyncs', 0, 'relation', undef); },
+	'cluster-io_size'              => \&stat_io_size_graph,
+	'cluster-io_wal_write'         => sub { &stat_io_rate_graph(@_, 'write_bytes', 0, 'wal', 'normal'); },
+	'cluster-io_wal_fsync'         => sub { &stat_io_rate_graph(@_, 'fsyncs', 0, 'wal', 'normal'); },
+	'cluster-io_wal_write_latency' => sub { &stat_io_latency_graph(@_, 'write_time', 'writes', 0, 'wal', 'normal'); },
+	'cluster-io_wal_fsync_latency' => sub { &stat_io_latency_graph(@_, 'fsync_time', 'fsyncs', 0, 'wal', 'normal'); },
+	'cluster-io_wal_init'          => sub { &stat_io_rate_graph(@_, 'write_bytes', 0, 'wal', 'init'); },
+	'cluster-io_wal_read'          => sub { &stat_io_rate_graph(@_, 'read_bytes', 0, 'wal', undef); },
+	'cluster-io_temp_throughput'   => sub { &stat_io_ops_rate_graph(@_, 'temp relation', undef, 'read' => 'read_bytes', 'write' => 'write_bytes', 'extend' => 'extend_bytes'); },
+	'cluster-io_temp_hit_ratio'    => \&stat_io_temp_hit_ratio_graph,
+	'cluster-io_temp_evictions'    => sub { &stat_io_rate_graph(@_, 'evictions', 0, 'temp relation', undef); },
+);
+# Pages of the pg_stat_io reports and their label in the menu
+our @STAT_IO_PAGES = (
+	[ 'cluster-io_throughput', 'I/O throughput per backend type' ],
+	[ 'cluster-io_writers', 'Shared buffers writers and evictions' ],
+	[ 'cluster-io_cache', 'Buffer hit ratio and ring buffers' ],
+	[ 'cluster-io_latency', 'I/O latency and size' ],
+	[ 'cluster-io_wal', 'WAL I/O' ],
+	[ 'cluster-io_temp', 'Temporary relations I/O' ],
+	[ 'cluster-io_aio', 'Asynchronous I/O' ],
+);
 
 # Names of the variables that need to be saved as binary file
 our @pg_to_be_stored = (
@@ -199,6 +243,9 @@ our @pg_to_be_stored = (
 	'all_subxact_counters',
 	'all_wait_events',
 	'all_stat_slots',
+	'all_stat_io',
+	'all_stat_io_prev',
+	'all_stat_aio',
 );
 
 # Names of sar variables that need to be saved as binary file
@@ -979,6 +1026,208 @@ my %DB_GRAPH_INFOS = (
 			'ylabel' => 'Number of subxact',
 			'legends' => ['Start','Commit','Abort', 'Overflow'],
 			'y2label' => 'Number of overflow',
+		},
+	},
+	'pg_stat_aio.csv' => {
+		'1' => {
+			'name' =>  'cluster-io_workers',
+			'page' =>  'cluster-io_aio',
+			'title' => 'I/O workers',
+			'description' => 'Number of I/O worker processes running when io_method is set to worker (PostgreSQL 18+), compared to the io_workers setting (PostgreSQL 18) or to the io_min_workers and io_max_workers limits of the automatically sized pool (PostgreSQL 19+).',
+			'ylabel' => 'Number of workers',
+			'legends' => [],
+		},
+		'2' => {
+			'name' =>  'cluster-io_aio_inflight',
+			'page' =>  'cluster-io_aio',
+			'title' => 'Asynchronous I/O in progress (sampled)',
+			'description' => 'Number of asynchronous I/O in progress at the time of each snapshot, total and by operation (pg_aios, PostgreSQL 18+). This is a sample taken at each collect, not a cumulative counter: short peaks between two snapshots are not visible.',
+			'ylabel' => 'Number of I/O',
+			'legends' => [],
+		},
+	},
+	'pg_stat_io.csv' => {
+		'1' => {
+			'name' =>  'cluster-io_read_throughput',
+			'page' =>  'cluster-io_throughput',
+			'title' => 'I/O read throughput per backend type',
+			'description' => 'Bytes read per second from disk (or the OS page cache) on relations and temporary relations, by backend type (pg_stat_io). The percentage is the share of each backend type over the whole period. Since PostgreSQL 18 several blocks can be read with a single I/O operation.',
+			'ylabel' => 'Size per second',
+			'legends' => [],
+		},
+		'2' => {
+			'name' =>  'cluster-io_write_throughput',
+			'page' =>  'cluster-io_throughput',
+			'title' => 'I/O write throughput per backend type',
+			'description' => 'Bytes written per second on relations and temporary relations, by backend type (pg_stat_io). Writes are expected to be done by the checkpointer and the background writer, a high share of client backends or autovacuum workers means that they have to write dirty buffers by themselves.',
+			'ylabel' => 'Size per second',
+			'legends' => [],
+		},
+		'3' => {
+			'name' =>  'cluster-io_extend_throughput',
+			'page' =>  'cluster-io_throughput',
+			'title' => 'Relation extension throughput per backend type',
+			'description' => 'Bytes per second used to extend relations and temporary relations (new blocks added to the files), by backend type (pg_stat_io). This shows which processes are growing the data files.',
+			'ylabel' => 'Size per second',
+			'legends' => [],
+		},
+		'4' => {
+			'name' =>  'cluster-io_buffer_writes',
+			'page' =>  'cluster-io_writers',
+			'title' => 'Shared buffers writes per backend type',
+			'description' => 'Bytes written per second from shared buffers in the normal context (no buffer access strategy) by backend type (pg_stat_io). Dirty buffers should mostly be written by the checkpointer and the background writer. When client backends have a high share, they have to write dirty buffers themselves before reusing them: look at shared_buffers, bgwriter_lru_maxpages, bgwriter_lru_multiplier and bgwriter_delay.',
+			'ylabel' => 'Size per second',
+			'legends' => [],
+		},
+		'5' => {
+			'name' =>  'cluster-io_evictions',
+			'page' =>  'cluster-io_writers',
+			'title' => 'Shared buffers evictions per backend type',
+			'description' => 'Number of buffers evicted per second from shared buffers in the normal context to make room for another block, by backend type (pg_stat_io). A sustained eviction rate means that the working set does not fit in shared buffers.',
+			'ylabel' => 'Buffers per second',
+			'legends' => [],
+		},
+		'6' => {
+			'name' =>  'cluster-io_backend_fsyncs',
+			'page' =>  'cluster-io_writers',
+			'title' => 'fsync calls done by backends',
+			'description' => 'Number of fsync calls per second on relations done by processes other than the checkpointer (pg_stat_io). This should be zero: a backend has to execute its own fsync only when the checkpointer fsync request queue is full.',
+			'ylabel' => 'Fsync per second',
+			'legends' => [],
+		},
+		'7' => {
+			'name' =>  'cluster-io_hit_ratio',
+			'page' =>  'cluster-io_cache',
+			'title' => 'Buffer hit ratio per I/O context',
+			'description' => 'Percentage of blocks found in shared buffers on relations, per I/O context (pg_stat_io). Unlike the database cache ratio this distinguishes the normal context from the bulkread (large sequential scans), bulkwrite (COPY, CREATE TABLE AS) and vacuum contexts that use a small ring of buffers and are expected to have a low hit ratio.',
+			'ylabel' => 'Percent',
+			'legends' => [],
+		},
+		'8' => {
+			'name' =>  'cluster-io_ring_buffers',
+			'page' =>  'cluster-io_cache',
+			'title' => 'Ring buffers reuses and evictions',
+			'description' => 'Buffers reused from the ring and buffers evicted from shared buffers per second in the bulkread, bulkwrite and vacuum contexts (pg_stat_io). Reuses are expected, a high number of evictions compared to reuses means that the ring had to take new buffers from shared buffers, see vacuum_buffer_usage_limit for the vacuum context.',
+			'ylabel' => 'Buffers per second',
+			'legends' => [],
+		},
+		'9' => {
+			'name' =>  'cluster-io_read_latency',
+			'page' =>  'cluster-io_latency',
+			'title' => 'Average read latency per backend type',
+			'description' => 'Average time in milliseconds of a read operation on relations and temporary relations, by backend type (pg_stat_io). Requires track_io_timing. Since PostgreSQL 18 a read operation can read several blocks, see the average I/O size graph.',
+			'ylabel' => 'Duration',
+			'legends' => [],
+			'timing' => 'track_io_timing',
+		},
+		'10' => {
+			'name' =>  'cluster-io_write_latency',
+			'page' =>  'cluster-io_latency',
+			'title' => 'Average write latency per backend type',
+			'description' => 'Average time in milliseconds of a write operation on relations and temporary relations, by backend type (pg_stat_io). Requires track_io_timing.',
+			'ylabel' => 'Duration',
+			'legends' => [],
+			'timing' => 'track_io_timing',
+		},
+		'11' => {
+			'name' =>  'cluster-io_extend_latency',
+			'page' =>  'cluster-io_latency',
+			'title' => 'Average relation extension latency per backend type',
+			'description' => 'Average time in milliseconds of a relation extension operation on relations and temporary relations, by backend type (pg_stat_io). Requires track_io_timing.',
+			'ylabel' => 'Duration',
+			'legends' => [],
+			'timing' => 'track_io_timing',
+		},
+		'12' => {
+			'name' =>  'cluster-io_fsync_latency',
+			'page' =>  'cluster-io_latency',
+			'title' => 'Average fsync latency per backend type',
+			'description' => 'Average time in milliseconds of a fsync call on relations, by backend type (pg_stat_io). Requires track_io_timing.',
+			'ylabel' => 'Duration',
+			'legends' => [],
+			'timing' => 'track_io_timing',
+		},
+		'13' => {
+			'name' =>  'cluster-io_size',
+			'page' =>  'cluster-io_latency',
+			'title' => 'Average I/O size on relations',
+			'description' => 'Average number of bytes per read, write and extend operation on relations (pg_stat_io, PostgreSQL 18+). Values higher than the block size show that consecutive blocks are combined into a single I/O operation, see io_combine_limit.',
+			'ylabel' => 'Size',
+			'legends' => [],
+		},
+		'14' => {
+			'name' =>  'cluster-io_wal_write',
+			'page' =>  'cluster-io_wal',
+			'title' => 'WAL write throughput per backend type',
+			'description' => 'Bytes of WAL written per second by backend type (pg_stat_io, PostgreSQL 18+). WAL should mostly be written by the WAL writer, a high share of client backends means that wal_buffers was full or that synchronous commits had to write their own WAL.',
+			'ylabel' => 'Size per second',
+			'legends' => [],
+		},
+		'15' => {
+			'name' =>  'cluster-io_wal_fsync',
+			'page' =>  'cluster-io_wal',
+			'title' => 'WAL fsync calls per backend type',
+			'description' => 'Number of fsync calls per second on WAL files by backend type (pg_stat_io, PostgreSQL 18+). With synchronous_commit on, each commit not covered by a previous flush leads to a fsync by the committing backend.',
+			'ylabel' => 'Fsync per second',
+			'legends' => [],
+		},
+		'16' => {
+			'name' =>  'cluster-io_wal_write_latency',
+			'page' =>  'cluster-io_wal',
+			'title' => 'Average WAL write latency per backend type',
+			'description' => 'Average time in milliseconds of a WAL write operation by backend type (pg_stat_io, PostgreSQL 18+). Requires track_wal_io_timing.',
+			'ylabel' => 'Duration',
+			'legends' => [],
+			'timing' => 'track_wal_io_timing',
+		},
+		'17' => {
+			'name' =>  'cluster-io_wal_fsync_latency',
+			'page' =>  'cluster-io_wal',
+			'title' => 'Average WAL fsync latency per backend type',
+			'description' => 'Average time in milliseconds of a fsync call on WAL files by backend type (pg_stat_io, PostgreSQL 18+). This is the latency added to each commit that has to flush WAL. Requires track_wal_io_timing.',
+			'ylabel' => 'Duration',
+			'legends' => [],
+			'timing' => 'track_wal_io_timing',
+		},
+		'18' => {
+			'name' =>  'cluster-io_wal_init',
+			'page' =>  'cluster-io_wal',
+			'title' => 'WAL segments initialization',
+			'description' => 'Bytes written per second to initialize new WAL segment files, by backend type (pg_stat_io init context, PostgreSQL 18+). This activity happens when no recycled segment is available, see wal_init_zero, wal_recycle, min_wal_size and max_wal_size.',
+			'ylabel' => 'Size per second',
+			'legends' => [],
+		},
+		'19' => {
+			'name' =>  'cluster-io_wal_read',
+			'page' =>  'cluster-io_wal',
+			'title' => 'WAL read throughput per backend type',
+			'description' => 'Bytes of WAL read per second by backend type (pg_stat_io, PostgreSQL 18+), for example by the startup process during recovery or by WAL senders for replication and logical decoding.',
+			'ylabel' => 'Size per second',
+			'legends' => [],
+		},
+		'20' => {
+			'name' =>  'cluster-io_temp_throughput',
+			'page' =>  'cluster-io_temp',
+			'title' => 'Temporary relations I/O throughput',
+			'description' => 'Bytes read, written and used to extend temporary tables per second (pg_stat_io object temp relation). Temporary tables use local buffers private to each session (temp_buffers), writes and reads mean that the temporary data do not fit in temp_buffers.',
+			'ylabel' => 'Size per second',
+			'legends' => [],
+		},
+		'21' => {
+			'name' =>  'cluster-io_temp_hit_ratio',
+			'page' =>  'cluster-io_temp',
+			'title' => 'Local buffers hit ratio',
+			'description' => 'Percentage of temporary relations blocks found in local buffers (pg_stat_io object temp relation). A low ratio with a lot of reads may justify a higher temp_buffers for the sessions using large temporary tables.',
+			'ylabel' => 'Percent',
+			'legends' => [],
+		},
+		'22' => {
+			'name' =>  'cluster-io_temp_evictions',
+			'page' =>  'cluster-io_temp',
+			'title' => 'Local buffers evictions per backend type',
+			'description' => 'Number of local buffers evicted per second to make room for another block of a temporary relation, by backend type (pg_stat_io object temp relation).',
+			'ylabel' => 'Buffers per second',
+			'legends' => [],
 		},
 	},
 	'pg_stat_waitevent.csv' => {
@@ -4691,6 +4940,463 @@ sub pg_subxact_counters_report
 		}
 		$dbfh->close();
 	}
+}
+####
+# I/O statistics from pg_stat_io (PG16+)
+#
+# CSV format produced by pgcluu_collectd (same for all PostgreSQL versions):
+#   0 timestamp, 1 backend_type, 2 object, 3 context, 4 reads, 5 read_bytes,
+#   6 read_time, 7 writes, 8 write_bytes, 9 write_time, 10 writebacks,
+#   11 writeback_time, 12 extends, 13 extend_bytes, 14 extend_time, 15 hits,
+#   16 evictions, 17 reuses, 18 fsyncs, 19 fsync_time, 20 block_size
+#
+# Values in pg_stat_io are cumulative, the deltas between two snapshots are
+# computed here. Last raw values are kept in %all_stat_io_prev, which is saved
+# in the binary cache, so that deltas are continuous in incremental mode.
+# Only non zero deltas are stored in %all_stat_io:
+#   $all_stat_io{$time}{interval} = seconds since the previous snapshot
+#   $all_stat_io{$time}{"backend_type|object|context"}{metric} = delta
+# where metric is one of the column names above plus read_blocks, the number
+# of blocks read (since PG18 reads are counted in I/O operations, not blocks).
+####
+
+sub pg_stat_io
+{
+	my ($in_dir, $file, $offset) = @_;
+
+	my $cur_time = '';
+	# Load data from file
+	my $curfh = open_filehdl("$in_dir/$file");
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>)
+	{
+		$offset += length($l);
+		my @data = split(/;/, $l);
+		next if ($#data < 20);
+		next if (!&normalize_line(\@data));
+
+		my $t = $data[0];
+		# A new snapshot is starting
+		if ($t ne $cur_time)
+		{
+			# Skip snapshot already seen in a previous run
+			next if ($all_stat_io_prev{time} && $t <= $all_stat_io_prev{time});
+			if ($all_stat_io_prev{time}) {
+				$all_stat_io{$t}{interval} = ($t - $all_stat_io_prev{time})/1000;
+			}
+			$all_stat_io_prev{lasttime} = $all_stat_io_prev{time} || 0;
+			$all_stat_io_prev{time} = $t;
+			$cur_time = $t;
+		}
+
+		my $key = "$data[1]|$data[2]|$data[3]";
+		my $block_size = $data[20] || 8192;
+		for (my $i = 0; $i <= $#STAT_IO_COLUMNS; $i++)
+		{
+			my $col = $STAT_IO_COLUMNS[$i];
+			my $val = $data[$i+4] || 0;
+			# When the row was not collected in the previous snapshot it had
+			# no activity so its previous value is 0. On the very first
+			# snapshot there is no delta, this is just the starting point.
+			if ($all_stat_io_prev{lasttime})
+			{
+				my $delta = $val - ($all_stat_io_prev{vals}{$key}{$col} || 0);
+				if ($delta > 0)
+				{
+					$all_stat_io{$t}{$key}{$col} = $delta;
+					if ($col eq 'read_bytes') {
+						$all_stat_io{$t}{$key}{read_blocks} = $delta/$block_size;
+					}
+				}
+			}
+			$all_stat_io_prev{vals}{$key}{$col} = $val;
+		}
+	}
+	$curfh->close();
+
+	return $offset || 0;
+}
+
+####
+# Helpers used to build the pg_stat_io reports
+####
+
+# Return the list of snapshot times with a valid interval
+sub stat_io_times
+{
+	my @times = ();
+	foreach my $t (sort {$a <=> $b} keys %all_stat_io)
+	{
+		$all_stat_io{$t}{interval} = 1 if ($sysinfo{CONFIGURATION}{'capture'});
+		next if (!$all_stat_io{$t}{interval});
+		push(@times, $t);
+	}
+	return @times;
+}
+
+# Return the sum of a metric at time $t for all rows matching the filters.
+# Filters are regexp applied to backend_type, object and context, undef
+# means no filter.
+sub stat_io_sum
+{
+	my ($t, $metric, $btype, $object, $context) = @_;
+
+	my $sum = 0;
+	foreach my $key (keys %{$all_stat_io{$t}})
+	{
+		next if ($key eq 'interval');
+		my ($b, $o, $c) = split(/\|/, $key);
+		next if (defined $btype && $b !~ /^(?:$btype)$/);
+		next if (defined $object && $o !~ /^(?:$object)$/);
+		next if (defined $context && $c !~ /^(?:$context)$/);
+		$sum += ($all_stat_io{$t}{$key}{$metric} || 0);
+	}
+	return $sum;
+}
+
+# Return the sorted list of backend types (pos 0), objects (pos 1) or
+# contexts (pos 2) having a non zero value for one of the given metrics
+# in the rows matching the object and context filters.
+sub stat_io_list
+{
+	my ($pos, $object, $context, @metrics) = @_;
+
+	my %list = ();
+	foreach my $t (keys %all_stat_io)
+	{
+		foreach my $key (keys %{$all_stat_io{$t}})
+		{
+			next if ($key eq 'interval');
+			my @k = split(/\|/, $key);
+			next if (defined $object && $k[1] !~ /^(?:$object)$/);
+			next if (defined $context && $k[2] !~ /^(?:$context)$/);
+			next if ($#metrics >= 0 && !grep { $all_stat_io{$t}{$key}{$_} } @metrics);
+			$list{$k[$pos]} = 1;
+		}
+	}
+	return sort keys %list;
+}
+
+# Return a jqplot point
+sub stat_io_point
+{
+	my ($t, $val) = @_;
+
+	return '[' . ($t - ($STATS_TIMEZONE*3600*1000)) . ',' . $val . '],';
+}
+
+# Write a graph with one serie per entry of the hash %series into the
+# html page associated to the graph ('page' key in the graph definition).
+# Legends are the hash keys, they can be renamed using %legends.
+sub stat_io_print_graph
+{
+	my ($src_base, $id, $data_info, $series, $legends) = @_;
+
+	my @legends = ();
+	my @graphs = ();
+	foreach my $s (sort keys %{$series})
+	{
+		next if (!$series->{$s});
+		$series->{$s} =~ s/,$//;
+		push(@legends, (defined $legends && exists $legends->{$s}) ? $legends->{$s} : $s);
+		push(@graphs, $series->{$s});
+	}
+	return if ($#graphs < 0);
+
+	my $page = $data_info->{$id}{page} || $data_info->{$id}{name};
+	my $fh = &append_to_html_file("$OUTPUT_DIR/$page.html", $src_base);
+	my %infos = %{$data_info->{$id}};
+	$infos{legends} = \@legends;
+	$fh->print( &jqplot_linegraph_array($IDX++, $data_info->{$id}{name}, \%infos, '', @graphs) );
+	$fh->close();
+}
+
+# Build a graph of a metric per second with one serie per backend type
+# ($pos = 0), object ($pos = 1) or context ($pos = 2), limited to the rows
+# matching the object and context filters. The legend of each serie shows
+# its share of the total over the whole period. Groups matching the
+# optional regexp $exclude are not reported.
+sub stat_io_rate_graph
+{
+	my ($src_base, $id, $data_info, $metric, $pos, $object, $context, $exclude) = @_;
+
+	my @groups = &stat_io_list($pos, $object, $context, $metric);
+	@groups = grep { $_ !~ /^(?:$exclude)$/ } @groups if ($exclude);
+	return if ($#groups < 0);
+
+	my %series = ();
+	my %total = ();
+	my $grand_total = 0;
+	foreach my $t (&stat_io_times())
+	{
+		foreach my $g (@groups)
+		{
+			my @filters = (undef, $object, $context);
+			$filters[$pos] = quotemeta($g);
+			my $val = &stat_io_sum($t, $metric, @filters);
+			$total{$g} += $val;
+			$grand_total += $val;
+			$series{$g} .= &stat_io_point($t, sprintf("%.2f", $val/$all_stat_io{$t}{interval}));
+		}
+	}
+	return if (!$grand_total);
+
+	my %legends = ();
+	foreach my $g (@groups) {
+		$legends{$g} = sprintf("%s (%0.2f%%)", $g, $total{$g}*100/$grand_total);
+	}
+	&stat_io_print_graph($src_base, $id, $data_info, \%series, \%legends);
+}
+
+
+# Build the graph of the buffer hit ratio per I/O context on relations.
+# The number of blocks read is used because since PG18 reads are counted
+# in I/O operations that can read several blocks.
+sub stat_io_hit_ratio_graph
+{
+	my ($src_base, $id, $data_info) = @_;
+
+	my @contexts = &stat_io_list(2, 'relation', undef, 'hits', 'read_blocks');
+	my %series = ();
+	foreach my $t (&stat_io_times())
+	{
+		foreach my $c (@contexts)
+		{
+			my $hits = &stat_io_sum($t, 'hits', undef, 'relation', quotemeta($c));
+			my $reads = &stat_io_sum($t, 'read_blocks', undef, 'relation', quotemeta($c));
+			next if (($hits + $reads) == 0);
+			$series{$c} .= &stat_io_point($t, sprintf("%.2f", $hits*100/($hits+$reads)));
+		}
+	}
+	&stat_io_print_graph($src_base, $id, $data_info, \%series);
+}
+
+# Build the graph of reuses and evictions per second in the contexts using
+# a buffer access strategy (ring buffer).
+sub stat_io_ring_graph
+{
+	my ($src_base, $id, $data_info) = @_;
+
+	my $strategy = 'bulkread|bulkwrite|vacuum';
+	my @contexts = &stat_io_list(2, 'relation', $strategy, 'reuses', 'evictions');
+	my %series = ();
+	foreach my $t (&stat_io_times())
+	{
+		foreach my $c (@contexts)
+		{
+			foreach my $m ('reuses', 'evictions')
+			{
+				my $val = &stat_io_sum($t, $m, undef, 'relation', quotemeta($c));
+				$series{"$c $m"} .= &stat_io_point($t, sprintf("%.2f", $val/$all_stat_io{$t}{interval}));
+			}
+		}
+	}
+	&stat_io_print_graph($src_base, $id, $data_info, \%series);
+}
+
+# Build a graph of the average duration of an operation ($time/$ops) with
+# one serie per backend type ($pos = 0), object ($pos = 1) or context
+# ($pos = 2). Points without operation are not reported. When there are
+# operations but no timing at all, the timing parameter (key 'timing' of
+# the graph definition) is most likely disabled: no graph is produced and
+# a notice is written instead.
+sub stat_io_latency_graph
+{
+	my ($src_base, $id, $data_info, $time, $ops, $pos, $object, $context) = @_;
+
+	my @groups = &stat_io_list($pos, $object, $context, $ops);
+	return if ($#groups < 0);
+
+	my %series = ();
+	my $total_ops = 0;
+	my $total_time = 0;
+	foreach my $t (&stat_io_times())
+	{
+		foreach my $g (@groups)
+		{
+			my @filters = (undef, $object, $context);
+			$filters[$pos] = quotemeta($g);
+			my $nops = &stat_io_sum($t, $ops, @filters);
+			next if (!$nops);
+			my $duration = &stat_io_sum($t, $time, @filters);
+			$total_ops += $nops;
+			$total_time += $duration;
+			$series{$g} .= &stat_io_point($t, sprintf("%.3f", $duration/$nops));
+		}
+	}
+	return if (!$total_ops);
+
+	if (!$total_time)
+	{
+		my $param = $data_info->{$id}{timing} || 'track_io_timing';
+		my $page = $data_info->{$id}{page} || $data_info->{$id}{name};
+		my $fh = &append_to_html_file("$OUTPUT_DIR/$page.html", $src_base);
+		$fh->print(qq{
+<li class="slide active-slide" id="$data_info->{$id}{name}-slide">
+      <div id="$data_info->{$id}{name}"><br/><br/><br/><br/></div>
+      <div class="row">
+            <div class="col-md-12">
+              <div class="panel panel-default">
+              <div class="panel-heading">
+              <h2>$data_info->{$id}{title}</h2>
+		<p>$data_info->{$id}{description}</p>
+              </div>
+              <div class="panel-body">
+		<blockquote><b>NO TIMING DATA</b>: $total_ops operations reported without any timing, $param seems to be disabled.</blockquote>
+              </div>
+              </div>
+            </div>
+      </div>
+</li>
+});
+		$fh->close();
+		return;
+	}
+
+	&stat_io_print_graph($src_base, $id, $data_info, \%series);
+}
+
+# Build the graph of the average size of read, write and extend operations
+# on relations. Before PG18 an operation is always one block, so the graph
+# is only produced with PostgreSQL 18 and later.
+sub stat_io_size_graph
+{
+	my ($src_base, $id, $data_info) = @_;
+
+	return if (!&backend_minimum_version(18));
+
+	my %series = ();
+	foreach my $t (&stat_io_times())
+	{
+		foreach my $op ('read', 'write', 'extend')
+		{
+			my $nops = &stat_io_sum($t, "${op}s", undef, 'relation', undef);
+			next if (!$nops);
+			my $bytes = &stat_io_sum($t, "${op}_bytes", undef, 'relation', undef);
+			$series{$op} .= &stat_io_point($t, sprintf("%.0f", $bytes/$nops));
+		}
+	}
+	&stat_io_print_graph($src_base, $id, $data_info, \%series);
+}
+
+
+# Build a graph with one serie per metric (per second) summed over all
+# rows matching the object and context filters. %metrics associates the
+# label of the serie to the metric name.
+sub stat_io_ops_rate_graph
+{
+	my ($src_base, $id, $data_info, $object, $context, %metrics) = @_;
+
+	my %series = ();
+	my $total = 0;
+	foreach my $t (&stat_io_times())
+	{
+		foreach my $label (keys %metrics)
+		{
+			my $val = &stat_io_sum($t, $metrics{$label}, undef, $object, $context);
+			$total += $val;
+			$series{$label} .= &stat_io_point($t, sprintf("%.2f", $val/$all_stat_io{$t}{interval}));
+		}
+	}
+	return if (!$total);
+	&stat_io_print_graph($src_base, $id, $data_info, \%series);
+}
+
+# Build the graph of the local buffers hit ratio for temporary relations
+sub stat_io_temp_hit_ratio_graph
+{
+	my ($src_base, $id, $data_info) = @_;
+
+	my %series = ();
+	foreach my $t (&stat_io_times())
+	{
+		my $hits = &stat_io_sum($t, 'hits', undef, 'temp relation', undef);
+		my $reads = &stat_io_sum($t, 'read_blocks', undef, 'temp relation', undef);
+		next if (($hits + $reads) == 0);
+		$series{'hit ratio'} .= &stat_io_point($t, sprintf("%.2f", $hits*100/($hits+$reads)));
+	}
+	&stat_io_print_graph($src_base, $id, $data_info, \%series);
+}
+
+####
+# Asynchronous I/O statistics (PG18+). CSV format:
+#   0 timestamp, 1 io_method, 2 io_workers, 3 io_min_workers,
+#   4 io_max_workers, 5 running_io_workers, 6 aio_in_progress, 7 aio_readv,
+#   8 aio_writev
+# These are gauges, no delta to compute.
+####
+sub pg_stat_aio
+{
+	my ($in_dir, $file, $offset) = @_;
+
+	my $curfh = open_filehdl("$in_dir/$file");
+	$curfh->seek($offset,0);
+	while (my $l = <$curfh>)
+	{
+		$offset += length($l);
+		my @data = split(/;/, $l);
+		next if ($#data < 8);
+		next if (!&normalize_line(\@data));
+
+		$all_stat_aio{$data[0]}{io_method} = $data[1];
+		my @cols = qw(io_workers io_min_workers io_max_workers running_io_workers aio_in_progress aio_readv aio_writev);
+		for (my $i = 0; $i <= $#cols; $i++) {
+			$all_stat_aio{$data[0]}{$cols[$i]} = $data[$i+2] || 0;
+		}
+	}
+	$curfh->close();
+
+	return $offset || 0;
+}
+
+# Compute graphs of asynchronous I/O statistics
+sub pg_stat_aio_report
+{
+	my ($src_base, %data_info) = @_;
+
+	my %workers = ();
+	my %inflight = ();
+	my $has_worker = 0;
+	my $has_inflight = 0;
+	foreach my $t (sort {$a <=> $b} keys %all_stat_aio)
+	{
+		my $s = $all_stat_aio{$t};
+		if ($s->{io_method} eq 'worker')
+		{
+			$has_worker = 1;
+			$workers{'running'} .= &stat_io_point($t, $s->{running_io_workers});
+			foreach my $p ('io_workers', 'io_min_workers', 'io_max_workers') {
+				$workers{$p} .= &stat_io_point($t, $s->{$p}) if ($s->{$p});
+			}
+		}
+		$has_inflight = 1 if ($s->{aio_in_progress});
+		$inflight{'total'} .= &stat_io_point($t, $s->{aio_in_progress});
+		$inflight{'readv'} .= &stat_io_point($t, $s->{aio_readv});
+		$inflight{'writev'} .= &stat_io_point($t, $s->{aio_writev});
+	}
+	%all_stat_aio = ();
+
+	foreach my $id (sort {$a <=> $b} keys %data_info)
+	{
+		if ($data_info{$id}{name} eq 'cluster-io_workers' && $has_worker) {
+			&stat_io_print_graph($src_base, $id, \%data_info, \%workers);
+		} elsif ($data_info{$id}{name} eq 'cluster-io_aio_inflight' && $has_inflight) {
+			&stat_io_print_graph($src_base, $id, \%data_info, \%inflight);
+		}
+	}
+}
+
+# Compute graphs of pg_stat_io statistics
+sub pg_stat_io_report
+{
+	my ($src_base, %data_info) = @_;
+
+	foreach my $id (sort {$a <=> $b} keys %data_info)
+	{
+		next if (!exists $STAT_IO_GRAPHS{$data_info{$id}{name}});
+		$STAT_IO_GRAPHS{$data_info{$id}{name}}->($src_base, $id, \%data_info);
+	}
+	%all_stat_io = ();
 }
 
 sub pg_stat_waitevent
@@ -8687,6 +9393,26 @@ sub generate_html_menu
 			$disable_waitevent_events = '';
 			$disable_waitevents = '';
 		}
+		my $disable_stat_io = ' disabled';
+		my $stat_io_menu = '';
+		foreach my $p (@STAT_IO_PAGES)
+		{
+			my $disable_page = ' class="disabled"';
+			if (-e "$OUTPUT_DIR/$p->[0].html") {
+				$disable_page = '';
+				$disable_stat_io = '';
+			}
+			$stat_io_menu .= qq{			      <li id="menu-$p->[0]"$disable_page><a href="$p->[0].html">$p->[1]</a></li>\n};
+		}
+		if ($stat_io_menu) {
+			$stat_io_menu = qq{
+			<li id="menu-stat_io" class="dropdown-submenu$disable_stat_io">
+			   <a href="#" tabindex="-1">I/O statistics </a>
+			      <ul class="dropdown-menu">
+$stat_io_menu			      </ul>
+		        </li>
+};
+		}
 
 		$menu_str .= qq{
               <li id="menu-cluster" class="dropdown">
@@ -8761,7 +9487,7 @@ sub generate_html_menu
 			      <li id="menu-cluster-waitevent_events"$disable_waitevent_events><a href="cluster-waitevent_events.html">Wait Event events</a></li>
 			      </ul>
 		        </li>
-		      <li class="divider"></li>
+$stat_io_menu		      <li class="divider"></li>
 			<li id="menu-replication" class="dropdown-submenu$disable_allrepli">
 			   <a href="#" tabindex="-1">Replication statistics </a>
 			      <ul class="dropdown-menu">
@@ -12701,6 +13427,10 @@ sub read_sysinfo_file
 			} elsif ($l =~ /^PostgreSQL (\d+)\.(\d+)/) {
 				$sysinfo{$section}{major} = "$1.$2";
 				$sysinfo{$section}{minor} = "$1.$2.0";
+			} elsif ($l =~ /^PostgreSQL (\d+)(devel|alpha|beta|rc)/) {
+				# Development and pre-release versions, ex: PostgreSQL 19beta4
+				$sysinfo{$section}{major} = "$1.0";
+				$sysinfo{$section}{minor} = "$1.0.0";
 			} elsif ($l =~ /^EnterpriseDB (\d+)\.(\d+)\.(\d+)/) {
 				$sysinfo{$section}{major} = "$1.$2";
 				$sysinfo{$section}{minor} = "$1.$2.$3";

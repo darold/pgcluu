@@ -426,6 +426,7 @@ COLLECTING STATISTICS
             |-- pg_prepared_xact.csv
             |-- pg_replication_slots.csv
             |-- pg_settings.csv
+            |-- pg_stat_aio.csv
             |-- pg_stat_archiver.csv
             |-- pg_stat_bgwriter.csv
             |-- pg_stat_connections.csv
@@ -434,6 +435,7 @@ COLLECTING STATISTICS
             |-- pg_stat_database.csv
             |-- pg_stat_hash_indexes.csv
             |-- pg_stat_invalid_indexes.csv
+            |-- pg_stat_io.csv
             |-- pg_statio_user_indexes.csv
             |-- pg_statio_user_sequences.csv
             |-- pg_statio_user_tables.csv
