@@ -1,0 +1,242 @@
+[CONFIGURATION]
+capture=0
+[PGVERSION]
+PostgreSQL 18.4 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit
+[PGUPTIME]
+2026-10-05 15:44:30.454526+00
+[EXTENSION]
+postgres=plpgsql-1.0
+[SCHEMA]
+postgres=public
+[JSON]
+[PROCEDURE]
+postgres=0
+[TRIGGER]
+postgres=0
+[PARTITIONNED_TABLE]
+[DEVICES]
+Device : vda
+/queue/scheduler : none [mq-deadline] kyber bfq 
+/queue/add_random : 0
+/queue/rq_affinity : 1
+/queue/rotational : 1
+/queue/read_ahead_kb : 128
+/queue/nr_requests : 256
+/queue/max_sectors_kb : 4096
+/queue/wbt_lat_usec : 75000
+Device : vdb
+/queue/scheduler : none [mq-deadline] kyber bfq 
+/queue/add_random : 0
+/queue/rq_affinity : 1
+/queue/rotational : 1
+/queue/read_ahead_kb : 8192
+/queue/nr_requests : 256
+/queue/max_sectors_kb : 4096
+/queue/wbt_lat_usec : 75000
+Device : vdc
+/queue/scheduler : none [mq-deadline] kyber bfq 
+/queue/add_random : 0
+/queue/rq_affinity : 1
+/queue/rotational : 1
+/queue/read_ahead_kb : 512
+/queue/nr_requests : 256
+/queue/max_sectors_kb : 4096
+/queue/wbt_lat_usec : 75000
+Device : vdd
+/queue/scheduler : none [mq-deadline] kyber bfq 
+/queue/add_random : 0
+/queue/rq_affinity : 1
+/queue/rotational : 1
+/queue/read_ahead_kb : 512
+/queue/nr_requests : 256
+/queue/max_sectors_kb : 4096
+/queue/wbt_lat_usec : 75000
+Device : zram0
+/queue/add_random : 0
+/queue/rotational : 0
+/queue/read_ahead_kb : 128
+/queue/max_sectors_kb : 124
+[POSTMASTER]
+pid: 95
+oom_score_adj: 0
+limit processes: 15919 / 15919
+limit open files: 1024 / 20000
+limit locked memory: 8388608 / 8388608
+cgroup v1: /system.slice/postgresql@18-main.service
+memory.limit_in_bytes: 9223372036854771712
+memory.memsw.limit_in_bytes: 9223372036854771712
+cpu.cfs_quota_us: -1
+cpu.cfs_period_us: 100000
+[CPU]
+processor	: 0
+model name	: Intel(R) Xeon(R) Processor @ 2.80GHz
+cpu MHz		: 2799.998
+cache size	: 33792 KB
+cpu cores	: 1
+[KERNEL]
+Linux vm 6.18.44-fc-v70 #1 SMP PREEMPT_DYNAMIC @0 x86_64 x86_64 x86_64 GNU/Linux
+[UPTIME]
+ 17:04:19 up 11 min,  0 user,  load average: 0.63, 0.47, 0.21
+[MEMORY]
+MemTotal:        4095312 kB
+MemFree:         2522064 kB
+MemAvailable:    3616432 kB
+Buffers:           27260 kB
+Cached:          1354040 kB
+SwapCached:            0 kB
+Active:           177772 kB
+Inactive:        1228252 kB
+Active(anon):      49188 kB
+Inactive(anon):    80836 kB
+Active(file):     128584 kB
+Inactive(file):  1147416 kB
+Unevictable:        8184 kB
+Mlocked:            8260 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Zswap:                 0 kB
+Zswapped:              0 kB
+Dirty:               124 kB
+Writeback:             0 kB
+AnonPages:         33008 kB
+Mapped:           142048 kB
+Shmem:            105304 kB
+KReclaimable:      46280 kB
+Slab:              65348 kB
+SReclaimable:      46280 kB
+SUnreclaim:        19068 kB
+KernelStack:        1824 kB
+PageTables:         6692 kB
+SecPageTables:         0 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:     2047656 kB
+Committed_AS:    1143068 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:       10020 kB
+VmallocChunk:          0 kB
+Percpu:              296 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:     12288 kB
+FilePmdMapped:         0 kB
+Balloon:               0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:       20480 kB
+DirectMap2M:     2076672 kB
+DirectMap1G:     4194304 kB
+[DF]
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/vda1        40G   12G   26G  32% /
+tmpfs           2.0G     0  2.0G   0% /dev/shm
+/dev/vdb1       200G   61G  140G  31% /var/lib/postgresql
+[MOUNT]
+/dev/vda1 on / type ext4 (rw,relatime)
+tmpfs on /dev/shm type tmpfs (rw,nosuid,nodev)
+/dev/vdb1 on /var/lib/postgresql type xfs (rw,noatime,attr2,inode64,logbufs=8,logbsize=32k,noquota)
+[FSTAB]
+/dev/vda1 / ext4 defaults 0 1
+/dev/vdb1 /var/lib/postgresql xfs noatime 0 2
+[PCI]
+[RELEASE]
+DISTRIB_ID=Ubuntu
+DISTRIB_RELEASE=24.04
+DISTRIB_CODENAME=noble
+DISTRIB_DESCRIPTION="Ubuntu 24.04.4 LTS"
+PRETTY_NAME="Ubuntu 24.04.4 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.4 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
+[SYSTEM]
+fs.file-max = 406945
+fs.nr_open = 1048576
+kernel.numa_balancing = 0
+kernel.sched_autogroup_enabled = 1
+net.core.rmem_max = 4194304
+net.core.somaxconn = 4096
+net.core.wmem_max = 4194304
+net.ipv4.ip_local_port_range = 32768	60999
+net.ipv4.tcp_keepalive_intvl = 75
+net.ipv4.tcp_keepalive_probes = 9
+net.ipv4.tcp_keepalive_time = 7200
+vm.dirty_background_bytes = 0
+vm.dirty_background_ratio = 10
+vm.dirty_bytes = 0
+vm.dirty_expire_centisecs = 3000
+vm.dirty_ratio = 20
+vm.dirty_writeback_centisecs = 500
+vm.min_free_kbytes = 67584
+vm.nr_hugepages = 0
+vm.nr_overcommit_hugepages = 0
+vm.overcommit_kbytes = 0
+vm.overcommit_memory = 0
+vm.overcommit_ratio = 50
+vm.swappiness = 60
+vm.watermark_scale_factor = 10
+vm.zone_reclaim_mode = 0
+/sys/kernel/mm/transparent_hugepage/enabled: always [madvise] never
+/sys/kernel/mm/transparent_hugepage/defrag: always defer defer+madvise [madvise] never
+/sys/kernel/mm/transparent_hugepage/khugepaged/defrag: 1
+/sys/kernel/mm/transparent_hugepage/shmem_enabled: always within_size advise [never] deny force
+/sys/devices/system/cpu/cpuidle/current_driver: none
+numa_nodes: 1
+[PROCESS]
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+postgres      95  0.0  0.6 222736 25280 ?        Ss   16:52   0:00 /usr/lib/postgresql/18/bin/postgres -D /var/lib/postgresql/18/main
+postgres      96  0.0  0.1 222868  6312 ?        Ss   16:52   0:00 postgres: io worker 0
+postgres      97  0.0  0.1 222868  6312 ?        Ss   16:52   0:00 postgres: io worker 1
+postgres      98  0.0  0.1 222868  6312 ?        Ss   16:52   0:00 postgres: io worker 2
+postgres      99  0.0  0.2 222868  9440 ?        Ss   16:52   0:00 postgres: checkpointer
+postgres     100  0.0  0.1 222872  5788 ?        Ss   16:52   0:00 postgres: background writer
+postgres     102  0.0  0.2 222736 10176 ?        Ss   16:52   0:00 postgres: walwriter
+postgres     103  0.0  0.2 224344  8956 ?        Ss   16:52   0:00 postgres: autovacuum launcher
+postgres     104  0.0  0.1 224332  7464 ?        Ss   16:52   0:00 postgres: logical replication launcher
+[CRONTAB]
+[INSTALLATION]
+ii  postgresql-18                    18.4-1.pgdg24.04+1               amd64        The World's Most Advanced Open Source Relational Database
+ii  postgresql-client-18             18.4-1.pgdg24.04+1               amd64        front-end programs for PostgreSQL 18
+[PGDATA]
+total 264
+drwx------ 19 postgres postgres   4096 Oct  6 16:52 .
+drwxr-xr-x 12 postgres root     4096 Oct  6 16:37 ..
+-rw-------  1 postgres postgres      3 Oct  5 13:20 PG_VERSION
+drwx------  6 postgres postgres   4096 Oct  5 13:24 base
+drwx------  2 postgres postgres   4096 Oct  6 17:01 global
+-rw-------  1 postgres postgres 116923 Oct  6 16:59 log
+drwx------  2 postgres postgres   4096 Oct  5 13:20 pg_commit_ts
+drwx------  2 postgres postgres   4096 Oct  5 13:20 pg_dynshmem
+-rw-------  1 postgres postgres   5721 Oct  5 13:20 pg_hba.conf
+-rw-------  1 postgres postgres   2681 Oct  5 13:20 pg_ident.conf
+drwx------  4 postgres postgres   4096 Oct  6 16:59 pg_logical
+drwx------  4 postgres postgres   4096 Oct  5 13:20 pg_multixact
+drwx------  2 postgres postgres   4096 Oct  5 13:20 pg_notify
+drwx------  2 postgres postgres   4096 Oct  6 10:52 pg_replslot
+drwx------  2 postgres postgres   4096 Oct  5 13:20 pg_serial
+drwx------  2 postgres postgres   4096 Oct  5 13:20 pg_snapshots
+drwx------  2 postgres postgres   4096 Oct  6 10:52 pg_stat
+drwx------  2 postgres postgres   4096 Oct  5 13:20 pg_stat_tmp
+drwx------  2 postgres postgres   4096 Oct  5 13:20 pg_subtrans
+drwx------  2 postgres postgres   4096 Oct  5 13:20 pg_tblspc
+drwx------  2 postgres postgres   4096 Oct  5 13:20 pg_twophase
+drwx------  4 postgres postgres  12288 Oct  6 16:59 pg_wal
+drwx------  2 postgres postgres   4096 Oct  5 13:20 pg_xact
+-rw-------  1 postgres postgres     88 Oct  5 13:20 postgresql.auto.conf
+-rw-------  1 postgres postgres  32579 Oct  5 13:20 postgresql.conf
+-rw-------  1 postgres postgres    152 Oct  6 16:52 postmaster.opts
+-rw-------  1 postgres postgres     99 Oct  6 16:52 postmaster.pid

@@ -1,0 +1,80 @@
+# Regression tests of pgCluu
+#
+# - offline: all tests of t/ on the fixtures (statistics collected on
+#   PostgreSQL 16, 17 and 18), no PostgreSQL server needed. The live test
+#   t/09_collectd_live.t is skipped.
+# - live: collect with pgcluu_collectd on a PostgreSQL server for each
+#   supported major version, then report generation (t/09_collectd_live.t).
+
+name: Regression tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  offline:
+    name: Offline tests (fixtures)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libcgi-pm-perl
+
+      - name: Versions
+        run: |
+          perl -v | head -2
+          node --version
+
+      - name: Run tests
+        run: |
+          perl Makefile.PL
+          make
+          make test TEST_VERBOSE=0
+
+
+  live:
+    name: Live collect on PostgreSQL ${{ matrix.pg }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ['14', '15', '16', '17', '18']
+    services:
+      postgres:
+        image: postgres:${{ matrix.pg }}
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGCLUU_TEST_LIVE: 1
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Server version
+        run: psql -X -At -c 'SELECT version()'
+
+      - name: Run live test
+        run: prove -v t/09_collectd_live.t

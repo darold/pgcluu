@@ -1,0 +1,16 @@
+[CONFIGURATION]
+capture=0
+[PGVERSION]
+PostgreSQL 16.14 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit
+[PGUPTIME]
+2026-10-05 15:40:41.324116+00
+[EXTENSION]
+postgres=plpgsql-1.0
+[SCHEMA]
+postgres=public
+[JSON]
+[PROCEDURE]
+postgres=0
+[TRIGGER]
+postgres=0
+[PARTITIONNED_TABLE]

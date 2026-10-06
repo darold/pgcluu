@@ -1,0 +1,6 @@
+2026-10-05 15:45:47+00;117;local;{all};{all};;;trust;;
+2026-10-05 15:45:47+00;119;host;{all};{all};127.0.0.1;255.255.255.255;trust;;
+2026-10-05 15:45:47+00;121;host;{all};{all};::1;ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff;trust;;
+2026-10-05 15:45:47+00;124;local;{replication};{all};;;trust;;
+2026-10-05 15:45:47+00;125;host;{replication};{all};127.0.0.1;255.255.255.255;trust;;
+2026-10-05 15:45:47+00;126;host;{replication};{all};::1;ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff;trust;;

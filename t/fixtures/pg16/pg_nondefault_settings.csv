@@ -1,0 +1,15 @@
+2026-10-05 15:45:48+00;Reporting and Logging / What to Log;application_name;pgcluu;;user;session;"";psql
+2026-10-05 15:45:48+00;Resource Usage / Background Writer;bgwriter_lru_maxpages;10;;sighup;command line;100;10
+2026-10-05 15:45:48+00;Client Connection Defaults / Locale and Formatting;default_text_search_config;pg_catalog.english;;user;configuration file;pg_catalog.simple;pg_catalog.english
+2026-10-05 15:45:48+00;Client Connection Defaults / Locale and Formatting;lc_messages;C.UTF-8;;superuser;configuration file;"";C.UTF-8
+2026-10-05 15:45:48+00;Client Connection Defaults / Locale and Formatting;lc_monetary;C.UTF-8;;user;configuration file;C;C.UTF-8
+2026-10-05 15:45:48+00;Client Connection Defaults / Locale and Formatting;lc_numeric;C.UTF-8;;user;configuration file;C;C.UTF-8
+2026-10-05 15:45:48+00;Client Connection Defaults / Locale and Formatting;lc_time;C.UTF-8;;user;configuration file;C;C.UTF-8
+2026-10-05 15:45:48+00;Client Connection Defaults / Statement Behavior;lock_timeout;3000;ms;user;client;0;3000
+2026-10-05 15:45:48+00;Reporting and Logging / What to Log;log_timezone;Etc/UTC;;sighup;configuration file;GMT;Etc/UTC
+2026-10-05 15:45:48+00;Connections and Authentication / Connection Settings;port;5416;;postmaster;command line;5432;5416
+2026-10-05 15:45:48+00;Client Connection Defaults / Statement Behavior;search_path;"";;user;session;"""$user"", public";"""$user"", public"
+2026-10-05 15:45:48+00;Resource Usage / Memory;shared_buffers;2048;8kB;postmaster;command line;16384;2048
+2026-10-05 15:45:48+00;Resource Usage / Memory;temp_buffers;128;8kB;user;command line;1024;128
+2026-10-05 15:45:48+00;Client Connection Defaults / Locale and Formatting;TimeZone;Etc/UTC;;user;configuration file;GMT;Etc/UTC
+2026-10-05 15:45:48+00;Statistics / Cumulative Query and Index Statistics;track_io_timing;on;;superuser;command line;off;on
