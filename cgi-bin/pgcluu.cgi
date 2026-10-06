@@ -5899,7 +5899,7 @@ sub pg_stat_locks_report
 	my %locks_stat = ();
 	my %legends = ();
 	my $tz = ($STATS_TIMEZONE*3600*1000);
-	foreach my $t (keys %all_stat_locks) {
+	foreach my $t (sort {$a <=> $b} keys %all_stat_locks) {
 		foreach my $lbl (keys %{$all_stat_locks{$t}{$db}}) {
 			push(@{$legends{$db}{$lbl}}, 'waiting') if ( grep(/^waiting$/, @{$legends{$db}{$lbl}}) && (${$legends{$db}{$lbl}}[0] eq 'granted') );
 			foreach my $k (@{$legends{$db}{$lbl}}) {
