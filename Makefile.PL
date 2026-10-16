@@ -3,6 +3,7 @@ use ExtUtils::MakeMaker;
 # the contents of the Makefile that is written.
 
 use strict;
+use File::Basename qw(dirname basename);
 
 my @ALLOWED_ARGS = ('INSTALLDIRS','DESTDIR','PREFIX','RSCDIR','REPORTDIR','CGIDIR','CONFDIR','PIDDIR','STATDIR','APACHECONF','MANDIR','DOCDIR','SYSTEMDDIR','RETENTION', 'BINDIR');
 
@@ -38,6 +39,8 @@ my $REPORTDIR = $ENV{REPORTDIR} || "$DESTDIR/var/lib/pgcluu/report";
 my $RSCDIR = $ENV{RSCDIR} || "$DESTDIR$PREFIX/share/pgcluu";
 my $CGIDIR = $ENV{CGIDIR} || "$DESTDIR$PREFIX/lib/cgi-bin";
 my $APACHECONF = $ENV{APACHECONF} || "$CONFDIR/apache2/conf-available";
+my $APACHEENABLED = dirname($APACHECONF) . '/conf-enabled';
+my $APACHEAVAILABLE = basename($APACHECONF);
 my $MANDIR = $ENV{MANDIR} || "$DESTDIR$PREFIX/share/man";
 my $DOCDIR = $ENV{DOCDIR} || "$DESTDIR$PREFIX/share/doc";
 my $SYSTEMDDIR = $ENV{SYSTEMDDIR} || "$DESTDIR/lib/systemd/system";
@@ -203,9 +206,10 @@ fi
 install -m 644 pgcluu_collectd.service $SYSTEMDDIR/
 install -m 644 pgcluu.service $SYSTEMDDIR/
 install -m 644 pgcluu.timer $SYSTEMDDIR/
-if [ ! -e "/etc/apache2/conf-enabled/pgcluu.conf" ]; then
-	cd /etc/apache2/conf-enabled/
-	ln -s ../conf-available/pgcluu.conf pgcluu.conf
+if [ ! -e "$APACHEENABLED/pgcluu.conf" ]; then
+	mkdir -p "$APACHEENABLED"
+	cd "$APACHEENABLED/"
+	ln -s "../$APACHEAVAILABLE/pgcluu.conf" pgcluu.conf
 fi
 cd $MANDIR/man1/
 ln -s pgcluu.1p.gz pgcluu_collectd.1p.gz
