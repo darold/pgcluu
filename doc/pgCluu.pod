@@ -695,6 +695,12 @@ then add a cron task to execute the command each five or ten minutes:
 
 	*/5 * * * * /usr/local/bin/pgcluu --cache /var/lib/pgcluu/data
 
+Only one pgcluu process can build the cache of a directory at a time, when
+the previous run is not finished the new one exits without doing anything.
+The lock files .pgcluu_cache_run.lock and .pgcluu_cache.lock are created in
+the statistics directories, the CGI must be able to read the last one to
+wait while the cache files are replaced.
+
 If you are using systemd pgcluu.timer service then caching can be enabled
 using STATS_REPORT_CACHING directive. Enabling this mode generate cache
 files (*.bin) in the statistics directory and disable static HTML reports

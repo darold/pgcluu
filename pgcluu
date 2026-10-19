@@ -23,6 +23,7 @@ use Time::Local 'timegm_nocheck';
 use POSIX qw(locale_h sys_wait_h ceil strftime);
 setlocale(LC_ALL, 'C');
 use Storable qw(store_fd fd_retrieve);
+use Fcntl qw(:flock);
 
 $VERSION = '4.0';
 $PROGRAM = 'pgCluu';
@@ -300,6 +301,12 @@ our %pidstat_context_stat = ();
 our %pidstat_memory_stat = ();
 our %pidstat_io_stat = ();
 
+
+# Cache files locking, see lock_cache_dir() and commit_cache_files()
+our $CACHE_RUN_LOCK_FILE = '.pgcluu_cache_run.lock';
+our $CACHE_DIR_LOCK_FILE = '.pgcluu_cache.lock';
+our $CACHE_RUN_LOCK = undef;
+our %PENDING_CACHE_FILES = ();
 
 our @pidstat_to_be_stored = (
 	'pidstat_cpu_stat',
@@ -1664,7 +1671,10 @@ if ($RETENTION) {
 }
 
 my $INPUT_DIR   = $ARGV[0] || '';
-$INPUT_DIR =~ s/\/$//;
+# The input directory is part of the keys of the offsets stored in the cache,
+# it must be written the same way by pgcluu and pgcluu.cgi.
+$INPUT_DIR =~ s#/{2,}#/#g;
+$INPUT_DIR =~ s#(.)/$#$1#;
 $OUTPUT_DIR =~ s/\/$//;
 
 # Set list of objects to monitor from command line options
@@ -1778,6 +1788,18 @@ if ($CACHE) {
 		warn "WARNING: output directory will not be used, cache files will be generated in $INPUT_DIR\n" if ($DEBUG);
 	}
 
+	# Only one pgcluu process can build the cache of an input directory at
+	# a time: a run started by cron while the previous one is still running
+	# would read the cache files while they are rewritten. The lock is kept
+	# until the end of the process.
+	if (!open($CACHE_RUN_LOCK, '>>', "$INPUT_DIR/$CACHE_RUN_LOCK_FILE")) {
+		die "FATAL: can't open lock file $INPUT_DIR/$CACHE_RUN_LOCK_FILE, $!\n";
+	}
+	if (!flock($CACHE_RUN_LOCK, LOCK_EX|LOCK_NB)) {
+		print STDERR "WARNING: an other pgcluu process is building the cache of $INPUT_DIR, nothing to do.\n";
+		exit 0;
+	}
+
 } else {
 
 	# Write resources files (js and css) from __DATA__ section if they have not
@@ -1850,6 +1872,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 	if ($CACHE && (scalar keys %sysinfo > 0) ) {
 		print "DEBUG: Dumping system information into cache file $in_dir/sys_cache.bin\n" if ($DEBUG);
 		&dump_sys_binary($in_dir, "sys_cache.bin");
+		&commit_cache_files($in_dir);
 	}
 
 	# Defined the backward level where ressources files are stored
@@ -1989,6 +2012,7 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 			$global_infos{'timezone'} = $TIMEZONE;
 			$global_infos{'stats_timezone'} = $STATS_TIMEZONE;
 			&dump_pg_binary($in_dir);
+			&commit_cache_files($in_dir);
 		}
 		else
 		{
@@ -2065,12 +2089,15 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 		#Load statistics from cache files
 		if ($#binfiles >= 0) {
 			print "DEBUG: Loading Sar statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
+			# sar and pidstat files are written together, see lock_cache_dir()
+			my $lock = &lock_cache_dir($in_dir, LOCK_SH);
 			&load_sar_binary($in_dir);
 			# Look for disk device and network interface from global info
 			push(@DEVICE_LIST, @{$global_infos{DEVICE_LIST}}) if (exists $global_infos{DEVICE_LIST});
 			push(@IFACE_LIST, @{$global_infos{IFACE_LIST}}) if (exists $global_infos{IFACE_LIST});
 			push(@DEVICE_SPACE_LIST, @{$global_infos{DEVICE_SPACE_LIST}}) if (exists $global_infos{DEVICE_SPACE_LIST});
 			&load_pidstat_binary($in_dir);
+			close($lock) if ($lock);
 		}
 		# In cache/binary mode we can not process sadc binary data file
 		if (($#binfiles == -1) && -f "$sadc_file")
@@ -2113,8 +2140,10 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 			foreach my $d (@DEVICE_SPACE_LIST) {
 				push(@{$global_infos{DEVICE_SPACE_LIST}}, $d) if (!grep(/^$d$/, @{$global_infos{DEVICE_SPACE_LIST}}));
 			}
+			# The offsets in the pidstat file are stored with the sar ones
 			&dump_sar_binary($in_dir);
 			&dump_pidstat_binary($in_dir);
+			&commit_cache_files($in_dir);
 
 		} else {
 
@@ -14029,15 +14058,72 @@ sub clear_stats
 
 }
 
+####
+# Lock the cache files of a directory. pgcluu takes an exclusive lock to
+# replace them (commit_cache_files), the readers take a shared lock to load
+# a set of files: the offsets in the csv files (global_infos.bin) must come
+# from the same run than the statistics loaded with them, otherwise lines
+# are read twice or lost. Returns the file handle holding the lock, closing
+# it releases the lock. A reader that can not open the lock file (no write
+# permission and file not created yet) reads the cache without lock.
+####
+sub lock_cache_dir
+{
+	my ($dir, $mode) = @_;
+
+	my $file = "$dir/$CACHE_DIR_LOCK_FILE";
+	my $fh;
+	if (!open($fh, '>>', $file) && !open($fh, '<', $file))
+	{
+		die "FATAL: can't open lock file $file, $!\n" if ($mode == LOCK_EX);
+		return undef;
+	}
+	flock($fh, $mode) or die "FATAL: can't lock $file, $!\n";
+
+	return $fh;
+}
+
+####
+# Cache files are written in a temporary file, they replace the current
+# cache files when commit_cache_files() is called.
+####
+sub cache_tmp_file
+{
+	my ($dir, $file) = @_;
+
+	push(@{$PENDING_CACHE_FILES{$dir}}, $file) if (!grep { $_ eq $file } @{$PENDING_CACHE_FILES{$dir}});
+
+	return "$dir/$file.tmp";
+}
+
+####
+# Replace the cache files of a directory by the temporary files written
+# since the last call. The renames are done under an exclusive lock so a
+# reader never loads a mix of old and new files of the same set.
+####
+sub commit_cache_files
+{
+	my $dir = shift;
+
+	return if (!exists $PENDING_CACHE_FILES{$dir});
+
+	my $lock = &lock_cache_dir($dir, LOCK_EX);
+	foreach my $f (@{$PENDING_CACHE_FILES{$dir}}) {
+		rename("$dir/$f.tmp", "$dir/$f") or die "FATAL: can't rename $dir/$f.tmp into $dir/$f, $!\n";
+	}
+	close($lock);
+	delete $PENDING_CACHE_FILES{$dir};
+}
+
 # Dump relevant memory to file for incremental use
 sub dump_pg_binary
 {
         my ($in_dir, $outfile) = @_;
 
 	foreach my $name (@pg_to_be_stored) {
-		my $lfh = IO::File->new("$in_dir/$name.bin", 'w');
+		my $lfh = IO::File->new(&cache_tmp_file($in_dir, "$name.bin"), 'w');
 		if (not defined $lfh) {
-			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
+			die "FATAL: can't write to $in_dir/$name.bin.tmp, $!\n";
 		}
 		if (grep(/^$name$/, 'global_databases', 'global_tbspnames')) {
 			store_fd({ $name => \@{$name} }, $lfh) || die ("Couldn't save binary data to \"$in_dir/$name.bin\"!\n");
@@ -14054,9 +14140,9 @@ sub dump_sar_binary
         my ($in_dir, $outfile) = @_;
 
 	foreach my $name (@sar_to_be_stored) {
-		my $lfh = IO::File->new("$in_dir/$name.bin", 'w');
+		my $lfh = IO::File->new(&cache_tmp_file($in_dir, "$name.bin"), 'w');
 		if (not defined $lfh) {
-			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
+			die "FATAL: can't write to $in_dir/$name.bin.tmp, $!\n";
 		}
 		store_fd({ $name => \%{$name} }, $lfh) || die ("Couldn't save binary data to \"$in_dir/$name.bin\"!\n");
 		$lfh->close;
@@ -14068,9 +14154,9 @@ sub dump_sys_binary
 {
         my ($in_dir, $outfile) = @_;
 
-	my $lfh = IO::File->new("$in_dir/$outfile", 'w');
+	my $lfh = IO::File->new(&cache_tmp_file($in_dir, $outfile), 'w');
 	if (not defined $lfh) {
-		die "FATAL: can't write to $in_dir/$outfile, $!\n";
+		die "FATAL: can't write to $in_dir/$outfile.tmp, $!\n";
 	}
         store_fd({
 		'sysinfo' => \%sysinfo,
@@ -14084,9 +14170,9 @@ sub dump_pidstat_binary
         my ($in_dir, $outfile) = @_;
 
 	foreach my $name (@pidstat_to_be_stored) {
-		my $lfh = IO::File->new("$in_dir/$name.bin", 'w');
+		my $lfh = IO::File->new(&cache_tmp_file($in_dir, "$name.bin"), 'w');
 		if (not defined $lfh) {
-			die "FATAL: can't write to $in_dir/$name.bin, $!\n";
+			die "FATAL: can't write to $in_dir/$name.bin.tmp, $!\n";
 		}
 		store_fd({ $name => \%{$name} }, $lfh) || die ("Couldn't save binary data to \"$in_dir/$name.bin\"!\n");
 		$lfh->close;
@@ -14097,6 +14183,9 @@ sub dump_pidstat_binary
 sub load_pg_binary
 {
         my ($in_dir) = @_;
+
+	# Load a consistent set of files, see lock_cache_dir()
+	my $lock = &lock_cache_dir($in_dir, LOCK_SH);
 
 	foreach my $name (@pg_to_be_stored) {
 
@@ -14719,6 +14808,7 @@ sub build_daily_binary
 			&dump_pg_binary($day_dir);
 			&dump_sar_binary($day_dir);
 			&dump_pidstat_binary($day_dir);
+			&commit_cache_files($day_dir);
 
 			# Reset global variables before processing a new work dir
 			&clear_stats();
@@ -14755,8 +14845,11 @@ sub build_daily_binary
 			}
 			if (!$DISABLE_SAR) {
 				print "DEBUG: Loading Sar statistics from cache files $in_dir/*.bin\n" if ($DEBUG);
+				# sar and pidstat files are written together, see lock_cache_dir()
+				my $lock = &lock_cache_dir($in_dir, LOCK_SH);
 				&load_sar_binary($in_dir);
 				&load_pidstat_binary($in_dir);
+				close($lock) if ($lock);
 			}
 		}
 	}
@@ -14770,6 +14863,7 @@ sub build_daily_binary
 	&dump_pg_binary($day_dir);
 	&dump_sar_binary($day_dir);
 	&dump_pidstat_binary($day_dir);
+	&commit_cache_files($day_dir);
 }
 
 sub read_conf

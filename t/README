@@ -61,6 +61,10 @@ Tests
                        line is read twice or two lines have the same
                        timestamp: duplicated timestamps, overlapping runs of
                        pgcluu -C, trailing slash in the CGI INPUT_DIR.
+  13_cache_lock.t      only one pgcluu -C at a time, cache files replaced
+                       atomically, readers wait while they are replaced,
+                       normalization of the input directory in pgcluu and
+                       pgcluu.cgi (the csv files are not read again).
 
 Known limitations are reported as TODO tests: they are shown by prove but
 do not make the tests fail. They are listed in %KNOWN_DIFF (05_incremental.t)

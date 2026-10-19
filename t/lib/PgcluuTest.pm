@@ -28,7 +28,7 @@ our @EXPORT = qw(
 	root_dir fixture_dir fixtures tmp_dir copy_dir run_cmd
 	normalize_html html_pages normalize_report_dir
 	check_expected load_subs
-	cgi_setup cgi_run cgi_menu_actions
+	cgi_setup cgi_install cgi_run cgi_menu_actions
 	have_cgi_pm have_node
 );
 
@@ -305,8 +305,18 @@ sub cgi_setup
 		die "FATAL: pgcluu -C failed on $fixture: $err\n" if ($rc != 0);
 	}
 
+	return cgi_install("$tmp/data");
+}
+
+# Install the CGI in a temporary directory with a configuration file using
+# the given input directory, returns the path of the CGI.
+sub cgi_install
+{
+	my $input_dir = shift;
+
+	my $tmp = tmp_dir();
 	open(my $fh, '>', "$tmp/pgcluu.conf") or die;
-	print $fh "INPUT_DIR $tmp/data\n";
+	print $fh "INPUT_DIR $input_dir\n";
 	close($fh);
 
 	my $src = _slurp(root_dir() . '/cgi-bin/pgcluu.cgi');

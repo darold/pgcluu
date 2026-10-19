@@ -62,8 +62,7 @@ my %EXPECTED = (
 	'cluster-tablespace-size.html'      => [ 'db=all&action=tablespace-size', [ 1000, 2000, 3000 ] ],
 	'cluster-database-prepared.html'    => [ undef, [ 3, 50 ] ],
 	'cluster-buffersused.html'          => [ 'db=all&action=cluster-buffersused', [ 10, 20, 30 ] ],
-	# the CGI page shows a graph per database too, the total is the first one
-	'cluster-database-conflicts.html'   => [ 'db=all&action=cluster-conflicts', [ 0, 3 ], 'first graph' ],
+	'cluster-database-conflicts.html'   => [ 'db=all&action=cluster-conflicts', [ 0, 3 ] ],
 	'database-conflict-db1.html'        => [ 'db=db1&action=database-conflicts', [ 0, 1 ] ],
 	'database-conflict-db2.html'        => [ 'db=db2&action=database-conflicts', [ 0, 2 ] ],
 );
@@ -118,24 +117,6 @@ sub check_report
 	}
 }
 
-# Install the CGI with its own configuration file
-sub cgi_install
-{
-	my $input_dir = shift;
-
-	my $tmp = tmp_dir();
-	open(my $fh, '>', "$tmp/pgcluu.conf") or die;
-	print $fh "INPUT_DIR $input_dir\n";
-	close($fh);
-	my $src = do { local $/; open(my $in, '<', "$root/cgi-bin/pgcluu.cgi") or die; <$in> };
-	$src =~ s{^my \$CONFIG_FILE\s*=\s*"[^"]*";}{my \$CONFIG_FILE = "$tmp/pgcluu.conf";}m or die;
-	open($fh, '>', "$tmp/pgcluu.cgi") or die;
-	print $fh $src;
-	close($fh);
-
-	return "$tmp/pgcluu.cgi";
-}
-
 sub check_cgi
 {
 	my ($input_dir, $label) = @_;
@@ -146,7 +127,6 @@ sub check_cgi
 		my $q = $EXPECTED{$page}[0];
 		my ($rc, $out, $err) = cgi_run($cgi, $q);
 		ok($rc == 0 && $err eq '', "$label: $q runs without error") or diag($err);
-		$out = join("\n", $out =~ /^\s*var graph_1_d\d+ = (.*)$/mg) if ($EXPECTED{$page}[2]);
 		check_values($out, $page, "$label $q");
 	}
 }

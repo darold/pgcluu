@@ -24,6 +24,7 @@ use Time::Local qw/timegm_nocheck timelocal_nocheck/;
 use POSIX qw(locale_h sys_wait_h ceil strftime);
 setlocale(LC_ALL, 'C');
 use Storable qw(store_fd fd_retrieve);
+use Fcntl qw(:flock);
 
 $VERSION = '4.0';
 $PROGRAM = 'pgCluu';
@@ -1749,6 +1750,10 @@ sub read_conf
 		if ($var eq 'INPUT_DIR') {
 			if (-d $vals[0]) {
 				$INPUT_DIR = $vals[0];
+				# Same normalization as pgcluu, the input directory is
+				# part of the keys of the offsets stored in the cache.
+				$INPUT_DIR =~ s#/{2,}#/#g;
+				$INPUT_DIR =~ s#(.)/$#$1#;
 			} else {
 				die "ERROR: can not find input directory, $vals[0]\n";
 			}
@@ -3238,7 +3243,14 @@ sub pg_stat_database_conflicts_report
 	my %conflict_type = ();
 	&set_cluster_total_by_db(\%all_stat_database_conflicts, 'tablespace', 'lock', 'snapshot', 'bufferpin', 'deadlock');
 	foreach my $db (sort keys %all_stat_database_conflicts) {
-		next if ($DATABASE && ($DATABASE ne 'all') && ($db ne $DATABASE));
+		# The cluster page shows the total, the graph of a database is
+		# shown by the database-conflicts action.
+		if ($ACTION eq 'cluster-conflicts') {
+			next if ($db ne 'all');
+		} else {
+			next if ($db eq 'all');
+			next if ($DATABASE && ($DATABASE ne 'all') && ($db ne $DATABASE));
+		}
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
 		foreach my $t (sort {$a <=> $b} keys %{$all_stat_database_conflicts{$db}}) {
 				$conflict_type{$db}{tablespace} .= '[' . ($t - $tz) . ',' . ($all_stat_database_conflicts{$db}{$t}{tablespace} || 0) . '],';
@@ -12958,9 +12970,30 @@ sub clear_stats
 }
 
 # Load statistics from pg cache into memory
+####
+# Take a shared lock on the cache files of a directory while loading them.
+# pgcluu replaces a set of cache files under an exclusive lock, the offsets
+# in the csv files (global_infos.bin) are then always loaded with the
+# statistics of the same run. Returns the file handle holding the lock or
+# undef when the lock file does not exist (cache built by an older pgcluu)
+# or can not be opened, the cache is then read without lock.
+####
+sub lock_cache_dir
+{
+	my $dir = shift;
+
+	my $fh;
+	open($fh, '<', "$dir/.pgcluu_cache.lock") or return undef;
+	flock($fh, LOCK_SH) or return undef;
+
+	return $fh;
+}
+
 sub load_pg_binary
 {
         my ($input_dir, $varname) = @_;
+
+	my $lock = &lock_cache_dir($input_dir);
 
 	# Storages to load: the ones associated to the action (a coma separated
 	# list) and the global information that are always required (offsets
@@ -13066,6 +13099,8 @@ sub load_sar_binary
 {
         my ($input_dir, $varname) = @_;
 
+	my $lock = &lock_cache_dir($input_dir);
+
 	foreach my $name (@sar_to_be_stored)
 	{
                 next if ($varname ne 'home' && $name ne $varname); # Just load the right binary file
@@ -13129,6 +13164,8 @@ sub load_sar_binary
 sub load_pidstat_binary
 {
 	my ($in_dir) = @_;
+
+	my $lock = &lock_cache_dir($in_dir);
 
 	foreach my $name (@pidstat_to_be_stored)
 	{
