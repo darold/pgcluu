@@ -1,3 +1,105 @@
+2025-10-19 - Version 5.0
+
+This major release adds a lot of new reports and fix several issues
+reported since last release.
+
+New features:
+
+  - Add report about replication slots retrieved from pg_replication_slots.
+  - Add collect of pg_hba_file_rules
+  - Limit wait event reporting to those that represent more than 0.1 percent
+    of the total of the wait event observed.
+  - Add collect of I/O statistics from pg_stat_io (PG16+)
+  - Add reports about:
+      - I/O throughput per backend type
+      - shared buffers writers and evictions
+      - buffer hit ratio and ring buffers
+      - I/O latency and size
+      - WAL I/O
+      - temporary relations I/O
+      - asynchronous I/O (PG18+)
+  - Add collect more kernel tuning parameters, remove shmmax and shmall
+      - vm.dirty_expire_centisecs and vm.dirty_writeback_centisecs, they were
+        not matched by the sysctl filter, and all other vm.dirty_* parameters,
+      - vm.min_free_kbytes, vm.watermark_scale_factor and kernel.numa_balancing,
+      - net.core.somaxconn, net.ipv4.ip_local_port_range, net.core.rmem_max,
+        net.core.wmem_max, fs.file-max and fs.nr_open,
+      - /sys/kernel/mm/transparent_hugepage/shmem_enabled: PostgreSQL shared
+        memory is anonymous shared memory, this is the setting that applies to
+        the shared buffers, not 'enabled',
+      - the frequency governor of all CPUs instead of cpu0 only, the cpuidle
+        driver, the intel_pstate status and energy performance preference, and
+        the number of NUMA nodes,
+      - read_ahead_kb, nr_requests, max_sectors_kb and wbt_lat_usec of each
+        block device.
+  - Collect and report the limits of the postmaster process. pgcluu_collectd now
+    saves in a new POSTMASTER section of sysinfo.txt:
+      - the pid of the postmaster, found as the parent of the checkpointer
+        (its /proc entry is readable by any user) or read from postmaster.pid
+        before PostgreSQL 10,
+      - oom_score_adj, -1000 is recommended for the postmaster,
+      - the soft and hard limits of open files, processes and locked memory,
+      - the cgroup limits: memory.max, memory.high, memory.swap.max, cpu.max,
+        cpu.weight, io.max, pids.max and the oom/oom_kill counters of
+        memory.events with cgroup v2 (also in hybrid mode), memory and cpu
+        quota limits with cgroup v1.
+    pgcluu and pgcluu.cgi show them in the Kernel panel of the system
+    information with sizes and CPU quotas formatted, and a tooltip for
+    oom_score_adj and the process limits.
+  - Add kernel pressure stall information and memory events reports.
+    pgcluu_collectd now appends at each run to kernel_stats.csv the cumulative
+    counters of:
+      - the pressure stall information (PSI) of the host (/proc/pressure, kernel
+        4.20+) and of the cgroup v2 of the postmaster (cpu, memory and io
+        pressure),
+      - the memory events of the cgroup of the postmaster (high, max, oom and
+        oom_kill from memory.events),
+      - /proc/vmstat counters not reported by sar: direct reclaims (allocstall),
+        memory compaction, transparent huge pages allocations and fallbacks,
+        OOM kills, NUMA allocations and page cache refaults.
+    - pgcluu and pgcluu.cgi have two new pages in the System menu:
+      - Pressure stall information: percentage of time with some or all tasks
+        stalled on CPU, memory or I/O for the host and the PostgreSQL cgroup,
+      - Kernel memory events: allocation stalls and compaction, transparent huge
+        pages, OOM kills, cgroup memory events, page cache refaults and NUMA
+        allocations.
+
+Here is the full list of fixes since previous release.
+
+  - Fix PostgreSQL version and uptime missing from sysinfo.txt
+  - Add PG17 compatibity: rebuild pg_stat_bgwriter. Thanks to Christophe
+    Courtois for the patch.
+  - Fix postgresql iodelay report.
+  - Fix System memory utilization report, since sar reports kbavail in sar
+    output.
+  - Fix sar await position detection with sysstat < v12.1.1.
+    Thanks to Scott Dellaperuta for the report.
+  - Fix pgcluu reports in capture mode complaining about non existing end-*
+    files. Thanks to Stephan Fercot for the report.
+  - Fix pgcluu reports in capture mode when the host is in streaming
+    replication.
+  - Fix pidstat reports: values read by column name and summed over the processes
+    The pidstat reports (PostgreSQL CPU, memory, page faults, I/O and context
+    switches) were wrong with the output of the pidstat command run by
+    pgcluu_collectd.
+  - Fix concurrent cache runs, cache files read during their rewrite and
+    input directory normalization. pgcluu -C run by cron every five minutes
+    could start while the previous run was still writing the cache files,
+    and pgcluu.cgi could read them at the same time.
+  - The cluster-conflicts page of the CGI showed a graph for each database in
+    addition to the cluster total, it now only shows the total. The graph of
+    a database is shown by the database-conflicts action.
+  - Fix cluster totals of tablespaces, prepared transactions, buffercache and conflicts
+  - Fix double ALL global connections and database size for cluster on charts. Thanks to MirekWa for the report.
+  - Fix Apache activation path for custom installations. Thanks to Wu Shuwen for the patch.
+  - Fix documentation formatting for pgcluu options.
+  - Fix report CSS style to extend array length to not truncate system information.
+  - Fix lock graphs whose data points were not ordered by time
+    The series of the lock types, lock modes and granted locks graphs were built
+    by iterating over the timestamps in hash order, so the lines of the graphs
+    were drawn back and forth in time.
+  - pgcluu.cgi: only load the cache files required by the requested report
+
 2024-03-06 - Version 4.0
 
 This release is a major release that fixes issues reported since

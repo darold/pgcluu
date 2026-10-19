@@ -26,7 +26,7 @@ setlocale(LC_ALL, 'C');
 use Storable qw(store_fd fd_retrieve);
 use Fcntl qw(:flock);
 
-$VERSION = '4.0';
+$VERSION = '5.0';
 $PROGRAM = 'pgCluu';
 
 
