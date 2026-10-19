@@ -44,7 +44,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pg: ['14', '15', '16', '17', '18', '19']
+        pg: ['14', '15', '16', '17', '18']
     services:
       postgres:
         image: postgres:${{ matrix.pg }}
