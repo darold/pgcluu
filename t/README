@@ -52,6 +52,8 @@ Tests
   10_kernel.t          cgroup files parsing and kernel_stats.csv format of
                        pgcluu_collectd, formatting of the postmaster limits,
                        kernel pages of the reports, shmmax/shmall not shown.
+  11_install.t         custom source installation and Apache configuration
+                       activation in a temporary tree (requires make).
 
 Known limitations are reported as TODO tests: they are shown by prove but
 do not make the tests fail. They are listed in %KNOWN_DIFF (05_incremental.t)
