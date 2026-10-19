@@ -54,6 +54,11 @@ Tests
                        kernel pages of the reports, shmmax/shmall not shown.
   11_install.t         custom source installation and Apache configuration
                        activation in a temporary tree (requires make).
+  12_cluster_total.t   cluster totals of the database sizes and connections
+                       are the sum of the per database values when a csv
+                       line is read twice or two lines have the same
+                       timestamp: duplicated timestamps, overlapping runs of
+                       pgcluu -C, trailing slash in the CGI INPUT_DIR.
 
 Known limitations are reported as TODO tests: they are shown by prove but
 do not make the tests fail. They are listed in %KNOWN_DIFF (05_incremental.t)

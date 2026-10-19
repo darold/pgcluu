@@ -3265,7 +3265,6 @@ sub pg_database_size
 		# Get database size statistics
 		if ( ($ACTION ne 'home') && ($ACTION ne 'database-info') ) {
 			$all_database_size{$data[0]}{$data[2]} = $data[3];
-			$all_database_size{$data[0]}{'all'} += $data[3];
 		} else {
 			$OVERALL_STATS{'database'}{$data[2]}{'size'} = $data[3];
 			$OVERALL_STATS{'start_date'} = $data[0] if (!$OVERALL_STATS{'start_date'} || ($OVERALL_STATS{'start_date'} gt $data[0]));
@@ -3291,6 +3290,7 @@ sub pg_database_size_report
 	my %database_stat = ();
 	my $total_val = 0;
 	my $tz = ($STATS_TIMEZONE*3600*1000);
+	&set_cluster_total(\%all_database_size);
 	foreach my $t (sort {$a <=> $b} keys %all_database_size) {
 		foreach my $db (@global_databases) {
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
@@ -5268,19 +5268,12 @@ sub pg_stat_connections
                 # Store list of database
                 $db_list{$data[5]} = 1;
 
-		if ($ACTION eq 'database-connections') {
-			$all_stat_connections{$data[0]}{$data[5]}{total} = $data[1];
-			$all_stat_connections{$data[0]}{$data[5]}{active} = $data[2];
-			$all_stat_connections{$data[0]}{$data[5]}{waiting} = $data[3];
-			$all_stat_connections{$data[0]}{$data[5]}{idle_in_xact} = $data[4];
-			$all_stat_connections{$data[0]}{$data[5]}{idle} = ($data[1] - $data[2] - $data[4]);
-		} else {
-			$all_stat_connections{$data[0]}{'all'}{total} += $data[1];
-			$all_stat_connections{$data[0]}{'all'}{active} += $data[2];
-			$all_stat_connections{$data[0]}{'all'}{waiting} += $data[3];
-			$all_stat_connections{$data[0]}{'all'}{idle_in_xact} += $data[4];
-			$all_stat_connections{$data[0]}{'all'}{idle} += ($data[1] - $data[2] - $data[4]);
-		}
+		# The cluster total is computed from these values in the report
+		$all_stat_connections{$data[0]}{$data[5]}{total} = $data[1];
+		$all_stat_connections{$data[0]}{$data[5]}{active} = $data[2];
+		$all_stat_connections{$data[0]}{$data[5]}{waiting} = $data[3];
+		$all_stat_connections{$data[0]}{$data[5]}{idle_in_xact} = $data[4];
+		$all_stat_connections{$data[0]}{$data[5]}{idle} = ($data[1] - $data[2] - $data[4]);
 	}
 	$curfh->close();
 
@@ -5302,6 +5295,7 @@ sub pg_stat_connections_report
 
 	my %connections_stat = ();
 	my $tz = ($STATS_TIMEZONE*3600*1000);
+	&set_cluster_total(\%all_stat_connections, 'total', 'active', 'waiting', 'idle_in_xact', 'idle') if ($ACTION ne 'database-connections');
 	foreach my $time (sort {$a <=> $b} keys %all_stat_connections)
 	{
 		if ($ACTION eq 'database-connections') {
@@ -7712,6 +7706,40 @@ sub pg_stat_statements_report
 };
 	%all_stat_statements = ();
 
+}
+
+####
+# Set the cluster wide total ('all') of a statistic for each timestamp as
+# the sum of the per database values. It must be computed when the report
+# is built, not when the csv lines are read.
+####
+sub set_cluster_total
+{
+	my ($stats, @fields) = @_;
+
+	foreach my $t (keys %{$stats})
+	{
+		my %total = ();
+		foreach my $db (keys %{$stats->{$t}})
+		{
+			next if ($db eq 'all');
+			if ($#fields < 0) {
+				$total{''} += ($stats->{$t}{$db} || 0);
+			} else {
+				foreach my $f (@fields) {
+					$total{$f} += ($stats->{$t}{$db}{$f} || 0);
+				}
+			}
+		}
+		if ($#fields < 0) {
+			$stats->{$t}{'all'} = $total{''} || 0;
+		} else {
+			$stats->{$t}{'all'} = {};
+			foreach my $f (@fields) {
+				$stats->{$t}{'all'}{$f} = $total{$f} || 0;
+			}
+		}
+	}
 }
 
 sub normalize_line

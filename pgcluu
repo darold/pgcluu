@@ -3305,7 +3305,6 @@ sub pg_database_size
 		$db_list{$data[2]} = 1;
 		# Get database size statistics
 		$all_database_size{$data[0]}{$data[2]} = $data[3];
-		$all_database_size{$data[0]}{'all'} += $data[3];
 	}
 	$curfh->close();
 
@@ -3325,6 +3324,7 @@ sub pg_database_size_report
 
 	my %database_stat = ();
 	my $total_val = 0;
+	&set_cluster_total(\%all_database_size);
 	foreach my $t (sort {$a <=> $b} keys %all_database_size)
 	{
 		foreach my $db (@global_databases)
@@ -5806,12 +5806,6 @@ sub pg_stat_connections
 		$all_stat_connections{$data[0]}{$data[5]}{waiting} = $data[3];
 		$all_stat_connections{$data[0]}{$data[5]}{idle_in_xact} = $data[4];
 		$all_stat_connections{$data[0]}{$data[5]}{idle} = ($data[1] - $data[2] - $data[4]);
-
-		$all_stat_connections{$data[0]}{'all'}{total} += $data[1];
-		$all_stat_connections{$data[0]}{'all'}{active} += $data[2];
-		$all_stat_connections{$data[0]}{'all'}{waiting} += $data[3];
-		$all_stat_connections{$data[0]}{'all'}{idle_in_xact} += $data[4];
-		$all_stat_connections{$data[0]}{'all'}{idle} += ($data[1] - $data[2] - $data[4]);
 	}
 	$curfh->close();
 
@@ -5830,6 +5824,7 @@ sub pg_stat_connections_report
 	my ($src_base, %data_info) = @_;
 
 	my %connections_stat = ();
+	&set_cluster_total(\%all_stat_connections, 'total', 'active', 'waiting', 'idle_in_xact', 'idle');
 	foreach my $t (sort {$a <=> $b} keys %all_stat_connections)
 	{
 		foreach my $db (@global_databases)
@@ -8315,6 +8310,39 @@ sub pg_stat_statements_report
 	}
 	%all_stat_statements = ();
 
+}
+
+####
+# Set the cluster wide total ('all') of a statistic for each timestamp as
+# the sum of the per database values.
+####
+sub set_cluster_total
+{
+	my ($stats, @fields) = @_;
+
+	foreach my $t (keys %{$stats})
+	{
+		my %total = ();
+		foreach my $db (keys %{$stats->{$t}})
+		{
+			next if ($db eq 'all');
+			if ($#fields < 0) {
+				$total{''} += ($stats->{$t}{$db} || 0);
+			} else {
+				foreach my $f (@fields) {
+					$total{$f} += ($stats->{$t}{$db}{$f} || 0);
+				}
+			}
+		}
+		if ($#fields < 0) {
+			$stats->{$t}{'all'} = $total{''} || 0;
+		} else {
+			$stats->{$t}{'all'} = {};
+			foreach my $f (@fields) {
+				$stats->{$t}{'all'}{$f} = $total{$f} || 0;
+			}
+		}
+	}
 }
 
 sub normalize_line
