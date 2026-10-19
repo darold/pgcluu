@@ -65,6 +65,12 @@ Tests
                        atomically, readers wait while they are replaced,
                        normalization of the input directory in pgcluu and
                        pgcluu.cgi (the csv files are not read again).
+  14_pidstat.t         pidstat reports from t/pidstat (sysstat 12.6.1
+                       output): columns read by name, values summed over the
+                       processes, older format, cache built in several
+                       passes with a sample cut in the middle of a line and
+                       lines read again, samples with the same timestamp,
+                       pgcluu.cgi from the csv and the cache files.
 
 Known limitations are reported as TODO tests: they are shown by prove but
 do not make the tests fail. They are listed in %KNOWN_DIFF (05_incremental.t)

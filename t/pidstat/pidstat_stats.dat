@@ -1,0 +1,93 @@
+Linux 6.8.0-45-generic (pg-host) 	10/05/26 	_x86_64_	(2 CPU)
+
+10:00:00     USER       PID    %usr %system  %guest   %wait    %CPU   CPU  Command
+10:00:01 postgres       100   10.00    5.00    0.00    1.00   15.00     0  postgres
+10:00:01 postgres       101   20.00   10.00    0.00    2.00   30.00     1  postgres
+
+10:00:00     USER       PID    usr-ms system-ms  guest-ms  Command
+10:00:01 postgres       100       100        50         0  postgres
+10:00:01 postgres       101       200       100         0  postgres
+
+10:00:00     USER       PID  minflt/s  majflt/s     VSZ     RSS   %MEM  Command
+10:00:01 postgres       100      1.00      0.00  200000   10000   0.50  postgres
+10:00:01 postgres       101      3.00      1.00  300000   20000   1.00  postgres
+
+10:00:00     USER       PID minflt-nr majflt-nr  Command
+10:00:01 postgres       100         7         7  postgres
+10:00:01 postgres       101         9         9  postgres
+
+10:00:00     USER       PID   kB_rd/s   kB_wr/s kB_ccwr/s iodelay  Command
+10:00:01 postgres       100    100.00     50.00      0.00       2  postgres
+10:00:01 postgres       101    200.00    150.00     10.00       3  postgres
+
+10:00:00     USER       PID   cswch/s nvcswch/s  Command
+10:00:01 postgres       100     10.00      1.00  postgres
+10:00:01 postgres       101     30.00      2.00  postgres
+
+
+
+
+
+
+Linux 6.8.0-45-generic (pg-host) 	10/05/26 	_x86_64_	(2 CPU)
+
+10:01:00     USER       PID    %usr %system  %guest   %wait    %CPU   CPU  Command
+10:01:01 postgres       100   10.00    5.00    0.00    1.00   15.00     0  postgres
+10:01:01 postgres       101   20.00   10.00    0.00    2.00   30.00     1  postgres
+
+10:01:00     USER       PID    usr-ms system-ms  guest-ms  Command
+10:01:01 postgres       100       100        50         0  postgres
+10:01:01 postgres       101       200       100         0  postgres
+
+10:01:00     USER       PID  minflt/s  majflt/s     VSZ     RSS   %MEM  Command
+10:01:01 postgres       100      1.00      0.00  200000   10000   0.50  postgres
+10:01:01 postgres       101      3.00      1.00  300000   20000   1.00  postgres
+
+10:01:00     USER       PID minflt-nr majflt-nr  Command
+10:01:01 postgres       100         7         7  postgres
+10:01:01 postgres       101         9         9  postgres
+
+10:01:00     USER       PID   kB_rd/s   kB_wr/s kB_ccwr/s iodelay  Command
+10:01:01 postgres       100    100.00     50.00      0.00       2  postgres
+10:01:01 postgres       101    200.00    150.00     10.00       3  postgres
+
+10:01:00     USER       PID   cswch/s nvcswch/s  Command
+10:01:01 postgres       100     10.00      1.00  postgres
+10:01:01 postgres       101     30.00      2.00  postgres
+
+
+
+
+
+
+Linux 6.8.0-45-generic (pg-host) 	10/05/26 	_x86_64_	(2 CPU)
+
+10:02:00     USER       PID    %usr %system  %guest   %wait    %CPU   CPU  Command
+10:02:01 postgres       100   10.00    5.00    0.00    1.00   15.00     0  postgres
+10:02:01 postgres       101   20.00   10.00    0.00    2.00   30.00     1  postgres
+
+10:02:00     USER       PID    usr-ms system-ms  guest-ms  Command
+10:02:01 postgres       100       100        50         0  postgres
+10:02:01 postgres       101       200       100         0  postgres
+
+10:02:00     USER       PID  minflt/s  majflt/s     VSZ     RSS   %MEM  Command
+10:02:01 postgres       100      1.00      0.00  200000   10000   0.50  postgres
+10:02:01 postgres       101      3.00      1.00  300000   20000   1.00  postgres
+
+10:02:00     USER       PID minflt-nr majflt-nr  Command
+10:02:01 postgres       100         7         7  postgres
+10:02:01 postgres       101         9         9  postgres
+
+10:02:00     USER       PID   kB_rd/s   kB_wr/s kB_ccwr/s iodelay  Command
+10:02:01 postgres       100    100.00     50.00      0.00       2  postgres
+10:02:01 postgres       101    200.00    150.00     10.00       3  postgres
+
+10:02:00     USER       PID   cswch/s nvcswch/s  Command
+10:02:01 postgres       100     10.00      1.00  postgres
+10:02:01 postgres       101     30.00      2.00  postgres
+
+
+
+
+
+

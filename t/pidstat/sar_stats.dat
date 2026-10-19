@@ -1,0 +1,216 @@
+Linux 6.8.0-45-generic (pg-host) 	10/05/26 	_x86_64_	(2 CPU)
+
+10:00:08        CPU      %usr     %nice      %sys   %iowait    %steal      %irq     %soft    %guest    %gnice     %idle
+10:00:09        all      1.00      0.00      0.50      0.00      0.00      0.00      0.50      0.00      0.00     98.01
+10:00:09          0      1.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00     99.00
+10:00:09          1      0.99      0.00      0.99      0.00      0.00      0.00      0.99      0.00      0.00     97.03
+
+10:00:08       proc/s   cswch/s
+10:00:09         0.00    187.00
+
+10:00:08          all      CPU0      CPU1 INTR
+10:00:09       202.00    112.00     90.00 sum
+10:00:09         0.00      0.00      0.00 24
+10:00:09         0.00      0.00      0.00 25
+10:00:09         0.00      0.00      0.00 26
+10:00:09         0.00      0.00      0.00 29
+10:00:09         0.00      0.00      0.00 30
+10:00:09         0.00      0.00      0.00 31
+10:00:09         0.00      0.00      0.00 32
+10:00:09         0.00      0.00      0.00 33
+10:00:09         0.00      0.00      0.00 34
+10:00:09         0.00      0.00      0.00 35
+10:00:09         0.00      0.00      0.00 36
+10:00:09         3.00      0.00      3.00 37
+10:00:09         0.00      0.00      0.00 38
+10:00:09         0.00      0.00      0.00 39
+10:00:09         0.00      0.00      0.00 40
+10:00:09         0.00      0.00      0.00 41
+10:00:09         0.00      0.00      0.00 42
+10:00:09         0.00      0.00      0.00 43
+10:00:09         0.00      0.00      0.00 44
+10:00:09         0.00      0.00      0.00 45
+10:00:09         0.00      0.00      0.00 46
+10:00:09         0.00      0.00      0.00 47
+10:00:09         0.00      0.00      0.00 48
+10:00:09         6.00      6.00      0.00 49
+10:00:09         6.00      0.00      6.00 50
+10:00:09         0.00      0.00      0.00 51
+10:00:09         0.00      0.00      0.00 52
+10:00:09         0.00      0.00      0.00 53
+10:00:09         0.00      0.00      0.00 54
+10:00:09         0.00      0.00      0.00 NMI
+10:00:09       120.00     61.00     59.00 LOC
+10:00:09         0.00      0.00      0.00 SPU
+10:00:09         0.00      0.00      0.00 PMI
+10:00:09         0.00      0.00      0.00 IWI
+10:00:09         0.00      0.00      0.00 RTR
+10:00:09         0.00      0.00      0.00 RES
+10:00:09        57.00     36.00     21.00 CAL
+10:00:09        10.00      9.00      1.00 TLB
+10:00:09         0.00      0.00      0.00 TRM
+10:00:09         0.00      0.00      0.00 HYP
+10:00:09         0.00      0.00      0.00 ERR
+10:00:09         0.00      0.00      0.00 MIS
+10:00:09         0.00      0.00      0.00 PIN
+10:00:09         0.00      0.00      0.00 NPI
+10:00:09         0.00      0.00      0.00 PIW
+
+10:00:08     pswpin/s pswpout/s
+10:00:09         0.00      0.00
+
+10:00:08     pgpgin/s pgpgout/s   fault/s  majflt/s  pgfree/s pgscank/s pgscand/s pgsteal/s    %vmeff
+10:00:09        16.00      4.00     33.00      2.00    999.00      0.00      0.00      0.00      0.00
+
+10:00:08          tps      rtps      wtps      dtps   bread/s   bwrtn/s   bdscd/s
+10:00:09         4.00      2.00      1.00      1.00     32.00      8.00      8.00
+
+10:00:08    kbmemfree   kbavail kbmemused  %memused kbbuffers  kbcached  kbcommit   %commit  kbactive   kbinact   kbdirty  kbanonpg    kbslab  kbkstack   kbpgtbl  kbvmused
+10:00:09      7774008   7760500    223464      2.72      1788    199960    549368      6.68      7488    377780       184    192168     23100      1536      2408      7560
+
+10:00:08    kbswpfree kbswpused  %swpused  kbswpcad   %swpcad
+10:00:09            0         0      0.00         0      0.00
+
+10:00:08    kbhugfree kbhugused  %hugused kbhugrsvd kbhugsurp
+10:00:09            0         0      0.00         0         0
+
+10:00:08    dentunusd   file-nr  inode-nr    pty-nr
+10:00:09         3245       132      3358         0
+
+10:00:08      runq-sz  plist-sz   ldavg-1   ldavg-5  ldavg-15   blocked
+10:00:09            0        95      0.01      0.04      0.01         0
+
+10:00:08          TTY   rcvin/s   xmtin/s framerr/s prtyerr/s     brk/s   ovrun/s
+10:00:09            0      0.00      0.00      0.00      0.00      0.00      0.00
+
+10:00:08          tps     rkB/s     wkB/s     dkB/s   areq-sz    aqu-sz     await     %util DEV
+10:00:09         2.00      0.00      4.00      4.00      4.00      0.00      0.00      0.00 vda
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00 vdb
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00 vdc
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00 vdd
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00 vde
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00 vdf
+
+10:00:08      rxpck/s   txpck/s    rxkB/s    txkB/s   rxcmp/s   txcmp/s  rxmcst/s   %ifutil IFACE
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00 lo
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00 ifb0
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00 ifb1
+10:00:09         9.00      9.00      2.01      0.58      0.00      0.00      0.00      0.00 eth0
+
+10:00:08      rxerr/s   txerr/s    coll/s  rxdrop/s  txdrop/s  txcarr/s  rxfram/s  rxfifo/s  txfifo/s IFACE
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00 lo
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00 ifb0
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00 ifb1
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00 eth0
+
+10:00:08       call/s retrans/s    read/s   write/s  access/s  getatt/s
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00
+
+10:00:08      scall/s badcall/s  packet/s     udp/s     tcp/s     hit/s    miss/s   sread/s  swrite/s saccess/s sgetatt/s
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
+
+10:00:08       totsck    tcpsck    udpsck    rawsck   ip-frag    tcp-tw
+10:00:09           30        17         0         0         0         0
+
+10:00:08       irec/s  fwddgm/s    idel/s     orq/s   asmrq/s   asmok/s  fragok/s fragcrt/s
+10:00:09         9.00      0.00      9.00      9.00      0.00      0.00      0.00      0.00
+
+10:00:08    ihdrerr/s iadrerr/s iukwnpr/s   idisc/s   odisc/s   onort/s    asmf/s   fragf/s
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
+
+10:00:08       imsg/s    omsg/s    iech/s   iechr/s    oech/s   oechr/s     itm/s    itmr/s     otm/s    otmr/s  iadrmk/s iadrmkr/s  oadrmk/s oadrmkr/s
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
+
+10:00:08       ierr/s    oerr/s idstunr/s odstunr/s   itmex/s   otmex/s iparmpb/s oparmpb/s   isrcq/s   osrcq/s  iredir/s  oredir/s
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
+
+10:00:08     active/s passive/s    iseg/s    oseg/s
+10:00:09         0.00      0.00      9.00      9.00
+
+10:00:08     atmptf/s  estres/s retrans/s isegerr/s   orsts/s
+10:00:09         0.00      0.00      0.00      0.00      0.00
+
+10:00:08       idgm/s    odgm/s  noport/s idgmerr/s
+10:00:09         0.00      0.00      0.00      0.00
+
+10:00:08      tcp6sck   udp6sck   raw6sck  ip6-frag
+10:00:09            0         0         0         0
+
+10:00:08      irec6/s fwddgm6/s   idel6/s    orq6/s  asmrq6/s  asmok6/s imcpck6/s omcpck6/s fragok6/s fragcr6/s
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
+
+10:00:08    ihdrer6/s iadrer6/s iukwnp6/s  i2big6/s  idisc6/s  odisc6/s  inort6/s  onort6/s   asmf6/s  fragf6/s itrpck6/s
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
+
+10:00:08      imsg6/s   omsg6/s   iech6/s  iechr6/s  oechr6/s  igmbq6/s  igmbr6/s  ogmbr6/s igmbrd6/s ogmbrd6/s irtsol6/s ortsol6/s  irtad6/s inbsol6/s onbsol6/s  inbad6/s  onbad6/s
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
+
+10:00:08      ierr6/s idtunr6/s odtunr6/s  itmex6/s  otmex6/s iprmpb6/s oprmpb6/s iredir6/s oredir6/s ipck2b6/s opck2b6/s
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
+
+10:00:08      idgm6/s   odgm6/s noport6/s idgmer6/s
+10:00:09         0.00      0.00      0.00      0.00
+
+10:00:08        CPU   total/s   dropd/s squeezd/s  rx_rps/s flw_lim/s   blg_len
+10:00:09        all      9.00      0.00      0.00      0.00      0.00         0
+10:00:09          0      9.00      0.00      0.00      0.00      0.00         0
+10:00:09          1      0.00      0.00      0.00      0.00      0.00         0
+
+10:00:08        CPU       MHz
+10:00:09        all   2700.00
+10:00:09          0   2700.00
+10:00:09          1   2700.00
+
+10:00:08     MBfsfree  MBfsused   %fsused  %ufsused     Ifree     Iused    %Iused FILESYSTEM
+10:00:09       244262     13758      5.33     88.14  16427212    350004      2.09 /dev/vda
+10:00:09            0        10    100.00    100.00         0         2    100.00 /dev/vdb
+10:00:09           31       271     89.85     91.85      4115        13      0.31 /dev/vdc
+10:00:09           16        30     64.77     66.81      4084        12      0.29 /dev/vdd
+10:00:09            0         1    100.00    100.00         0       240    100.00 /dev/vde
+10:00:09            0         6    100.00    100.00         0       305    100.00 /dev/vdf
+
+10:00:08     %scpu-10  %scpu-60 %scpu-300     %scpu
+10:00:09         0.00      0.00      0.05      0.06
+
+10:00:08      %sio-10   %sio-60  %sio-300      %sio   %fio-10   %fio-60  %fio-300      %fio
+10:00:09         0.00      0.00      0.03      0.00      0.00      0.00      0.03      0.00
+
+10:00:08     %smem-10  %smem-60 %smem-300     %smem  %fmem-10  %fmem-60 %fmem-300     %fmem
+10:00:09         0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

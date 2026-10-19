@@ -281,12 +281,24 @@ our %pidstat_cpu_stat = ();
 our %pidstat_context_stat = ();
 our %pidstat_memory_stat = ();
 our %pidstat_io_stat = ();
+# Samples of the pidstat file already counted, see pidstat_sample_stats()
+our %pidstat_samples = ();
+# Columns of the pidstat reports used, the values are read by column name.
+# The names separated by | are the names used by the different versions of
+# sysstat for the same column.
+our %PIDSTAT_COLUMNS = (
+	'pcpu'   => [ '%usr|%user', '%system', '%guest', '%wait', '%CPU' ],
+	'pcswch' => [ 'cswch/s', 'nvcswch/s' ],
+	'pmem'   => [ 'minflt/s', 'majflt/s', 'VSZ', 'RSS', '%MEM' ],
+	'pio'    => [ 'kB_rd/s', 'kB_wr/s', 'kB_ccwr/s', 'iodelay' ],
+);
 
 our @pidstat_to_be_stored = (
 	'pidstat_cpu_stat',
 	'pidstat_context_stat',
 	'pidstat_memory_stat',
-	'pidstat_io_stat'
+	'pidstat_io_stat',
+	'pidstat_samples'
 );
 
 # Relation between sar binary file and CGI action parameter.
@@ -1676,7 +1688,7 @@ my %PIDSTAT_GRAPH_INFOS = (
 	'2' => {
 		'name' =>  'postgres-memory',
 		'title' => 'PostgreSQL memory utilization',
-		'description' => 'Report memory utilization. Virtual Size (VSZ): The virtual memory usage of entire task in kilobytes. Resident Set Size (RSS): The non-swapped physical memory used by the task in kilobytes.',
+		'description' => 'Report memory utilization. Virtual Size (VSZ): The virtual memory usage of entire task in kilobytes. Resident Set Size (RSS): The non-swapped physical memory used by the task in kilobytes. Values are the sum of all PostgreSQL processes, the shared memory is counted for each process using it.',
 		'ylabel' => 'Memory size',
 		'legends' => ['VSZ','RSS'],
 	},
@@ -1919,6 +1931,8 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 	# and global information to build menu
 	%sysinfo = ();
 	%global_infos = ();
+	# Offsets of the pidstat samples are related to the file of a directory
+	%pidstat_samples = ();
 	@DATABASE_LIST = ();
 	@DEVICE_LIST = ();
 	@IFACE_LIST = ();
@@ -2005,10 +2019,13 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 					next if (($ACTION ne 'home') && ($REAL_ACTION ne $SAR_GRAPH_INFOS{$id}->{name}));
 					&compute_sarfile_stats($sar_file, $in_dir, \%fulldata, %{$SAR_GRAPH_INFOS{$id}});
 				}
-				print STDERR "DEBUG: looking for pidstatt data file $pidstat_file\n" if ($DEBUG);
-				%fullpidstatdata = &load_sarfile_stats($sar_file);
-				foreach my $id (sort keys %PIDSTAT_GRAPH_INFOS) {
-					&compute_pidstatfile_stats($pidstat_file, $in_dir, %{$PIDSTAT_GRAPH_INFOS{$id}});
+				if ($pidstat_file && -f "$pidstat_file")
+				{
+					print STDERR "DEBUG: looking for pidstat data file $pidstat_file\n" if ($DEBUG);
+					%fullpidstatdata = ();
+					foreach my $id (sort keys %PIDSTAT_GRAPH_INFOS) {
+						&compute_pidstatfile_stats($pidstat_file, $in_dir, %{$PIDSTAT_GRAPH_INFOS{$id}});
+					}
 				}
 			}
 		}
@@ -2105,10 +2122,13 @@ foreach (my $dx = 0; $dx <= $#WORK_DIRS; $dx++)
 				&& (($#binfiles == -1) || ($pidstat_file !~ /\.gz$/)) )
 			{
 
-				print STDERR "DEBUG: looking for pidstatt data file $pidstat_file\n" if ($DEBUG);
-				%fullpidstatdata = &load_sarfile_stats($sar_file);
-				foreach my $id (sort keys %PIDSTAT_GRAPH_INFOS) {
-					&compute_pidstatfile_stats($pidstat_file, $in_dir, %{$PIDSTAT_GRAPH_INFOS{$id}});
+				if ($pidstat_file && -f "$pidstat_file")
+				{
+					print STDERR "DEBUG: looking for pidstat data file $pidstat_file\n" if ($DEBUG);
+					%fullpidstatdata = ();
+					foreach my $id (sort keys %PIDSTAT_GRAPH_INFOS) {
+						&compute_pidstatfile_stats($pidstat_file, $in_dir, %{$PIDSTAT_GRAPH_INFOS{$id}});
+					}
 				}
 			}
 		}
@@ -9862,43 +9882,91 @@ sub compute_cpu_report
 
 }
 
+####
+# Parse a header line of a pidstat report. Returns the type of the report
+# and the position of the columns kept for this type (%PIDSTAT_COLUMNS) in
+# the values of a line, the timestamp excluded. Reports not used (the CHILD
+# reports of -T ALL for example) have no type.
+####
+sub parse_pidstat_header
+{
+	my $line = shift;
+
+	my $type = &find_report_type($line);
+	return ('') if (!$type || !exists $PIDSTAT_COLUMNS{$type});
+
+	my @headers = split(m#\s+#, $line);
+	shift(@headers);
+	# AM/PM of the timestamp with 12 hours time format
+	shift(@headers) if ($#headers >= 0 && $headers[0] =~ /^(AM|PM)$/);
+
+	my %pos = ();
+	for (my $i = 0; $i <= $#headers; $i++) {
+		$pos{$headers[$i]} = $i;
+	}
+	my @columns = ();
+	foreach my $c (@{$PIDSTAT_COLUMNS{$type}}) {
+		# A column can have several names following the sysstat version
+		my ($found) = grep { exists $pos{$_} } split(/\|/, $c);
+		push(@columns, defined $found ? $pos{$found} : -1);
+	}
+
+	return ($type, scalar @headers, @columns);
+}
+
+####
+# Return the statistics of the timestamp where the values of a process
+# must be added, or undef when the line must be skipped. The values of all
+# the processes of a sample are summed. A sample is the output of a run of
+# pidstat, identified by the offset of its first line in the file. For each
+# type of report the offset of the end of the last line counted is kept for
+# each sample: a line before this offset was already counted, it is read
+# again over the cache. When an other sample has the same timestamp (hour
+# repeated by a DST change) it replaces the previous one.
+####
+sub pidstat_sample_stats
+{
+	my ($stats, $type, $t, $sample, $pos, $end) = @_;
+
+	my $done = $pidstat_samples{'end'}{$type}{$sample};
+	return undef if (defined $done && $pos < $done);
+
+	my $owner = $pidstat_samples{'owner'}{$type}{$t};
+	delete $stats->{$t} if (defined $owner && $owner != $sample);
+
+	$pidstat_samples{'end'}{$type}{$sample} = $end;
+	$pidstat_samples{'owner'}{$type}{$t} = $sample;
+
+	$stats->{$t} //= {};
+	return $stats->{$t};
+}
+
+# Split a line stored by load_pidstatfile_stats(), returns the timestamp,
+# the sample, the offsets of the line and the values of the columns kept,
+# undef for a column not reported by this pidstat version.
+sub split_pidstat_line
+{
+	my ($t, $sample, $pos, $end, @values) = split(/;/, shift, -1);
+	return ($t, $sample, $pos, $end, map { ($_ eq '') ? undef : $_ } @values);
+}
+
 sub compute_pidstatcpu_stat
 {
-	for (my $i = 0; $i <= $#_; $i++)
+	foreach my $l (@_)
 	{
-		my @data = split(/;/, $_[$i]);
-		next if ($data[2] !~ /^\d+/);
-		# hostname;interval;timestamp;USER;PID;%usr;%system;%guest;%CPU;CPU;Command
-		# hostname;interval;timestamp;USER;PID;%usr;%system;%guest;%wait;%CPU;CPU;Command
+		my ($t, $sample, $pos, $end, $usr, $system, $guest, $wait, $cpu) = &split_pidstat_line($l);
+
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($t < $BEGIN));
+		next if ($END   && ($t > $END));
 
-		map { s/,/\./ } @data ;
-		# we only store all cpu statistics
-		my $total_cpu = ($data[6]||0) + ($data[7]||0);
-		my $ncpu = $data[9];
-		$ncpu = $data[10] if ($#data > 10);
-		$pidstat_cpu_stat{$data[2]}{$ncpu}{total}  += $total_cpu;
-		$pidstat_cpu_stat{$data[2]}{$ncpu}{user}   += ($data[6]||0);
-		$pidstat_cpu_stat{$data[2]}{$ncpu}{system} += ($data[7]||0);
-
-		$pidstat_cpu_stat{$data[2]}{'all'}{total}  += $total_cpu;
-		$pidstat_cpu_stat{$data[2]}{'all'}{user}   += ($data[6]||0);
-		$pidstat_cpu_stat{$data[2]}{'all'}{system} += ($data[7]||0);
-
-		if ($#data > 10)
-		{
-			$pidstat_cpu_stat{$data[2]}{$ncpu}{wait}   += ($data[8]||0);
-			$pidstat_cpu_stat{$data[2]}{$ncpu}{cpu}    += ($data[9]||0);
-			$pidstat_cpu_stat{$data[2]}{'all'}{wait}   += ($data[8]||0);
-			$pidstat_cpu_stat{$data[2]}{'all'}{cpu}    += ($data[9]||0);
-		}
-		else
-		{
-			$pidstat_cpu_stat{$data[2]}{$ncpu}{cpu}    += ($data[8]||0);
-			$pidstat_cpu_stat{$data[2]}{'all'}{cpu}    += ($data[8]||0);
-		}
+		my $s = &pidstat_sample_stats(\%pidstat_cpu_stat, 'pcpu', $t, $sample, $pos, $end) or next;
+		$s->{'all'}{total}  += ($usr||0) + ($system||0);
+		$s->{'all'}{user}   += ($usr||0);
+		$s->{'all'}{system} += ($system||0);
+		$s->{'all'}{cpu}    += ($cpu||0);
+		# %wait is reported since sysstat 12.5.1
+		$s->{'all'}{wait}   += $wait if (defined $wait);
 	}
 }
 
@@ -9907,43 +9975,28 @@ sub compute_pidstatcpu_report
 	my $data_info = shift();
 
 	my %pidstatcpu_stat = ();
+	my $has_wait = 0;
 	foreach my $t (sort {$a <=> $b} keys %pidstat_cpu_stat)
 	{
-		foreach my $cpu (keys %{$pidstat_cpu_stat{$t}})
-		{
-			# We only process values from total CPU
-			next if ($cpu ne 'all');
-			$pidstatcpu_stat{$cpu}{total}  .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{total} . '],';
-			$pidstatcpu_stat{$cpu}{system} .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{system} . '],';
-			$pidstatcpu_stat{$cpu}{user}   .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{user} . '],';
-			$pidstatcpu_stat{$cpu}{cpu}    .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{cpu} . '],';
-			if (exists $pidstatcpu_stat{$cpu}{wait})
-			{
-				$pidstatcpu_stat{$cpu}{wait}   .= '[' . $t . ',' . $pidstat_cpu_stat{$t}{$cpu}{wait} . '],';
-			}
-		}
+		# We only process values from total CPU
+		next if (!exists $pidstat_cpu_stat{$t}{'all'});
+		my $s = $pidstat_cpu_stat{$t}{'all'};
+		$pidstatcpu_stat{total}  .= '[' . $t . ',' . ($s->{total}||0) . '],';
+		$pidstatcpu_stat{system} .= '[' . $t . ',' . ($s->{system}||0) . '],';
+		$pidstatcpu_stat{user}   .= '[' . $t . ',' . ($s->{user}||0) . '],';
+		$pidstatcpu_stat{wait}   .= '[' . $t . ',' . ($s->{wait}||0) . '],';
+		# %wait is only reported by recent versions of pidstat
+		$has_wait = 1 if (exists $s->{wait});
 	}
 	%pidstat_cpu_stat = ();
 
 	if (scalar keys %pidstatcpu_stat > 0)
 	{
-		foreach my $cpu (keys %pidstatcpu_stat)
-		{
-			next if ($cpu ne 'all');
-			$pidstatcpu_stat{$cpu}{total} =~ s/,$//;
-			$pidstatcpu_stat{$cpu}{system} =~ s/,$//;
-			$pidstatcpu_stat{$cpu}{user} =~ s/,$//;
-			$pidstatcpu_stat{$cpu}{cpu} =~ s/,$//;
-
-			if (exists $pidstatcpu_stat{$cpu}{wait})
-			{
-				$pidstatcpu_stat{$cpu}{wait} =~ s/,$//;
-				print &jqplot_linegraph_array($IDX++, 'postgres-cpu', $data_info, $cpu, $pidstatcpu_stat{$cpu}{total}, $pidstatcpu_stat{$cpu}{system}, $pidstatcpu_stat{$cpu}{user}, $pidstatcpu_stat{$cpu}{wait});
-			}
-			else
-			{
-				print &jqplot_linegraph_array($IDX++, 'postgres-cpu', $data_info, $cpu, $pidstatcpu_stat{$cpu}{total}, $pidstatcpu_stat{$cpu}{system}, $pidstatcpu_stat{$cpu}{user});
-			}
+		map { $pidstatcpu_stat{$_} =~ s/,$//; } keys %pidstatcpu_stat;
+		if ($has_wait) {
+			print &jqplot_linegraph_array($IDX++, 'postgres-cpu', $data_info, 'all', $pidstatcpu_stat{total}, $pidstatcpu_stat{system}, $pidstatcpu_stat{user}, $pidstatcpu_stat{wait});
+		} else {
+			print &jqplot_linegraph_array($IDX++, 'postgres-cpu', $data_info, 'all', $pidstatcpu_stat{total}, $pidstatcpu_stat{system}, $pidstatcpu_stat{user});
 		}
 	}
 }
@@ -10098,20 +10151,17 @@ sub compute_context_report
 
 sub compute_pidstatcontext_stat
 {
-
-	for (my $i = 0; $i <= $#_; $i++)
+	foreach my $l (@_)
 	{
-		# hostname;interval;timestamp;USER;PID;cswch/s;nvcswch/s;Command
-		my @data = split(/;/, $_[$i]);
-		next if ($data[2] !~ /^\d+/);
+		my ($t, $sample, $pos, $end, $cswch, $nvcswch) = &split_pidstat_line($l);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($t < $BEGIN));
+		next if ($END   && ($t > $END));
 
-		map { s/,/\./ } @data ;
-		$pidstat_context_stat{$data[2]}{'cswch'}  = ($data[5]||0);
-		$pidstat_context_stat{$data[2]}{'nvcswch'}  = ($data[6]||0);
+		my $s = &pidstat_sample_stats(\%pidstat_context_stat, 'pcswch', $t, $sample, $pos, $end) or next;
+		$s->{'cswch'}   += ($cswch||0);
+		$s->{'nvcswch'} += ($nvcswch||0);
 	}
 }
 
@@ -10180,21 +10230,20 @@ sub compute_memory_report
 
 sub compute_pidstatmemory_stat
 {
-	for (my $i = 0; $i <= $#_; $i++)
+	foreach my $l (@_)
 	{
-		# hostname;interval;timestamp;USER;PID;minflt/s;majflt/s;VSZ;RSS;%MEM;Command
-		my @data = split(/;/, $_[$i]);
-		next if ($data[2] !~ /^\d+/);
-		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		my ($t, $sample, $pos, $end, $minflt, $majflt, $vsz, $rss, $mem) = &split_pidstat_line($l);
 
-		map { s/,/\./ } @data ;
-		$pidstat_memory_stat{$data[2]}{'minflt/s'}  = ($data[5]||0);
-		$pidstat_memory_stat{$data[2]}{'majflt/s'}  = ($data[6]||0);
-		$pidstat_memory_stat{$data[2]}{'VSZ'} = $data[7]||0;
-		$pidstat_memory_stat{$data[2]}{'RSS'} = $data[8]||0;
-		$pidstat_memory_stat{$data[2]}{'%MEM'} = $data[9]||0;
+		# Skip unwanted lines
+		next if ($BEGIN && ($t < $BEGIN));
+		next if ($END   && ($t > $END));
+
+		my $s = &pidstat_sample_stats(\%pidstat_memory_stat, 'pmem', $t, $sample, $pos, $end) or next;
+		$s->{'minflt/s'} += ($minflt||0);
+		$s->{'majflt/s'} += ($majflt||0);
+		$s->{'VSZ'}      += ($vsz||0);
+		$s->{'RSS'}      += ($rss||0);
+		$s->{'%MEM'}     += ($mem||0);
 	}
 }
 
@@ -10462,7 +10511,7 @@ sub compute_pidstatfault_report
 	{
 		$pidstatfault_stat{'majflt/s'} =~ s/,$//;
 		$pidstatfault_stat{'minflt/s'} =~ s/,$//;
-		print &jqplot_linegraph_array($IDX++, 'postgres-fault', $data_info, '', $pidstatfault_stat{'majflt/s'}, $pidstatfault_stat{'minflt/s'});
+		print &jqplot_linegraph_array($IDX++, 'postgres-fault', $data_info, '', $pidstatfault_stat{'minflt/s'}, $pidstatfault_stat{'majflt/s'});
 		%pidstat_memory_stat = ();
 	}
 }
@@ -10550,24 +10599,23 @@ sub compute_block_report
 
 sub compute_pidstatio_stat
 {
-	for (my $i = 0; $i <= $#_; $i++)
+	foreach my $l (@_)
 	{
-		# hostname;interval;timestamp;USER;PID;kB_rd/s;kB_wr/s;kB_ccwr/s;Command
-		# hostname;interval;timestamp;USER;PID;kB_rd/s;kB_wr/s;kB_ccwr/s;iodelay;Command
-		my @data = split(/;/, $_[$i]);
-		next if ($data[2] !~ /^\d+/);
+		my ($t, $sample, $pos, $end, $rd, $wr, $ccwr, $iodelay) = &split_pidstat_line($l);
 
 		# Skip unwanted lines
-		next if ($BEGIN && ($data[2] < $BEGIN));
-		next if ($END   && ($data[2] > $END));
+		next if ($BEGIN && ($t < $BEGIN));
+		next if ($END   && ($t > $END));
 
-		map { s/,/\./ } @data;
-		$pidstat_io_stat{$data[2]}{'kB_rd/s'} = ($data[5] > 0) ? $data[5] : 0;
-		$pidstat_io_stat{$data[2]}{'kB_wr/s'} = ($data[6] > 0) ? $data[6] : 0;
-		$pidstat_io_stat{$data[2]}{'kB_ccwr/s'} = ($data[7] > 0) ? $data[7] : 0;
-		if ($#data > 8)
-		{
-			$pidstat_io_stat{$data[2]}{'iodelay'} = ($data[8] > 0) ? $data[8] : 0;
+		my $s = &pidstat_sample_stats(\%pidstat_io_stat, 'pio', $t, $sample, $pos, $end) or next;
+		# -1 is reported for the processes whose statistics can not be read
+		$s->{'kB_rd/s'}   += $rd if (($rd||0) > 0);
+		$s->{'kB_wr/s'}   += $wr if (($wr||0) > 0);
+		$s->{'kB_ccwr/s'} += $ccwr if (($ccwr||0) > 0);
+		$s->{$_} //= 0 foreach ('kB_rd/s', 'kB_wr/s', 'kB_ccwr/s');
+		# iodelay is reported since sysstat 10.0.1
+		if (defined $iodelay) {
+			$s->{'iodelay'} += ($iodelay > 0) ? $iodelay : 0;
 		}
 	}
 }
@@ -10579,10 +10627,11 @@ sub compute_pidstatio_report
 	my %pidstatio_stat = ();
 	foreach my $t (sort {$a <=> $b} keys %pidstat_io_stat)
 	{
-		$pidstatio_stat{'kB_rd/s'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'kB_rd/s'} . '],';
-		$pidstatio_stat{'kB_wr/s'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'kB_wr/s'} . '],';
-		$pidstatio_stat{'kB_ccwr/s'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'kB_ccwr/s'} . '],';
-		if (exists $pidstatio_stat{'iodelay'})
+		$pidstatio_stat{'kB_rd/s'} .= '[' . $t . ',' . ($pidstat_io_stat{$t}{'kB_rd/s'}||0) . '],';
+		$pidstatio_stat{'kB_wr/s'} .= '[' . $t . ',' . ($pidstat_io_stat{$t}{'kB_wr/s'}||0) . '],';
+		$pidstatio_stat{'kB_ccwr/s'} .= '[' . $t . ',' . ($pidstat_io_stat{$t}{'kB_ccwr/s'}||0) . '],';
+		# iodelay is only reported by recent versions of pidstat
+		if (exists $pidstat_io_stat{$t}{'iodelay'})
 		{
 			$pidstatio_stat{'iodelay'} .= '[' . $t . ',' . $pidstat_io_stat{$t}{'iodelay'} . '],';
 		}
@@ -11513,10 +11562,6 @@ sub load_pidstatfile_stats
 {
 	my ($file) = @_;
 
-	my $interval = 0;
-	my $hostname = 'unknown';
-	my $has_changed = 0;
-
 	# Load data from file
 	my @content = ();
 	my $offset = 0;
@@ -11526,35 +11571,55 @@ sub load_pidstatfile_stats
 	$curfh->seek($offset,0);
 	while (my $l = <$curfh>)
 	{
+		# A line not terminated is being written, it will be read next time
+		last if ($l !~ /\n$/);
+		my $pos = $offset;
 		$offset += length($l);
 		chomp($l);
 		$l =~ s/\r//;
 		# Prevent non relevant lines from being loaded into memory
 		if ( ($l eq '') || ($l =~ /^\d+:\d+:\d+/) || ($l =~ /\d+[\-\/]\d+[\-\/]\d+/)) {
-			push(@content, $l);
+			push(@content, [ $l, $pos, $offset ]);
 		}
 	}
 	$curfh->close();
 	$global_infos{"$file"} = $offset;
 
-	my $type = '';
-	my @headers = ();
+	# The read can start in the middle of a sample or of a report: their
+	# header was read the previous time and is stored with the cache.
+	my $sample = -1;
+	my $header = '';
+	if (exists $pidstat_samples{'last'})
+	{
+		$sample = $pidstat_samples{'last'}{'sample'};
+		$header = $pidstat_samples{'last'}{'header'};
+		$pidstat_day = $pidstat_samples{'last'}{'day'};
+		$pidstat_month = $pidstat_samples{'last'}{'month'};
+		$pidstat_year = $pidstat_samples{'last'}{'year'};
+	}
+	my ($type, $ncol, @columns) = ('');
+	($type, $ncol, @columns) = &parse_pidstat_header($header) if ($header);
+	my $in_report = ($header) ? 1 : 0;
+
 	my $old_time = 0;
 	my $orig_time = 0;
 
-	for (my $i = 0; $i <= $#content; $i++)
+	foreach my $c (@content)
 	{
+		my ($line, $pos, $end) = @$c;
+
 		# Empty line, maybe the end of a report
-		if ($content[$i] eq '')
+		if ($line eq '')
 		{
 			$type = '';
-			@headers = ();
+			$in_report = 0;
+			$header = '';
 			$old_time = $orig_time if ($FROM_SA_FILE);
 			next;
 		}
-		# look for kernel header to find the date
-		if ( ($content[$i] !~ /^\d+:\d+:\d+/)
-			&& ($content[$i] =~ /\s+(\d+)([\-\/])(\d+)[\-\/](\d+)\s+/) )
+		# look for kernel header to find the date, it starts a new sample
+		if ( ($line !~ /^\d+:\d+:\d+/)
+			&& ($line =~ /\s+(\d+)([\-\/])(\d+)[\-\/](\d+)\s+/) )
 		{
 			if ($2 eq '/') {
 				$pidstat_month = $1;
@@ -11578,50 +11643,48 @@ sub load_pidstatfile_stats
 			my $tz = ((0-$TIMEZONE)*3600);
 			$orig_time = &timegm_nocheck(0, 0, 0, $pidstat_day, $pidstat_month - 1, $pidstat_year - 1900) + $tz;
 
+			$sample = $pos;
 			$type = '';
-			@headers = ();
+			$in_report = 0;
+			$header = '';
 			next;
 		}
 		# Remove average/summary header if any
-		if ( ($content[$i] !~ /^\d+:\d+:\d+/) && ($content[$i] =~ /^\D+:\s+/) ) {
+		if ( ($line !~ /^\d+:\d+:\d+/) && ($line =~ /^\D+:\s+/) ) {
 			$type = '';
-			@headers = ();
+			$in_report = 0;
+			$header = '';
 			next;
 		}
 
-		if ($#headers == -1)
+		# First line of a report: the header
+		if (!$in_report)
 		{
-			push(@headers, split(m#\s+#, $content[$i]));
-			shift(@headers);
-			# Try to find the kind of report
-			$type = &find_report_type($content[$i]);
-			if (!$type) {
-				@headers = ();
-			} else {
-				#push(@{$fulldata{$type}}, "hostname;interval;timestamp;" . join(";", @headers));
-			}
+			$in_report = 1;
+			$header = $line;
+			($type, $ncol, @columns) = &parse_pidstat_header($line);
 			next;
 		}
+		next if (!$type);
 
 		# Remove AM|PM timestamp information
 		my $am_pm = '';
-		if ($content[$i] =~ s/^(\d+:\d+:\d+)\s(AM|PM)/$1/) {
+		if ($line =~ s/^(\d+:\d+:\d+)\s(AM|PM)/$1/) {
 			$am_pm = $2;
-			shift(@headers) if ($headers[0] =~ /^(AM|PM)$/);
 		}
 
-		# Get all values reported
-		my @values = ();
-		push(@values, split(m#\s+#, $content[$i]));
+		# Get all values reported, the command is the last column and may
+		# contain spaces.
+		my @values = split(m#\s+#, $line, $ncol+1);
 		# Extract the timestamp of the line
 		my $timestamp = shift(@values);
 
-		if ($#values != $#headers)
+		if ($#values != $ncol - 1)
 		{
-			warn "ERROR: Parsing of pidstat output reports different values than headers allow. ($#values != $#headers)\n";
+			warn "ERROR: Parsing of pidstat output reports different values than headers allow. ($#values != " . ($ncol - 1) . ")\n";
 			warn "INFO: pidstat output file was $file\n";
-			warn "INFO: Line was: $content[$i]\n";
-			die "Header: " . join(';', @headers) . " | Values: " . join(';', @values) . "\n";
+			warn "INFO: Line was: $line\n";
+			die "Header: $header\n";
 		}
 		if ($timestamp =~ /(\d+:\d+:\d+)/)
 		{
@@ -11631,14 +11694,24 @@ sub load_pidstatfile_stats
 		if (!$timestamp)
 		{
 			print STDERR "ERROR: unkown time information from pidstat file.\n";
-			print STDERR "HEADER: $timestamp ", join(" ", @headers), "\n";
-			die "DATA: $content[$i]\n";
+			print STDERR "HEADER: $header\n";
+			die "DATA: $line\n";
 		}
 
-		# Change decimal character to perl
-		map { s/,/\./; } @values;
-		push(@{$fullpidstatdata{$type}}, "$hostname;$interval;$timestamp;" . join(";", @values));
+		# Keep the columns used, change decimal character to perl
+		my @kept = map { ($_ >= 0) ? $values[$_] : '' } @columns;
+		map { s/,/\./; } @kept;
+		push(@{$fullpidstatdata{$type}}, join(';', $timestamp, $sample, $pos, $end, @kept));
 	}
+
+	# Where the next read will start
+	$pidstat_samples{'last'} = {
+		'sample' => $sample,
+		'header' => $header,
+		'day' => $pidstat_day,
+		'month' => $pidstat_month,
+		'year' => $pidstat_year,
+	};
 }
 
 sub load_fsuse_stats
