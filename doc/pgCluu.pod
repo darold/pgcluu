@@ -546,6 +546,7 @@ usage: pgcluu [options] [-i sar_file | -I sadc_file] [input_dir]
 		   files are stored.
 
 options:
+
   -b, --begin  datetime      start date/time for the data to be parsed (time of current timezone).
   -C, --cache                generate cache files only (.bin), no html output.
   -d, --db-only dbname       only report for the whole cluster and the given

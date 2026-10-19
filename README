@@ -425,7 +425,6 @@ COLLECTING STATISTICS
             |-- pg_ident.conf
             |-- pg_nondefault_settings.csv
             |-- pg_prepared_xact.csv
-            |-- pg_replication_slots.csv
             |-- pg_settings.csv
             |-- pg_stat_aio.csv
             |-- pg_stat_archiver.csv
@@ -538,45 +537,59 @@ GENERATING REPORTS
             input_dir: directory where pgcluu_collectd or pgstats and sar data
                        files are stored.
 
-    options: -b, --begin datetime start date/time for the data to be parsed
-    (time of current timezone). -C, --cache generate cache files only
-    (.bin), no html output. -d, --db-only dbname only report for the whole
-    cluster and the given database name. You can use it multiple time or
-    give a comma separated list of database name. -D, --device-only dev only
-    report I/O stats for a particular device You can use it multiple time or
-    give a comma separated list of device name, ex: sda,sdc. -e, --end
-    datetime end date/time for the data to be parsed (time of current
-    timezone). -i, --sar-file=FILE path to the sar text data file to read to
-    generate system reports. Default to input_dir/sar_stats.dat. -I,
-    --sadc-file=FILE sadc binary data file to read to generate system
-    reports. Default to input_dir/sadc_stats.dat. -n, --top-number Top
-    number of tables or indexes I/O stats to show. Default is set to top 10.
-    Set it to 0 to show all. -N, --network-only iface only report stats for
-    a particular network interface. You can use it multiple times or give a
-    comma separated list of network interfaces, ex: eth0,eth1. -o,
-    --output=DIR output directory -r, --reverse-date By default pgcluu look
-    at mm/dd/yy format in sar file. When enabled pgcluu will look at
-    dd/mm/yy format. -s, --sadf=BIN path to the sadf sysstat command used to
-    read the sadc binary data file. Default: /usr/bin/sadf. -S,
-    --disable-sar disable collect of system statistics with sar. -t,
-    --with-table table Only report for the whole tables and the given table
-    name. You can use it multiple time or give a comma separated list of
-    database name. -T, --no-table Do not report statistics related to
-    tables. -v, --verbose Print out debug informations. -V, --version Show
-    pgcluu version and exit. -x, --external-menu Save menu in menu.html and
-    load it into each report using w3-include-html attribut from w3.js. This
-    will only work if acces to HTML reports is through a Web server, not
-    using the file:// protocol. -z, --timezone +/-XX Set the number of
-    hour(s) from GMT of the timezone, Eg: -z +02 Usually autodetected. Use
-    this to adjust date/time from the sar output, pgcluu use GMT time to
-    draw charts. -Z, --stats-timezone +/-XX Set the number of hour(s) from
-    GMT of the timezone. Eg: -Z +02 Usually autodetected. Use this to adjust
-    date/time from the cluster and system stats output, pgcluu use GMT time.
-    --from-sa-file instruct pgcluu that file specified by the -i option uses
-    the standard system activity daily data file. --charset used to set the
-    HTML charset to be used. Default: utf-8. --retention NDAYS number of
-    rolling days to keep in report directory. Default is to store
-    indefinitely. --help print usage
+    options:
+
+      -b, --begin  datetime      start date/time for the data to be parsed (time of current timezone).
+      -C, --cache                generate cache files only (.bin), no html output.
+      -d, --db-only dbname       only report for the whole cluster and the given
+                                 database name. You can use it multiple time or
+                                 give a comma separated list of database name.
+      -D, --device-only dev      only report I/O stats for a particular device
+                                 You can use it multiple time or give a comma
+                                 separated list of device name, ex: sda,sdc.
+      -e, --end    datetime      end date/time for the data to be parsed (time of current timezone).
+      -i, --sar-file=FILE        path to the sar text data file to read to generate
+                                 system reports. Default to input_dir/sar_stats.dat.
+      -I, --sadc-file=FILE       sadc binary data file to read to generate system
+                                 reports. Default to input_dir/sadc_stats.dat.
+      -n, --top-number           Top number of tables or indexes I/O stats to show.
+                                 Default is set to top 10. Set it to 0 to show all.
+      -N, --network-only iface   only report stats for a particular network interface.
+                                 You can use it multiple times or give a comma separated
+                                 list of network interfaces, ex: eth0,eth1.
+      -o, --output=DIR           output directory
+      -r, --reverse-date         By default pgcluu look at mm/dd/yy format in sar file.
+                                 When enabled pgcluu will look at dd/mm/yy format.
+      -s, --sadf=BIN             path to the sadf sysstat command used to read the
+                                 sadc binary data file. Default: /usr/bin/sadf.
+      -S, --disable-sar          disable collect of system statistics with sar.
+      -t, --with-table table     Only report for the whole tables and the given
+                                 table name. You can use it multiple time or
+                                 give a comma separated list of database name.
+      -T, --no-table             Do not report statistics related to tables.
+      -v, --verbose              Print out debug informations.
+      -V, --version              Show pgcluu version and exit.
+      -x, --external-menu        Save menu in menu.html and load it into each report
+                                 using w3-include-html attribut from w3.js. This will
+                                 only work if acces to HTML reports is through a Web
+                                 server, not using the file:// protocol.
+      -z, --timezone +/-XX       Set the number of hour(s) from GMT of the timezone,
+                                 Eg: -z +02
+                                 Usually autodetected.
+                                 Use this to adjust date/time from the sar output,
+                                 pgcluu use GMT time to draw charts.
+      -Z, --stats-timezone +/-XX Set the number of hour(s) from GMT of the timezone.
+                                 Eg: -Z +02
+                                 Usually autodetected.
+                                 Use this to adjust date/time from the cluster and
+                                 system stats output, pgcluu use GMT time.
+      --from-sa-file             instruct pgcluu that file specified by the -i option
+                                 uses the standard system activity daily data file.
+      --charset                  used to set the HTML charset to be used.
+                                 Default: utf-8.
+      --retention NDAYS          number of rolling days to keep in report directory.
+                                 Default is to store indefinitely.
+      --help                     print usage
 
     For example, you can generate all HTML reports from data files stored
     into /tmp/stat_db1/ with the following commands:
