@@ -3179,28 +3179,25 @@ sub pg_stat_database_conflicts
 		next if (!&normalize_line(\@data));
 		# timestamp | datid | datname | confl_tablespace | confl_lock | confl_snapshot | confl_bufferpin | confl_deadlock
 
-		# Get database size statistics
-		push(@{$start_vals{$data[2]}}, @data) if ($#{$start_vals{$data[2]}} < 0);
+		# The first line read for a database has no previous value, its
+		# delta is unknown: it must not replace a value loaded from cache.
+		my $first = ($#{$start_vals{$data[2]}} < 0) ? 1 : 0;
+		push(@{$start_vals{$data[2]}}, @data) if ($first);
 
 		(($data[3] - $start_vals{$data[2]}[3]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[3] - $start_vals{$data[2]}[3]);
-		$all_stat_database_conflicts{$data[2]}{$data[0]}{tablespace} = $tmp_val;
-		$all_stat_database_conflicts{'all'}{$data[0]}{tablespace} = $tmp_val;
+		&set_conflict_delta($data[2], $data[0], 'tablespace', $tmp_val, $first);
 
 		(($data[4] - $start_vals{$data[2]}[4]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[4] - $start_vals{$data[2]}[4]);
-		$all_stat_database_conflicts{$data[2]}{$data[0]}{lock} = $tmp_val;
-		$all_stat_database_conflicts{'all'}{$data[0]}{lock} = $tmp_val;
+		&set_conflict_delta($data[2], $data[0], 'lock', $tmp_val, $first);
 
 		(($data[5] - $start_vals{$data[2]}[5]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[5] - $start_vals{$data[2]}[5]);
-		$all_stat_database_conflicts{$data[2]}{$data[0]}{snapshot} += $tmp_val;
-		$all_stat_database_conflicts{'all'}{$data[0]}{snapshot} = $tmp_val;
+		&set_conflict_delta($data[2], $data[0], 'snapshot', $tmp_val, $first);
 
 		(($data[6] - $start_vals{$data[2]}[6]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[6] - $start_vals{$data[2]}[6]);
-		$all_stat_database_conflicts{$data[2]}{$data[0]}{bufferpin} = $tmp_val;
-		$all_stat_database_conflicts{'all'}{$data[0]}{bufferpin} = $tmp_val;
+		&set_conflict_delta($data[2], $data[0], 'bufferpin', $tmp_val, $first);
 
 		(($data[7] - $start_vals{$data[2]}[7]) < 0) ? $tmp_val = 0 : $tmp_val = ($data[7] - $start_vals{$data[2]}[7]);
-		$all_stat_database_conflicts{$data[2]}{$data[0]}{deadlock} = $tmp_val;
-		$all_stat_database_conflicts{'all'}{$data[0]}{deadlock} = $tmp_val;
+		&set_conflict_delta($data[2], $data[0], 'deadlock', $tmp_val, $first);
 
 		@{$start_vals{$data[2]}} = ();
 		push(@{$start_vals{$data[2]}}, @data);
@@ -3209,6 +3206,24 @@ sub pg_stat_database_conflicts
 	$curfh->close();
 
 	return $offset;
+}
+
+####
+# Store the delta of a conflict counter for a database at a timestamp. The
+# value is replaced, not added, so that a line read twice gives the same
+# result. The first line read for a database has a delta of 0
+# because there is no previous value, it must not replace the value of
+# the same timestamp loaded from the cache.
+####
+sub set_conflict_delta
+{
+	my ($db, $t, $field, $val, $first) = @_;
+
+	if ($first) {
+		$all_stat_database_conflicts{$db}{$t}{$field} //= $val;
+	} else {
+		$all_stat_database_conflicts{$db}{$t}{$field} = $val;
+	}
 }
 
 # Compute graphs of database conflict statistics
@@ -3221,6 +3236,7 @@ sub pg_stat_database_conflicts_report
 	my $total_val = 0;
 	my $tz = ($STATS_TIMEZONE*3600*1000);
 	my %conflict_type = ();
+	&set_cluster_total_by_db(\%all_stat_database_conflicts, 'tablespace', 'lock', 'snapshot', 'bufferpin', 'deadlock');
 	foreach my $db (sort keys %all_stat_database_conflicts) {
 		next if ($DATABASE && ($DATABASE ne 'all') && ($db ne $DATABASE));
 		next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
@@ -3341,7 +3357,6 @@ sub pg_tablespace_size
 		if ( ($ACTION ne 'home') && ($ACTION ne 'database-info') ) {
 			$all_tablespace_size{$data[0]}{$data[1]}{size} = $data[2];
 			$all_tablespace_size{$data[0]}{$data[1]}{location} = $data[3];
-			$all_tablespace_size{$data[0]}{'all'}{size} += $data[2];
 		} else {
 			$OVERALL_STATS{'tablespace'}{$data[1]}{'size'} = $data[2];
 			$OVERALL_STATS{'tablespace'}{$data[1]}{'location'} = $data[3];
@@ -3349,7 +3364,7 @@ sub pg_tablespace_size
 	}
 	$curfh->close();
 
-	push(@global_tbspnames, 'all') if ($#global_tbspnames > 0);
+	push(@global_tbspnames, 'all') if (($#global_tbspnames > 0) && !grep(/^all$/, @global_tbspnames));
 
 	return $offset;
 }
@@ -3364,6 +3379,7 @@ sub pg_tablespace_size_report
 	my $print_after = '';
 	my %tablespace_stat = ();
 	my $tz = ($STATS_TIMEZONE*3600*1000);
+	&set_cluster_total(\%all_tablespace_size, 'size');
 	foreach my $time (sort {$a <=> $b} keys %all_tablespace_size) {
 		foreach my $tbsp (@global_tbspnames) {
 			$tablespace_stat{$tbsp}{size} .= '[' . ($time - $tz) . ',' . ($all_tablespace_size{$time}{$tbsp}{size}||0) . '],';
@@ -7319,8 +7335,6 @@ sub pg_database_buffercache
 		# date_trunc | datname | buffers | buffered | buffers % | database %
 		$all_database_buffercache{$data[0]}{$data[1]}{shared_buffers_used} = ($data[4]||0);
 		$all_database_buffercache{$data[0]}{$data[1]}{database_loaded} = ($data[5]||0);
-		$all_database_buffercache{$data[0]}{'all'}{shared_buffers_used} += ($data[4]||0);
-		$all_database_buffercache{$data[0]}{'all'}{database_loaded} += ($data[5]||0);
 	}
 	$curfh->close();
 
@@ -7342,6 +7356,7 @@ sub pg_database_buffercache_report
 
 	my %shared_stat = ();
 	my $tz = ($STATS_TIMEZONE*3600*1000);
+	&set_cluster_total(\%all_database_buffercache, 'shared_buffers_used', 'database_loaded');
 	foreach my $t (sort keys %all_database_buffercache) {
 		foreach my $db (@global_databases) {
 			next if (($db ne 'all') && ($#INCLUDE_DB >= 0) && (!grep($db =~ /^$_$/, @INCLUDE_DB)));
@@ -7711,7 +7726,15 @@ sub pg_stat_statements_report
 ####
 # Set the cluster wide total ('all') of a statistic for each timestamp as
 # the sum of the per database values. It must be computed when the report
-# is built, not when the csv lines are read.
+# is built, not when the csv lines are read: a line read twice (csv file
+# read again over the cache, overlapping runs of pgcluu -C) or two lines
+# with the same timestamp only overwrite the per database value but were
+# summed twice in the total. Any 'all' value coming from an old cache file
+# is replaced.
+#
+# The hash is indexed by timestamp then by database name (or tablespace).
+# With a list of fields, the per database values are hashes of these fields;
+# a field written 'name:max' gets the highest value instead of the sum.
 ####
 sub set_cluster_total
 {
@@ -7726,18 +7749,54 @@ sub set_cluster_total
 			if ($#fields < 0) {
 				$total{''} += ($stats->{$t}{$db} || 0);
 			} else {
-				foreach my $f (@fields) {
-					$total{$f} += ($stats->{$t}{$db}{$f} || 0);
-				}
+				&add_to_total(\%total, $stats->{$t}{$db}, @fields);
 			}
 		}
 		if ($#fields < 0) {
 			$stats->{$t}{'all'} = $total{''} || 0;
 		} else {
-			$stats->{$t}{'all'} = {};
-			foreach my $f (@fields) {
-				$stats->{$t}{'all'}{$f} = $total{$f} || 0;
-			}
+			$stats->{$t}{'all'} = \%total;
+		}
+	}
+}
+
+####
+# Same as set_cluster_total() for a hash indexed by database name then by
+# timestamp, the per database values are hashes of the given fields.
+####
+sub set_cluster_total_by_db
+{
+	my ($stats, @fields) = @_;
+
+	my %total = ();
+	foreach my $db (keys %{$stats})
+	{
+		next if ($db eq 'all');
+		foreach my $t (keys %{$stats->{$db}}) {
+			$total{$t} //= {};
+			&add_to_total($total{$t}, $stats->{$db}{$t}, @fields);
+		}
+	}
+	if (scalar keys %total) {
+		$stats->{'all'} = \%total;
+	} else {
+		delete $stats->{'all'};
+	}
+}
+
+# Add the fields of a per database value to a total
+sub add_to_total
+{
+	my ($total, $val, @fields) = @_;
+
+	foreach my $field (@fields)
+	{
+		my ($f, $agg) = split(/:/, $field);
+		$total->{$f} //= 0;
+		if (($agg || '') eq 'max') {
+			$total->{$f} = $val->{$f} if (($val->{$f} || 0) > $total->{$f});
+		} else {
+			$total->{$f} += ($val->{$f} || 0);
 		}
 	}
 }

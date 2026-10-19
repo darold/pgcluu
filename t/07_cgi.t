@@ -27,8 +27,8 @@ my $root = root_dir();
 # cache files are built by pgcluu, the csv files are parsed by the CGI own
 # code which gives different values for the cluster wide statistics of
 # pg_stat_database (backends, cache ratio, ...) and for the transactions of
-# a database. In cache mode the tablespace sizes are duplicated and the
-# archiver statistics are missing from the home page.
+# a database. In cache mode the archiver statistics are missing from the
+# home page.
 my %KNOWN_CSV_DIFF = map { $_ => 1 } qw(
 	db=all&action=cluster-backends
 	db=all&action=cluster-cache_ratio
@@ -38,7 +38,6 @@ my %KNOWN_CSV_DIFF = map { $_ => 1 } qw(
 	db=all&action=cluster-temporary_bytes
 	db=all&action=cluster-temporary_files
 	db=all&action=home
-	db=all&action=tablespace-size
 	db=postgres&action=database-transactions
 );
 # Only seen with the PG18 fixture. sysinfo: in csv mode the CGI ignores the

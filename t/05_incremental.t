@@ -6,7 +6,7 @@
 #
 # All pages must be identical, except the known differences listed in
 # %KNOWN_DIFF (TODO tests): one point is lost at the boundary for the
-# statistics computed as deltas and the tablespace sizes are duplicated.
+# statistics computed as deltas.
 # The pg_stat_io reports keep the last raw values in the cache and have no
 # such difference.
 #------------------------------------------------------------------------------
@@ -29,7 +29,7 @@ my %KNOWN_DIFF = map { $_ => 1 } qw(
 	cluster-database-read_ratio.html cluster-database-read_write_query.html
 	cluster-database-temporary_bytes.html cluster-database-temporary_files.html
 	cluster-database-transactions.html cluster-database-write_ratio.html
-	cluster-tablespace-size.html database-conflict-postgres.html database-conn-postgres.html
+	database-conflict-postgres.html database-conn-postgres.html
 	database-io-postgres.html database-lock-postgres.html database-postgres.html
 	database-tmpf-postgres.html database-tx-postgres.html
 );

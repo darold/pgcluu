@@ -1,15 +1,22 @@
 #!/usr/bin/perl
 #------------------------------------------------------------------------------
-# Cluster wide totals of the database sizes and of the connections (issue
-# #156): the total must always be the sum of the per database values, even
-# when the same csv line is read twice or when two lines have the same
-# timestamp. Before the fix the per database value was overwritten but the
-# total was summed twice, the cluster graphs showed twice the real value.
+# Cluster wide totals (issue #156): the total of a report must always be the
+# sum of the per database (or per tablespace) values, even when the same csv
+# line is read twice or when two lines have the same timestamp. Before the
+# fix the per database value was overwritten but the total was summed twice,
+# the cluster graphs showed twice the real value. The conflicts, stored as
+# deltas, were also summed twice for each database.
 #
-# Data: two databases, db1 (size 1000, 10 connections: 2 active, 1 idle in
-# transaction) and db2 (size 2000, 20 connections: 4 active, 1 idle in
-# transaction) at each snapshot. Expected cluster values: size 3000,
-# active 6, idle 22, idle in transaction 2, waiting 0.
+# Data, at each snapshot:
+#   database sizes        db1 1000, db2 2000                  -> total 3000
+#   connections           db1 10 (2 active, 1 idle in xact),
+#                         db2 20 (4 active, 1 idle in xact)   -> active 6,
+#                                                                idle 22
+#   tablespace sizes      pg_default 1000, pg_global 2000     -> total 3000
+#   prepared transactions db1 1 (oldest 30), db2 2 (oldest 50)-> 3, oldest 50
+#   buffercache           db1 10%, db2 20% of shared buffers  -> 30%
+#   conflicts             lock counter of db1 +1, db2 +2      -> deltas 1, 2
+#                                                                and 3
 #
 # Cases:
 #   - static report on data with duplicated timestamps (DST change, the
@@ -30,38 +37,52 @@ use PgcluuTest;
 
 my $root = root_dir();
 
-my @DBS = (
-	# oid, name, size, total, active, waiting, idle_in_xact
-	[ 16384, 'db1', 1000, 10, 2, 0, 1 ],
-	[ 16385, 'db2', 2000, 20, 4, 0, 1 ],
-);
-my %EXPECTED = (
-	'cluster-database-size.html'        => [ 1000, 2000, 3000 ],  # db1, db2, all
-	'cluster-database-connections.html' => [ 0, 2, 6, 22 ],       # waiting, idle_in_xact, active, idle
-);
-my %CGI_ACTION = (
-	'cluster-database-size.html'        => 'cluster-size',
-	'cluster-database-connections.html' => 'cluster-connections',
+# Lines written at each snapshot, $n is the number of the snapshot
+my %CSV = (
+	'pg_database_size.csv' => sub { my ($t, $n) = @_; (
+		"$t;16384;db1;1000", "$t;16385;db2;2000") },
+	'pg_stat_connections.csv' => sub { my ($t, $n) = @_; (
+		"$t;10;2;0;1;db1", "$t;20;4;0;1;db2") },
+	'pg_tablespace_size.csv' => sub { my ($t, $n) = @_; (
+		"$t;pg_default;1000;/data/base", "$t;pg_global;2000;/data/global") },
+	'pg_prepared_xact.csv' => sub { my ($t, $n) = @_; (
+		"$t;db1;1;30", "$t;db2;2;50") },
+	'pg_database_buffercache.csv' => sub { my ($t, $n) = @_; (
+		"$t;db1;100;800 kB;10;5", "$t;db2;200;1600 kB;20;7") },
+	'pg_stat_database_conflicts.csv' => sub { my ($t, $n) = @_; (
+		"$t;16384;db1;0;" . ($n * 1) . ";0;0;0;0",
+		"$t;16385;db2;0;" . ($n * 2) . ";0;0;0;0") },
 );
 
-# Write one snapshot of both files per timestamp
+# Static report page => [ CGI query (undef: not in the CGI), distinct values ]
+# The first point of the conflicts has no previous value, its delta is 0.
+my %EXPECTED = (
+	'cluster-database-size.html'        => [ 'db=all&action=cluster-size', [ 1000, 2000, 3000 ] ],
+	'cluster-database-connections.html' => [ 'db=all&action=cluster-connections', [ 0, 2, 6, 22 ] ],
+	'cluster-tablespace-size.html'      => [ 'db=all&action=tablespace-size', [ 1000, 2000, 3000 ] ],
+	'cluster-database-prepared.html'    => [ undef, [ 3, 50 ] ],
+	'cluster-buffersused.html'          => [ 'db=all&action=cluster-buffersused', [ 10, 20, 30 ] ],
+	# the CGI page shows a graph per database too, the total is the first one
+	'cluster-database-conflicts.html'   => [ 'db=all&action=cluster-conflicts', [ 0, 3 ], 'first graph' ],
+	'database-conflict-db1.html'        => [ 'db=db1&action=database-conflicts', [ 0, 1 ] ],
+	'database-conflict-db2.html'        => [ 'db=db2&action=database-conflicts', [ 0, 2 ] ],
+);
+my @CGI_PAGES = grep { defined $EXPECTED{$_}[0] } sort keys %EXPECTED;
+
+# Write the snapshots of all the csv files, $n is the number of the first one
 sub write_csv
 {
-	my ($dir, $append, @times) = @_;
+	my ($dir, $n, @times) = @_;
 
-	my $mode = $append ? '>>' : '>';
-	open(my $sz, $mode, "$dir/pg_database_size.csv") or die;
-	open(my $cn, $mode, "$dir/pg_stat_connections.csv") or die;
-	foreach my $t (@times)
+	foreach my $f (sort keys %CSV)
 	{
-		foreach my $d (@DBS)
-		{
-			print $sz "$t;$d->[0];$d->[1];$d->[2]\n";
-			print $cn "$t;$d->[3];$d->[4];$d->[5];$d->[6];$d->[1]\n";
+		open(my $fh, '>>', "$dir/$f") or die "FATAL: can not write $dir/$f, $!\n";
+		my $i = $n;
+		foreach my $t (@times) {
+			print $fh "$_\n" foreach ($CSV{$f}->($t, $i++));
 		}
+		close($fh);
 	}
-	close($sz);
-	close($cn);
 }
 
 # Distinct values of the data points of a page
@@ -76,7 +97,7 @@ sub check_values
 {
 	my ($html, $page, $label) = @_;
 	my @got = graph_values($html);
-	is_deeply(\@got, $EXPECTED{$page}, "$label: $page shows the right cluster total")
+	is_deeply(\@got, $EXPECTED{$page}[1], "$label: $page shows the right values")
 		or diag("values found: @got");
 }
 
@@ -120,11 +141,13 @@ sub check_cgi
 	my ($input_dir, $label) = @_;
 
 	my $cgi = cgi_install($input_dir);
-	foreach my $page (sort keys %EXPECTED)
+	foreach my $page (@CGI_PAGES)
 	{
-		my ($rc, $out, $err) = cgi_run($cgi, "db=all&action=$CGI_ACTION{$page}");
-		is($rc, 0, "$label: $CGI_ACTION{$page} runs") or diag($err);
-		check_values($out, $page, $label);
+		my $q = $EXPECTED{$page}[0];
+		my ($rc, $out, $err) = cgi_run($cgi, $q);
+		ok($rc == 0 && $err eq '', "$label: $q runs without error") or diag($err);
+		$out = join("\n", $out =~ /^\s*var graph_1_d\d+ = (.*)$/mg) if ($EXPECTED{$page}[2]);
+		check_values($out, $page, "$label $q");
 	}
 }
 
@@ -162,14 +185,14 @@ sub check_cgi
 	check_report($base, 'overlapping cache runs', $PgcluuTest::FIXTURE_DAY);
 
 	SKIP: {
-		skip('CGI.pm is not installed', 2 * keys %EXPECTED) if (!have_cgi_pm());
+		skip('CGI.pm is not installed', 2 * @CGI_PAGES) if (!have_cgi_pm());
 		check_cgi($base, 'overlapping cache runs (cgi)');
 	}
 }
 
 #### CGI with a trailing slash in INPUT_DIR
 SKIP: {
-	skip('CGI.pm is not installed', 2 * keys %EXPECTED) if (!have_cgi_pm());
+	skip('CGI.pm is not installed', 2 * @CGI_PAGES) if (!have_cgi_pm());
 
 	my $base = tmp_dir();
 	my $data = "$base/$PgcluuTest::FIXTURE_DAY";
