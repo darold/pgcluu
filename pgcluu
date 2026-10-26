@@ -5944,24 +5944,27 @@ sub pg_stat_user_functions
 	$curfh->close();
 
 	# Read end file and set the final value
-	$curfh = open_filehdl("$in_dir/end-$file");
-	while (my $l = <$curfh>) {
-		chomp($l);
-		next if (!$l);
-		my @data = split(/;/, $l);
-		next if (!&normalize_line(\@data));
+	if (!$sysinfo{CONFIGURATION}{'capture'})
+	{
+		$curfh = open_filehdl("$in_dir/end-$file");
+		while (my $l = <$curfh>) {
+			chomp($l);
+			next if (!$l);
+			my @data = split(/;/, $l);
+			next if (!&normalize_line(\@data));
 
-		# timestamp | datname | funcid | schemaname | funcname | calls | total_time | self_time
-		$data[4] = "$data[3].$data[4]";
+			# timestamp | datname | funcid | schemaname | funcname | calls | total_time | self_time
+			$data[4] = "$data[3].$data[4]";
 
-		$all_stat_user_functions{$data[1]}{$data[4]}{calls}      = $data[5] - ($all_stat_user_functions{$data[1]}{$data[4]}{calls} || 0);
-		$all_stat_user_functions{$data[1]}{$data[4]}{calls}      = $data[5] if ($all_stat_user_functions{$data[1]}{$data[4]}{calls} < 0);
-		$all_stat_user_functions{$data[1]}{$data[4]}{total_time} = $data[6] - ($all_stat_user_functions{$data[1]}{$data[4]}{total_time} || 0);
-		$all_stat_user_functions{$data[1]}{$data[4]}{total_time} = $data[6] if ($all_stat_user_functions{$data[1]}{$data[4]}{total_time} < 0);
-		$all_stat_user_functions{$data[1]}{$data[4]}{self_time}  = $data[7] - ($all_stat_user_functions{$data[1]}{$data[4]}{self_time} || 0);
-		$all_stat_user_functions{$data[1]}{$data[4]}{self_time}  = $data[7] if ($all_stat_user_functions{$data[1]}{$data[4]}{self_time} < 0);
+			$all_stat_user_functions{$data[1]}{$data[4]}{calls}      = $data[5] - ($all_stat_user_functions{$data[1]}{$data[4]}{calls} || 0);
+			$all_stat_user_functions{$data[1]}{$data[4]}{calls}      = $data[5] if ($all_stat_user_functions{$data[1]}{$data[4]}{calls} < 0);
+			$all_stat_user_functions{$data[1]}{$data[4]}{total_time} = $data[6] - ($all_stat_user_functions{$data[1]}{$data[4]}{total_time} || 0);
+			$all_stat_user_functions{$data[1]}{$data[4]}{total_time} = $data[6] if ($all_stat_user_functions{$data[1]}{$data[4]}{total_time} < 0);
+			$all_stat_user_functions{$data[1]}{$data[4]}{self_time}  = $data[7] - ($all_stat_user_functions{$data[1]}{$data[4]}{self_time} || 0);
+			$all_stat_user_functions{$data[1]}{$data[4]}{self_time}  = $data[7] if ($all_stat_user_functions{$data[1]}{$data[4]}{self_time} < 0);
+		}
+		$curfh->close();
 	}
-	$curfh->close();
 }
 
 sub pg_stat_all_functions
