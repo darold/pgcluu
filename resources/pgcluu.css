@@ -164,6 +164,28 @@ ul#slides li div div {
     font-size: 0.8em;
 }
 
+table.jqplot-table-legend-scroll {
+    display: block;
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 10;
+}
+
+/* series values of the tooltip: 10 rows of fixed height, then scroll */
+.jqplot-tooltip-scroll {
+    max-height: 15em;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 4px;
+}
+
+.jqplot-tooltip-scroll > div {
+    height: 1.5em;
+    line-height: 1.5em;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
 .jqplot-highlighter-tooltip {
     border: 0px;
     font-size: 1.0em;

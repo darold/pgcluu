@@ -1,6 +1,132 @@
 
 /* <![CDATA[ */
 
+/*
+ * Charts legends and tooltips with more than legend_max_rows entries are
+ * limited in height and made scrollable.
+ */
+var legend_max_rows = 10;
+
+/*
+ * When pack() is called the legend table is already attached to the DOM,
+ * and it is called before jqPlot measures the legend to position it and to
+ * compute the pie radius, so the reduced height and the scrollbar width are
+ * taken into account.
+ */
+if ($.jqplot && $.jqplot.TableLegendRenderer) {
+	var jqplot_legend_pack = $.jqplot.TableLegendRenderer.prototype.pack;
+	$.jqplot.TableLegendRenderer.prototype.pack = function(offsets) {
+		if (this._elem) {
+			var rows = this._elem.find('tr');
+			if (rows.length > legend_max_rows) {
+				var h = rows.eq(legend_max_rows).offset().top - this._elem.offset().top;
+				this._elem.addClass('jqplot-table-legend-scroll').css('max-height', h + 'px');
+			}
+		}
+		return jqplot_legend_pack.call(this, offsets);
+	};
+}
+
+/*
+ * Return the HTML of the per series values shown in the tooltip, in a
+ * scrollable area when there are more than legend_max_rows series. The
+ * highlighter rebuilds the tooltip for each point, restore the scroll
+ * position used for the previous point once the new content is inserted.
+ */
+function tooltip_series_html (lines, plot) {
+	if (lines.length <= legend_max_rows) {
+		return '<br>' + lines.join('<br>');
+	}
+	var restore = function() {
+		var area = plot.target.find('.jqplot-highlighter-tooltip .jqplot-tooltip-scroll')[0];
+		if (area && plot._tooltip_scroll) {
+			area.scrollTop = plot._tooltip_scroll;
+		}
+	};
+	if (window.Promise) {
+		Promise.resolve().then(restore);
+	} else {
+		setTimeout(restore, 0);
+	}
+	return '<div class="jqplot-tooltip-scroll"><div>' + lines.join('</div><div>') + '</div></div>';
+}
+
+/*
+ * The tooltip follows the mouse so it can not be scrolled with the mouse:
+ * when it is shown, the mouse wheel over the graph scrolls its series list.
+ * When the top or the end of the list is reached the page scrolls as usual.
+ */
+function add_tooltip_wheel (plot) {
+	var target = plot.target[0];
+	if (!target || !target.addEventListener) {
+		return;
+	}
+	// remember the scroll position, also when the tooltip is scrolled directly
+	target.addEventListener('scroll', function(ev) {
+		if (ev.target.className == 'jqplot-tooltip-scroll') {
+			plot._tooltip_scroll = ev.target.scrollTop;
+		}
+	}, true);
+	target.addEventListener('wheel', function(ev) {
+		var hl = plot.plugins.highlighter;
+		if (!hl || !hl._tooltipElem || !hl._tooltipElem.is(':visible')) {
+			return;
+		}
+		var area = hl._tooltipElem.find('.jqplot-tooltip-scroll')[0];
+		if (!area || area.contains(ev.target)) {
+			return;
+		}
+		var max = area.scrollHeight - area.clientHeight;
+		var delta = ev.deltaY;
+		if (ev.deltaMode == 1) {
+			delta *= 16;
+		} else if (ev.deltaMode == 2) {
+			delta *= area.clientHeight;
+		}
+		if (max <= 0 || (delta < 0 && area.scrollTop <= 0) || (delta > 0 && area.scrollTop >= max)) {
+			return;
+		}
+		area.scrollTop = Math.max(0, Math.min(max, area.scrollTop + delta));
+		plot._tooltip_scroll = area.scrollTop;
+		ev.preventDefault();
+	}, { passive: false });
+}
+
+/*
+ * jqplotToImageStr() draws every legend row, ignoring the scroll area, so
+ * keep only the rows currently visible in a scrollable legend during the
+ * export and put all the rows back afterward.
+ */
+function chart_to_image (divid) {
+	var saved = [];
+	$('#'+divid+' table.jqplot-table-legend-scroll').each(function() {
+		var tbl = this, top = tbl.scrollTop;
+		var area = tbl.getBoundingClientRect().top + tbl.clientTop;
+		var body = $(tbl).find('tr').first().parent();
+		var rows = body.children('tr');
+		// rows fully visible in the scroll area, computed before detaching
+		var visible = rows.filter(function() {
+			var r = this.getBoundingClientRect();
+			return (r.top >= area - 1 && r.bottom <= area + tbl.clientHeight + 1);
+		});
+		rows.detach();
+		body.append(visible.length ? visible : rows.slice(0, legend_max_rows));
+		tbl.scrollTop = 0;
+		saved.push([tbl, body, rows, top]);
+	});
+	var img;
+	try {
+		img = $('#'+divid).jqplotToImageStr({});
+	} finally {
+		$.each(saved, function(i, s) {
+			s[1].children('tr').detach();
+			s[1].append(s[2]);
+			s[0].scrollTop = s[3];
+		});
+	}
+	return img;
+}
+
 function create_download_button (buttonid, cssclass) {
 	document.writeln('<button type="button" id="download'+buttonid+'" class="btn btn-danger" data-toggle="modal" data-target="#pgcluuModal">Download</button>');
 	document.writeln('<button type="button" id="csv'+buttonid+'" class="btn btn-danger" >CSV export</button>');
@@ -17,7 +143,7 @@ $(document).ready(function() {
 function add_download_button_event (buttonid, divid, plot) {
 
 	jQuery('#download'+buttonid).click( function() {
-		$('#pgcluuModal img').attr('src', $('#'+divid).jqplotToImageStr({}));
+		$('#pgcluuModal img').attr('src', chart_to_image(divid));
 	});
 	jQuery('#csv'+buttonid).click( function() {
 		export_csv(plot, buttonid);
@@ -26,7 +152,7 @@ function add_download_button_event (buttonid, divid, plot) {
 }
 
 function create_linegraph (divid, charttitle, ylabel, arr_series, lineseries, y2label) {
-        return $.jqplot(divid, lineseries, { 
+        var plot = $.jqplot(divid, lineseries, {
         seriesColors: ['#6e9dc9','#f4ab3a','#ac7fa8','#8dbd0f',"#958c12","#953579", "#4b5de4", "#d8b83f", "#ff5800", "#0085cc"],
         seriesDefaults: { markerOptions: {show: false}, lineWidth:1 },
         grid: { borderWidth: 1, background: '#ffffff'},
@@ -65,14 +191,18 @@ function create_linegraph (divid, charttitle, ylabel, arr_series, lineseries, y2
                 tooltipContentEditor: function (str, seriesIndex, pointIndex, plot) {
                     var dateToDisplay = new Date(plot.data[seriesIndex][pointIndex][0]);
                     var textToShow = '<div>On '+dateToDisplay.toString().substring(0,33)+'<br>'+dateToDisplay.toString().substring(34);
+                    var lines = [];
                     for (var i=0; i<plot.data.length;i++) {
-                            textToShow += '<br><span class="mfigure">'+pretty_print_number(plot.data[i][pointIndex][1], 2, plot.series[i].label)+' <small>'+plot.series[i].label+'</small></span>';
+                            lines.push('<span class="mfigure">'+pretty_print_number(plot.data[i][pointIndex][1], 2, plot.series[i].label)+' <small>'+plot.series[i].label+'</small></span>');
                     }
+                    textToShow += tooltip_series_html(lines, plot);
                     textToShow += '</div>';
                     return textToShow;
                 }
         }
     });
+    add_tooltip_wheel(plot);
+    return plot;
 }
 
 function create_piechart(divid, title, data) {
