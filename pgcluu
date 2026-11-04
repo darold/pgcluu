@@ -6821,7 +6821,9 @@ sub pg_stat_unused_indexes
 		my @data = split(/;/, $l);
 
 		# timestamp | dbname | schemaname | relname | indexrelname | index_code
-		push(@{$all_stat_unused_indexes{$data[1]}},  [ ($data[2], $data[3], $data[4], $data[5]) ] );
+		# timestamp | dbname | schemaname | relname | indexrelname | index_code | index_size
+		push(@data, 'n/a') if ($#data < 6);
+		push(@{$all_stat_unused_indexes{$data[1]}},  [ ($data[2], $data[3], $data[4], $data[5], $data[6]) ] );
 	}
 	$curfh->close();
 }
@@ -6859,6 +6861,7 @@ sub pg_stat_unused_indexes_report
 					<th>Table</th>
 					<th>Index</th>
 					<th>Code</th>
+					<th>Size</th>
 					</tr>
 				</thead>
 				<tbody>
