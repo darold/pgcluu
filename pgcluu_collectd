@@ -3272,15 +3272,15 @@ sub dump_unusedindexes
 
 	my $sql = sprintf(
 		"SELECT date_trunc('seconds', now()), current_database(), " .
-		"schemaname, relname, indexrelname, regexp_replace(pg_get_indexdef(pg_stat_user_indexes.indexrelid), E'[\\\\n\\\\r]+', ' ', 'g'), pg_relation_size(s.indexrelid) as relsize " .
+		"schemaname, relname, indexrelname, regexp_replace(pg_get_indexdef(pg_stat_user_indexes.indexrelid), E'[\\\\n\\\\r]+', ' ', 'g'), pg_relation_size(pg_stat_user_indexes.indexrelid) as relsize " .
 		"FROM pg_stat_user_indexes " .
 		"INNER JOIN pg_index ON pg_index.indexrelid = pg_stat_user_indexes.indexrelid " .
 		"WHERE NOT indexrelname ILIKE 'fki%%' " .
 		"AND NOT indisprimary " .
 		"AND NOT indisunique AND idx_scan = 0 " .
 		(&backend_minimum_version(9,1) ? "AND NOT indisexclusion " : "") .
-		"AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint c WHERE c.conindid = s.indexrelid) " .
-		"AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_inherits AS inh WHERE inh.inhrelid = s.indexrelid) "
+		"AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint c WHERE c.conindid = pg_stat_user_indexes.indexrelid) " .
+		"AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_inherits AS inh WHERE inh.inhrelid = pg_stat_user_indexes.indexrelid) "
 	);
 
 	return $sql;
