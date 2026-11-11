@@ -121,6 +121,15 @@ my $SSH_OPTIONS = "-o ConnectTimeout=$SSH_TIMEOUT -o PreferredAuthentications=ho
 
 my $ALWAYS_SECURE_SEARCH_PATH_SQL = "SELECT pg_catalog.set_config('search_path', '', false);";
 
+# Marker printed by psql \echo in the collector SQL scripts to tell which
+# output file the following lines must be appended to. The output of psql
+# is read by pgcluu_collectd itself instead of using "\o | cat >> file",
+# which forks a shell and a cat process for each metric and each database.
+my $OUTPUT_MARKER = "#pgcluu_collectd:$$:output:";
+# Temporary file used to pass the collector SQL script to psql, it is
+# set by run_sql_script() and removed at end of each run or at exit.
+my $SQL_SCRIPT_FILE = '';
+
 # Variable to store previous settings
 my %ORIGINAL_PG_SETTINGS = ();
 my %ORIGINAL_DBROLE_SETTINGS = ();
@@ -501,6 +510,7 @@ if ($SHOW_VER) {
 END {
 	kill '-TERM', $SAR_PID if ($SAR_PID);
 	kill '-TERM', $PIDSTAT_PID if ($PIDSTAT_PID);
+	unlink($SQL_SCRIPT_FILE) if ($SQL_SCRIPT_FILE);
 }
 
 # The daemon should be stopped
@@ -1233,7 +1243,7 @@ sub collect_metrics
 	}
 
 	# Generating global statistics collector SQL script
-	my $script_sql = &create_sql_script();
+	my ($script_sql, $script_outputs) = &create_sql_script();
 
 	if (!$script_sql && ($#METRICS < 0))
 	{
@@ -1245,10 +1255,7 @@ sub collect_metrics
 		# Collecting database statistics if there other than pgbouncer metrics to collect
 		if ($PG_RET >= 0)
 		{
-			if (open(my $fhl, '|-', $PSQL_PROG)) {
-				print $fhl $script_sql, "\n";
-				close($fhl);
-			} else {
+			if (!&run_sql_script($PSQL_PROG, $script_sql, $script_outputs)) {
 				&dprint("FATAL: failure when calling psql command: $PSQL_PROG, $!\n");
 				unlink_pid_and_exit("FATAL: failure when calling psql command: $PSQL_PROG, $!", 1);
 			}
@@ -1262,17 +1269,14 @@ sub collect_metrics
 			{
 
 				next if (($#included_dbs >= 0) && !grep(/^$db$/i, @included_dbs));
-				my $script_repeat_sql = &create_sql_script($db);
+				my ($script_repeat_sql, $repeat_outputs) = &create_sql_script($db);
 				if (!$script_repeat_sql) {
 					last;
 				}
 				my $LOCAL_PSQL_PROG = &set_local_psql_command($db);
 
 				# Collecting database statistics
-				if (open(my $fhl, '|-', $LOCAL_PSQL_PROG)) {
-					print $fhl $script_repeat_sql, "\n";
-					close($fhl);
-				} else {
+				if (!&run_sql_script($LOCAL_PSQL_PROG, $script_repeat_sql, $repeat_outputs)) {
 					&dprint("FATAL: failure when calling psql command: $LOCAL_PSQL_PROG, $!\n");
 					unlink_pid_and_exit("FATAL: failure when calling psql command: $LOCAL_PSQL_PROG, $!", 1);
 				}
@@ -1564,6 +1568,9 @@ sub create_sql_script
 
 	# Prepare the SQL script
 	my $sql_queries = '';
+	# List of the output files, the index in this array is
+	# used in the marker that precedes the output of a metric
+	my @outputs = ();
 	foreach my $type (sort {$a cmp $b} keys %METRICS_COMMANDS)
 	{
 		next if (!$db && $METRICS_COMMANDS{$type}->{repeat});
@@ -1614,13 +1621,15 @@ sub create_sql_script
 			# Add a prefix to end file so that the first file will be preserved
 			$file_output = 'end-' . $METRICS_COMMANDS{$type}->{output};
 		}
+		# Register the output file, its index is used in the marker
+		push(@outputs, "$OUT_DIR/$file_output");
 
 		if (&backend_minimum_version(8, 2)) {
 			$sql_queries .= <<EOF
-\\o | cat > /dev/null
+\\echo '${OUTPUT_MARKER}-1'
 $ALWAYS_SECURE_SEARCH_PATH_SQL
 -- $type
-\\o | cat $FILE_REDIR '$OUT_DIR/$file_output'
+\\echo '${OUTPUT_MARKER}$#outputs'
 COPY ($sql) TO STDOUT CSV DELIMITER ';';
 
 EOF
@@ -1628,10 +1637,10 @@ EOF
 			# 8.1 and lower doesn't support select statement into COPY
 			# we use a temporary table instead
 			$sql_queries .= <<EOF
-\\o | cat > /dev/null
+\\echo '${OUTPUT_MARKER}-1'
 $ALWAYS_SECURE_SEARCH_PATH_SQL
 -- $type
-\\o | cat $FILE_REDIR '$OUT_DIR/$file_output'
+\\echo '${OUTPUT_MARKER}$#outputs'
 BEGIN;
 CREATE TEMPORARY TABLE __pgcluu as $sql;
 COPY __pgcluu TO STDOUT CSV DELIMITER ';';
@@ -1645,7 +1654,77 @@ EOF
 		$sql_queries = "SET application_name TO pgcluu;\n" . $sql_queries;
 	}
 
-	return $sql_queries
+	return ($sql_queries, \@outputs);
+}
+
+####
+# Execute a collector SQL script with the given psql command and dispatch
+# the output to the metric files following the markers printed by the
+# script (see create_sql_script()). Lines that are not preceded by a valid
+# marker are discarded. Returns 1 on success and 0 when psql can not be run.
+####
+sub run_sql_script
+{
+	my ($psql_cmd, $script, $outputs) = @_;
+
+	# The script is written to a temporary file so that the output of psql
+	# can be read without risk of deadlock between its stdin and its stdout.
+	# The file is stored beside the pid file, the name is always the same
+	# so that no file can accumulate even if the program is killed.
+	my $script_file = "$PIDFILE.sql";
+	unlink($script_file);
+	my $fhs = IO::File->new($script_file, O_WRONLY|O_CREAT|O_EXCL, 0600);
+	if (not defined $fhs) {
+		&dprint("ERROR: can not create temporary file $script_file, $!\n");
+		return 0;
+	}
+	$SQL_SCRIPT_FILE = $script_file;
+	print $fhs $script, "\n";
+	$fhs->close();
+
+	my $cmd = $psql_cmd;
+	$cmd =~ s/ -f - / -f '$script_file' /;
+
+	my $fhl;
+	if (!open($fhl, '-|', $cmd)) {
+		unlink($script_file);
+		return 0;
+	}
+
+	my $marker_len = length($OUTPUT_MARKER);
+	my %handles = ();
+	my $out = undef;
+	while (my $l = <$fhl>)
+	{
+		if (substr($l, 0, $marker_len) eq $OUTPUT_MARKER)
+		{
+			my $idx = substr($l, $marker_len);
+			chomp($idx);
+			$out = undef;
+			if ($idx =~ /^\d+$/ && defined $outputs->[$idx])
+			{
+				my $file = $outputs->[$idx];
+				if (!exists $handles{$file})
+				{
+					# Same behavior as "cat >> file": the file is
+					# created even if the query returns nothing.
+					$handles{$file} = IO::File->new($file, $FILE_REDIR);
+					&dprint("ERROR: can not write to file $file, $!\n") if (not defined $handles{$file});
+				}
+				$out = $handles{$file};
+			}
+			next;
+		}
+		print $out $l if (defined $out);
+	}
+	close($fhl);
+	foreach my $f (keys %handles) {
+		$handles{$f}->close() if (defined $handles{$f});
+	}
+	unlink($script_file);
+	$SQL_SCRIPT_FILE = '';
+
+	return 1;
 }
 
 sub fetch_version
