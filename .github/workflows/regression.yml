@@ -21,10 +21,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # CGI.pm is installed only when the runner image does not provide it.
+      # The Ubuntu mirrors can be unreachable for a while, the download is
+      # retried by apt and the whole installation three times.
       - name: Install dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq libcgi-pm-perl
+          if perl -MCGI -e 1 2>/dev/null; then
+            echo "CGI.pm found: $(perl -MCGI -e 'print $CGI::VERSION')"
+          else
+            for i in 1 2 3; do
+              sudo apt-get -o Acquire::Retries=5 update -qq &&
+              sudo apt-get -o Acquire::Retries=5 install -y -qq libcgi-pm-perl && break
+              [ $i -eq 3 ] && exit 1
+              echo "apt-get failed, new attempt in 60 seconds"
+              sleep 60
+            done
+          fi
 
       - name: Versions
         run: |
@@ -52,8 +64,10 @@ jobs:
           POSTGRES_PASSWORD: postgres
         ports:
           - 5432:5432
+        # -U: without it pg_isready connects as root and the server logs
+        # 'role "root" does not exist' at each check
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -68,10 +82,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # psql, used by pgcluu_collectd and the test, is installed only when
+      # the runner image does not provide it. The Ubuntu mirrors can be
+      # unreachable for a while, the download is retried by apt and the
+      # whole installation three times.
       - name: Install dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client
+          if command -v psql >/dev/null; then
+            echo "psql found: $(psql --version)"
+          else
+            for i in 1 2 3; do
+              sudo apt-get -o Acquire::Retries=5 update -qq &&
+              sudo apt-get -o Acquire::Retries=5 install -y -qq postgresql-client && break
+              [ $i -eq 3 ] && exit 1
+              echo "apt-get failed, new attempt in 60 seconds"
+              sleep 60
+            done
+          fi
 
       - name: Server version
         run: psql -X -At -c 'SELECT version()'
